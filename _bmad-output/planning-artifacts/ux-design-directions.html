@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RoomForge UX Design Directions</title>
+  <style>
+    :root {
+      --bg: #f6f7f8;
+      --surface: #ffffff;
+      --ink: #172026;
+      --muted: #65717d;
+      --line: #d9dee5;
+      --primary: #256f86;
+      --candidate: #d99210;
+      --confirmed: #1f9a72;
+      --selected: #246bfe;
+      --warning: #b66a00;
+      --error: #c2413b;
+      --measure: #4f76a6;
+      --shadow: 0 18px 48px rgba(20, 31, 43, 0.12);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 28px;
+      background: rgba(246, 247, 248, 0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--line);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 21px; letter-spacing: 0; }
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+    }
+    main {
+      display: grid;
+      gap: 32px;
+      padding: 28px;
+    }
+    section.direction {
+      min-height: calc(100vh - 96px);
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 20px;
+      align-items: stretch;
+    }
+    .brief {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .brief h2 { font-size: 20px; margin-bottom: 10px; }
+    .brief p { color: var(--muted); line-height: 1.5; font-size: 14px; margin-bottom: 16px; }
+    .brief ul {
+      margin: 0;
+      padding: 0 0 0 18px;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .mock {
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      min-height: 720px;
+    }
+    .appbar {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+    }
+    .mark {
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--primary);
+      border-radius: 6px;
+      position: relative;
+    }
+    .mark::after {
+      content: "";
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      bottom: 6px;
+      height: 8px;
+      border-left: 2px solid var(--primary);
+      border-bottom: 2px solid var(--primary);
+      transform: skew(-15deg);
+    }
+    .top-actions, .tools, .segmented, .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    button, .chip, .icon-btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 7px;
+      height: 34px;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 13px;
+    }
+    .icon-btn {
+      width: 34px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+    }
+    .primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .editor {
+      display: grid;
+      grid-template-columns: 56px minmax(0, 1fr) 300px;
+      height: calc(100% - 56px);
+      min-height: 664px;
+    }
+    .rail {
+      border-right: 1px solid var(--line);
+      background: #f9fafb;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      padding: 10px;
+    }
+    .canvas-wrap {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: 48px minmax(0, 1fr) 44px;
+      background: #eef1f3;
+    }
+    .canvas-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+    .canvas {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(20, 31, 43, 0.08) 1px, transparent 1px),
+        linear-gradient(rgba(20, 31, 43, 0.08) 1px, transparent 1px),
+        #f7f7f4;
+      background-size: 34px 34px;
+    }
+    .photo {
+      position: absolute;
+      inset: 48px 80px 82px 80px;
+      background:
+        linear-gradient(140deg, rgba(255,255,255,0.9), rgba(230,226,214,0.84) 45%, rgba(176,162,138,0.72)),
+        repeating-linear-gradient(90deg, rgba(92,68,42,0.12) 0 8px, rgba(255,255,255,0.08) 8px 16px);
+      border: 1px solid rgba(37, 45, 55, 0.18);
+      border-radius: 4px;
+      transform: perspective(700px) rotateX(2deg);
+    }
+    .photo::before {
+      content: "";
+      position: absolute;
+      left: 12%;
+      right: 12%;
+      top: 18%;
+      height: 1px;
+      background: rgba(23,32,38,0.16);
+    }
+    .candidate, .confirmed, .selected-line, .measure-line, .error-line {
+      position: absolute;
+      height: 0;
+      border-top: 3px solid;
+      transform-origin: left center;
+      filter: drop-shadow(0 0 2px rgba(255,255,255,0.95));
+    }
+    .candidate { border-top-color: var(--candidate); border-top-style: dashed; opacity: .75; }
+    .confirmed { border-top-color: var(--confirmed); border-top-width: 4px; }
+    .selected-line { border-top-color: var(--selected); border-top-width: 5px; filter: drop-shadow(0 0 5px rgba(36,107,254,.45)); }
+    .measure-line { border-top-color: var(--measure); border-top-width: 2px; }
+    .error-line { border-top-color: var(--error); border-top-style: dashed; border-top-width: 4px; }
+    .handle {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      margin: -8px 0 0 -8px;
+      border: 2px solid white;
+      border-radius: 50%;
+      background: var(--confirmed);
+      box-shadow: 0 0 0 2px var(--confirmed);
+    }
+    .handle.candidate {
+      background: white;
+      box-shadow: 0 0 0 2px var(--candidate);
+      opacity: 1;
+    }
+    .handle.selected {
+      background: white;
+      box-shadow: 0 0 0 3px var(--selected), 0 0 0 7px rgba(36,107,254,.18);
+    }
+    .label {
+      position: absolute;
+      padding: 4px 7px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.92);
+      font-size: 12px;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      box-shadow: 0 6px 18px rgba(23,32,38,.12);
+    }
+    .inspector {
+      border-left: 1px solid var(--line);
+      background: #fff;
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .panel-title {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+    .field label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .field div, .metric {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      background: #fbfcfd;
+    }
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      border-top: 1px solid var(--line);
+      background: #fbfcfd;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .badge.warn { color: var(--warning); border-color: rgba(182,106,0,.25); background: rgba(247,181,72,.12); }
+    .badge.ok { color: var(--confirmed); border-color: rgba(31,154,114,.25); background: rgba(31,154,114,.1); }
+    .badge.fail { color: var(--error); border-color: rgba(194,65,59,.25); background: rgba(194,65,59,.1); }
+    .comparison {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }
+    .mini-card h3 { font-size: 14px; margin-bottom: 8px; }
+    .mini-card p { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .d2 { --primary: #4f46e5; --candidate: #e59f14; --confirmed: #0f8f69; --selected: #4f46e5; --measure: #3f6aa7; background: #f4f5fb; }
+    .d3 { --primary: #0f766e; --candidate: #dc8a00; --confirmed: #26865e; --selected: #0d6efd; --measure: #5e7491; background: #f5f7f2; }
+    .d4 { --primary: #245d72; --candidate: #efb11d; --confirmed: #2d936c; --selected: #1f5eff; --measure: #667db1; background: #eef2f4; }
+    .d5 { --primary: #1d4ed8; --candidate: #eaa018; --confirmed: #19916b; --selected: #1d4ed8; --measure: #4d79ad; background: #f8fafc; }
+    .d6 { --primary: #334155; --candidate: #d97706; --confirmed: #047857; --selected: #2563eb; --measure: #64748b; background: #f1f5f9; }
+    .d2 .editor { grid-template-columns: minmax(0, 1fr) 340px; }
+    .d2 .rail { display: none; }
+    .d3 .canvas { background-color: #f9faf7; }
+    .d3 .photo { inset: 64px 120px 120px 120px; }
+    .d4 .mock, .d4 .brief { background: #172026; color: #edf4f7; border-color: #2e414d; }
+    .d4 .appbar, .d4 .canvas-toolbar, .d4 .statusbar, .d4 .rail, .d4 .inspector { background: #20313a; border-color: #324754; color: #edf4f7; }
+    .d4 .canvas { background-color: #111b21; }
+    .d4 .field div, .d4 button, .d4 .chip, .d4 .icon-btn, .d4 .label, .d4 .mini-card { background: #263943; border-color: #405866; color: #edf4f7; }
+    .d4 .brief p, .d4 .field label, .d4 .panel-title, .d4 .statusbar, .d4 .mini-card p { color: #a9bac4; }
+    .d5 .editor { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 210px; }
+    .d5 .rail, .d5 .inspector { display: none; }
+    .mobile-sheet {
+      border-top: 1px solid var(--line);
+      background: #fff;
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+    .d6 .editor { grid-template-columns: 260px minmax(0, 1fr) 340px; }
+    .job-list {
+      border-right: 1px solid var(--line);
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    @media (max-width: 980px) {
+      header { position: static; align-items: flex-start; flex-direction: column; }
+      section.direction { grid-template-columns: 1fr; }
+      .editor { grid-template-columns: minmax(0, 1fr); }
+      .rail, .inspector { display: none; }
+      .mock { min-height: 620px; }
+      .comparison { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>RoomForge UX Design Directions</h1>
+      <p style="color: var(--muted); margin-top: 4px; font-size: 13px;">OpenCV-assisted geometry review + metric 2D/3D planning workspace</p>
+    </div>
+    <nav class="nav">
+      <a href="#d1">1 Lab</a>
+      <a href="#d2">2 Planner</a>
+      <a href="#d3">3 Warm</a>
+      <a href="#d4">4 Studio</a>
+      <a href="#d5">5 Mobile</a>
+      <a href="#d6">6 Admin</a>
+    </nav>
+  </header>
+  <main>
+    <section id="d1" class="direction">
+      <aside class="brief">
+        <h2>1. OpenCV Lab Workspace</h2>
+        <p>Best for emphasizing the term-project killer feature. The photo and CV evidence are front and center, with clear candidate vs confirmed geometry rules.</p>
+        <ul>
+          <li>Strong detection/geometry/planning layers</li>
+          <li>Great for demo and evaluation</li>
+          <li>Risks feeling technical if copy is not friendly</li>
+        </ul>
+      </aside>
+      <div class="mock">
+        <div class="appbar">
+          <div class="brand"><span class="mark"></span>RoomForge</div>
+          <div class="top-actions"><span class="badge warn">Needs review</span><button>Export</button><button class="primary">Save</button></div>
+        </div>
+        <div class="editor">
+          <div class="rail"><button class="icon-btn">↖</button><button class="icon-btn">□</button><button class="icon-btn">⌁</button><button class="icon-btn">▣</button><button class="icon-btn">↺</button></div>
+          <div class="canvas-wrap">
+            <div class="canvas-toolbar"><div class="segmented"><button class="primary">Photo</button><button>2D</button><button>3D</button></div><div class="tools"><button>Top</button><button>Corner</button><button>Reset</button></div></div>
+            <div class="canvas">
+              <div class="photo"></div>
+              <div class="candidate" style="left: 18%; top: 35%; width: 42%; transform: rotate(7deg);"></div>
+              <div class="candidate" style="left: 21%; top: 62%; width: 35%; transform: rotate(-8deg);"></div>
+              <div class="confirmed" style="left: 24%; top: 56%; width: 45%; transform: rotate(0deg);"></div>
+              <div class="selected-line" style="left: 25%; top: 30%; width: 38%; transform: rotate(75deg);"></div>
+              <div class="handle candidate" style="left: 18%; top: 35%;"></div>
+              <div class="handle" style="left: 24%; top: 56%;"></div>
+              <div class="handle selected" style="left: 63%; top: 30%;"></div>
+              <div class="measure-line" style="left: 25%; top: 72%; width: 43%;"></div>
+              <div class="label" style="left: 41%; top: 69%;">4.20 m</div>
+              <div class="label" style="left: 18%; top: 24%;">6 candidates detected</div>
+            </div>
+            <div class="statusbar"><span>Drag corners to close the room boundary.</span><span class="badge warn">2 corners need review</span></div>
+          </div>
+          <aside class="inspector">
+            <div><div class="panel-title">Selected boundary</div><h3>North wall candidate</h3></div>
+            <div class="field"><label>Detected length</label><div><span>4.18</span><span>m</span></div></div>
+            <div class="field"><label>Confidence</label><div><span>Medium</span><span>review</span></div></div>
+            <div class="field"><label>Calibration impact</label><div><span>+1.6%</span><span>scale</span></div></div>
+            <button class="primary">Confirm line</button>
+            <button>Reject candidate</button>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="d2" class="direction d2">
+      <aside class="brief">
+        <h2>2. Calm Planner</h2>
+        <p>Best for everyday users. Less technical first impression, with OpenCV evidence still visible but framed as guided correction.</p>
+        <ul>
+          <li>Friendly without becoming decorative</li>
+          <li>Strong inspector and next-action guidance</li>
+          <li>May underplay CV term-project evidence</li>
+        </ul>
+      </aside>
+      <div class="mock">
+        <div class="appbar">
+          <div class="brand"><span class="mark"></span>RoomForge</div>
+          <div class="top-actions"><button>Projects</button><button class="primary">Save layout</button></div>
+        </div>
+        <div class="editor">
+          <div class="canvas-wrap">
+            <div class="canvas-toolbar"><div class="segmented"><button>Photo review</button><button class="primary">2D Plan</button><button>3D</button></div><span class="badge ok">Boundary closed</span></div>
+            <div class="canvas">
+              <div class="confirmed" style="left: 24%; top: 28%; width: 52%;"></div>
+              <div class="confirmed" style="left: 24%; top: 28%; width: 37%; transform: rotate(90deg);"></div>
+              <div class="confirmed" style="left: 24%; top: 66%; width: 52%;"></div>
+              <div class="confirmed" style="left: 76%; top: 28%; width: 37%; transform: rotate(90deg);"></div>
+              <div class="handle" style="left: 24%; top: 28%;"></div><div class="handle" style="left: 76%; top: 28%;"></div><div class="handle selected" style="left: 76%; top: 66%;"></div><div class="handle" style="left: 24%; top: 66%;"></div>
+              <div class="label" style="left: 47%; top: 23%;">4.20 m</div><div class="label" style="left: 78%; top: 46%;">3.10 m</div>
+            </div>
+            <div class="statusbar"><span>Good. The room boundary is closed and scaled.</span><span>Saved 12:42</span></div>
+          </div>
+          <aside class="inspector">
+            <div><div class="panel-title">Next step</div><h3>Add furniture</h3></div>
+            <p style="color: var(--muted); font-size: 13px; line-height: 1.5;">Your room is ready for planning. Add a proxy item, then switch to 3D to inspect scale.</p>
+            <button class="primary">Add bed</button><button>Add desk</button><button>Add wardrobe</button>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="d3" class="direction d3">
+      <aside class="brief">
+        <h2>3. Floorplan Pro</h2>
+        <p>Best for precision. Puts 2D plan control first, with strong measurement hierarchy and compact professional tooling.</p>
+        <ul>
+          <li>Excellent for desktop authoring</li>
+          <li>Strong tabular numeric feel</li>
+          <li>Can feel less approachable</li>
+        </ul>
+      </aside>
+      <div class="mock">
+        <div class="appbar"><div class="brand"><span class="mark"></span>RoomForge</div><div class="top-actions"><span class="badge ok">Scale locked</span><button class="primary">Export JSON</button></div></div>
+        <div class="editor">
+          <div class="rail"><button class="icon-btn">⌖</button><button class="icon-btn">L</button><button class="icon-btn">▥</button><button class="icon-btn">⌘</button></div>
+          <div class="canvas-wrap">
+            <div class="canvas-toolbar"><div class="segmented"><button class="primary">2D</button><button>3D</button></div><div class="tools"><button>Grid</button><button>Snap</button><button>Units</button></div></div>
+            <div class="canvas">
+              <div class="confirmed" style="left: 20%; top: 22%; width: 56%;"></div>
+              <div class="confirmed" style="left: 20%; top: 22%; width: 48%; transform: rotate(90deg);"></div>
+              <div class="confirmed" style="left: 20%; top: 70%; width: 56%;"></div>
+              <div class="confirmed" style="left: 76%; top: 22%; width: 48%; transform: rotate(90deg);"></div>
+              <div class="selected-line" style="left: 37%; top: 42%; width: 18%; transform: rotate(90deg);"></div>
+              <div class="label" style="left: 43%; top: 18%;">4.200 m</div><div class="label" style="left: 78%; top: 45%;">3.600 m</div><div class="label" style="left: 36%; top: 39%;">Desk 1.20 m</div>
+            </div>
+            <div class="statusbar"><span>Snap: 10 cm · Units: meters · Origin: lower-left</span><span class="badge ok">All fields valid</span></div>
+          </div>
+          <aside class="inspector"><div class="panel-title">Geometry</div><div class="field"><label>Width</label><div><span>4.200</span><span>m</span></div></div><div class="field"><label>Depth</label><div><span>3.600</span><span>m</span></div></div><div class="field"><label>Scale error</label><div><span>1.2</span><span>%</span></div></div><button class="primary">Lock dimensions</button></aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="d4" class="direction d4">
+      <aside class="brief">
+        <h2>4. Spatial Studio</h2>
+        <p>Best for cinematic 2D/3D confidence. Dark shell gives overlays high contrast, but needs care for forms/admin readability.</p>
+        <ul>
+          <li>Strong canvas focus</li>
+          <li>Great visual contrast for overlays</li>
+          <li>Risks looking too technical</li>
+        </ul>
+      </aside>
+      <div class="mock">
+        <div class="appbar"><div class="brand"><span class="mark"></span>RoomForge</div><div class="top-actions"><button>Top</button><button>Eye-level</button><button class="primary">Reset</button></div></div>
+        <div class="editor">
+          <div class="rail"><button class="icon-btn">◐</button><button class="icon-btn">⬚</button><button class="icon-btn">↗</button></div>
+          <div class="canvas-wrap">
+            <div class="canvas-toolbar"><span class="badge warn">3D preview</span><div class="segmented"><button>2D</button><button class="primary">3D</button></div></div>
+            <div class="canvas">
+              <div class="confirmed" style="left: 26%; top: 58%; width: 48%; transform: rotate(-12deg);"></div>
+              <div class="confirmed" style="left: 28%; top: 58%; width: 32%; transform: rotate(-72deg);"></div>
+              <div class="measure-line" style="left: 35%; top: 48%; width: 30%; transform: rotate(-12deg);"></div>
+              <div class="label" style="left: 45%; top: 42%;">Eye-level view</div>
+            </div>
+            <div class="statusbar"><span>Camera follows selected furniture. Press Reset if lost.</span><span>30 FPS target</span></div>
+          </div>
+          <aside class="inspector"><div class="panel-title">Selected object</div><h3>Sofa proxy</h3><div class="field"><label>Size</label><div><span>1.80 × 0.82</span><span>m</span></div></div><div class="field"><label>Rotation</label><div><span>12</span><span>deg</span></div></div><button class="primary">Fit camera</button></aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="d5" class="direction d5">
+      <aside class="brief">
+        <h2>5. Mobile Review Companion</h2>
+        <p>Best for future smartphone path. Focuses on upload, review, status, and light correction with Toss-like panels.</p>
+        <ul>
+          <li>Good for capture/review future</li>
+          <li>Smooth bottom-sheet pattern</li>
+          <li>Not a full precision editor</li>
+        </ul>
+      </aside>
+      <div class="mock">
+        <div class="appbar"><div class="brand"><span class="mark"></span>RoomForge</div><div class="top-actions"><span class="badge warn">Review</span></div></div>
+        <div class="editor">
+          <div class="canvas-wrap">
+            <div class="canvas-toolbar"><button>Back</button><div class="segmented"><button class="primary">Photo</button><button>Plan</button><button>3D</button></div></div>
+            <div class="canvas">
+              <div class="photo" style="inset: 34px 28px 34px 28px;"></div>
+              <div class="candidate" style="left: 16%; top: 38%; width: 62%; transform: rotate(4deg);"></div>
+              <div class="confirmed" style="left: 19%; top: 62%; width: 55%;"></div>
+              <div class="handle selected" style="left: 74%; top: 62%;"></div>
+              <div class="label" style="left: 21%; top: 27%;">Drag corner to wall edge</div>
+            </div>
+            <div class="mobile-sheet">
+              <div style="width: 42px; height: 4px; border-radius: 99px; background: var(--line); justify-self: center;"></div>
+              <h3>Confirm room outline</h3>
+              <p style="font-size: 13px; color: var(--muted); line-height: 1.45;">Two corners need review. Keep the wall boundary aligned before generating the plan.</p>
+              <div class="status-row"><button>Retake</button><button class="primary">Confirm corner</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="d6" class="direction d6">
+      <aside class="brief">
+        <h2>6. Admin Ops Console</h2>
+        <p>Best for operational confidence. Dense, scannable tables and artifact detail for debugging reconstruction issues.</p>
+        <ul>
+          <li>Strong support/admin story</li>
+          <li>Reuses status language from user flow</li>
+          <li>Should remain visually separate from primary UX</li>
+        </ul>
+      </aside>
+      <div class="mock">
+        <div class="appbar"><div class="brand"><span class="mark"></span>RoomForge Admin</div><div class="top-actions"><button>Jobs</button><button>Users</button><button class="primary">Retry selected</button></div></div>
+        <div class="editor">
+          <div class="job-list">
+            <div class="mini-card"><h3>job_1042</h3><p><span class="badge warn">Needs review</span></p></div>
+            <div class="mini-card"><h3>job_1041</h3><p><span class="badge fail">Calibration failed</span></p></div>
+            <div class="mini-card"><h3>job_1040</h3><p><span class="badge ok">Succeeded</span></p></div>
+          </div>
+          <div class="canvas-wrap">
+            <div class="canvas-toolbar"><span>OpenCV artifacts</span><div class="tools"><button>Source</button><button class="primary">Overlay</button><button>Result</button></div></div>
+            <div class="canvas">
+              <div class="photo"></div>
+              <div class="candidate" style="left: 19%; top: 38%; width: 44%; transform: rotate(9deg);"></div>
+              <div class="error-line" style="left: 22%; top: 64%; width: 32%; transform: rotate(-5deg);"></div>
+              <div class="handle candidate" style="left: 19%; top: 38%;"></div>
+              <div class="label" style="left: 24%; top: 29%;">weak candidate · low confidence</div>
+            </div>
+            <div class="statusbar"><span>Failure source: boundary not closed</span><span class="badge fail">User guidance needed</span></div>
+          </div>
+          <aside class="inspector"><div class="panel-title">Job detail</div><div class="field"><label>User</label><div><span>minji@example</span><span></span></div></div><div class="field"><label>Provider</label><div><span>manual-opencv</span><span>v1</span></div></div><div class="field"><label>Reason</label><div><span>calibration_failed</span><span></span></div></div><button class="primary">Create retry</button><button>Copy support note</button></aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="direction">
+      <aside class="brief">
+        <h2>Comparison Notes</h2>
+        <p>Use this grid to select or combine directions. The strongest base is likely 1 + 2 + 3: OpenCV evidence, approachable guidance, and precision tooling.</p>
+      </aside>
+      <div class="mock" style="padding: 18px; min-height: auto;">
+        <div class="comparison">
+          <div class="mini-card"><h3>Best MVP Base</h3><p>Direction 1 gives the clearest OpenCV term-project value and artifact visibility.</p></div>
+          <div class="mini-card"><h3>Best User Feel</h3><p>Direction 2 makes correction feel calm and approachable for non-technical users.</p></div>
+          <div class="mini-card"><h3>Best Precision</h3><p>Direction 3 is strongest for desktop editing, dimensions, and 2D/3D planning.</p></div>
+          <div class="mini-card"><h3>Use Carefully</h3><p>Direction 4 is visually strong but may feel too technical if used everywhere.</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

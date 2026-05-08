@@ -1,0 +1,6 @@
+# bmad related
+_bmad/
+.agent/
+.agents/
+.claude/
+notes/

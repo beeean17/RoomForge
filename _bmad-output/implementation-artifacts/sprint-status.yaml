@@ -1,5 +1,5 @@
 # generated: 2026-05-08T13:44:39+0900
-# last_updated: 2026-05-08T13:44:39+0900
+# last_updated: 2026-05-11T18:31:35+0900
 # project: RoomForge
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,16 +35,16 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08T13:44:39+0900
-last_updated: 2026-05-08T13:44:39+0900
+last_updated: 2026-05-11T18:31:35+0900
 project: RoomForge
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
 development_status:
-  epic-1: backlog
-  1-1-enabler-set-up-initial-project-from-minimal-official-starters: backlog
-  1-2-enabler-baseline-verification-and-ci-checks: backlog
+  epic-1: in-progress
+  1-1-enabler-set-up-initial-project-from-minimal-official-starters: review
+  1-2-enabler-baseline-verification-and-ci-checks: review
   1-3-google-sign-in-and-sign-out: backlog
   1-4-authenticated-api-session-mapping: backlog
   1-5-user-project-list-and-creation: backlog

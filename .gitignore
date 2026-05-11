@@ -1,6 +1,131 @@
-# bmad related
+# RoomForge gitignore
+#
+# Keep source, docs, BMAD output, lockfiles, and example config files tracked.
+# Ignore generated files, local tool state, credentials, dependency folders,
+# build artifacts, and runtime caches across the monorepo.
+
+# Local BMAD / agent workspace
 _bmad/
 .agent/
 .agents/
 .claude/
 notes/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE local state
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+*.keystore
+*.jks
+key.properties
+firebase-debug.log
+firebase-debug.*.log
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# Oracle local credentials / clients
+wallet/
+Wallet_*/
+tnsnames.ora
+sqlnet.ora
+ojdbc*.jar
+
+# Logs and reports
+*.log
+logs/
+coverage/
+htmlcov/
+
+# Python / FastAPI server
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+.python-version
+.venv/
+venv/
+env/
+server/.venv/
+server/venv/
+
+# Node / Vite editor
+node_modules/
+dist/
+dist-ssr/
+.vite/
+.npm/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Flutter / Dart app
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+**/doc/api/
+app.*.symbols
+app.*.map.json
+
+# Flutter platform generated local files
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/key.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Generated.xcconfig
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/DerivedData/
+**/ios/Runner.xcworkspace/xcuserdata/
+**/ios/Runner.xcodeproj/xcuserdata/
+**/macos/Flutter/ephemeral/
+**/macos/Pods/
+**/macos/.symlinks/
+**/macos/Runner.xcworkspace/xcuserdata/
+**/macos/Runner.xcodeproj/xcuserdata/
+**/linux/flutter/ephemeral/
+**/windows/flutter/ephemeral/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+*.bak
+*.orig

@@ -1,0 +1,17 @@
+{
+  "status": {
+    "candidate": "#2563eb",
+    "confirmed": "#16a34a",
+    "selected": "#f59e0b",
+    "warning": "#d97706",
+    "error": "#dc2626",
+    "measurement": "#7c3aed",
+    "save": "#0891b2",
+    "admin": "#475569"
+  },
+  "surface": {
+    "canvas": "#eef2f7",
+    "panel": "#ffffff",
+    "grid": "rgba(15, 23, 42, 0.08)"
+  }
+}

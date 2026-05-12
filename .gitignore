@@ -31,6 +31,11 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+**/.env\ copy.example
 *.pem
 *.key
 *.p12
@@ -42,9 +47,21 @@ Thumbs.db
 key.properties
 firebase-debug.log
 firebase-debug.*.log
+firestore-debug.log
+database-debug.log
+pubsub-debug.log
+storage-debug.log
+ui-debug.log
+*-debug.log
 service-account*.json
 google-services.json
 GoogleService-Info.plist
+.firebase-emulator-data/
+**/.firebase-emulator-data/
+.firebase/
+**/.firebase/
+firebase-export-*/
+**/firebase-export-*/
 
 # Oracle local credentials / clients
 wallet/

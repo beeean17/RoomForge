@@ -13,6 +13,7 @@ docs/      Project documentation
 ```
 
 See [docs/project-structure.md](docs/project-structure.md) and [docs/baseline-verification.md](docs/baseline-verification.md).
+Firebase Auth setup is documented in [docs/firebase-auth-setup.md](docs/firebase-auth-setup.md).
 
 ## Verification
 

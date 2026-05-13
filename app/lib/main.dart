@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'src/auth/auth_repository.dart';
 import 'src/auth/firebase_options_from_env.dart';
+import 'src/projects/project_api.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -86,6 +87,7 @@ class AuthGate extends StatelessWidget {
         return ProjectWorkspaceScreen(
           authRepository: authRepository,
           session: session,
+          projectApi: ProjectApi(authRepository: authRepository),
         );
       },
     );
@@ -192,11 +194,13 @@ class ProjectWorkspaceScreen extends StatelessWidget {
   const ProjectWorkspaceScreen({
     required this.authRepository,
     required this.session,
+    required this.projectApi,
     super.key,
   });
 
   final AuthRepository authRepository;
   final AuthSession session;
+  final ProjectApi projectApi;
 
   @override
   Widget build(BuildContext context) {
@@ -213,28 +217,241 @@ class ProjectWorkspaceScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Center(
+      body: ProjectWorkspaceBody(
+        displayName: displayName,
+        projectApi: projectApi,
+      ),
+    );
+  }
+}
+
+class ProjectWorkspaceBody extends StatefulWidget {
+  const ProjectWorkspaceBody({
+    required this.displayName,
+    required this.projectApi,
+    super.key,
+  });
+
+  final String displayName;
+  final ProjectApi projectApi;
+
+  @override
+  State<ProjectWorkspaceBody> createState() => _ProjectWorkspaceBodyState();
+}
+
+class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
+  late Future<List<RoomProject>> _projectsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _projectsFuture = widget.projectApi.listProjects();
+  }
+
+  void _reload() {
+    setState(() {
+      _projectsFuture = widget.projectApi.listProjects();
+    });
+  }
+
+  Future<void> _createProject() async {
+    final result = await showDialog<_ProjectDraft>(
+      context: context,
+      builder: (context) => const CreateProjectDialog(),
+    );
+    if (result == null) {
+      return;
+    }
+
+    await widget.projectApi.createProject(
+      name: result.name,
+      description: result.description,
+    );
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Signed in as $displayName',
-                  style: Theme.of(context).textTheme.headlineSmall,
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Signed in as ${widget.displayName}',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Text(
+                    'Projects',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: _createProject,
+                    child: const Text('Create project'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: FutureBuilder<List<RoomProject>>(
+                  future: _projectsFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return ProjectErrorView(
+                        message: snapshot.error.toString(),
+                        onRetry: _reload,
+                      );
+                    }
+
+                    final projects = snapshot.data ?? const <RoomProject>[];
+                    if (projects.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          'No room projects yet. Create your first project.',
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      itemCount: projects.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final project = projects[index];
+                        return ListTile(
+                          title: Text(project.name),
+                          subtitle: Text(
+                            project.description?.isNotEmpty == true
+                                ? project.description!
+                                : 'No description',
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Your project workspace is ready. Project list and creation flows are implemented in the next stories.',
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+class ProjectErrorView extends StatelessWidget {
+  const ProjectErrorView({
+    required this.message,
+    required this.onRetry,
+    super.key,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+class CreateProjectDialog extends StatefulWidget {
+  const CreateProjectDialog({super.key});
+
+  @override
+  State<CreateProjectDialog> createState() => _CreateProjectDialogState();
+}
+
+class _CreateProjectDialogState extends State<CreateProjectDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _ProjectDraft(
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Create room project'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Project name'),
+              maxLength: 120,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Enter a project name.';
+                }
+                return null;
+              },
+            ),
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(labelText: 'Description'),
+              maxLength: 1000,
+              minLines: 2,
+              maxLines: 4,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Create')),
+      ],
+    );
+  }
+}
+
+class _ProjectDraft {
+  const _ProjectDraft({required this.name, this.description});
+
+  final String name;
+  final String? description;
 }

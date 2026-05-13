@@ -34,3 +34,15 @@ ROOMFORGE_ORACLE_PASSWORD=change-me
 ```
 
 If `ROOMFORGE_FIREBASE_AUTH_EMULATOR_HOST` is set, Firebase Admin verifies tokens against the local Auth emulator.
+
+## Room Project APIs
+
+Room project endpoints require `Authorization: Bearer <firebase_id_token>`.
+
+- `GET /room-projects`: lists active projects owned by the authenticated user.
+- `POST /room-projects`: creates a project owned by the authenticated user.
+
+Initial project persistence schema:
+
+- `migrations/001_user_session_mapping.sql`
+- `migrations/002_room_projects.sql`

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     oracle_user: str = "roomforge"
     oracle_password: str = "change-me"
     enable_external_cv_provider: bool = False
+    firebase_auth_emulator_host: str = ""
+    firebase_admin_credentials_path: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="ROOMFORGE_")
 

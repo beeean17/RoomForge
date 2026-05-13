@@ -13,6 +13,7 @@ flutter analyze
 npm run typecheck
 npm test
 python3 -m compileall app tests
+python3 -m pytest
 ```
 
 Manual equivalents:
@@ -27,6 +28,14 @@ npm test
 
 cd ../server
 python3 -m compileall app tests
+python3 -m pytest
 ```
 
-CI should reproduce the same app, editor, and server checks. Server pytest is available after installing `server[dev]`, but the baseline check only requires Python syntax compilation so the scaffold can be verified before dependency setup is finalized.
+CI reproduces the same app, editor, and server checks. Server pytest requires installing the server development dependencies:
+
+```bash
+cd server
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python -m pytest
+```

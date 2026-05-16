@@ -24,11 +24,32 @@ class ProjectCreate:
     description: str | None = None
 
 
+@dataclass(frozen=True)
+class ProjectUpdate:
+    name: str
+    description: str | None = None
+
+
+class ProjectNotFound(Exception):
+    pass
+
+
 class ProjectRepository(Protocol):
     def list_for_user(self, user: UserRecord) -> list[ProjectRecord]:
         pass
 
     def create_for_user(self, user: UserRecord, payload: ProjectCreate) -> ProjectRecord:
+        pass
+
+    def get_for_user(self, user: UserRecord, project_id: int) -> ProjectRecord:
+        pass
+
+    def update_for_user(
+        self, user: UserRecord, project_id: int, payload: ProjectUpdate
+    ) -> ProjectRecord:
+        pass
+
+    def delete_for_user(self, user: UserRecord, project_id: int) -> None:
         pass
 
 
@@ -106,6 +127,89 @@ class OracleProjectRepository:
             raise RuntimeError("Oracle project creation failed.")
 
         return project_record_from_row(row)
+
+    def get_for_user(self, user: UserRecord, project_id: int) -> ProjectRecord:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                row = self._fetch_project(cursor, user.id, project_id)
+
+        if row is None:
+            raise ProjectNotFound()
+        return project_record_from_row(row)
+
+    def update_for_user(
+        self, user: UserRecord, project_id: int, payload: ProjectUpdate
+    ) -> ProjectRecord:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE room_projects
+                    SET name = :name,
+                        description = :description,
+                        updated_at = SYSTIMESTAMP
+                    WHERE id = :project_id
+                      AND user_id = :user_id
+                      AND deleted_at IS NULL
+                    """,
+                    name=payload.name,
+                    description=payload.description,
+                    project_id=project_id,
+                    user_id=user.id,
+                )
+                if cursor.rowcount == 0:
+                    raise ProjectNotFound()
+                connection.commit()
+                row = self._fetch_project(cursor, user.id, project_id)
+
+        if row is None:
+            raise ProjectNotFound()
+        return project_record_from_row(row)
+
+    def delete_for_user(self, user: UserRecord, project_id: int) -> None:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE room_projects
+                    SET deleted_at = SYSTIMESTAMP,
+                        updated_at = SYSTIMESTAMP
+                    WHERE id = :project_id
+                      AND user_id = :user_id
+                      AND deleted_at IS NULL
+                    """,
+                    project_id=project_id,
+                    user_id=user.id,
+                )
+                if cursor.rowcount == 0:
+                    raise ProjectNotFound()
+                connection.commit()
+
+    def _fetch_project(self, cursor, user_id: int, project_id: int):
+        cursor.execute(
+            """
+            SELECT id, user_id, name, description, created_at, updated_at
+            FROM room_projects
+            WHERE id = :project_id
+              AND user_id = :user_id
+              AND deleted_at IS NULL
+            """,
+            project_id=project_id,
+            user_id=user_id,
+        )
+        return cursor.fetchone()
 
 
 def project_record_from_row(row) -> ProjectRecord:

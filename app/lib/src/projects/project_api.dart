@@ -74,6 +74,42 @@ class ProjectApi {
     return RoomProject.fromJson(data['project'] as Map<String, Object?>);
   }
 
+  Future<RoomProject> getProject(int projectId) async {
+    final response = await _client.get(
+      _baseUri.resolve('/room-projects/$projectId'),
+      headers: await _headers(),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return RoomProject.fromJson(data['project'] as Map<String, Object?>);
+  }
+
+  Future<RoomProject> updateProject({
+    required int projectId,
+    required String name,
+    String? description,
+  }) async {
+    final response = await _client.put(
+      _baseUri.resolve('/room-projects/$projectId'),
+      headers: await _headers(),
+      body: jsonEncode({'name': name, 'description': description}),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return RoomProject.fromJson(data['project'] as Map<String, Object?>);
+  }
+
+  Future<void> deleteProject(int projectId) async {
+    final response = await _client.delete(
+      _baseUri.resolve('/room-projects/$projectId'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 204) {
+      return;
+    }
+    _decodeEnvelope(response);
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await authRepository.idToken();
     if (token == null || token.isEmpty) {

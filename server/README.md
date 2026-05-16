@@ -41,6 +41,11 @@ Room project endpoints require `Authorization: Bearer <firebase_id_token>`.
 
 - `GET /room-projects`: lists active projects owned by the authenticated user.
 - `POST /room-projects`: creates a project owned by the authenticated user.
+- `GET /room-projects/{project_id}`: returns an owned active project.
+- `PUT /room-projects/{project_id}`: updates owned project metadata.
+- `DELETE /room-projects/{project_id}`: soft deletes an owned project.
+
+Cross-user access returns `not_found` so the API does not disclose whether another user's project exists.
 
 Initial project persistence schema:
 

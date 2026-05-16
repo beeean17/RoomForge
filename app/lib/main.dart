@@ -241,6 +241,7 @@ class ProjectWorkspaceBody extends StatefulWidget {
 
 class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   late Future<List<RoomProject>> _projectsFuture;
+  RoomProject? _selectedProject;
 
   @override
   void initState() {
@@ -257,7 +258,7 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   Future<void> _createProject() async {
     final result = await showDialog<_ProjectDraft>(
       context: context,
-      builder: (context) => const CreateProjectDialog(),
+      builder: (context) => const ProjectEditorDialog(),
     );
     if (result == null) {
       return;
@@ -267,6 +268,73 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       name: result.name,
       description: result.description,
     );
+    _reload();
+  }
+
+  Future<void> _openProject(RoomProject project) async {
+    final detail = await widget.projectApi.getProject(project.id);
+    setState(() {
+      _selectedProject = detail;
+    });
+  }
+
+  Future<void> _editSelectedProject() async {
+    final project = _selectedProject;
+    if (project == null) {
+      return;
+    }
+
+    final result = await showDialog<_ProjectDraft>(
+      context: context,
+      builder: (context) => ProjectEditorDialog(project: project),
+    );
+    if (result == null) {
+      return;
+    }
+
+    final updated = await widget.projectApi.updateProject(
+      projectId: project.id,
+      name: result.name,
+      description: result.description,
+    );
+    setState(() {
+      _selectedProject = updated;
+    });
+    _reload();
+  }
+
+  Future<void> _deleteSelectedProject() async {
+    final project = _selectedProject;
+    if (project == null) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete project'),
+        content: Text('Delete "${project.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    await widget.projectApi.deleteProject(project.id);
+    setState(() {
+      _selectedProject = null;
+    });
     _reload();
   }
 
@@ -300,49 +368,127 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: FutureBuilder<List<RoomProject>>(
-                  future: _projectsFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return ProjectErrorView(
-                        message: snapshot.error.toString(),
-                        onRetry: _reload,
-                      );
-                    }
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: FutureBuilder<List<RoomProject>>(
+                        future: _projectsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          if (snapshot.hasError) {
+                            return ProjectErrorView(
+                              message: snapshot.error.toString(),
+                              onRetry: _reload,
+                            );
+                          }
 
-                    final projects = snapshot.data ?? const <RoomProject>[];
-                    if (projects.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No room projects yet. Create your first project.',
-                        ),
-                      );
-                    }
+                          final projects =
+                              snapshot.data ?? const <RoomProject>[];
+                          if (projects.isEmpty) {
+                            return const Center(
+                              child: Text(
+                                'No room projects yet. Create your first project.',
+                              ),
+                            );
+                          }
 
-                    return ListView.separated(
-                      itemCount: projects.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final project = projects[index];
-                        return ListTile(
-                          title: Text(project.name),
-                          subtitle: Text(
-                            project.description?.isNotEmpty == true
-                                ? project.description!
-                                : 'No description',
-                          ),
-                        );
-                      },
-                    );
-                  },
+                          return ListView.separated(
+                            itemCount: projects.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final project = projects[index];
+                              final isSelected =
+                                  _selectedProject?.id == project.id;
+                              return ListTile(
+                                selected: isSelected,
+                                title: Text(project.name),
+                                subtitle: Text(
+                                  project.description?.isNotEmpty == true
+                                      ? project.description!
+                                      : 'No description',
+                                ),
+                                onTap: () => _openProject(project),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      flex: 2,
+                      child: ProjectDetailPanel(
+                        project: _selectedProject,
+                        onEdit: _editSelectedProject,
+                        onDelete: _deleteSelectedProject,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class ProjectDetailPanel extends StatelessWidget {
+  const ProjectDetailPanel({
+    required this.project,
+    required this.onEdit,
+    required this.onDelete,
+    super.key,
+  });
+
+  final RoomProject? project;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final project = this.project;
+    if (project == null) {
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+        ),
+        child: Center(child: Text('Select a project to view details.')),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(project.name, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(
+              project.description?.isNotEmpty == true
+                  ? project.description!
+                  : 'No description',
+            ),
+            const SizedBox(height: 20),
+            const Text('Next action: add room photo and dimensions.'),
+            const Spacer(),
+            FilledButton(onPressed: onEdit, child: const Text('Edit')),
+            const SizedBox(height: 8),
+            OutlinedButton(onPressed: onDelete, child: const Text('Delete')),
+          ],
         ),
       ),
     );
@@ -374,17 +520,29 @@ class ProjectErrorView extends StatelessWidget {
   }
 }
 
-class CreateProjectDialog extends StatefulWidget {
-  const CreateProjectDialog({super.key});
+class ProjectEditorDialog extends StatefulWidget {
+  const ProjectEditorDialog({this.project, super.key});
+
+  final RoomProject? project;
 
   @override
-  State<CreateProjectDialog> createState() => _CreateProjectDialogState();
+  State<ProjectEditorDialog> createState() => _ProjectEditorDialogState();
 }
 
-class _CreateProjectDialogState extends State<CreateProjectDialog> {
+class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final project = widget.project;
+    if (project != null) {
+      _nameController.text = project.name;
+      _descriptionController.text = project.description ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -411,7 +569,9 @@ class _CreateProjectDialogState extends State<CreateProjectDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Create room project'),
+      title: Text(
+        widget.project == null ? 'Create room project' : 'Edit project',
+      ),
       content: Form(
         key: _formKey,
         child: Column(
@@ -443,7 +603,10 @@ class _CreateProjectDialogState extends State<CreateProjectDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Create')),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(widget.project == null ? 'Create' : 'Save'),
+        ),
       ],
     );
   }

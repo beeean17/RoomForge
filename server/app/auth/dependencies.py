@@ -52,12 +52,33 @@ def authenticate_request(
         raise_auth_error(request_id)
 
 
+def authorize_admin_request(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+) -> UserRecord:
+    user = authenticate_request(request, credentials)
+    if user.role != "admin":
+        raise_admin_error(request_id_from(request))
+    return user
+
+
 def raise_auth_error(request_id: str) -> None:
     raise AuthErrorResponse(
         error_response(
             code="unauthenticated",
             message="A valid Firebase ID token is required.",
             status_code=401,
+            request_id=request_id,
+        )
+    )
+
+
+def raise_admin_error(request_id: str) -> None:
+    raise AuthErrorResponse(
+        error_response(
+            code="unauthorized",
+            message="Admin access is required.",
+            status_code=403,
             request_id=request_id,
         )
     )

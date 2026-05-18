@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'src/admin/admin_api.dart';
 import 'src/auth/auth_repository.dart';
 import 'src/auth/firebase_options_from_env.dart';
 import 'src/projects/project_api.dart';
@@ -87,6 +88,7 @@ class AuthGate extends StatelessWidget {
         return ProjectWorkspaceScreen(
           authRepository: authRepository,
           session: session,
+          adminApi: AdminApi(authRepository: authRepository),
           projectApi: ProjectApi(authRepository: authRepository),
         );
       },
@@ -194,13 +196,46 @@ class ProjectWorkspaceScreen extends StatelessWidget {
   const ProjectWorkspaceScreen({
     required this.authRepository,
     required this.session,
+    required this.adminApi,
     required this.projectApi,
     super.key,
   });
 
   final AuthRepository authRepository;
   final AuthSession session;
+  final AdminApi adminApi;
   final ProjectApi projectApi;
+
+  Future<void> _openAdmin(BuildContext context) async {
+    try {
+      final adminSession = await adminApi.loadSession();
+      if (!context.mounted) {
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => AdminShellScreen(session: adminSession),
+        ),
+      );
+    } on AdminApiException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      final message = error.code == 'unauthorized'
+          ? 'Admin access is required.'
+          : error.message;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Admin access check failed: $error')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -212,6 +247,10 @@ class ProjectWorkspaceScreen extends StatelessWidget {
         title: const Text('RoomForge Workspace'),
         actions: [
           TextButton(
+            onPressed: () => _openAdmin(context),
+            child: const Text('Admin'),
+          ),
+          TextButton(
             onPressed: authRepository.signOut,
             child: const Text('Sign out'),
           ),
@@ -220,6 +259,53 @@ class ProjectWorkspaceScreen extends StatelessWidget {
       body: ProjectWorkspaceBody(
         displayName: displayName,
         projectApi: projectApi,
+      ),
+    );
+  }
+}
+
+class AdminShellScreen extends StatelessWidget {
+  const AdminShellScreen({required this.session, super.key});
+
+  final AdminSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName =
+        session.admin.displayName ?? session.admin.email ?? 'admin user';
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Admin Operations')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Signed in as $displayName',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text('Role: ${session.admin.role}'),
+                const SizedBox(height: 24),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.fromBorderSide(
+                      BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('No operational records yet.'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -51,3 +51,26 @@ Initial project persistence schema:
 
 - `migrations/001_user_session_mapping.sql`
 - `migrations/002_room_projects.sql`
+
+## Admin Access Boundary
+
+Admin endpoints require the same Firebase bearer token plus an Oracle-side `users.role`
+value of `admin`.
+
+- `GET /admin/session`: verifies that the authenticated user has admin access.
+
+Normal authenticated users receive the standard `unauthorized` envelope with no
+application data:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "unauthorized",
+    "message": "Admin access is required."
+  },
+  "meta": {
+    "request_id": "..."
+  }
+}
+```

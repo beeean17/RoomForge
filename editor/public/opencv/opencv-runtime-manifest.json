@@ -1,0 +1,5 @@
+{
+  "mode": "mvp-browser-worker-stub",
+  "opencvJs": "/opencv/opencv.js",
+  "opencvWasm": "/opencv/opencv.wasm"
+}

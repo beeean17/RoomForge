@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:typed_data';
+import 'dart:ui_web' as ui_web;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'src/admin/admin_api.dart';
 import 'src/auth/auth_repository.dart';
 import 'src/auth/firebase_options_from_env.dart';
+import 'src/editor/editor_config.dart';
 import 'src/projects/project_api.dart';
 
 Future<void> main() async {
@@ -774,6 +776,19 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
   }
 
+  Future<void> _openReconstruction() async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => EditorBridgeScreen(project: project),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final project = widget.project;
@@ -822,6 +837,11 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 onSave: _saveDimensions,
               ),
               const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _openReconstruction,
+                child: const Text('Open reconstruction'),
+              ),
+              const SizedBox(height: 8),
               FilledButton(onPressed: widget.onEdit, child: const Text('Edit')),
               const SizedBox(height: 8),
               OutlinedButton(
@@ -1082,6 +1102,140 @@ class _ImageSize {
 
   final int width;
   final int height;
+}
+
+class EditorBridgeScreen extends StatefulWidget {
+  const EditorBridgeScreen({required this.project, super.key});
+
+  final RoomProject project;
+
+  @override
+  State<EditorBridgeScreen> createState() => _EditorBridgeScreenState();
+}
+
+class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
+  late final String _viewType;
+  late final html.IFrameElement _iframe;
+  StreamSubscription<html.MessageEvent>? _messageSubscription;
+  String _bridgeStatus = 'Waiting for editor frame.';
+  String _runtimeStatus = 'Waiting for OpenCV worker.';
+
+  @override
+  void initState() {
+    super.initState();
+    _viewType =
+        'roomforge-editor-${widget.project.id}-${DateTime.now().microsecondsSinceEpoch}';
+    _iframe = html.IFrameElement()
+      ..src = _editorUrlFor(widget.project)
+      ..style.border = '0'
+      ..style.width = '100%'
+      ..style.height = '100%'
+      ..allow = 'fullscreen'
+      ..tabIndex = 0;
+
+    _iframe.onLoad.listen((_) {
+      _postEditorMessage(
+        type: 'roomforge.reconstruction.open',
+        requestId: 'open-project-${widget.project.id}',
+        payload: {
+          'project_id': widget.project.id,
+          'project_name': widget.project.name,
+        },
+      );
+    });
+
+    ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
+      return _iframe;
+    });
+
+    _messageSubscription = html.window.onMessage.listen(_handleEditorMessage);
+  }
+
+  @override
+  void dispose() {
+    _messageSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Reconstruction: ${widget.project.name}')),
+      body: Column(
+        children: [
+          Material(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(child: Text(_bridgeStatus)),
+                  const SizedBox(width: 16),
+                  Expanded(child: Text(_runtimeStatus)),
+                  const SizedBox(width: 16),
+                  OutlinedButton(
+                    onPressed: () => _postEditorMessage(
+                      type: 'roomforge.editor.ping',
+                      requestId:
+                          'manual-ping-${DateTime.now().millisecondsSinceEpoch}',
+                      payload: {'source': 'flutter-shell'},
+                    ),
+                    child: const Text('Ping editor'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: HtmlElementView(viewType: _viewType)),
+        ],
+      ),
+    );
+  }
+
+  void _handleEditorMessage(html.MessageEvent event) {
+    final data = event.data;
+    if (data is! Map) {
+      return;
+    }
+
+    final type = data['type']?.toString();
+    final version = data['version'];
+    if (type == null || version != 1) {
+      return;
+    }
+
+    setState(() {
+      if (type == 'roomforge.editor.ready') {
+        _bridgeStatus = 'Editor ready.';
+      } else if (type.endsWith('.response')) {
+        _bridgeStatus = 'Bridge round trip: $type';
+      } else if (type == 'roomforge.opencv.runtimeLoaded') {
+        _runtimeStatus = 'OpenCV worker assets loaded.';
+      } else if (type == 'roomforge.opencv.runtimeFailed') {
+        _runtimeStatus = 'OpenCV worker asset loading failed.';
+      }
+    });
+  }
+
+  void _postEditorMessage({
+    required String type,
+    required String requestId,
+    required Map<String, Object?> payload,
+  }) {
+    _iframe.contentWindow?.postMessage({
+      'type': type,
+      'version': 1,
+      'requestId': requestId,
+      'payload': payload,
+    }, '*');
+  }
+
+  String _editorUrlFor(RoomProject project) {
+    final uri = Uri.parse(EditorConfig.editorUrl);
+    final queryParameters = Map<String, String>.from(uri.queryParameters)
+      ..['project_id'] = project.id.toString();
+    return uri.replace(queryParameters: queryParameters).toString();
+  }
 }
 
 class ProjectErrorView extends StatelessWidget {

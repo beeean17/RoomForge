@@ -102,6 +102,8 @@ and only operate on projects owned by the authenticated user.
   owned project that already has a source image and saved dimensions.
 - `GET /room-projects/{project_id}/reconstruction-jobs/{job_id}`: returns the
   current job status and transition trail for client polling.
+- `POST /room-projects/{project_id}/reconstruction-jobs/{job_id}/retry`: creates
+  a retry job linked to the original job and preserves the original history.
 
 Allowed persisted statuses are `created`, `uploading`, `processing`,
 `review_required`, `succeeded`, `failed`, `timeout`, `cancelled`, and `retrying`.

@@ -879,6 +879,39 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
   }
 
+  Future<void> _retryReconstruction() async {
+    final project = widget.project;
+    final job = _reconstructionJob;
+    if (project == null || job == null) {
+      return;
+    }
+
+    setState(() {
+      _isSubmittingReconstruction = true;
+      _reconstructionMessage = null;
+    });
+
+    try {
+      final retryJob = await widget.projectApi.retryReconstructionJob(
+        projectId: project.id,
+        jobId: job.id,
+      );
+      setState(() {
+        _reconstructionJob = retryJob;
+        _reconstructionMessage = 'Retry available: ${retryJob.statusLabel}';
+      });
+      _startReconstructionPolling(retryJob.id);
+    } on ProjectApiException catch (error) {
+      setState(() => _reconstructionMessage = error.message);
+    } catch (error) {
+      setState(() => _reconstructionMessage = 'Retry failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingReconstruction = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final project = widget.project;
@@ -932,6 +965,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 message: _reconstructionMessage,
                 isSubmitting: _isSubmittingReconstruction,
                 onSubmit: _submitReconstruction,
+                onRetry: _retryReconstruction,
               ),
               const SizedBox(height: 20),
               FilledButton(
@@ -1200,6 +1234,7 @@ class ReconstructionJobSection extends StatelessWidget {
     required this.message,
     required this.isSubmitting,
     required this.onSubmit,
+    required this.onRetry,
     super.key,
   });
 
@@ -1207,6 +1242,7 @@ class ReconstructionJobSection extends StatelessWidget {
   final String? message;
   final bool isSubmitting;
   final VoidCallback onSubmit;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1222,12 +1258,28 @@ class ReconstructionJobSection extends StatelessWidget {
           const SizedBox(height: 8),
           Text('Status: ${job!.statusLabel}'),
           Text('Provider: ${job!.provider}'),
+          if (job!.status == 'review_required' || job!.status == 'failed') ...[
+            const SizedBox(height: 8),
+            Text(
+              job!.failureReasonMessage ??
+                  'Check blur, lighting, hidden boundaries, occlusion, distortion, unsupported image, OpenCV failure, invalid geometry, or calibration failure.',
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ],
         ],
         const SizedBox(height: 12),
         FilledButton(
           onPressed: isSubmitting ? null : onSubmit,
           child: Text(isSubmitting ? 'Submitting...' : 'Submit reconstruction'),
         ),
+        if (job != null &&
+            (job!.terminal || job!.status == 'review_required')) ...[
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: isSubmitting ? null : onRetry,
+            child: const Text('Retry reconstruction'),
+          ),
+        ],
       ],
     );
   }

@@ -82,6 +82,26 @@ def get_reconstruction_job(
     return job_envelope(request, job, transitions)
 
 
+@router.post("/{project_id}/reconstruction-jobs/{job_id}/retry", status_code=201)
+def retry_reconstruction_job(
+    project_id: int,
+    job_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, object]:
+    try:
+        user = authenticate_request(request, credentials)
+        repository = reconstruction_job_repository_from(request)
+        job = repository.retry_for_project(user, project_id, job_id)
+        transitions = repository.list_transitions_for_job(user, project_id, job.id)
+    except AuthErrorResponse as exc:
+        return exc.response
+    except ReconstructionJobNotFound:
+        return not_found_response(request)
+
+    return job_envelope(request, job, transitions)
+
+
 def job_envelope(
     request: Request,
     job: ReconstructionJobRecord,

@@ -85,6 +85,36 @@ class FakeReconstructionJobRepository:
         self.get_for_project(user, project_id, job_id)
         return self.transitions[job_id]
 
+    def retry_for_project(
+        self, user: UserRecord, project_id: int, job_id: int
+    ) -> ReconstructionJobRecord:
+        original = self.get_for_project(user, project_id, job_id)
+        retry = ReconstructionJobRecord(
+            id=len(self.jobs) + 1,
+            project_id=project_id,
+            user_id=user.id,
+            source_image_id=original.source_image_id,
+            status="retrying",
+            provider=original.provider,
+            retry_of_job_id=original.id,
+            failure_reason_code=None,
+            failure_reason_message=None,
+            created_at=datetime(2026, 5, 19, tzinfo=UTC),
+            updated_at=datetime(2026, 5, 19, tzinfo=UTC),
+        )
+        transition = ReconstructionJobTransitionRecord(
+            id=2,
+            job_id=retry.id,
+            status="retrying",
+            actor="user",
+            reason_code="retry_requested",
+            reason_message="User requested reconstruction retry.",
+            created_at=datetime(2026, 5, 19, tzinfo=UTC),
+        )
+        self.jobs.append(retry)
+        self.transitions[retry.id] = [transition]
+        return retry
+
 
 def configured_app(repository: FakeReconstructionJobRepository):
     app = create_app()
@@ -200,3 +230,39 @@ def test_review_required_status_uses_needs_review_label() -> None:
     assert response.status_code == 200
     assert response.json()["data"]["job"]["status"] == "review_required"
     assert response.json()["data"]["job"]["status_label"] == "Needs review"
+
+
+def test_retry_reconstruction_job_links_to_original_job() -> None:
+    from fastapi.testclient import TestClient
+
+    repository = FakeReconstructionJobRepository()
+    client = TestClient(configured_app(repository))
+    create_response = client.post(
+        "/room-projects/1/reconstruction-jobs",
+        headers={"Authorization": "Bearer valid-token"},
+        json={"source_image_id": 5},
+    )
+    original_job_id = create_response.json()["data"]["job"]["id"]
+
+    response = client.post(
+        f"/room-projects/1/reconstruction-jobs/{original_job_id}/retry",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 201
+    retry_job = response.json()["data"]["job"]
+    assert retry_job["status"] == "retrying"
+    assert retry_job["retry_of_job_id"] == original_job_id
+    assert response.json()["data"]["transitions"][0]["reason_code"] == "retry_requested"
+
+
+def test_retry_reconstruction_job_does_not_disclose_other_users_job() -> None:
+    from fastapi.testclient import TestClient
+
+    response = TestClient(configured_app(FakeReconstructionJobRepository())).post(
+        "/room-projects/99/reconstruction-jobs/1/retry",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

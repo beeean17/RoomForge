@@ -311,6 +311,17 @@ worker.onmessage = (event: MessageEvent<BridgeMessage>) => {
   postToParent(event.data)
   if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
     postToParent({
+      type: 'roomforge.reconstruction.qualityWarning',
+      version: BRIDGE_VERSION,
+      payload: {
+        status: 'review_required',
+        label: 'Needs review',
+        reason_code: 'low_confidence',
+        reason_message: 'Candidate geometry should be reviewed before save or export.',
+        recovery_actions: ['manual_outline', 'corner_correction', 'reupload'],
+      },
+    })
+    postToParent({
       type: 'roomforge.opencv.candidatesExtracted',
       version: BRIDGE_VERSION,
       payload: {

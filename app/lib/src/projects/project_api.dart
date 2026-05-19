@@ -321,6 +321,21 @@ class ProjectApi {
     return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
   }
 
+  Future<ReconstructionJob> retryReconstructionJob({
+    required int projectId,
+    required int jobId,
+  }) async {
+    final response = await _client.post(
+      _baseUri.resolve(
+        '/room-projects/$projectId/reconstruction-jobs/$jobId/retry',
+      ),
+      headers: await _headers(),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await authRepository.idToken();
     if (token == null || token.isEmpty) {

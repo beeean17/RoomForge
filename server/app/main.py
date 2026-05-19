@@ -8,6 +8,7 @@ from app.routers import (
     auth,
     dimensions,
     health,
+    opencv_results,
     projects,
     reconstruction_jobs,
     source_images,
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(source_images.router)
     app.include_router(dimensions.router)
     app.include_router(reconstruction_jobs.router)
+    app.include_router(opencv_results.router)
     app.include_router(health.router)
     return app
 

@@ -53,6 +53,7 @@ Initial project persistence schema:
 - `migrations/002_room_projects.sql`
 - `migrations/003_source_images_and_room_dimensions.sql`
 - `migrations/004_reconstruction_jobs.sql`
+- `migrations/005_opencv_results.sql`
 
 ## Source Image Intake APIs
 
@@ -104,6 +105,19 @@ Allowed persisted statuses are `created`, `uploading`, `processing`,
 `review_required`, `succeeded`, `failed`, `timeout`, `cancelled`, and `retrying`.
 The persisted `review_required` status is exposed to users as "Needs review";
 the API does not create a separate `needs_review` status.
+
+## OpenCV Candidate Result APIs
+
+OpenCV result endpoints require `Authorization: Bearer <firebase_id_token>` and
+only operate on jobs owned by the authenticated user.
+
+- `POST /room-projects/{project_id}/opencv-results`: stores candidate geometry
+  produced by the browser/editor OpenCV layer.
+- `GET /room-projects/{project_id}/opencv-results/{result_id}`: returns stored
+  candidate geometry metadata for owned project review.
+
+Candidate geometry must use `coordinate_space: "image_pixels"`. Confirmed
+geometry is intentionally stored separately in later geometry review stories.
 
 ## Admin Access Boundary
 

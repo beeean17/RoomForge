@@ -94,6 +94,27 @@ for (const point of outlinePoints.slice(0, 4)) {
 }
 scene.add(room)
 
+const candidateMaterial = new THREE.LineDashedMaterial({
+  color: 0x7c3aed,
+  dashSize: 0.12,
+  gapSize: 0.08,
+  transparent: true,
+  opacity: 0.48,
+})
+const candidatePoints = [
+  new THREE.Vector3(-1.85, 0.06, -1.34),
+  new THREE.Vector3(1.86, 0.06, -1.42),
+  new THREE.Vector3(1.72, 0.06, 1.34),
+  new THREE.Vector3(-1.78, 0.06, 1.42),
+  new THREE.Vector3(-1.85, 0.06, -1.34),
+]
+const candidateLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints(candidatePoints),
+  candidateMaterial,
+)
+candidateLine.computeLineDistances()
+room.add(candidateLine)
+
 let runtimeState: Record<string, unknown> = { state: 'loading' }
 
 function resizeRenderer(): void {
@@ -164,6 +185,17 @@ worker.onmessage = (event: MessageEvent<BridgeMessage>) => {
       ? 'Worker assets loaded'
       : 'Worker asset loading failed'
   postToParent(event.data)
+  if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
+    postToParent({
+      type: 'roomforge.opencv.candidatesExtracted',
+      version: BRIDGE_VERSION,
+      payload: {
+        coordinate_space: 'image_pixels',
+        confidence: 0.72,
+        candidate_geometry: candidateGeometry(),
+      },
+    })
+  }
 }
 worker.postMessage({
   type: 'roomforge.opencv.loadRuntime',
@@ -186,3 +218,29 @@ queueMicrotask(() => {
     },
   })
 })
+
+function candidateGeometry(): Record<string, unknown> {
+  return {
+    image: {
+      width_px: 1600,
+      height_px: 1200,
+    },
+    candidate_sets: [
+      {
+        id: 'candidate-1',
+        kind: 'room_boundary',
+        coordinate_space: 'image_pixels',
+        points: [
+          { x: 120, y: 240 },
+          { x: 1420, y: 220 },
+          { x: 1480, y: 980 },
+          { x: 180, y: 1020 },
+        ],
+      },
+    ],
+    overlay_style: {
+      candidate: 'dashed-low-opacity-purple',
+      confirmed: 'solid-blue-with-handles',
+    },
+  }
+}

@@ -51,6 +51,43 @@ Initial project persistence schema:
 
 - `migrations/001_user_session_mapping.sql`
 - `migrations/002_room_projects.sql`
+- `migrations/003_source_images_and_room_dimensions.sql`
+
+## Source Image Intake APIs
+
+Source image endpoints require `Authorization: Bearer <firebase_id_token>` and
+only operate on projects owned by the authenticated user.
+
+- `POST /room-projects/{project_id}/source-images`: accepts a JSON payload with
+  base64 image content and stores source image metadata plus the MVP Oracle BLOB.
+- `GET /room-projects/{project_id}/source-images/{source_image_id}`: returns
+  owned source image metadata without returning the image bytes.
+
+MVP upload policy:
+
+- Allowed content types: `image/jpeg`, `image/png`, `image/webp`.
+- Default max size: `10485760` bytes, configurable with
+  `ROOMFORGE_SOURCE_IMAGE_MAX_BYTES`.
+- Metadata preserves original filename, generated stored name, content type,
+  byte size, dimensions when supplied by the browser, SHA-256, upload timestamp,
+  project linkage, user linkage, and retention status.
+
+The MVP stores the original image in Oracle so authorization remains centralized.
+Future object storage migration should keep the API metadata contract and move
+`image_blob` behind an internal storage reference.
+
+## Room Dimension APIs
+
+Room dimension endpoints require `Authorization: Bearer <firebase_id_token>` and
+only operate on projects owned by the authenticated user.
+
+- `PUT /room-projects/{project_id}/dimensions`: saves width, depth, optional
+  height, and explicit `meters` units.
+- `GET /room-projects/{project_id}/dimensions`: returns saved owned dimensions.
+
+If height is omitted, the API applies the MVP default height from
+`ROOMFORGE_ROOM_DEFAULT_HEIGHT_METERS` and returns `height_source: "default"`.
+Client-supplied height returns `height_source: "user"`.
 
 ## Admin Access Boundary
 

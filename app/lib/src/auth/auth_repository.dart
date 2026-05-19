@@ -21,6 +21,8 @@ class AuthSession {
 abstract class AuthRepository {
   Stream<AuthSession?> authStateChanges();
 
+  Future<String?> idToken();
+
   Future<void> signInWithGoogle();
 
   Future<void> signOut();
@@ -39,6 +41,15 @@ class FirebaseAuthRepository implements AuthRepository {
       }
       return AuthSession.fromFirebaseUser(user);
     });
+  }
+
+  @override
+  Future<String?> idToken() {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      return Future.value();
+    }
+    return user.getIdToken();
   }
 
   @override
@@ -64,6 +75,11 @@ class DisabledAuthRepository implements AuthRepository {
   Stream<AuthSession?> authStateChanges() {
     scheduleMicrotask(() => _controller.add(null));
     return _controller.stream;
+  }
+
+  @override
+  Future<String?> idToken() async {
+    return null;
   }
 
   @override

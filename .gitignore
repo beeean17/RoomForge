@@ -91,6 +91,8 @@ venv/
 env/
 server/.venv/
 server/venv/
+*.egg-info/
+**/*.egg-info/
 
 # Node / Vite editor
 node_modules/

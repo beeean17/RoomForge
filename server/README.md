@@ -15,3 +15,62 @@ After installing development dependencies:
 ```bash
 python3 -m pytest
 ```
+
+## Auth Session Mapping
+
+Protected API routes use `Authorization: Bearer <firebase_id_token>`.
+
+`GET /auth/session` verifies the Firebase ID token and maps the Firebase user to an Oracle `users` record. The initial schema is in `migrations/001_user_session_mapping.sql`.
+
+Configuration:
+
+```env
+ROOMFORGE_FIREBASE_PROJECT_ID=roomforge-dev
+ROOMFORGE_FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+ROOMFORGE_FIREBASE_ADMIN_CREDENTIALS_PATH=
+ROOMFORGE_ORACLE_DSN=localhost/freepdb1
+ROOMFORGE_ORACLE_USER=roomforge
+ROOMFORGE_ORACLE_PASSWORD=change-me
+```
+
+If `ROOMFORGE_FIREBASE_AUTH_EMULATOR_HOST` is set, Firebase Admin verifies tokens against the local Auth emulator.
+
+## Room Project APIs
+
+Room project endpoints require `Authorization: Bearer <firebase_id_token>`.
+
+- `GET /room-projects`: lists active projects owned by the authenticated user.
+- `POST /room-projects`: creates a project owned by the authenticated user.
+- `GET /room-projects/{project_id}`: returns an owned active project.
+- `PUT /room-projects/{project_id}`: updates owned project metadata.
+- `DELETE /room-projects/{project_id}`: soft deletes an owned project.
+
+Cross-user access returns `not_found` so the API does not disclose whether another user's project exists.
+
+Initial project persistence schema:
+
+- `migrations/001_user_session_mapping.sql`
+- `migrations/002_room_projects.sql`
+
+## Admin Access Boundary
+
+Admin endpoints require the same Firebase bearer token plus an Oracle-side `users.role`
+value of `admin`.
+
+- `GET /admin/session`: verifies that the authenticated user has admin access.
+
+Normal authenticated users receive the standard `unauthorized` envelope with no
+application data:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "unauthorized",
+    "message": "Admin access is required."
+  },
+  "meta": {
+    "request_id": "..."
+  }
+}
+```

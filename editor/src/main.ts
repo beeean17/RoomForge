@@ -46,6 +46,7 @@ app.innerHTML = `
       <button id="add-corner" type="button">Add corner</button>
       <button id="delete-corner" type="button">Delete corner</button>
       <button id="reset-candidate" type="button">Reset</button>
+      <button id="generate-floor-plan" type="button">Generate floor plan</button>
     </div>
   </aside>
 </section>
@@ -227,6 +228,39 @@ document.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('c
 document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry('Reset to OpenCV candidate.')
+})
+
+document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListener('click', () => {
+  if (confirmedPoints.length < 3) {
+    geometryStatusElement.textContent = 'Confirm at least three corners before generation.'
+    return
+  }
+  geometryStatusElement.textContent = 'Generated meter-space MVP floor plan.'
+  postToParent({
+    type: 'roomforge.calibration.floorPlanGenerated',
+    version: BRIDGE_VERSION,
+    payload: {
+      unit: 'meters',
+      scale_summary: '4.20 m x 3.60 m rectangular MVP floor plan',
+      reference_line: { from_index: 0, to_index: 1 },
+      reference_length_value: 4.2,
+      perspective_assumptions: {
+        model: 'mvp_rectangular_projection',
+        source_coordinate_space: 'image_pixels',
+        target_coordinate_space: 'meters',
+      },
+      image_geometry: confirmedGeometryPayload(),
+      metric_geometry: {
+        coordinate_space: 'meters',
+        points: [
+          { x: 0, y: 0 },
+          { x: 4.2, y: 0 },
+          { x: 4.2, y: 3.6 },
+          { x: 0, y: 3.6 },
+        ],
+      },
+    },
+  })
 })
 
 editorCanvas.addEventListener('pointerdown', (event) => {

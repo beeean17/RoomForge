@@ -55,6 +55,7 @@ Initial project persistence schema:
 - `migrations/004_reconstruction_jobs.sql`
 - `migrations/005_opencv_results.sql`
 - `migrations/006_confirmed_geometries.sql`
+- `migrations/007_floor_plans.sql`
 
 ## Source Image Intake APIs
 
@@ -132,6 +133,20 @@ and only operate on projects owned by the authenticated user.
 
 Confirmed pre-calibration geometry uses `coordinate_space: "image_pixels"` and
 is validated to contain at least three points and no self-intersecting polygon.
+
+## Floor Plan APIs
+
+Floor plan endpoints require `Authorization: Bearer <firebase_id_token>` and
+only operate on confirmed geometry owned by the authenticated user.
+
+- `POST /room-projects/{project_id}/floor-plans`: generates a meter-space MVP
+  floor plan from confirmed image-space geometry and saved room dimensions.
+- `GET /room-projects/{project_id}/floor-plans/{floor_plan_id}`: returns owned
+  floor plan metadata and geometry.
+
+Floor plan payloads preserve perspective assumptions, input image-pixel geometry,
+and output meter-space geometry. The MVP rectangular generator records zero
+width/depth/aspect deviation against saved room dimensions.
 
 ## Admin Access Boundary
 

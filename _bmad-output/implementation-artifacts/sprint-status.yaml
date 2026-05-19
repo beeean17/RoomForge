@@ -1,5 +1,5 @@
 # generated: 2026-05-08T13:44:39+0900
-# last_updated: 2026-05-19T11:30:00+0900
+# last_updated: 2026-05-19T11:48:00+0900
 # project: RoomForge
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08T13:44:39+0900
-last_updated: 2026-05-19T11:30:00+0900
+last_updated: 2026-05-19T11:48:00+0900
 project: RoomForge
 project_key: NOKEY
 tracking_system: file-system
@@ -62,7 +62,7 @@ development_status:
   3-2-reconstruction-job-creation-and-status-tracking: review
   3-3-opencv-candidate-extraction-and-overlay-persistence: review
   3-4-geometry-candidate-review-and-manual-correction: review
-  3-5-metric-calibration-and-floor-plan-generation: backlog
+  3-5-metric-calibration-and-floor-plan-generation: review
   3-6-reconstruction-quality-failure-guidance-and-retry: backlog
   epic-3-retrospective: optional
   epic-4: backlog

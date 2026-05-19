@@ -6,6 +6,7 @@ from app.core.request import request_id_from
 from app.routers import (
     admin,
     auth,
+    confirmed_geometries,
     dimensions,
     health,
     opencv_results,
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     app.include_router(dimensions.router)
     app.include_router(reconstruction_jobs.router)
     app.include_router(opencv_results.router)
+    app.include_router(confirmed_geometries.router)
     app.include_router(health.router)
     return app
 

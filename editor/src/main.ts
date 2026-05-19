@@ -35,7 +35,18 @@ app.innerHTML = `
         <dt>Viewport</dt>
         <dd id="viewport-status">Sizing scene</dd>
       </div>
+      <div>
+        <dt>Geometry</dt>
+        <dd id="geometry-status">Candidate and confirmed overlays visible</dd>
+      </div>
     </dl>
+    <div class="geometry-controls" aria-label="Geometry correction controls">
+      <button id="accept-candidate" type="button">Accept candidate</button>
+      <button id="manual-outline" type="button">Manual rectangle</button>
+      <button id="add-corner" type="button">Add corner</button>
+      <button id="delete-corner" type="button">Delete corner</button>
+      <button id="reset-candidate" type="button">Reset</button>
+    </div>
   </aside>
 </section>
 `
@@ -44,8 +55,9 @@ const canvas = document.querySelector<HTMLCanvasElement>('.editor-canvas')
 const bridgeStatus = document.querySelector<HTMLElement>('#bridge-status')
 const opencvStatus = document.querySelector<HTMLElement>('#opencv-status')
 const viewportStatus = document.querySelector<HTMLElement>('#viewport-status')
+const geometryStatus = document.querySelector<HTMLElement>('#geometry-status')
 
-if (!canvas || !bridgeStatus || !opencvStatus || !viewportStatus) {
+if (!canvas || !bridgeStatus || !opencvStatus || !viewportStatus || !geometryStatus) {
   throw new Error('Missing editor UI element.')
 }
 
@@ -53,6 +65,7 @@ const editorCanvas = canvas
 const bridgeStatusElement = bridgeStatus
 const opencvStatusElement = opencvStatus
 const viewportStatusElement = viewportStatus
+const geometryStatusElement = geometryStatus
 
 const renderer = new THREE.WebGLRenderer({ canvas: editorCanvas, antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
@@ -84,13 +97,20 @@ const outlinePoints = [
   new THREE.Vector3(-2, 0.02, 1.5),
   new THREE.Vector3(-2, 0.02, -1.5),
 ]
-room.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outlinePoints), outlineMaterial))
+let confirmedPoints = outlinePoints.slice(0, 4).map((point) => point.clone())
+const confirmedLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([...confirmedPoints, confirmedPoints[0]]),
+  outlineMaterial,
+)
+room.add(confirmedLine)
 
 const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0x0f172a })
-for (const point of outlinePoints.slice(0, 4)) {
+const cornerMeshes: THREE.Mesh[] = []
+for (const point of confirmedPoints) {
   const corner = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), cornerMaterial)
   corner.position.copy(point)
   room.add(corner)
+  cornerMeshes.push(corner)
 }
 scene.add(room)
 
@@ -116,6 +136,10 @@ candidateLine.computeLineDistances()
 room.add(candidateLine)
 
 let runtimeState: Record<string, unknown> = { state: 'loading' }
+let activeCornerIndex: number | null = null
+const raycaster = new THREE.Raycaster()
+const pointer = new THREE.Vector2()
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02)
 
 function resizeRenderer(): void {
   const parent = editorCanvas.parentElement
@@ -132,7 +156,6 @@ function resizeRenderer(): void {
 }
 
 function render(): void {
-  room.rotation.y += 0.002
   renderer.render(scene, camera)
   requestAnimationFrame(render)
 }
@@ -173,6 +196,73 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
   }
 
   respondToFlutter(event.data)
+})
+
+document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
+  confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
+  updateConfirmedGeometry('Accepted OpenCV candidate.')
+})
+
+document.querySelector<HTMLButtonElement>('#manual-outline')?.addEventListener('click', () => {
+  confirmedPoints = outlinePoints.slice(0, 4).map((point) => point.clone())
+  updateConfirmedGeometry('Started from manual rectangle.')
+})
+
+document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('click', () => {
+  const lastPoint = confirmedPoints[confirmedPoints.length - 1]
+  const firstPoint = confirmedPoints[0]
+  confirmedPoints.push(lastPoint.clone().lerp(firstPoint, 0.5))
+  updateConfirmedGeometry('Added a boundary corner.')
+})
+
+document.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('click', () => {
+  if (confirmedPoints.length <= 3) {
+    geometryStatusElement.textContent = 'At least three corners are required.'
+    return
+  }
+  confirmedPoints.pop()
+  updateConfirmedGeometry('Deleted the last boundary corner.')
+})
+
+document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
+  confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
+  updateConfirmedGeometry('Reset to OpenCV candidate.')
+})
+
+editorCanvas.addEventListener('pointerdown', (event) => {
+  setPointerFromEvent(event)
+  raycaster.setFromCamera(pointer, camera)
+  const intersections = raycaster.intersectObjects(cornerMeshes)
+  if (intersections.length === 0) {
+    return
+  }
+  const cornerIndex = cornerMeshes.indexOf(intersections[0].object as THREE.Mesh)
+  if (cornerIndex < 0) {
+    return
+  }
+  activeCornerIndex = cornerIndex
+  editorCanvas.setPointerCapture(event.pointerId)
+})
+
+editorCanvas.addEventListener('pointermove', (event) => {
+  if (activeCornerIndex === null) {
+    return
+  }
+  setPointerFromEvent(event)
+  raycaster.setFromCamera(pointer, camera)
+  const target = new THREE.Vector3()
+  if (raycaster.ray.intersectPlane(dragPlane, target)) {
+    confirmedPoints[activeCornerIndex] = target
+    updateConfirmedGeometry('Dragging confirmed boundary corner.', false)
+  }
+})
+
+editorCanvas.addEventListener('pointerup', (event) => {
+  if (activeCornerIndex !== null) {
+    updateConfirmedGeometry('Updated confirmed boundary by dragging corner.')
+  }
+  activeCornerIndex = null
+  editorCanvas.releasePointerCapture(event.pointerId)
 })
 
 const worker = new Worker(new URL('./opencvWorker.ts', import.meta.url), {
@@ -243,4 +333,51 @@ function candidateGeometry(): Record<string, unknown> {
       confirmed: 'solid-blue-with-handles',
     },
   }
+}
+
+function updateConfirmedGeometry(message: string, emit = true): void {
+  const closedPoints = [...confirmedPoints, confirmedPoints[0]]
+  confirmedLine.geometry.dispose()
+  confirmedLine.geometry = new THREE.BufferGeometry().setFromPoints(closedPoints)
+
+  while (cornerMeshes.length < confirmedPoints.length) {
+    const corner = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), cornerMaterial)
+    room.add(corner)
+    cornerMeshes.push(corner)
+  }
+  while (cornerMeshes.length > confirmedPoints.length) {
+    const corner = cornerMeshes.pop()
+    if (corner) {
+      room.remove(corner)
+    }
+  }
+  for (const [index, point] of confirmedPoints.entries()) {
+    cornerMeshes[index].position.copy(point)
+  }
+
+  geometryStatusElement.textContent = message
+  if (emit) {
+    postToParent({
+      type: 'roomforge.geometry.confirmedChanged',
+      version: BRIDGE_VERSION,
+      payload: confirmedGeometryPayload(),
+    })
+  }
+}
+
+function confirmedGeometryPayload(): Record<string, unknown> {
+  return {
+    coordinate_space: 'image_pixels',
+    geometry_kind: 'room_boundary',
+    points: confirmedPoints.map((point) => ({
+      x: Math.round((point.x + 2) * 400),
+      y: Math.round((point.z + 1.5) * 400),
+    })),
+  }
+}
+
+function setPointerFromEvent(event: PointerEvent): void {
+  const rect = editorCanvas.getBoundingClientRect()
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+  pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1)
 }

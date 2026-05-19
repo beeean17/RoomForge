@@ -54,6 +54,7 @@ Initial project persistence schema:
 - `migrations/003_source_images_and_room_dimensions.sql`
 - `migrations/004_reconstruction_jobs.sql`
 - `migrations/005_opencv_results.sql`
+- `migrations/006_confirmed_geometries.sql`
 
 ## Source Image Intake APIs
 
@@ -118,6 +119,19 @@ only operate on jobs owned by the authenticated user.
 
 Candidate geometry must use `coordinate_space: "image_pixels"`. Confirmed
 geometry is intentionally stored separately in later geometry review stories.
+
+## Confirmed Geometry APIs
+
+Confirmed geometry endpoints require `Authorization: Bearer <firebase_id_token>`
+and only operate on projects owned by the authenticated user.
+
+- `POST /room-projects/{project_id}/confirmed-geometries`: stores user-confirmed
+  room boundary points separately from OpenCV candidate geometry.
+- `GET /room-projects/{project_id}/confirmed-geometries/{geometry_id}`: returns
+  owned confirmed geometry.
+
+Confirmed pre-calibration geometry uses `coordinate_space: "image_pixels"` and
+is validated to contain at least three points and no self-intersecting polygon.
 
 ## Admin Access Boundary
 

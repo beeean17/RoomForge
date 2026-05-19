@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 
 from app.core.errors import error_response
 from app.core.request import request_id_from
-from app.routers import admin, auth, health, projects, source_images
+from app.routers import admin, auth, dimensions, health, projects, source_images
 
 
 def create_app() -> FastAPI:
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router)
     app.include_router(projects.router)
     app.include_router(source_images.router)
+    app.include_router(dimensions.router)
     app.include_router(health.router)
     return app
 

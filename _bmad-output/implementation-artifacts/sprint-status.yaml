@@ -1,5 +1,5 @@
 # generated: 2026-05-08T13:44:39+0900
-# last_updated: 2026-05-17T02:16:50+0900
+# last_updated: 2026-05-19T10:15:57+0900
 # project: RoomForge
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08T13:44:39+0900
-last_updated: 2026-05-17T02:16:50+0900
+last_updated: 2026-05-19T10:15:57+0900
 project: RoomForge
 project_key: NOKEY
 tracking_system: file-system
@@ -51,11 +51,11 @@ development_status:
   1-6-open-update-and-delete-own-projects: review
   1-7-admin-access-boundary: review
   epic-1-retrospective: optional
-  epic-2: backlog
-  2-1-photo-suitability-upload-entry: backlog
-  2-2-enabler-image-size-and-retention-policy: backlog
-  2-3-source-image-upload-and-metadata-persistence: backlog
-  2-4-room-dimension-entry: backlog
+  epic-2: in-progress
+  2-1-photo-suitability-upload-entry: review
+  2-2-enabler-image-size-and-retention-policy: review
+  2-3-source-image-upload-and-metadata-persistence: review
+  2-4-room-dimension-entry: review
   epic-2-retrospective: optional
   epic-3: backlog
   3-1-spike-enabler-editor-bridge-and-opencv-runtime-packaging: backlog

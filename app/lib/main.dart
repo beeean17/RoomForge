@@ -1,3 +1,9 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
+import 'dart:async';
+import 'dart:html' as html;
+import 'dart:typed_data';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -513,6 +519,7 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
                       flex: 2,
                       child: ProjectDetailPanel(
                         project: _selectedProject,
+                        projectApi: widget.projectApi,
                         onEdit: _editSelectedProject,
                         onDelete: _deleteSelectedProject,
                       ),
@@ -528,21 +535,248 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   }
 }
 
-class ProjectDetailPanel extends StatelessWidget {
+class ProjectDetailPanel extends StatefulWidget {
   const ProjectDetailPanel({
     required this.project,
+    required this.projectApi,
     required this.onEdit,
     required this.onDelete,
     super.key,
   });
 
   final RoomProject? project;
+  final ProjectApi projectApi;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
+  State<ProjectDetailPanel> createState() => _ProjectDetailPanelState();
+}
+
+class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
+  static const _allowedImageTypes = {'image/jpeg', 'image/png', 'image/webp'};
+  static const _maxImageBytes = 10 * 1024 * 1024;
+  static const _lowQualityImageBytes = 100 * 1024;
+
+  final _dimensionFormKey = GlobalKey<FormState>();
+  final _widthController = TextEditingController();
+  final _depthController = TextEditingController();
+  final _heightController = TextEditingController();
+
+  SourceImage? _sourceImage;
+  RoomDimensions? _dimensions;
+  String _uploadState = 'empty';
+  String? _uploadMessage;
+  bool _isSavingDimensions = false;
+  String? _dimensionMessage;
+  StreamSubscription<html.MouseEvent>? _dragOverSubscription;
+  StreamSubscription<html.MouseEvent>? _dragLeaveSubscription;
+  StreamSubscription<html.MouseEvent>? _dropSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    final body = html.document.body;
+    if (body == null) {
+      return;
+    }
+    _dragOverSubscription = body.onDragOver.listen(_handleDragOver);
+    _dragLeaveSubscription = body.onDragLeave.listen(_handleDragLeave);
+    _dropSubscription = body.onDrop.listen(_handleDrop);
+  }
+
+  @override
+  void didUpdateWidget(ProjectDetailPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.project?.id != widget.project?.id) {
+      _sourceImage = null;
+      _dimensions = null;
+      _uploadState = 'empty';
+      _uploadMessage = null;
+      _dimensionMessage = null;
+      _widthController.clear();
+      _depthController.clear();
+      _heightController.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _dragOverSubscription?.cancel();
+    _dragLeaveSubscription?.cancel();
+    _dropSubscription?.cancel();
+    _widthController.dispose();
+    _depthController.dispose();
+    _heightController.dispose();
+    super.dispose();
+  }
+
+  void _handleDragOver(html.MouseEvent event) {
+    if (widget.project == null) {
+      return;
+    }
+    event.preventDefault();
+    setState(() {
+      _uploadState = 'dragging';
+      _uploadMessage = 'Drop a JPEG, PNG, or WebP room photo.';
+    });
+  }
+
+  void _handleDragLeave(html.MouseEvent event) {
+    if (widget.project == null || _uploadState != 'dragging') {
+      return;
+    }
+    setState(() {
+      _uploadState = _sourceImage == null ? 'empty' : 'uploaded';
+      _uploadMessage = _sourceImage == null ? null : _uploadMessage;
+    });
+  }
+
+  void _handleDrop(html.MouseEvent event) {
+    if (widget.project == null) {
+      return;
+    }
+    event.preventDefault();
+    final files = event.dataTransfer.files;
+    final file = files?.isNotEmpty == true ? files!.first : null;
+    if (file == null) {
+      setState(() {
+        _uploadState = 'rejected';
+        _uploadMessage = 'Drop one supported room photo file.';
+      });
+      return;
+    }
+    unawaited(_uploadFile(file));
+  }
+
+  Future<void> _selectAndUploadImage() async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
+
+    setState(() {
+      _uploadState = 'dragging';
+      _uploadMessage = 'Select a JPEG, PNG, or WebP room photo.';
+    });
+
+    final input = html.FileUploadInputElement()
+      ..accept = _allowedImageTypes.join(',')
+      ..multiple = false;
+    input.click();
+    await input.onChange.first;
+
+    final file = input.files?.isNotEmpty == true ? input.files!.first : null;
+    if (file == null) {
+      setState(() {
+        _uploadState = 'empty';
+        _uploadMessage = null;
+      });
+      return;
+    }
+
+    await _uploadFile(file);
+  }
+
+  Future<void> _uploadFile(html.File file) async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
+
+    final contentType = _normalizedContentType(file);
+    final validationMessage = _clientImageValidationMessage(file, contentType);
+    if (validationMessage != null) {
+      setState(() {
+        _uploadState = 'rejected';
+        _uploadMessage = validationMessage;
+        _sourceImage = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _uploadState = file.size < _lowQualityImageBytes
+          ? 'lowQualityWarning'
+          : 'uploading';
+      _uploadMessage = file.size < _lowQualityImageBytes
+          ? 'Low-quality warning: this file is small. Use a sharper, brighter image if reconstruction looks weak.'
+          : 'Uploading source image metadata.';
+    });
+
+    try {
+      final bytes = await _readFileBytes(file);
+      final imageSize = await _readImageSize(file);
+      final sourceImage = await widget.projectApi.uploadSourceImage(
+        projectId: project.id,
+        filename: file.name,
+        contentType: contentType,
+        bytes: bytes,
+        widthPx: imageSize?.width,
+        heightPx: imageSize?.height,
+      );
+      setState(() {
+        _sourceImage = sourceImage;
+        _uploadState = 'uploaded';
+        _uploadMessage = imageSize == null
+            ? 'Uploaded. Image dimensions were not available from the browser.'
+            : 'Uploaded ${imageSize.width} x ${imageSize.height}px source image.';
+      });
+    } on ProjectApiException catch (error) {
+      setState(() {
+        _uploadState = 'rejected';
+        _uploadMessage = error.message;
+        _sourceImage = null;
+      });
+    } catch (error) {
+      setState(() {
+        _uploadState = 'rejected';
+        _uploadMessage = 'Upload failed: $error';
+        _sourceImage = null;
+      });
+    }
+  }
+
+  Future<void> _saveDimensions() async {
+    final project = widget.project;
+    if (project == null || !_dimensionFormKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isSavingDimensions = true;
+      _dimensionMessage = null;
+    });
+
+    try {
+      final dimensions = await widget.projectApi.saveRoomDimensions(
+        projectId: project.id,
+        widthValue: double.parse(_widthController.text.trim()),
+        depthValue: double.parse(_depthController.text.trim()),
+        heightValue: _heightController.text.trim().isEmpty
+            ? null
+            : double.parse(_heightController.text.trim()),
+      );
+      setState(() {
+        _dimensions = dimensions;
+        _dimensionMessage = dimensions.usesDefaultHeight
+            ? 'Saved with MVP default height ${dimensions.heightValue.toStringAsFixed(2)} m.'
+            : 'Saved room dimensions.';
+      });
+    } on ProjectApiException catch (error) {
+      setState(() => _dimensionMessage = error.message);
+    } catch (error) {
+      setState(() => _dimensionMessage = 'Saving dimensions failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingDimensions = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final project = this.project;
+    final project = widget.project;
     if (project == null) {
       return const DecoratedBox(
         decoration: BoxDecoration(
@@ -558,27 +792,296 @@ class ProjectDetailPanel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(project.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              project.description?.isNotEmpty == true
-                  ? project.description!
-                  : 'No description',
-            ),
-            const SizedBox(height: 20),
-            const Text('Next action: add room photo and dimensions.'),
-            const Spacer(),
-            FilledButton(onPressed: onEdit, child: const Text('Edit')),
-            const SizedBox(height: 8),
-            OutlinedButton(onPressed: onDelete, child: const Text('Delete')),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(project.name, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                project.description?.isNotEmpty == true
+                    ? project.description!
+                    : 'No description',
+              ),
+              const SizedBox(height: 20),
+              PhotoIntakeSection(
+                state: _uploadState,
+                message: _uploadMessage,
+                sourceImage: _sourceImage,
+                onSelectImage: _selectAndUploadImage,
+              ),
+              const SizedBox(height: 20),
+              RoomDimensionsSection(
+                formKey: _dimensionFormKey,
+                widthController: _widthController,
+                depthController: _depthController,
+                heightController: _heightController,
+                dimensions: _dimensions,
+                message: _dimensionMessage,
+                isSaving: _isSavingDimensions,
+                onSave: _saveDimensions,
+              ),
+              const SizedBox(height: 20),
+              FilledButton(onPressed: widget.onEdit, child: const Text('Edit')),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: widget.onDelete,
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  String _normalizedContentType(html.File file) {
+    if (file.type.isNotEmpty) {
+      return file.type;
+    }
+    final lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lowerName.endsWith('.png')) {
+      return 'image/png';
+    }
+    if (lowerName.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    return 'application/octet-stream';
+  }
+
+  String? _clientImageValidationMessage(html.File file, String contentType) {
+    if (!_allowedImageTypes.contains(contentType)) {
+      return 'Unsupported image type. Use JPEG, PNG, or WebP.';
+    }
+    if (file.size > _maxImageBytes) {
+      return 'Room photo must be 10 MB or smaller.';
+    }
+    return null;
+  }
+
+  Future<Uint8List> _readFileBytes(html.File file) async {
+    final reader = html.FileReader();
+    reader.readAsArrayBuffer(file);
+    await reader.onLoad.first;
+    final result = reader.result;
+    if (result is ByteBuffer) {
+      return Uint8List.view(result);
+    }
+    if (result is Uint8List) {
+      return result;
+    }
+    throw StateError('Could not read selected image bytes.');
+  }
+
+  Future<_ImageSize?> _readImageSize(html.File file) async {
+    final url = html.Url.createObjectUrl(file);
+    final image = html.ImageElement(src: url);
+    try {
+      await image.onLoad.first.timeout(const Duration(seconds: 3));
+      final width = image.naturalWidth;
+      final height = image.naturalHeight;
+      if (width <= 0 || height <= 0) {
+        return null;
+      }
+      return _ImageSize(width: width, height: height);
+    } on TimeoutException {
+      return null;
+    } finally {
+      html.Url.revokeObjectUrl(url);
+    }
+  }
+}
+
+class PhotoIntakeSection extends StatelessWidget {
+  const PhotoIntakeSection({
+    required this.state,
+    required this.message,
+    required this.sourceImage,
+    required this.onSelectImage,
+    super.key,
+  });
+
+  final String state;
+  final String? message;
+  final SourceImage? sourceImage;
+  final VoidCallback onSelectImage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final borderColor = switch (state) {
+      'rejected' => theme.colorScheme.error,
+      'uploaded' => theme.colorScheme.primary,
+      'lowQualityWarning' => const Color(0xFFB45309),
+      _ => const Color(0xFFE2E8F0),
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Photo intake', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        const Text(
+          'Use a sharp, bright room photo with visible floor-wall boundaries, minimal occlusion, low distortion, and JPEG, PNG, or WebP format.',
+        ),
+        const SizedBox(height: 10),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.fromBorderSide(BorderSide(color: borderColor)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(_stateLabel),
+                if (message != null) ...[
+                  const SizedBox(height: 8),
+                  Text(message!),
+                ],
+                if (sourceImage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '${sourceImage!.originalFilename} - ${(sourceImage!.byteSize / 1024).toStringAsFixed(1)} KB',
+                  ),
+                ],
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: state == 'uploading' ? null : onSelectImage,
+                  child: Text(
+                    state == 'uploading' ? 'Uploading...' : 'Choose photo',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String get _stateLabel {
+    return switch (state) {
+      'dragging' => 'Ready to select',
+      'uploading' => 'Uploading',
+      'uploaded' => 'Uploaded',
+      'rejected' => 'Rejected',
+      'lowQualityWarning' => 'Low-quality warning',
+      _ => 'No source image selected',
+    };
+  }
+}
+
+class RoomDimensionsSection extends StatelessWidget {
+  const RoomDimensionsSection({
+    required this.formKey,
+    required this.widthController,
+    required this.depthController,
+    required this.heightController,
+    required this.dimensions,
+    required this.message,
+    required this.isSaving,
+    required this.onSave,
+    super.key,
+  });
+
+  final GlobalKey<FormState> formKey;
+  final TextEditingController widthController;
+  final TextEditingController depthController;
+  final TextEditingController heightController;
+  final RoomDimensions? dimensions;
+  final String? message;
+  final bool isSaving;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Form(
+      key: formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Room dimensions', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: widthController,
+                  decoration: const InputDecoration(
+                    labelText: 'Width',
+                    suffixText: 'm',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: _positiveDimensionValidator,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  controller: depthController,
+                  decoration: const InputDecoration(
+                    labelText: 'Depth',
+                    suffixText: 'm',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: _positiveDimensionValidator,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: heightController,
+            decoration: const InputDecoration(
+              labelText: 'Height',
+              helperText: 'Leave blank to use the MVP default height.',
+              suffixText: 'm',
+            ),
+            keyboardType: TextInputType.number,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return null;
+              }
+              return _positiveDimensionValidator(value);
+            },
+          ),
+          if (message != null) ...[const SizedBox(height: 8), Text(message!)],
+          if (dimensions != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Saved: ${dimensions!.widthValue.toStringAsFixed(2)} x ${dimensions!.depthValue.toStringAsFixed(2)} x ${dimensions!.heightValue.toStringAsFixed(2)} ${dimensions!.unit}',
+            ),
+          ],
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: isSaving ? null : onSave,
+            child: Text(isSaving ? 'Saving...' : 'Save dimensions'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String? _positiveDimensionValidator(String? value) {
+    final parsed = double.tryParse(value?.trim() ?? '');
+    if (parsed == null || parsed <= 0) {
+      return 'Enter a positive number.';
+    }
+    return null;
+  }
+}
+
+class _ImageSize {
+  const _ImageSize({required this.width, required this.height});
+
+  final int width;
+  final int height;
 }
 
 class ProjectErrorView extends StatelessWidget {

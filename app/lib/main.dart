@@ -567,13 +567,17 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
 
   SourceImage? _sourceImage;
   RoomDimensions? _dimensions;
+  ReconstructionJob? _reconstructionJob;
   String _uploadState = 'empty';
   String? _uploadMessage;
   bool _isSavingDimensions = false;
+  bool _isSubmittingReconstruction = false;
   String? _dimensionMessage;
+  String? _reconstructionMessage;
   StreamSubscription<html.MouseEvent>? _dragOverSubscription;
   StreamSubscription<html.MouseEvent>? _dragLeaveSubscription;
   StreamSubscription<html.MouseEvent>? _dropSubscription;
+  Timer? _reconstructionPollTimer;
 
   @override
   void initState() {
@@ -593,12 +597,15 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     if (oldWidget.project?.id != widget.project?.id) {
       _sourceImage = null;
       _dimensions = null;
+      _reconstructionJob = null;
       _uploadState = 'empty';
       _uploadMessage = null;
       _dimensionMessage = null;
+      _reconstructionMessage = null;
       _widthController.clear();
       _depthController.clear();
       _heightController.clear();
+      _reconstructionPollTimer?.cancel();
     }
   }
 
@@ -607,6 +614,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     _dragOverSubscription?.cancel();
     _dragLeaveSubscription?.cancel();
     _dropSubscription?.cancel();
+    _reconstructionPollTimer?.cancel();
     _widthController.dispose();
     _depthController.dispose();
     _heightController.dispose();
@@ -789,6 +797,88 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     );
   }
 
+  Future<void> _submitReconstruction() async {
+    final project = widget.project;
+    final sourceImage = _sourceImage;
+    if (project == null || sourceImage == null) {
+      setState(() {
+        _reconstructionMessage =
+            'Upload a source image before submitting reconstruction.';
+      });
+      return;
+    }
+    if (_dimensions == null) {
+      setState(() {
+        _reconstructionMessage =
+            'Save room dimensions before submitting reconstruction.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmittingReconstruction = true;
+      _reconstructionMessage = null;
+    });
+
+    try {
+      final job = await widget.projectApi.createReconstructionJob(
+        projectId: project.id,
+        sourceImageId: sourceImage.id,
+      );
+      setState(() {
+        _reconstructionJob = job;
+        _reconstructionMessage = job.statusLabel;
+      });
+      _startReconstructionPolling(job.id);
+    } on ProjectApiException catch (error) {
+      setState(() => _reconstructionMessage = error.message);
+    } catch (error) {
+      setState(
+        () => _reconstructionMessage = 'Reconstruction submit failed: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingReconstruction = false);
+      }
+    }
+  }
+
+  void _startReconstructionPolling(int jobId) {
+    _reconstructionPollTimer?.cancel();
+    _reconstructionPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      unawaited(_pollReconstructionJob(jobId));
+    });
+  }
+
+  Future<void> _pollReconstructionJob(int jobId) async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
+
+    try {
+      final job = await widget.projectApi.getReconstructionJob(
+        projectId: project.id,
+        jobId: jobId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _reconstructionJob = job;
+        _reconstructionMessage = job.statusLabel;
+      });
+      if (job.terminal) {
+        _reconstructionPollTimer?.cancel();
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _reconstructionMessage = 'Status refresh failed: $error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final project = widget.project;
@@ -835,6 +925,13 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 message: _dimensionMessage,
                 isSaving: _isSavingDimensions,
                 onSave: _saveDimensions,
+              ),
+              const SizedBox(height: 20),
+              ReconstructionJobSection(
+                job: _reconstructionJob,
+                message: _reconstructionMessage,
+                isSubmitting: _isSubmittingReconstruction,
+                onSubmit: _submitReconstruction,
               ),
               const SizedBox(height: 20),
               FilledButton(
@@ -1094,6 +1191,45 @@ class RoomDimensionsSection extends StatelessWidget {
       return 'Enter a positive number.';
     }
     return null;
+  }
+}
+
+class ReconstructionJobSection extends StatelessWidget {
+  const ReconstructionJobSection({
+    required this.job,
+    required this.message,
+    required this.isSubmitting,
+    required this.onSubmit,
+    super.key,
+  });
+
+  final ReconstructionJob? job;
+  final String? message;
+  final bool isSubmitting;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Reconstruction job', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Text(message ?? 'Submit after source image and dimensions are saved.'),
+        if (job != null) ...[
+          const SizedBox(height: 8),
+          Text('Status: ${job!.statusLabel}'),
+          Text('Provider: ${job!.provider}'),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: isSubmitting ? null : onSubmit,
+          child: Text(isSubmitting ? 'Submitting...' : 'Submit reconstruction'),
+        ),
+      ],
+    );
   }
 }
 

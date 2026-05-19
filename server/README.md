@@ -52,6 +52,7 @@ Initial project persistence schema:
 - `migrations/001_user_session_mapping.sql`
 - `migrations/002_room_projects.sql`
 - `migrations/003_source_images_and_room_dimensions.sql`
+- `migrations/004_reconstruction_jobs.sql`
 
 ## Source Image Intake APIs
 
@@ -88,6 +89,21 @@ only operate on projects owned by the authenticated user.
 If height is omitted, the API applies the MVP default height from
 `ROOMFORGE_ROOM_DEFAULT_HEIGHT_METERS` and returns `height_source: "default"`.
 Client-supplied height returns `height_source: "user"`.
+
+## Reconstruction Job APIs
+
+Reconstruction job endpoints require `Authorization: Bearer <firebase_id_token>`
+and only operate on projects owned by the authenticated user.
+
+- `POST /room-projects/{project_id}/reconstruction-jobs`: creates a job for an
+  owned project that already has a source image and saved dimensions.
+- `GET /room-projects/{project_id}/reconstruction-jobs/{job_id}`: returns the
+  current job status and transition trail for client polling.
+
+Allowed persisted statuses are `created`, `uploading`, `processing`,
+`review_required`, `succeeded`, `failed`, `timeout`, `cancelled`, and `retrying`.
+The persisted `review_required` status is exposed to users as "Needs review";
+the API does not create a separate `needs_review` status.
 
 ## Admin Access Boundary
 

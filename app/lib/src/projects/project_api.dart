@@ -122,6 +122,56 @@ class RoomDimensions {
   }
 }
 
+class ReconstructionJob {
+  const ReconstructionJob({
+    required this.id,
+    required this.projectId,
+    required this.userId,
+    required this.sourceImageId,
+    required this.status,
+    required this.statusLabel,
+    required this.terminal,
+    required this.provider,
+    required this.createdAt,
+    required this.updatedAt,
+    this.retryOfJobId,
+    this.failureReasonCode,
+    this.failureReasonMessage,
+  });
+
+  final int id;
+  final int projectId;
+  final int userId;
+  final int sourceImageId;
+  final String status;
+  final String statusLabel;
+  final bool terminal;
+  final String provider;
+  final int? retryOfJobId;
+  final String? failureReasonCode;
+  final String? failureReasonMessage;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory ReconstructionJob.fromJson(Map<String, Object?> json) {
+    return ReconstructionJob(
+      id: json['id'] as int,
+      projectId: json['project_id'] as int,
+      userId: json['user_id'] as int,
+      sourceImageId: json['source_image_id'] as int,
+      status: json['status'] as String,
+      statusLabel: json['status_label'] as String,
+      terminal: json['terminal'] as bool,
+      provider: json['provider'] as String,
+      retryOfJobId: json['retry_of_job_id'] as int?,
+      failureReasonCode: json['failure_reason_code'] as String?,
+      failureReasonMessage: json['failure_reason_message'] as String?,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+}
+
 class ProjectApi {
   ProjectApi({
     required this.authRepository,
@@ -242,6 +292,33 @@ class ProjectApi {
     final body = _decodeEnvelope(response);
     final data = body['data'] as Map<String, Object?>;
     return RoomDimensions.fromJson(data['dimensions'] as Map<String, Object?>);
+  }
+
+  Future<ReconstructionJob> createReconstructionJob({
+    required int projectId,
+    required int sourceImageId,
+  }) async {
+    final response = await _client.post(
+      _baseUri.resolve('/room-projects/$projectId/reconstruction-jobs'),
+      headers: await _headers(),
+      body: jsonEncode({'source_image_id': sourceImageId}),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
+  }
+
+  Future<ReconstructionJob> getReconstructionJob({
+    required int projectId,
+    required int jobId,
+  }) async {
+    final response = await _client.get(
+      _baseUri.resolve('/room-projects/$projectId/reconstruction-jobs/$jobId'),
+      headers: await _headers(),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
   }
 
   Future<Map<String, String>> _headers() async {

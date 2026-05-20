@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     source_image_max_bytes: int = 10 * 1024 * 1024
     source_image_allowed_content_types: str = "image/jpeg,image/png,image/webp"
     room_default_height_meters: float = 2.4
+    use_in_memory_repositories: bool = False
+    cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5000,http://127.0.0.1:5000"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="ROOMFORGE_")
 

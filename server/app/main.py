@@ -1,8 +1,11 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.errors import error_response
 from app.core.request import request_id_from
+from app.core.config import settings
+from app.repositories.memory import install_in_memory_repositories
 from app.routers import (
     admin,
     auth,
@@ -19,6 +22,21 @@ from app.routers import (
 
 def create_app() -> FastAPI:
     app = FastAPI(title="RoomForge API", version="0.1.0")
+
+    if settings.use_in_memory_repositories:
+        install_in_memory_repositories(app)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            origin.strip()
+            for origin in settings.cors_allow_origins.split(",")
+            if origin.strip()
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request, exc):

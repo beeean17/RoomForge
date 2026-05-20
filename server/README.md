@@ -16,6 +16,24 @@ After installing development dependencies:
 python3 -m pytest
 ```
 
+## Local Service Testing Without Oracle
+
+When Oracle is not ready, run the API with in-memory repositories:
+
+```bash
+./scripts/server-local.sh
+```
+
+This keeps Firebase token verification active, but stores users, projects,
+images, dimensions, jobs, geometry, and floor plans in process memory. Data is
+reset when the server restarts.
+
+The local script uses `http://127.0.0.1:8010` by default to avoid common local
+port conflicts. Override with `ROOMFORGE_SERVER_PORT=8000` if needed.
+
+See `docs/local-service-test.md` from the repository root for the full local
+browser test flow.
+
 ## Auth Session Mapping
 
 Protected API routes use `Authorization: Bearer <firebase_id_token>`.

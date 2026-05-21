@@ -76,6 +76,19 @@ app.innerHTML = `
       <button type="button" data-furniture-category="table">Add table</button>
       <button type="button" data-furniture-category="sofa">Add sofa</button>
     </div>
+    <div class="furniture-edit-controls" aria-label="Selected furniture editing controls">
+      <button type="button" data-furniture-edit="move-up">Move up</button>
+      <button type="button" data-furniture-edit="move-down">Move down</button>
+      <button type="button" data-furniture-edit="move-left">Move left</button>
+      <button type="button" data-furniture-edit="move-right">Move right</button>
+      <button type="button" data-furniture-edit="rotate-left">Rotate -15</button>
+      <button type="button" data-furniture-edit="rotate-right">Rotate +15</button>
+      <button type="button" data-furniture-edit="narrower">Narrower</button>
+      <button type="button" data-furniture-edit="wider">Wider</button>
+      <button type="button" data-furniture-edit="shallower">Shallower</button>
+      <button type="button" data-furniture-edit="deeper">Deeper</button>
+      <button type="button" data-furniture-edit="delete">Delete</button>
+    </div>
     <div class="camera-controls" aria-label="3D camera controls">
       <button type="button" data-camera-action="reset">Reset</button>
       <button type="button" data-camera-action="fit">Fit</button>
@@ -106,6 +119,9 @@ const cameraActionButtons = Array.from(
 const furnitureCategoryButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-furniture-category]'),
 )
+const furnitureEditButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-furniture-edit]'),
+)
 
 if (
   !canvas ||
@@ -120,7 +136,8 @@ if (
   !view2dButton ||
   !view3dButton ||
   cameraActionButtons.length === 0 ||
-  furnitureCategoryButtons.length === 0
+  furnitureCategoryButtons.length === 0 ||
+  furnitureEditButtons.length === 0
 ) {
   throw new Error('Missing editor UI element.')
 }
@@ -239,6 +256,18 @@ const reducedMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
 
 type CameraAction = 'reset' | 'fit' | 'top' | 'front' | 'corner' | 'eye'
 type CameraDragMode = 'orbit' | 'pan'
+type FurnitureEditAction =
+  | 'move-up'
+  | 'move-down'
+  | 'move-left'
+  | 'move-right'
+  | 'rotate-left'
+  | 'rotate-right'
+  | 'narrower'
+  | 'wider'
+  | 'shallower'
+  | 'deeper'
+  | 'delete'
 
 type CameraSnapshot = {
   position: THREE.Vector3
@@ -362,6 +391,14 @@ for (const button of furnitureCategoryButtons) {
     const category = button.dataset.furnitureCategory
     if (isFurnitureCategory(category)) {
       addFurniture(category)
+    }
+  })
+}
+for (const button of furnitureEditButtons) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.furnitureEdit
+    if (isFurnitureEditAction(action)) {
+      editSelectedFurniture(action)
     }
   })
 }
@@ -762,6 +799,10 @@ function updateSpatialStatus(): void {
   view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d'))
   view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
   view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
+  const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
+  for (const button of furnitureEditButtons) {
+    button.disabled = !furnitureSelected
+  }
 }
 
 function emitSceneState(type: string, requestId?: string): void {
@@ -815,6 +856,88 @@ function selectFurniture(objectId: unknown): void {
   rebuildFurniture()
   updateSpatialStatus()
   emitSceneState('roomforge.selection.changed')
+}
+
+function editSelectedFurniture(action: FurnitureEditAction): void {
+  const selected = selectedFurniture()
+  if (!selected) {
+    return
+  }
+  if (action === 'delete') {
+    spatialModel = {
+      ...spatialModel,
+      hasUnsavedChanges: true,
+      selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
+      furniture: spatialModel.furniture.filter((item) => item.objectId !== selected.objectId),
+    }
+    geometryStatusElement.textContent = `Deleted ${selected.label}.`
+    rebuildFurniture()
+    updateSpatialStatus()
+    emitSceneState('roomforge.scene.updated')
+    return
+  }
+
+  const startedAt = performance.now()
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    furniture: spatialModel.furniture.map((item) =>
+      item.objectId === selected.objectId ? editedFurniture(item, action) : item,
+    ),
+  }
+  const elapsed = performance.now() - startedAt
+  geometryStatusElement.textContent = `Updated ${selected.label} in ${elapsed.toFixed(1)} ms.`
+  rebuildFurniture()
+  updateSpatialStatus()
+  emitSceneState('roomforge.scene.updated')
+}
+
+function editedFurniture(item: FurnitureObject, action: FurnitureEditAction): FurnitureObject {
+  const moveStep = 0.1
+  const sizeStep = 0.1
+  if (action === 'move-up') {
+    return { ...item, position: { ...item.position, y: Number((item.position.y - moveStep).toFixed(2)) } }
+  }
+  if (action === 'move-down') {
+    return { ...item, position: { ...item.position, y: Number((item.position.y + moveStep).toFixed(2)) } }
+  }
+  if (action === 'move-left') {
+    return { ...item, position: { ...item.position, x: Number((item.position.x - moveStep).toFixed(2)) } }
+  }
+  if (action === 'move-right') {
+    return { ...item, position: { ...item.position, x: Number((item.position.x + moveStep).toFixed(2)) } }
+  }
+  if (action === 'rotate-left' || action === 'rotate-right') {
+    const delta = action === 'rotate-left' ? -15 : 15
+    return { ...item, rotationDegrees: (item.rotationDegrees + delta + 360) % 360 }
+  }
+  if (action === 'narrower' || action === 'wider') {
+    const delta = action === 'narrower' ? -sizeStep : sizeStep
+    return {
+      ...item,
+      size: {
+        ...item.size,
+        widthMeters: Number(Math.max(0.2, item.size.widthMeters + delta).toFixed(2)),
+      },
+    }
+  }
+  const delta = action === 'shallower' ? -sizeStep : sizeStep
+  return {
+    ...item,
+    size: {
+      ...item.size,
+      depthMeters: Number(Math.max(0.2, item.size.depthMeters + delta).toFixed(2)),
+    },
+  }
+}
+
+function selectedFurniture(): FurnitureObject | null {
+  if (spatialModel.selected?.objectType !== 'furniture') {
+    return null
+  }
+  return (
+    spatialModel.furniture.find((item) => item.objectId === spatialModel.selected?.objectId) ?? null
+  )
 }
 
 function furnitureDefaults(category: FurnitureCategory): FurnitureObject {
@@ -1138,6 +1261,22 @@ function inspectorSummary(model: SpatialModel): string {
 
 function isFurnitureCategory(value: string | undefined): value is FurnitureCategory {
   return value === 'chair' || value === 'table' || value === 'sofa'
+}
+
+function isFurnitureEditAction(value: string | undefined): value is FurnitureEditAction {
+  return (
+    value === 'move-up' ||
+    value === 'move-down' ||
+    value === 'move-left' ||
+    value === 'move-right' ||
+    value === 'rotate-left' ||
+    value === 'rotate-right' ||
+    value === 'narrower' ||
+    value === 'wider' ||
+    value === 'shallower' ||
+    value === 'deeper' ||
+    value === 'delete'
+  )
 }
 
 function setPointerFromEvent(event: PointerEvent): void {

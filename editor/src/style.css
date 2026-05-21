@@ -152,6 +152,21 @@ dd {
   gap: 8px;
 }
 
+.furniture-edit-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.furniture-edit-controls button[data-furniture-edit='delete'] {
+  grid-column: 1 / -1;
+}
+
+.furniture-edit-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .camera-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

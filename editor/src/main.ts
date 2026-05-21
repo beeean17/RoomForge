@@ -7,6 +7,14 @@ import {
   postBridgeMessage,
   type BridgeMessage,
 } from './bridge'
+import {
+  defaultSpatialModel,
+  roomBounds,
+  spatialModelFromBridgePayload,
+  spatialSummary,
+  type SpatialModel,
+  type ViewMode,
+} from './spatialModel'
 
 const app = document.querySelector<HTMLDivElement>('#app')
 
@@ -17,11 +25,16 @@ if (!app) {
 app.innerHTML = `
 <section class="editor-shell">
   <div class="viewport" aria-label="RoomForge editor viewport">
+    <div class="viewport-toolbar" aria-label="Planning view controls">
+      <button id="view-2d" type="button" aria-pressed="true">2D</button>
+      <button id="view-3d" type="button" aria-pressed="false">3D</button>
+    </div>
     <canvas class="editor-canvas" aria-label="Three.js reconstruction viewport"></canvas>
+    <div class="viewport-status-strip" id="scene-status">Initializing metric room scene</div>
   </div>
-  <aside class="status-panel">
+  <aside class="status-panel" aria-label="Inspector and status">
     <p class="eyebrow">RoomForge editor</p>
-    <h1>Reconstruction bridge ready</h1>
+    <h1>Planning editor</h1>
     <dl class="status-list">
       <div>
         <dt>Bridge</dt>
@@ -38,6 +51,14 @@ app.innerHTML = `
       <div>
         <dt>Geometry</dt>
         <dd id="geometry-status">Candidate and confirmed overlays visible</dd>
+      </div>
+      <div>
+        <dt>Scene</dt>
+        <dd id="spatial-status">Waiting for metric floor plan</dd>
+      </div>
+      <div>
+        <dt>Inspector</dt>
+        <dd id="inspector-status">Selected room shell</dd>
       </div>
     </dl>
     <div class="geometry-controls" aria-label="Geometry correction controls">
@@ -57,8 +78,24 @@ const bridgeStatus = document.querySelector<HTMLElement>('#bridge-status')
 const opencvStatus = document.querySelector<HTMLElement>('#opencv-status')
 const viewportStatus = document.querySelector<HTMLElement>('#viewport-status')
 const geometryStatus = document.querySelector<HTMLElement>('#geometry-status')
+const spatialStatus = document.querySelector<HTMLElement>('#spatial-status')
+const inspectorStatus = document.querySelector<HTMLElement>('#inspector-status')
+const sceneStatus = document.querySelector<HTMLElement>('#scene-status')
+const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
+const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
 
-if (!canvas || !bridgeStatus || !opencvStatus || !viewportStatus || !geometryStatus) {
+if (
+  !canvas ||
+  !bridgeStatus ||
+  !opencvStatus ||
+  !viewportStatus ||
+  !geometryStatus ||
+  !spatialStatus ||
+  !inspectorStatus ||
+  !sceneStatus ||
+  !view2dButton ||
+  !view3dButton
+) {
   throw new Error('Missing editor UI element.')
 }
 
@@ -67,6 +104,11 @@ const bridgeStatusElement = bridgeStatus
 const opencvStatusElement = opencvStatus
 const viewportStatusElement = viewportStatus
 const geometryStatusElement = geometryStatus
+const spatialStatusElement = spatialStatus
+const inspectorStatusElement = inspectorStatus
+const sceneStatusElement = sceneStatus
+const view2dButtonElement = view2dButton
+const view3dButtonElement = view3dButton
 
 const renderer = new THREE.WebGLRenderer({ canvas: editorCanvas, antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
@@ -76,6 +118,8 @@ const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
 camera.position.set(3.5, 4, 5)
 camera.lookAt(0, 0, 0)
+
+let spatialModel: SpatialModel = defaultSpatialModel()
 
 const room = new THREE.Group()
 const floor = new THREE.Mesh(
@@ -88,6 +132,7 @@ const floor = new THREE.Mesh(
   }),
 )
 floor.rotation.x = -Math.PI / 2
+floor.userData.objectId = spatialModel.room.objectId
 room.add(floor)
 
 const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x2563eb })
@@ -104,6 +149,20 @@ const confirmedLine = new THREE.Line(
   outlineMaterial,
 )
 room.add(confirmedLine)
+
+const wallMaterial = new THREE.MeshBasicMaterial({
+  color: 0x94a3b8,
+  transparent: true,
+  opacity: 0.28,
+  side: THREE.DoubleSide,
+})
+const wallGroup = new THREE.Group()
+room.add(wallGroup)
+
+const selectionMaterial = new THREE.LineBasicMaterial({ color: 0x0f172a })
+const selectionLine = new THREE.Line(new THREE.BufferGeometry(), selectionMaterial)
+selectionLine.visible = true
+room.add(selectionLine)
 
 const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0x0f172a })
 const cornerMeshes: THREE.Mesh[] = []
@@ -154,6 +213,7 @@ function resizeRenderer(): void {
   camera.aspect = width / Math.max(height, 1)
   camera.updateProjectionMatrix()
   viewportStatusElement.textContent = `${width} x ${height}px`
+  applyViewModeCamera()
 }
 
 function render(): void {
@@ -183,8 +243,30 @@ function respondToFlutter(message: BridgeMessage): void {
         height: editorCanvas.clientHeight,
       },
       focusable: true,
+      spatialModel: spatialModelPayload(),
     },
   })
+}
+
+function handleBridgeCommand(message: BridgeMessage): void {
+  if (message.type === 'roomforge.scene.initialize') {
+    spatialModel = spatialModelFromBridgePayload(message.payload)
+    applySpatialModel()
+    respondToFlutter(message)
+    emitSceneState('roomforge.scene.initialized', message.requestId)
+    return
+  }
+
+  if (message.type === 'roomforge.view.setMode') {
+    const viewMode = message.payload.viewMode
+    if (viewMode === '2d' || viewMode === '3d') {
+      setViewMode(viewMode)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  respondToFlutter(message)
 }
 
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
@@ -196,8 +278,11 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return
   }
 
-  respondToFlutter(event.data)
+  handleBridgeCommand(event.data)
 })
+
+view2dButtonElement.addEventListener('click', () => setViewMode('2d'))
+view3dButtonElement.addEventListener('click', () => setViewMode('3d'))
 
 document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
@@ -236,22 +321,42 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     return
   }
   geometryStatusElement.textContent = 'Generated meter-space MVP floor plan.'
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    room: {
+      ...spatialModel.room,
+      floorPlan: {
+        ...spatialModel.room.floorPlan,
+        metricGeometry: {
+          coordinateSpace: 'meters',
+          points: [
+            { x: 0, y: 0 },
+            { x: 4.2, y: 0 },
+            { x: 4.2, y: 3.6 },
+            { x: 0, y: 3.6 },
+          ],
+        },
+      },
+    },
+  }
+  applySpatialModel()
   postToParent({
     type: 'roomforge.calibration.floorPlanGenerated',
     version: BRIDGE_VERSION,
     payload: {
       unit: 'meters',
-      scale_summary: '4.20 m x 3.60 m rectangular MVP floor plan',
-      reference_line: { from_index: 0, to_index: 1 },
-      reference_length_value: 4.2,
-      perspective_assumptions: {
+      scaleSummary: '4.20 m x 3.60 m rectangular MVP floor plan',
+      referenceLine: { fromIndex: 0, toIndex: 1 },
+      referenceLengthValue: 4.2,
+      perspectiveAssumptions: {
         model: 'mvp_rectangular_projection',
-        source_coordinate_space: 'image_pixels',
-        target_coordinate_space: 'meters',
+        sourceCoordinateSpace: 'image_pixels',
+        targetCoordinateSpace: 'meters',
       },
-      image_geometry: confirmedGeometryPayload(),
-      metric_geometry: {
-        coordinate_space: 'meters',
+      imageGeometry: confirmedGeometryPayload(),
+      metricGeometry: {
+        coordinateSpace: 'meters',
         points: [
           { x: 0, y: 0 },
           { x: 4.2, y: 0 },
@@ -267,15 +372,25 @@ editorCanvas.addEventListener('pointerdown', (event) => {
   setPointerFromEvent(event)
   raycaster.setFromCamera(pointer, camera)
   const intersections = raycaster.intersectObjects(cornerMeshes)
-  if (intersections.length === 0) {
+  if (intersections.length > 0) {
+    const cornerIndex = cornerMeshes.indexOf(intersections[0].object as THREE.Mesh)
+    if (cornerIndex < 0) {
+      return
+    }
+    activeCornerIndex = cornerIndex
+    editorCanvas.setPointerCapture(event.pointerId)
     return
   }
-  const cornerIndex = cornerMeshes.indexOf(intersections[0].object as THREE.Mesh)
-  if (cornerIndex < 0) {
-    return
+
+  const roomIntersections = raycaster.intersectObject(floor)
+  if (roomIntersections.length > 0) {
+    spatialModel = {
+      ...spatialModel,
+      selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
+    }
+    updateSpatialStatus()
+    emitSceneState('roomforge.selection.changed')
   }
-  activeCornerIndex = cornerIndex
-  editorCanvas.setPointerCapture(event.pointerId)
 })
 
 editorCanvas.addEventListener('pointermove', (event) => {
@@ -294,9 +409,11 @@ editorCanvas.addEventListener('pointermove', (event) => {
 editorCanvas.addEventListener('pointerup', (event) => {
   if (activeCornerIndex !== null) {
     updateConfirmedGeometry('Updated confirmed boundary by dragging corner.')
+    if (editorCanvas.hasPointerCapture(event.pointerId)) {
+      editorCanvas.releasePointerCapture(event.pointerId)
+    }
   }
   activeCornerIndex = null
-  editorCanvas.releasePointerCapture(event.pointerId)
 })
 
 const worker = new Worker(new URL('./opencvWorker.ts', import.meta.url), {
@@ -316,18 +433,18 @@ worker.onmessage = (event: MessageEvent<BridgeMessage>) => {
       payload: {
         status: 'review_required',
         label: 'Needs review',
-        reason_code: 'low_confidence',
-        reason_message: 'Candidate geometry should be reviewed before save or export.',
-        recovery_actions: ['manual_outline', 'corner_correction', 'reupload'],
+        reasonCode: 'low_confidence',
+        reasonMessage: 'Candidate geometry should be reviewed before save or export.',
+        recoveryActions: ['manual_outline', 'corner_correction', 'reupload'],
       },
     })
     postToParent({
       type: 'roomforge.opencv.candidatesExtracted',
       version: BRIDGE_VERSION,
       payload: {
-        coordinate_space: 'image_pixels',
+        coordinateSpace: 'image_pixels',
         confidence: 0.72,
-        candidate_geometry: candidateGeometry(),
+        candidateGeometry: candidateGeometry(),
       },
     })
   }
@@ -339,6 +456,7 @@ worker.postMessage({
   payload: {},
 } satisfies BridgeMessage)
 
+applySpatialModel()
 window.addEventListener('resize', resizeRenderer)
 resizeRenderer()
 render()
@@ -350,40 +468,87 @@ queueMicrotask(() => {
     payload: {
       editor: 'roomforge-three-editor',
       bridgeVersion: BRIDGE_VERSION,
+      spatialModel: spatialModelPayload(),
     },
   })
 })
 
-function candidateGeometry(): Record<string, unknown> {
-  return {
-    image: {
-      width_px: 1600,
-      height_px: 1200,
-    },
-    candidate_sets: [
-      {
-        id: 'candidate-1',
-        kind: 'room_boundary',
-        coordinate_space: 'image_pixels',
-        points: [
-          { x: 120, y: 240 },
-          { x: 1420, y: 220 },
-          { x: 1480, y: 980 },
-          { x: 180, y: 1020 },
-        ],
-      },
-    ],
-    overlay_style: {
-      candidate: 'dashed-low-opacity-purple',
-      confirmed: 'solid-blue-with-handles',
-    },
+function applySpatialModel(): void {
+  const bounds = roomBounds(spatialModel)
+  const width = Math.max(bounds.widthMeters, 0.1)
+  const depth = Math.max(bounds.depthMeters, 0.1)
+  floor.geometry.dispose()
+  floor.geometry = new THREE.PlaneGeometry(width, depth)
+  floor.position.set(0, 0, 0)
+
+  confirmedPoints = spatialModel.room.floorPlan.metricGeometry.points.map((point) =>
+    metricPointToScene(point.x, point.y, 0.02),
+  )
+  syncConfirmedGeometryMeshes()
+  rebuildWalls()
+  applyViewModeCamera()
+  updateSpatialStatus()
+}
+
+function setViewMode(viewMode: ViewMode): void {
+  spatialModel = { ...spatialModel, viewMode }
+  applyViewModeCamera()
+  updateSpatialStatus()
+  emitSceneState('roomforge.view.changed')
+}
+
+function applyViewModeCamera(): void {
+  const bounds = roomBounds(spatialModel)
+  const maxDimension = Math.max(bounds.widthMeters, bounds.depthMeters, 1)
+  const distance = maxDimension / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
+
+  if (spatialModel.viewMode === '2d') {
+    wallGroup.visible = false
+    camera.position.set(0, distance * 1.35, 0.001)
+    camera.up.set(0, 0, -1)
+  } else {
+    wallGroup.visible = true
+    camera.position.set(maxDimension * 0.85, maxDimension * 0.75, maxDimension * 0.95)
+    camera.up.set(0, 1, 0)
+  }
+
+  camera.lookAt(0, 0, 0)
+  camera.updateProjectionMatrix()
+}
+
+function rebuildWalls(): void {
+  for (const child of [...wallGroup.children]) {
+    wallGroup.remove(child)
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose()
+    }
+  }
+
+  const height = spatialModel.room.heightMeters
+  for (let index = 0; index < confirmedPoints.length; index += 1) {
+    const start = confirmedPoints[index]
+    const end = confirmedPoints[(index + 1) % confirmedPoints.length]
+    const dx = end.x - start.x
+    const dz = end.z - start.z
+    const length = Math.hypot(dx, dz)
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(length, height), wallMaterial)
+    wall.position.set(start.x + dx / 2, height / 2, start.z + dz / 2)
+    wall.rotation.y = -Math.atan2(dz, dx)
+    wall.userData.objectId = spatialModel.room.objectId
+    wallGroup.add(wall)
   }
 }
 
-function updateConfirmedGeometry(message: string, emit = true): void {
+function syncConfirmedGeometryMeshes(): void {
   const closedPoints = [...confirmedPoints, confirmedPoints[0]]
   confirmedLine.geometry.dispose()
   confirmedLine.geometry = new THREE.BufferGeometry().setFromPoints(closedPoints)
+
+  selectionLine.geometry.dispose()
+  selectionLine.geometry = new THREE.BufferGeometry().setFromPoints(
+    closedPoints.map((point) => point.clone().setY(0.09)),
+  )
+  selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
 
   while (cornerMeshes.length < confirmedPoints.length) {
     const corner = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), cornerMaterial)
@@ -394,13 +559,106 @@ function updateConfirmedGeometry(message: string, emit = true): void {
     const corner = cornerMeshes.pop()
     if (corner) {
       room.remove(corner)
+      corner.geometry.dispose()
     }
   }
   for (const [index, point] of confirmedPoints.entries()) {
     cornerMeshes[index].position.copy(point)
   }
+}
 
+function updateSpatialStatus(): void {
+  spatialStatusElement.textContent = spatialSummary(spatialModel)
+  sceneStatusElement.textContent = spatialSummary(spatialModel)
+  inspectorStatusElement.textContent = inspectorSummary(spatialModel)
+  selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
+  view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d'))
+  view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d'))
+  view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
+  view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
+}
+
+function emitSceneState(type: string, requestId?: string): void {
+  postToParent({
+    type,
+    version: BRIDGE_VERSION,
+    requestId,
+    payload: spatialModelPayload(),
+  })
+}
+
+function spatialModelPayload(): Record<string, unknown> {
+  return {
+    sceneId: spatialModel.sceneId,
+    coordinateSpace: spatialModel.coordinateSpace,
+    unit: spatialModel.unit,
+    viewMode: spatialModel.viewMode,
+    selected: spatialModel.selected,
+    hasUnsavedChanges: spatialModel.hasUnsavedChanges,
+    scale: spatialModel.scale,
+    room: spatialModel.room,
+  }
+}
+
+function metricPointToScene(x: number, y: number, height = 0): THREE.Vector3 {
+  const bounds = roomBounds(spatialModel)
+  return new THREE.Vector3(x - bounds.centerX, height, y - bounds.centerY)
+}
+
+function scenePointToMetric(point: THREE.Vector3): { x: number; y: number } {
+  const bounds = roomBounds(spatialModel)
+  return {
+    x: Number((point.x + bounds.centerX).toFixed(3)),
+    y: Number((point.z + bounds.centerY).toFixed(3)),
+  }
+}
+
+function candidateGeometry(): Record<string, unknown> {
+  return {
+    image: {
+      widthPx: 1600,
+      heightPx: 1200,
+    },
+    candidateSets: [
+      {
+        id: 'candidate-1',
+        kind: 'room_boundary',
+        coordinateSpace: 'image_pixels',
+        points: [
+          { x: 120, y: 240 },
+          { x: 1420, y: 220 },
+          { x: 1480, y: 980 },
+          { x: 180, y: 1020 },
+        ],
+      },
+    ],
+    overlayStyle: {
+      candidate: 'dashed-low-opacity-purple',
+      confirmed: 'solid-blue-with-handles',
+    },
+  }
+}
+
+function updateConfirmedGeometry(message: string, emit = true): void {
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    room: {
+      ...spatialModel.room,
+      floorPlan: {
+        ...spatialModel.room.floorPlan,
+        metricGeometry: {
+          coordinateSpace: 'meters',
+          points: confirmedPoints.map(scenePointToMetric),
+        },
+      },
+    },
+  }
+
+  syncConfirmedGeometryMeshes()
+  rebuildWalls()
   geometryStatusElement.textContent = message
+  updateSpatialStatus()
   if (emit) {
     postToParent({
       type: 'roomforge.geometry.confirmedChanged',
@@ -412,13 +670,21 @@ function updateConfirmedGeometry(message: string, emit = true): void {
 
 function confirmedGeometryPayload(): Record<string, unknown> {
   return {
-    coordinate_space: 'image_pixels',
-    geometry_kind: 'room_boundary',
+    coordinateSpace: 'image_pixels',
+    geometryKind: 'room_boundary',
     points: confirmedPoints.map((point) => ({
       x: Math.round((point.x + 2) * 400),
       y: Math.round((point.z + 1.5) * 400),
     })),
   }
+}
+
+function inspectorSummary(model: SpatialModel): string {
+  const bounds = roomBounds(model)
+  const selected = model.selected?.objectId ?? 'none'
+  return `${selected}; ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+    2,
+  )} m x ${model.room.heightMeters.toFixed(2)} m`
 }
 
 function setPointerFromEvent(event: PointerEvent): void {

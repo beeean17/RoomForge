@@ -1,22 +1,22 @@
 # RoomForge Branch Strategy
 
+Read this together with `docs/agent/STORY_QUEUE.md`, `docs/agent/STORY_EXECUTION_LOOP.md`, and `docs/agent/RECOVERY_PLAYBOOK.md`.
+
 ## Default rule
 
 Use a story-branch workflow.
 
 ```text
-main / trunk    = stable validated baseline
-story branch    = one target story
-story commit    = one completed and validated story
-pull request    = one story branch
-epic            = multiple story branches, never one branch by default
+primary branch = stable validated local baseline
+story branch   = one target story
+story commit   = one completed and validated story
+remote PR/MR   = optional remote collaboration step, requires user approval
+epic           = multiple story branches, never one branch by default
 ```
-
-Do not implement feature work directly on `main` or the repository's primary branch unless the user explicitly instructs you to do so.
 
 ## Branch naming
 
-Use lowercase branch names with the story number and a short slug.
+Use lowercase branch names with the story number and a short slug:
 
 ```text
 story/4.1-shared-spatial-model
@@ -37,142 +37,95 @@ story/6.5-admin-search
 story/6.6-provider-failure-diagnosis
 ```
 
-Use these only when appropriate:
+Use these for non-story work:
 
 ```text
-chore/agent-instructions       # agent files, setup docs, tooling docs
-fix/story-4.1-view-state        # focused fix for a completed story
-spike/story-3.1-editor-bridge   # explicit spike/enabler work
-docs/story-5.4-round-trip       # documentation-only story output
+chore/agent-instructions
+fix/story-4.1-view-state
+spike/story-3.1-editor-bridge
+docs/story-5.4-round-trip
 ```
 
-## Branch lifecycle
+## Primary branch detection
 
-Before starting a story:
+Detect the repository primary branch instead of assuming.
+
+Preferred order:
+
+1. remote HEAD branch from `git remote show origin`;
+2. `main`;
+3. `master`;
+4. `trunk`.
+
+## Normal story lifecycle
 
 ```bash
-git status --short
-git fetch origin
-git switch main
-git pull --ff-only
-git switch -c story/4.1-shared-spatial-model
+git fetch origin || true
+git switch <primary-branch>
+git pull --ff-only || true
+git switch -c <target-story-branch> || git switch <target-story-branch>
 ```
 
-If the repository uses `master`, `trunk`, or another primary branch, use that branch instead of `main`. Detect the primary branch from the repository instead of assuming.
-
-If `git status --short` is not clean, stop and report the existing changes before creating or switching branches.
-
-During the story:
-
-- Keep all implementation work on the story branch.
-- Keep scope limited to the target story.
-- Do not start the next story on the same branch.
-- Do not mix unrelated cleanup, experiments, or agent-file changes into a story branch.
-- If a prerequisite gap belongs to an earlier completed story, stop and propose a separate `fix/story-x.y-...` branch.
-
-After validation:
-
-```bash
-git status --short
-git diff --stat
-git add <story files only>
-git commit -m "feat(story-4.1): implement shared spatial model and 2d 3d view shell"
-git push -u origin story/4.1-shared-spatial-model
-```
-
-Open a PR or merge request from the story branch to `main` after human review.
-
-If GitHub CLI is available and the user asked to create a PR:
-
-```bash
-gh pr create \
-  --base main \
-  --head story/4.1-shared-spatial-model \
-  --title "feat(story-4.1): implement shared spatial model and 2d 3d view shell" \
-  --body-file docs/agent/last-completion-report.md
-```
-
-Do not assume `gh` is installed. If it is not available, report the branch name, commit hash, and suggested PR title/body.
+If the worktree is dirty or the wrong branch is active, use `docs/agent/RECOVERY_PLAYBOOK.md` instead of stopping.
 
 ## Agent instruction setup branch
 
-When installing or updating only these agent files, use a separate ops branch:
+Agent instruction changes belong on a chore branch:
 
 ```bash
-git switch -c chore/agent-instructions
+git switch -c chore/agent-instructions || git switch chore/agent-instructions
 git add AGENTS.md MANIFEST.md app/AGENTS.md editor/AGENTS.md server/AGENTS.md docs/agent
-git commit -m "chore: add RoomForge Codex agent instructions"
-git push -u origin chore/agent-instructions
+git commit -m "chore: update RoomForge Codex agent instructions"
 ```
 
-Do not combine agent instruction changes with a product story implementation.
+If agent instruction files are already mixed with product story files, auto-split them using Recovery B.
 
-## Commit and merge policy
+## Local continuation mode
 
-The desired repository history is:
-
-```text
-one story branch -> one validated story commit -> one PR/MR -> merge to main
-```
-
-If the story branch accidentally accumulates several checkpoint commits, squash or rebase them into one story commit before merge unless the user explicitly wants to keep the intermediate commits.
-
-Do not merge a branch when:
-
-- acceptance criteria are incomplete
-- relevant checks were not run and no substitute evidence exists
-- unrelated changes are staged or committed
-- the branch contains multiple stories
-- the branch was created from a stale primary branch and conflicts are unresolved
-
-After merge:
+When the user asks to continue through the story queue, use local fast-forward merges to keep moving:
 
 ```bash
-git switch main
-git pull --ff-only
-git branch -d story/4.1-shared-spatial-model
+git switch <primary-branch>
+git merge --ff-only <completed-story-branch>
+git switch -c <next-story-branch>
 ```
 
-Delete the remote branch if the hosting service does not do it automatically.
+This preserves one story commit per story and lets the next story start from the updated baseline.
 
-## Multiple-agent work
+Push and PR/MR creation are not part of local continuation mode and require separate user approval.
 
-Use one implementation agent per story branch.
+## Remote PR mode
 
-Parallel branches are acceptable only when they do not overlap the same files or contracts. If two branches both touch shared spatial model, bridge schema, API envelope, job status model, layout schema, or design tokens, run a Team review before coding and choose a sequence.
+When the user wants PR/MR review after each story:
 
-Recommended safe parallelism:
+1. commit one story on the story branch;
+2. push branch only after user approval;
+3. create PR/MR only after user approval;
+4. stop after PR/MR and wait for merge before next story.
 
-- one implementation branch
-- one review-only subagent set
-- one documentation/ops branch only when it does not touch product code
+## What to do with dirty state
 
-Avoid running two implementation agents on adjacent dependent stories at the same time. For example, do not implement Story 4.2 before Story 4.1 has merged unless the 4.1 contract is already stable.
+Do not stop immediately. Classify changed files:
 
-## Branch readiness report
+- target story files: keep on story branch;
+- agent ops files: split to `chore/agent-instructions`;
+- unrelated files: stash with a descriptive name and continue;
+- planning source files: stop unless user explicitly asked to edit planning artifacts.
 
-Before coding a story, report:
+## Branch completion report
 
-```text
-Branch readiness:
-- Primary branch:
-- Current branch:
-- Working tree clean:
-- Target story:
-- Planned story branch:
-- Branch created:
-- Expected commit message:
-```
-
-Before committing or pushing, report:
+Before each commit and local merge, report:
 
 ```text
 Branch completion:
+- Primary branch:
 - Current branch:
 - Target story:
 - Files changed:
+- Recovery used:
 - Validation run:
 - Commit message:
+- Local merge planned:
 - Push/PR requested by user:
 - Unrelated changes present:
 ```

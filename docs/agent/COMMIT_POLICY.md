@@ -1,36 +1,26 @@
 # RoomForge Commit Policy
 
+Read this together with `docs/agent/STORY_QUEUE.md`, `docs/agent/STORY_EXECUTION_LOOP.md`, and `docs/agent/AUTO_RUN.md`.
+
 ## Default rule
 
-The default commit granularity is:
-
 ```text
-1 completed story = 1 commit
+1 completed story = 1 local commit
 ```
 
 A story commit should contain everything needed to satisfy and validate that story's acceptance criteria. It may touch app, editor, server, tests, docs, and shared packages when those changes are required by the same story.
 
-Do not combine multiple stories, an entire epic, or unrelated cleanup into one commit.
+Do not combine multiple stories, an entire epic, or unrelated cleanup into one story commit.
 
-Do not split one story into many tiny commits by default. Split only when the user explicitly asks for smaller commits, when the story is too risky to review as one change, or when a separate prerequisite/fix must land before the story.
+## Permission model
 
-## Relationship to branches
+When the user asks to run the queue, continue the loop, or proceed automatically:
 
-Read `docs/agent/BRANCH_STRATEGY.md` before committing.
+- local story commits are allowed;
+- local fast-forward merges into the local primary branch are allowed;
+- push and PR/MR creation are not allowed unless explicitly approved.
 
-The default relationship is:
-
-```text
-one target story = one story branch = one final story commit = one PR/MR
-```
-
-Before committing, confirm:
-
-- the current branch is the target story branch
-- the current branch is not `main`, `master`, or the repository primary branch
-- staged files belong to the target story
-- no unrelated user changes are included
-- validation has run or a substitute check is documented
+When the user asks for preflight-only or review-only, do not commit.
 
 ## Relationship between Goals, stories, and commits
 
@@ -41,30 +31,7 @@ Commit     = one completed and validated story
 Epic       = multiple stories; never one commit by default
 ```
 
-If a Goal includes multiple stories, implement them sequentially and prepare one commit per story.
-
-## Before coding
-
-Before implementation, confirm branch readiness and produce a story execution plan:
-
-```text
-Story execution plan:
-- Target story branch:
-- Target story:
-- Acceptance criteria:
-- Expected files/areas:
-- Validation checks:
-- Stop conditions:
-- Suggested commit message:
-```
-
-## During coding
-
-- Keep changes scoped to the target story.
-- Internal checkpoints are allowed, but the final suggested commit remains story-sized.
-- Do not start the next story until the current story is validated or explicitly paused.
-- Do not hide unrelated refactors, dependency changes, or cleanup inside the story commit.
-- If a prerequisite gap is found, stop and report whether it should be a separate prerequisite commit or handled inside the story.
+If a Goal includes multiple stories, implement them sequentially and create one local commit per completed story.
 
 ## Commit message format
 
@@ -74,14 +41,7 @@ Use:
 <type>(story-<n.n>): <story outcome>
 ```
 
-Recommended types:
-
-- `feat` for user-facing or platform capability
-- `fix` for a defect or regression
-- `test` for validation-only stories or test-only corrections
-- `docs` for documentation-only updates
-- `chore` for setup, tooling, CI, or scaffold stories
-- `refactor` only when behavior is intentionally unchanged
+Use the exact message from `docs/agent/STORY_QUEUE.md` when available.
 
 Examples:
 
@@ -104,88 +64,62 @@ feat(story-6.5): add admin search across operational records
 feat(story-6.6): add provider state and failure diagnosis
 ```
 
-Avoid vague messages:
+## What belongs in one story commit
 
-```text
-update editor
-finish epic 4
-misc fixes
-everything for admin
-```
+Acceptable:
 
-## Story commit readiness
+- app/editor/server changes required by the same story;
+- tests or fixtures proving the story;
+- local docs explaining story decisions;
+- small formatting changes in files already touched for the story.
 
-Before suggesting or creating a commit, report:
+Not acceptable:
+
+- two or more story implementations;
+- epic-wide cleanup;
+- unrelated bug fixes;
+- broad formatting across untouched files;
+- new dependencies not needed for the target story;
+- agent instruction updates mixed with product story work.
+
+## Commit readiness
+
+Before committing, verify:
 
 ```text
 Story commit readiness:
 - Story:
+- Branch:
 - Acceptance criteria status:
 - Files changed:
+- Files staged:
 - Validation run:
-- Result:
+- Fix/retry cycles:
+- Environment limitations:
 - Known limitations:
 - Suggested commit message:
 ```
 
-The acceptance criteria status should use:
-
-```text
-AC 1: pass/partial/fail + evidence
-AC 2: pass/partial/fail + evidence
-AC 3: pass/partial/fail + evidence
-```
-
-## What belongs in one story commit
-
-Acceptable in one story commit:
-
-- App/editor/server changes that are all required by the same story.
-- Tests or fixtures proving that story.
-- Local docs that explain decisions made for that story.
-- Small local formatting changes in files already touched for that story.
-
-Not acceptable in one story commit:
-
-- Two or more story implementations.
-- Epic-wide cleanup mixed with a story.
-- Unrelated bug fixes.
-- Broad formatting changes across untouched files.
-- New dependencies that are not needed for the target story.
-- Experimental work for a later story.
+If unrelated changes appear, use `docs/agent/RECOVERY_PLAYBOOK.md` to split or stash them instead of stopping immediately.
 
 ## When not to commit
 
 Do not commit when:
 
-- Acceptance criteria are not verified and no partial/deferred reason is documented.
-- Validation was not run and no substitute check is documented.
-- The staged diff includes multiple stories.
-- The staged diff includes unrelated cleanup or exploratory code.
-- The repository is in a broken state unrelated to the target story and the breakage is not documented.
+- acceptance criteria cannot be verified after validation recovery;
+- no relevant validation or substitute evidence exists;
+- staged diff includes multiple stories and cannot be split;
+- staged diff includes unrelated work and cannot be separated;
+- the repository is in a broken state caused by unresolved hard-stop conditions.
 
-## If the story is too large
+## After commit in local continuation mode
 
-If a story becomes too large to review safely, stop and propose one of these options:
+Fast-forward merge to local primary and continue:
 
-1. Keep one story commit, but reduce the implementation to the minimum acceptance criteria.
-2. Create a separate prerequisite commit for an infrastructure gap.
-3. Ask the user whether to intentionally split the story into smaller commits.
+```bash
+git switch <primary-branch>
+git merge --ff-only <completed-story-branch>
+git switch -c <next-story-branch>
+```
 
-By default, do **not** split without user approval.
-
-
-## Direct commit safety
-
-If the user asks the agent to commit:
-
-1. Show `git branch --show-current`.
-2. Show `git status --short`.
-3. Confirm the branch matches the target story.
-4. Stage only target-story files.
-5. Show staged files.
-6. Create exactly one story commit unless the user explicitly requests a different shape.
-7. Push only if the user asked to push.
-8. Create a PR only if the user asked to create a PR.
-
-If any unrelated change appears, stop and report it.
+Do not push or create PR/MR unless the user explicitly approves.

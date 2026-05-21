@@ -16,6 +16,10 @@ roomforge/
 └── docs/agent/
     ├── README.md
     ├── CURRENT_PROGRESS.md
+    ├── STORY_QUEUE.md
+    ├── STORY_EXECUTION_LOOP.md
+    ├── AUTO_RUN.md
+    ├── RECOVERY_PLAYBOOK.md
     ├── TEAM.md
     ├── GOAL_TEMPLATE.md
     ├── GOALS.md
@@ -33,54 +37,67 @@ Do not place this file inside `_bmad-output/planning-artifacts/`. That folder co
 
 ```json
 {
-  "generated_for": "RoomForge agent markdown files v4",
+  "generated_for": "RoomForge agent markdown files v6",
   "assumed_current_progress": "through Story 3.6",
   "default_next_story": "Story 4.1",
-  "branch_policy": "story branches: one target story equals one branch",
-  "commit_policy": "story-sized commits: one completed story equals one commit",
-  "files": [
-    "AGENTS.md",
-    "MANIFEST.md",
-    "app/AGENTS.md",
-    "docs/agent/COMPLETION_REPORT.md",
-    "docs/agent/BRANCH_STRATEGY.md",
-    "docs/agent/COMMIT_POLICY.md",
-    "docs/agent/CURRENT_PROGRESS.md",
-    "docs/agent/GOALS.md",
-    "docs/agent/GOAL_TEMPLATE.md",
-    "docs/agent/README.md",
-    "docs/agent/STOP_CONDITIONS.md",
-    "docs/agent/SUBAGENTS.md",
-    "docs/agent/TEAM.md",
-    "docs/agent/VALIDATION.md",
-    "editor/AGENTS.md",
-    "server/AGENTS.md"
-  ]
+  "execution_loop": "1 story = 1 branch = 1 goal = 1 validation loop = 1 completion report = 1 story commit",
+  "remote_policy": "push and PR/MR require explicit user permission",
+  "local_policy": "local branch creation, validation recovery, story commits, and local fast-forward merges are allowed when queue/autonomous mode is requested",
+  "major_change_from_v5": "recoverable branch/worktree/validation issues are auto-repaired instead of triggering immediate stops"
 }
 ```
 
-## Install check
+## Required files
 
-After copying the files into the project root, verify:
+- `AGENTS.md` - root agent instructions.
+- `app/AGENTS.md` - Flutter shell rules.
+- `editor/AGENTS.md` - Three.js/OpenCV editor rules.
+- `server/AGENTS.md` - FastAPI/Oracle server rules.
+- `docs/agent/CURRENT_PROGRESS.md` - current Story 3.6 baseline.
+- `docs/agent/STORY_QUEUE.md` - story order, branch names, commit messages.
+- `docs/agent/STORY_EXECUTION_LOOP.md` - repeatable story loop.
+- `docs/agent/AUTO_RUN.md` - prompt and rules for continuing through all stories.
+- `docs/agent/RECOVERY_PLAYBOOK.md` - automatic recovery for dirty worktree, mixed docs/product changes, validation failures, and branch mismatch.
+- `docs/agent/TEAM.md` - teammate/reviewer behavior.
+- `docs/agent/GOAL_TEMPLATE.md` - `/goal` shape.
+- `docs/agent/GOALS.md` - story-specific Goals.
+- `docs/agent/VALIDATION.md` - validation and fallback checks.
+- `docs/agent/STOP_CONDITIONS.md` - hard stops only after recovery attempts.
+- `docs/agent/BRANCH_STRATEGY.md` - branch lifecycle.
+- `docs/agent/COMMIT_POLICY.md` - story commit policy.
+- `docs/agent/SUBAGENTS.md` - review subagent prompts.
+- `docs/agent/COMPLETION_REPORT.md` - completion report template.
+
+## Recommended install command
 
 ```bash
-test -f AGENTS.md
-test -f MANIFEST.md
-test -f docs/agent/GOALS.md
-test -f docs/agent/BRANCH_STRATEGY.md
-test -f docs/agent/COMMIT_POLICY.md
-test -f app/AGENTS.md
-test -f editor/AGENTS.md
-test -f server/AGENTS.md
+cd /path/to/roomforge
+unzip /path/to/roomforge-agent-markdown-v6.zip -d /tmp/roomforge-agent-files
+rsync -av /tmp/roomforge-agent-files/roomforge-agent-markdown-v6/ ./
 ```
 
-## Agent start prompt
+## Recommended first commit for agent files
+
+If these files are newly installed or updated, commit them separately before product story work:
+
+```bash
+git switch main
+git pull --ff-only
+git switch -c chore/agent-instructions
+git add AGENTS.md MANIFEST.md app/AGENTS.md editor/AGENTS.md server/AGENTS.md docs/agent
+git commit -m "chore: update RoomForge Codex agent instructions"
+```
+
+If product story changes are already mixed into the worktree, do not stop. Use `docs/agent/RECOVERY_PLAYBOOK.md` to split them automatically.
+
+## Recommended Codex prompt
 
 ```text
-Read AGENTS.md, MANIFEST.md, docs/agent/CURRENT_PROGRESS.md, docs/agent/TEAM.md, docs/agent/GOALS.md, docs/agent/BRANCH_STRATEGY.md, and docs/agent/COMMIT_POLICY.md.
+Read AGENTS.md, MANIFEST.md, docs/agent/CURRENT_PROGRESS.md, docs/agent/STORY_QUEUE.md, docs/agent/STORY_EXECUTION_LOOP.md, docs/agent/AUTO_RUN.md, docs/agent/RECOVERY_PLAYBOOK.md, docs/agent/GOALS.md, docs/agent/VALIDATION.md, docs/agent/STOP_CONDITIONS.md, docs/agent/BRANCH_STRATEGY.md, and docs/agent/COMMIT_POLICY.md.
 
-Use the current baseline through Story 3.6. Do not restart from Story 1.1.
-Before coding, confirm branch readiness and produce a story execution plan. Each commit should represent one completed, validated story.
-Do not combine multiple stories in one commit, and do not split a story into tiny commits unless explicitly requested.
-Use a story branch such as story/4.1-shared-spatial-model. Review the handoff gate, then proceed with Goal 4.1 if the Story 3.5/3.6 handoff is sufficient.
+Run the remaining story queue from Story 4.1 through Story 6.6.
+Use automatic recovery for dirty worktree, mixed agent docs, branch mismatch, missing validation commands, and validation failures.
+Create local story branches and one local story commit per validated story.
+Fast-forward merge each completed story locally into the primary branch, then continue to the next story.
+Do not push or create PRs unless I explicitly approve.
 ```

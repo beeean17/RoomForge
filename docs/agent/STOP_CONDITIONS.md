@@ -1,86 +1,98 @@
 # RoomForge Stop Conditions
 
-Agents must stop and report before implementing if any condition below is true.
+This file defines **hard stops**. Recoverable branch, worktree, and validation issues must first go through `docs/agent/RECOVERY_PLAYBOOK.md`.
 
-## Branch stop conditions
+## Default behavior
 
-- The agent is about to implement product story work directly on `main`, `master`, or the repository primary branch without explicit user instruction.
-- The working tree has uncommitted changes not created by the current Goal.
-- The current branch name does not match the target story and the user did not explicitly request using it.
-- The branch already contains changes for another story.
-- Agent instruction changes are mixed with product story implementation changes.
-- A prerequisite fix belongs to an earlier story and would make the current story branch ambiguous.
+Do not stop immediately for:
 
-## Scope stop conditions
+- dirty worktree;
+- wrong branch;
+- agent docs mixed with product work;
+- missing local tool such as Flutter;
+- `python` missing when substitutes exist;
+- Vite chunk-size warning;
+- validation failure caused by current-story code.
 
-- The requested work requires changing MVP scope.
-- The requested work jumps ahead of the current story sequence without a dependency reason.
-- The requested work reimplements completed Stories 1.1 through 3.6 without evidence of a defect.
-- The requested work combines too many stories into one Goal.
-- The requested work introduces post-MVP features as production behavior rather than stubs/extension points.
+First attempt recovery. Stop only when a hard stop remains after recovery attempts.
 
-## Architecture stop conditions
+## Hard stop: destructive or remote actions
 
-- The task requires running heavy OpenCV, deep-learning, or GPU inference on the lightweight API server.
-- The task requires direct editor-to-Oracle API calls from rendering modules.
-- The task blurs Flutter, Three.js, and FastAPI responsibilities.
-- The task requires changing API envelope or naming conventions without updating the architecture docs.
-- The task introduces a persisted status outside the allowed list.
+Stop before doing any of these unless explicitly authorized:
 
-## Data integrity stop conditions
+- pushing to remote;
+- creating a PR/MR;
+- force-pushing;
+- deleting remote branches;
+- dropping a stash containing user work;
+- running `git reset --hard` or `git clean -fd` on unpreserved user changes;
+- rewriting published branch history.
 
-- Candidate geometry and confirmed geometry would be merged.
-- Geometry coordinate space cannot be determined.
-- Metric floor plan output cannot be traced to input geometry and calibration.
-- Layout save/load/export cannot preserve required fields.
-- Auth/ownership checks cannot be enforced.
-- Admin authorization cannot be separated from normal authentication.
+## Hard stop: product and planning conflicts
 
-## Current-stage stop conditions
+Stop when:
 
-Before Story 4.1:
+- the requested work conflicts with planning artifacts and no small reversible assumption can resolve it;
+- the requested work changes MVP scope;
+- the requested work introduces a post-MVP feature as production behavior rather than a stub/extension point;
+- the requested work jumps ahead of the story queue without a dependency reason;
+- the requested work combines multiple stories and cannot be split automatically.
 
-- No metric floor plan handoff exists from the reconstruction flow.
-- Story 3.6 warning/failure/retry behavior is missing and blocks planning-editor trust.
-- Editor bridge or initialization cannot receive room/floor plan data.
+## Hard stop: architecture invariants
 
-Before Story 5.1:
+Stop when the implementation would require:
 
-- Shared spatial model is not stable enough to serialize layout state.
-- Furniture object IDs or coordinates are unstable.
+- heavy OpenCV, deep-learning, or GPU inference on the lightweight API server;
+- direct editor-to-Oracle API calls from rendering modules;
+- merging candidate geometry and confirmed geometry;
+- introducing a persisted status outside the allowed list;
+- removing the API envelope `data`, `error`, `meta.request_id`;
+- omitting coordinate space from geometry payloads when geometry is persisted or exchanged;
+- bypassing auth/ownership/admin authorization checks.
 
-Before Story 6.1:
+## Hard stop: unresolved prerequisite gaps
 
-- Required job/status/artifact records do not exist.
-- Admin authorization boundary is not present.
+Before Story 4.1, hard stop only if all of these are true:
 
-## Verification stop conditions
+- no metric floor plan handoff exists;
+- no valid metric fixture/demo floor plan can be used;
+- editor initialization cannot receive floor plan or scene data;
+- the missing prerequisite cannot be fixed in a small focused fix branch.
 
-- No relevant check can be run and no substitute check is possible.
-- A failing check indicates a regression in an earlier completed story.
-- Acceptance criteria cannot be verified from implementation or tests.
+Before Story 5.1, hard stop only if:
 
-## Required stop report
+- shared spatial model state cannot be serialized;
+- furniture IDs or coordinates are unstable and cannot be fixed within the current story.
+
+Before Story 6.1, hard stop only if:
+
+- required job/status/artifact records do not exist;
+- admin authorization boundary is absent and cannot be introduced as a focused prerequisite fix.
+
+## Hard stop: validation after recovery
+
+Stop only after validation recovery has been attempted when:
+
+- no relevant check or substitute evidence can verify the story acceptance criteria;
+- a current-story validation failure remains after three focused fix/retry cycles;
+- a failing check indicates an unrelated earlier regression that cannot be isolated or fixed safely;
+- acceptance criteria cannot be verified from implementation, tests, or documented manual checks.
+
+## Hard stop: merge/rebase conflicts
+
+Stop when:
+
+- branch recovery produces conflicts that require product decisions;
+- conflict resolution would alter unrelated stories;
+- fast-forward/local merge cannot be repaired safely.
+
+## Required hard-stop report
 
 When stopping, report:
 
-1. The exact stop condition triggered
-2. Evidence from repository or documents
-3. Smallest safe fix
-4. Whether the current Goal should pause, shrink, or be replaced
-5. Recommended next Goal
-
-
-## Commit / push / PR stop conditions
-
-Stop before committing if:
-
-- The current branch is not the target story branch.
-- The staged change contains more than one story.
-- The staged change contains epic-wide or cross-story work that cannot be explained as part of the target story.
-- The staged change includes unrelated fixes, experiments, or cleanup outside the target story.
-- A required acceptance criterion for the target story is unverified and no reason is documented.
-- No relevant validation was run and no substitute validation is documented.
-- The suggested commit message would need words like "complete epic", "everything", "misc", or multiple story numbers.
-
-It is acceptable for one story commit to touch app, editor, server, tests, and docs when those changes are all required by that story and are validated together.
+1. Hard stop condition.
+2. Recovery attempts already performed.
+3. Evidence from repository or documents.
+4. Smallest safe next action.
+5. Whether the current story should pause, shrink, or be replaced by a fix branch.
+6. Current branch, stash names, and uncommitted changes.

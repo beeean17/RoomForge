@@ -54,3 +54,7 @@ flutter test
 ```
 
 When the story touches responsive/accessibility behavior, also verify desktop, tablet, and mobile-review layouts manually or with widget tests where feasible.
+
+## Validation fallback
+
+If Flutter is not available in the agent environment, document `flutter not found in PATH` and continue with available substitute checks from `docs/agent/VALIDATION.md`. Missing local Flutter tooling is not by itself a hard stop.

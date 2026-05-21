@@ -20,7 +20,8 @@ Return:
 1. Pass/fail by category
 2. Highest-risk boundary violation
 3. Required code or test evidence
-4. Go/no-go recommendation
+4. Recovery action if failing but recoverable
+5. Hard-stop recommendation only if an invariant would be violated
 ```
 
 ## UX/accessibility guard
@@ -42,7 +43,8 @@ Return:
 1. Pass/fail by category
 2. Highest-risk UX/accessibility gap
 3. Required manual checks
-4. Go/no-go recommendation
+4. Recovery action if failing but recoverable
+5. Hard-stop recommendation only if acceptance criteria cannot be verified
 ```
 
 ## Validation guard
@@ -55,6 +57,7 @@ Review the proposed Goal against story acceptance criteria and RoomForge validat
 Check:
 - target story ACs
 - app/editor/server checks
+- validation fallbacks for missing local tooling
 - required test/fixture updates
 - ownership/admin/auth checks
 - save/load/export round-trip rules where relevant
@@ -63,53 +66,42 @@ Check:
 Return:
 1. Acceptance criteria checklist
 2. Required verification commands
-3. Any checks that can only be manual
-4. Completion criteria
+3. Fallback commands
+4. Fix/retry plan for failures
+5. Completion criteria
 ```
 
-## Current-stage reviewer for Epic 4
+## Recovery guard
 
 ```text
-Spawn an Epic 4 reviewer subagent.
+Spawn a recovery guard subagent.
 
-Assume Stories 1.1 through 3.6 are complete. Review whether the proposed Epic 4 implementation preserves:
-- valid metric floor plan handoff
-- one shared spatial model
-- 2D/3D selection and coordinate persistence
-- camera reset/presets
-- furniture object identity
-- measurement units
-- non-color-only selection/warnings
-- responsive/accessibility criteria in each story
+Read docs/agent/RECOVERY_PLAYBOOK.md, docs/agent/STOP_CONDITIONS.md, docs/agent/BRANCH_STRATEGY.md, and docs/agent/COMMIT_POLICY.md.
 
-Return the smallest set of corrections needed before coding.
+Classify the current repository issue as recoverable or hard-stop.
+If recoverable, return exact commands or actions to preserve work, split files, repair branch state, rerun validation, and continue.
+Only recommend stopping if recovery would risk data loss, scope drift, security exposure, or an invariant violation.
 ```
 
+## Story loop guard
+
+```text
+You are the RoomForge story loop guard.
+Read docs/agent/STORY_QUEUE.md, docs/agent/STORY_EXECUTION_LOOP.md, docs/agent/AUTO_RUN.md, docs/agent/RECOVERY_PLAYBOOK.md, docs/agent/BRANCH_STRATEGY.md, and docs/agent/COMMIT_POLICY.md.
+Verify that the current work is exactly one target story, on the correct story branch or recoverable to that branch, with validation planned or completed, and with one story-level commit message.
+Do not return go/no-go only. Return either:
+- continue, with validation plan; or
+- recover and continue, with recovery steps; or
+- hard stop, with the hard-stop condition and recovery already attempted.
+```
 
 ## Story commit guard
-
-Use this subagent when a Goal may span more than one story or when staged changes look too broad:
 
 ```text
 You are the RoomForge story commit guard.
 
-Read AGENTS.md and docs/agent/COMMIT_POLICY.md. Review the proposed Goal and confirm the target story. Check whether the planned or staged changes map to exactly one completed story. Provide the story scope, required acceptance criteria, validation checks, and suggested commit message. Warn if multiple stories, epic-wide work, unrelated cleanup, or unrelated app/editor/server/database/docs changes are being bundled into one commit.
-```
-
-
-## Branch guard
-
-Use this subagent before coding when branch state is unclear, or before committing/pushing/creating a PR:
-
-```text
-You are the RoomForge branch guard.
-
-Read docs/agent/BRANCH_STRATEGY.md and docs/agent/COMMIT_POLICY.md. Check the current branch, target story, working tree status, and staged files. Confirm whether the branch maps to exactly one target story and whether it is safe to proceed, commit, push, or create a PR.
-
-Return:
-1. Current branch and expected branch
-2. Working tree status
-3. Whether unrelated changes are present
-4. Whether staged files map to one story
-5. Go/no-go recommendation
+Read AGENTS.md and docs/agent/COMMIT_POLICY.md. Review the proposed commit and confirm it maps to exactly one completed story.
+If unrelated changes are present, use docs/agent/RECOVERY_PLAYBOOK.md to split or stash them before committing.
+Return staged files, validation evidence, commit message, and whether the story commit can be created locally.
+Push/PR must remain blocked unless user explicitly approved.
 ```

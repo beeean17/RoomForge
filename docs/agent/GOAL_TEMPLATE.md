@@ -2,63 +2,54 @@
 
 Use this template for every `/goal`.
 
+Before every `/goal`, use the story loop from `docs/agent/STORY_EXECUTION_LOOP.md`, recovery rules from `docs/agent/RECOVERY_PLAYBOOK.md`, and branch/commit metadata from `docs/agent/STORY_QUEUE.md`.
+
 ```text
-/goal [one concrete outcome]
+/goal [one concrete story outcome]
 
 Current baseline:
 - Treat RoomForge as implemented through Story 3.6 unless repository evidence contradicts this.
 - Do not reimplement completed stories unless the Goal explicitly asks for a fix.
 
 Before implementing:
-- Read `docs/agent/BRANCH_STRATEGY.md` and `docs/agent/COMMIT_POLICY.md`.
-- Identify the exact target story, confirm branch readiness, and produce a story execution plan before coding.
-- Read `_bmad-output/planning-artifacts/implementation-readiness-report-2026-05-08.md`.
-- Read `_bmad-output/planning-artifacts/epics.md` for the target story acceptance criteria.
-- Read `_bmad-output/planning-artifacts/architecture.md` for boundaries and patterns.
+- Identify the exact target story from docs/agent/STORY_QUEUE.md.
+- Repair branch/worktree issues using docs/agent/RECOVERY_PLAYBOOK.md.
+- Read _bmad-output/planning-artifacts/implementation-readiness-report-2026-05-08.md.
+- Read _bmad-output/planning-artifacts/epics.md for the target story acceptance criteria.
+- Read _bmad-output/planning-artifacts/architecture.md for boundaries and patterns.
 - Read PRD/UX documents only when the story affects product behavior, UX, accessibility, or editor interactions.
-- Summarize the target story, acceptance criteria, constraints, validation plan, and stop conditions before coding.
-- If implementing Story 4.1 or later, verify that the Story 3.5/3.6 reconstruction-to-editor handoff is sufficient.
-
+- Produce a short story preflight.
 
 Branch setup:
-- Do not implement on `main` or the repository primary branch unless the user explicitly asks.
-- Use a story branch such as `story/4.1-shared-spatial-model`.
-- Confirm the working tree is clean before branch creation.
-- If unrelated user changes exist, stop and report them.
-- Do not commit, push, or create a PR unless the user explicitly asks.
+- Use the target story branch from docs/agent/STORY_QUEUE.md.
+- If the branch/worktree is not ready, repair instead of stopping.
+- Agent instruction updates must be split to chore/agent-instructions automatically if mixed with product work.
 
 Scope:
 - Keep changes limited to the target story unless a direct prerequisite is missing.
 - Do not broaden MVP scope.
 - Do not add post-MVP features except as documented stubs or extension points.
 
-Story branch and commit plan:
-- The default branch unit is one target story.
-- If the Goal includes multiple stories, implement and validate one story at a time.
-- Each story plan should list likely files, acceptance criteria, validation, and suggested commit message.
-- Do not combine multiple stories or epics in one commit.
-
 Validation:
 - Run documented checks for affected workspaces.
-- Add or update the smallest meaningful test/check for the story.
-- Verify acceptance criteria directly.
-- Verify RoomForge invariants from AGENTS.md.
+- Use fallback validation commands when local tooling differs.
+- Fix validation failures caused by current-story code and rerun checks.
+- Repeat up to three validation/fix cycles.
+- Missing Flutter or another local SDK is an environment limitation, not an automatic stop.
 
-Stop and report if:
+Hard stop only if:
 - The task requires changing MVP scope.
 - The task requires heavy CV/GPU/deep-learning execution on the API server.
 - The task requires a persisted status outside the allowed list.
 - The task would merge candidate geometry and confirmed geometry.
 - The task bypasses auth/ownership checks.
 - The task requires direct editor-to-Oracle API calls from rendering modules.
-- A required story prerequisite is missing.
-- Verification cannot be run and no substitute check is possible.
+- Acceptance criteria remain unverifiable after recovery and validation attempts.
 
-Before each commit suggestion, actual commit, push, or PR:
-- Report branch name, story, acceptance criteria status, files changed, validation run, result, known limitations, suggested commit message, and PR readiness.
-
-Complete only when:
-- Acceptance criteria are implemented or explicitly documented as deferred with reason.
-- Relevant checks pass or failures are reported.
-- Changed files, verification results, assumptions, risks, and next recommended Goal are reported.
+Complete when:
+- Acceptance criteria are pass or documented partial with evidence.
+- Relevant checks pass, are substituted, or are unavailable with documented environment reason.
+- Completion report is produced.
+- One local story commit is created when auto-run mode is active.
+- The next story is identified from STORY_QUEUE.md.
 ```

@@ -1,6 +1,6 @@
 # Completion Report Template
 
-Use this at the end of every Goal.
+Use this at the end of every Goal/story.
 
 ## 1. Goal summary
 
@@ -15,23 +15,35 @@ Use this at the end of every Goal.
   - Status: pass/fail/partial
   - Evidence:
 - AC 2:
-  - Status:
+  - Status: pass/fail/partial
   - Evidence:
 - AC 3:
-  - Status:
+  - Status: pass/fail/partial
   - Evidence:
 
 Add more AC rows as needed.
 
-## 3. Checks run
+## 3. Validation loop
 
-- app:
-- editor:
-- server:
-- integration/manual:
-- checks not run and why:
+- Commands run:
+- Commands passed:
+- Commands failed:
+- Fix/retry cycles:
+- Substitute checks:
+- Environment limitations:
+- Manual checks:
+- Final validation result:
 
-## 4. Invariants verified
+## 4. Recovery actions used
+
+- Recovery needed: yes/no
+- Issue:
+- Recovery playbook section:
+- Commands/actions taken:
+- Result:
+- Remaining limitation:
+
+## 5. Invariants verified
 
 - app/editor/server boundary:
 - no heavy CV/GPU on API server:
@@ -44,7 +56,7 @@ Add more AC rows as needed.
 - admin authorization, if applicable:
 - accessibility/responsive:
 
-## 5. Story-specific evidence
+## 6. Story-specific evidence
 
 For Epic 4:
 
@@ -72,27 +84,39 @@ For Epic 6:
 - retry linkage:
 - search/failure diagnosis:
 
-## 6. Branch and story commit readiness
+## 7. Branch and story commit readiness
 
-- Current branch:
-- Target story branch:
 - Primary branch:
+- Current branch:
+- Target story branch from `STORY_QUEUE.md`:
 - Working tree status:
-- Target story commit:
+- Suggested story commit message:
 - Acceptance criteria status:
-- Commit created, if user requested commit:
-- Commit hash, if created:
+- Files changed:
+- Files staged:
+- Commit created:
+- Commit hash:
+- Local merge into primary:
 - Pushed branch, if user requested push:
 - PR/MR created, if user requested PR:
-- Suggested commit not created:
 - Reason if story was not ready to commit:
+
+## 8. Changed files
+
+## 9. Assumptions and decisions
+
+## 10. Risks / follow-ups
+
+## 11. Story loop handoff
+
+- Current story:
+- Current story branch:
+- Current story status: complete/partial/blocked
+- Local story commit:
+- Local primary branch updated:
 - Next story:
-- Suggested next story branch:
+- Next story branch:
+- Preconditions for next story:
+- Auto-advance status:
 
-## 7. Changed files
-
-## 8. Assumptions and decisions
-
-## 9. Risks / follow-ups
-
-## 10. Recommended next Goal
+## 12. Recommended next Goal

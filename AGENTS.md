@@ -4,13 +4,13 @@
 
 You are working on RoomForge, a web-first room reconstruction and furniture planning app.
 
-Do not implement the whole MVP at once. Work story-by-story, keep changes scoped, verify acceptance criteria, and report exactly what changed.
+Work story-by-story. Keep scope tight. Verify acceptance criteria. Commit at story granularity. When the user asks to run the story queue, do **not** keep stopping on recoverable operational issues. Repair the branch/worktree/validation state automatically, document what happened, and continue.
 
 ## Current baseline
 
 The user has stated that implementation is currently complete through **Story 3.6**.
 
-Treat Stories 1.1 through 3.6 as the current baseline unless repository evidence contradicts that. Do not reimplement earlier stories unless the current Goal explicitly asks for a bug fix, integration gap, or regression fix.
+Treat Stories 1.1 through 3.6 as the current baseline unless repository evidence clearly contradicts that. Do not reimplement earlier stories unless the current Goal explicitly requires a bug fix, integration gap, or regression fix.
 
 Default next implementation sequence:
 
@@ -26,77 +26,77 @@ Default next implementation sequence:
 10. Story 5.4 - Save, Load, and Export Round-Trip Validation
 11. Story 6.1 through Story 6.6 - Admin Operations and CV Troubleshooting
 
-Before beginning Story 4.1, verify that the current implementation has a usable metric floor plan handoff from Story 3.5 and the reconstruction quality/failure/retry behavior from Story 3.6. If those are incomplete, stop and report the exact missing prerequisite instead of silently rebuilding earlier stories.
+Before beginning Story 4.1, verify that the current implementation has a usable metric floor plan handoff from Story 3.5 and the reconstruction quality/failure/retry behavior from Story 3.6. If the handoff is partial but sufficient for a fixture/demo metric floor plan, proceed with Story 4.1 and document the limitation instead of stopping.
 
+## Active execution mode
 
+Use this rule for all remaining stories:
+
+```text
+1 Story = 1 Branch = 1 Goal = 1 Validation Loop = 1 Completion Report = 1 Story Commit
+```
+
+A PR/MR is still preferred for remote collaboration, but **push and PR/MR creation require explicit user permission**. Local branches and local story commits are allowed when the user asks to run the queue or continue the loop.
+
+Read these operational playbooks before implementation:
+
+- `docs/agent/STORY_QUEUE.md`
+- `docs/agent/STORY_EXECUTION_LOOP.md`
+- `docs/agent/AUTO_RUN.md`
+- `docs/agent/RECOVERY_PLAYBOOK.md`
+- `docs/agent/VALIDATION.md`
+- `docs/agent/STOP_CONDITIONS.md`
+- `docs/agent/BRANCH_STRATEGY.md`
+- `docs/agent/COMMIT_POLICY.md`
+
+## Non-blocking recovery rule
+
+Do not stop merely because one of these recoverable issues appears:
+
+- working tree is dirty;
+- current branch is wrong;
+- agent instruction files are mixed with story product files;
+- a validation command is missing from the environment;
+- a validation command fails because of current-story code;
+- the previous story branch is locally committed but not merged;
+- Flutter is unavailable in the current PATH;
+- Vite reports a non-fatal chunk-size warning;
+- `python` is missing but `.venv/bin/python`, `python3`, `uv run`, or another documented substitute exists.
+
+Use `docs/agent/RECOVERY_PLAYBOOK.md` first. Stop only after the recovery playbook cannot safely resolve the issue, or when a hard stop from `docs/agent/STOP_CONDITIONS.md` remains after recovery attempts.
 
 ## Branch strategy
 
 Default branch granularity is **one target story = one story branch**.
 
-Before implementation, read `docs/agent/BRANCH_STRATEGY.md` together with `docs/agent/COMMIT_POLICY.md`.
-
 Branch rules:
 
-- Do not implement feature work directly on `main` or the repository primary branch unless the user explicitly asks.
-- Start each story from the latest primary branch.
-- Use a branch name like `story/4.1-shared-spatial-model`.
+- Do not implement feature work directly on `main`, `master`, `trunk`, or the repository primary branch.
+- Start each story from the latest local primary branch.
+- Use a branch name from `docs/agent/STORY_QUEUE.md`, such as `story/4.1-shared-spatial-model`.
 - Keep one story branch focused on one story.
-- Do not combine agent instruction updates with product story work.
-- If a prerequisite fix belongs to an earlier story, stop and propose a separate `fix/story-x.y-...` branch.
-- Do not commit, push, or create a PR unless the user explicitly asks.
-- If committing is requested, produce one completed story commit on the story branch.
-
-Before coding a Goal, report branch readiness:
-
-```text
-Branch readiness:
-- Primary branch:
-- Current branch:
-- Working tree clean:
-- Target story:
-- Planned story branch:
-- Branch created:
-- Expected commit message:
-```
+- Agent instruction updates belong on `chore/agent-instructions` or another ops/chore branch.
+- If agent instruction updates are found mixed with product story work, split them automatically using `docs/agent/RECOVERY_PLAYBOOK.md`.
+- If a prerequisite fix belongs to an earlier story and is small enough to unblock the queue, create a focused `fix/story-x.y-...` branch, validate it, locally merge it, and resume. If it is not small or safe, hard stop and report.
+- Push and PR creation require explicit user permission.
 
 ## Commit policy
 
 Default commit granularity is **one completed story = one commit**.
 
-Goals may be story-sized. If a Goal contains multiple stories, implement and validate one story at a time, then suggest or create one commit per story.
+When the user asks to run the queue, continue the loop, or proceed autonomously, local story commits are permitted after validation passes. Push and PR/MR creation are not permitted unless the user explicitly grants them.
 
-Before coding a Goal:
+When committing:
 
-1. Read `docs/agent/BRANCH_STRATEGY.md` and `docs/agent/COMMIT_POLICY.md`.
-2. Identify the exact target story.
-3. Produce branch readiness and a story execution plan with scope, expected files, validation, branch name, and commit message.
-4. Implement the story in internal checkpoints if needed, but keep the final commit at story granularity.
+- Create exactly one commit per completed story.
+- Do not combine multiple stories, epics, or unrelated follow-up fixes in one story commit.
+- Do not split a story into many tiny commits unless the user explicitly asks.
+- Formatting-only cleanup can be included in the story commit only when it is local to story files.
+- Use story-prefixed messages from `docs/agent/STORY_QUEUE.md`.
 
-When committing is requested:
+## Required reading order for product work
 
-- Create one commit per completed story.
-- Do not combine multiple stories, epics, or unrelated follow-up fixes in one commit.
-- Do not split a story into many tiny commits unless the user explicitly asks for smaller commits or the story must be separated for safety.
-- Formatting-only cleanup can be included in the story commit only when it is local to the story files.
-- Use story-prefixed messages such as `feat(story-4.1): implement shared spatial model and view shell`.
-
-Before suggesting or creating a commit, report:
-
-```text
-Story commit readiness:
-- Story:
-- Acceptance criteria status:
-- Files changed:
-- Validation run:
-- Result:
-- Known limitations:
-- Suggested commit message:
-```
-
-## Required reading order
-
-Before implementation, read only the documents needed for the current task.
+Before implementation, read only the documents needed for the current story.
 
 Always start with:
 
@@ -140,12 +140,12 @@ Treat `implementation-readiness-report-2026-05-08.md` as the latest implementati
 
 Before coding:
 
-1. Identify the target story or stories.
-2. Read the story acceptance criteria from `epics.md`.
-3. Read architecture rules that affect the touched boundary.
-4. Summarize the target story, constraints, validation plan, and stop conditions.
-5. If the requested work conflicts with the planning artifacts, stop and report the conflict.
-6. If the current Goal starts at Story 4.1 or later, confirm the Story 3.5/3.6 handoff is sufficient for the work.
+1. Determine the next story from `docs/agent/STORY_QUEUE.md`.
+2. Run branch/worktree readiness.
+3. If readiness fails, repair using `docs/agent/RECOVERY_PLAYBOOK.md`.
+4. Read target story acceptance criteria from `epics.md`.
+5. Read architecture rules affecting the touched boundary.
+6. Produce a short story preflight: scope, expected files, validation, invariants, and commit message.
 
 During coding:
 
@@ -153,19 +153,24 @@ During coding:
 - Do not add post-MVP features unless needed as a documented stub or extension point.
 - Do not broaden product scope.
 - Prefer the smallest reversible implementation decision.
-- Document assumptions when the planning artifacts do not specify a detail.
+- Document assumptions when planning artifacts do not specify a detail.
 - Add or update the smallest meaningful test/check for the story.
 
-Before completion:
+Validation loop:
 
-- Run the relevant app/editor/server checks when available.
-- Verify acceptance criteria directly.
-- Verify the RoomForge invariants above.
-- Report any check that could not be run and why.
+1. Run relevant checks.
+2. If a check fails because of current-story code, fix and rerun.
+3. Repeat up to three validation/fix cycles.
+4. Missing local tools are environment limitations, not automatic blockers; use substitutes and document them.
+5. Stop only if acceptance criteria cannot be verified after reasonable recovery attempts.
 
-## Completion report format
+Completion:
 
-Use the format in `docs/agent/COMPLETION_REPORT.md`.
+- Produce the report from `docs/agent/COMPLETION_REPORT.md`.
+- Commit one validated story locally when queue/autonomous mode is active.
+- Fast-forward merge the completed story into the local primary branch when local continuation mode is active.
+- Create the next story branch and continue unless the user has asked to stop.
+- Do not push or create a PR unless explicitly approved.
 
 ## Agent playbooks
 
@@ -173,10 +178,16 @@ Use these files for repeatable workflows:
 
 - `docs/agent/README.md`
 - `docs/agent/CURRENT_PROGRESS.md`
+- `docs/agent/STORY_QUEUE.md`
+- `docs/agent/STORY_EXECUTION_LOOP.md`
+- `docs/agent/AUTO_RUN.md`
+- `docs/agent/RECOVERY_PLAYBOOK.md`
 - `docs/agent/TEAM.md`
 - `docs/agent/GOAL_TEMPLATE.md`
 - `docs/agent/GOALS.md`
 - `docs/agent/VALIDATION.md`
+- `docs/agent/STOP_CONDITIONS.md`
+- `docs/agent/BRANCH_STRATEGY.md`
 - `docs/agent/COMMIT_POLICY.md`
 - `docs/agent/SUBAGENTS.md`
 - `docs/agent/COMPLETION_REPORT.md`

@@ -87,3 +87,13 @@ story/4.1-shared-spatial-model
 ```
 
 After Story 4.1 is validated, committed, reviewed, and merged, start Story 4.2 from the updated primary branch rather than continuing on the Story 4.1 branch.
+
+
+## Active execution queue
+
+Use `docs/agent/STORY_QUEUE.md` and `docs/agent/STORY_EXECUTION_LOOP.md` for all remaining stories. The active queue starts with the Story 3.5/3.6 handoff gate and then proceeds from Story 4.1 through Story 6.6.
+
+
+## Auto-run note
+
+The current execution model is designed to continue through the active story queue without repeatedly stopping on recoverable issues. If Story 4.1 starts with a partial persisted floor-plan handoff but can use a valid metric fixture/demo floor plan, proceed and document the limitation. Use `RECOVERY_PLAYBOOK.md` for branch/worktree repair and `VALIDATION.md` for validation retries.

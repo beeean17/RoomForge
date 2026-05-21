@@ -1,15 +1,29 @@
 # RoomForge Goals
 
-## Commit granularity rule
+## Story loop rule
 
-Before running any Goal in this file, read `docs/agent/BRANCH_STRATEGY.md` and `docs/agent/COMMIT_POLICY.md` and identify the target story. The default commit unit is **one completed story = one commit**.
+Before running any Goal in this file, read `docs/agent/STORY_QUEUE.md`, `docs/agent/STORY_EXECUTION_LOOP.md`, `docs/agent/AUTO_RUN.md`, `docs/agent/RECOVERY_PLAYBOOK.md`, `docs/agent/BRANCH_STRATEGY.md`, and `docs/agent/COMMIT_POLICY.md` and identify the target story.
 
-Do not implement directly on `main` unless the user explicitly asks. Create or use the matching story branch before coding. Do not commit automatically unless the user explicitly asked you to commit. If committing is requested, create one commit per completed and validated story. Do not combine multiple stories or an entire epic into one commit.
+The default execution unit is:
 
+```text
+1 story = 1 branch = 1 goal = 1 validation loop = 1 completion report = 1 local story commit
+```
+
+When the user asks to run the queue or continue automatically:
+
+- create or repair the story branch;
+- execute one story Goal;
+- run validation, fix failures, and rerun;
+- create one local story commit;
+- fast-forward merge locally into the primary branch;
+- create the next story branch and continue.
+
+Do not push or create a PR/MR unless the user explicitly approves.
 
 These Goals are written for the current project state: **implementation is assumed complete through Story 3.6**.
 
-Use one Goal at a time. Do not run the full list as one task. Use one story branch per Goal/story.
+Use one Goal at a time. Do not implement the full list as one code change. The active queue is controlled by `docs/agent/STORY_EXECUTION_LOOP.md` and `docs/agent/STORY_QUEUE.md`.
 
 ---
 

@@ -12,6 +12,8 @@ import {
   roomBounds,
   spatialModelFromBridgePayload,
   spatialSummary,
+  type FurnitureCategory,
+  type FurnitureObject,
   type SpatialModel,
   type ViewMode,
 } from './spatialModel'
@@ -69,6 +71,11 @@ app.innerHTML = `
       <button id="reset-candidate" type="button">Reset</button>
       <button id="generate-floor-plan" type="button">Generate floor plan</button>
     </div>
+    <div class="furniture-controls" aria-label="Furniture catalog">
+      <button type="button" data-furniture-category="chair">Add chair</button>
+      <button type="button" data-furniture-category="table">Add table</button>
+      <button type="button" data-furniture-category="sofa">Add sofa</button>
+    </div>
     <div class="camera-controls" aria-label="3D camera controls">
       <button type="button" data-camera-action="reset">Reset</button>
       <button type="button" data-camera-action="fit">Fit</button>
@@ -96,6 +103,9 @@ const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
 const cameraActionButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-camera-action]'),
 )
+const furnitureCategoryButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-furniture-category]'),
+)
 
 if (
   !canvas ||
@@ -109,7 +119,8 @@ if (
   !cameraStatus ||
   !view2dButton ||
   !view3dButton ||
-  cameraActionButtons.length === 0
+  cameraActionButtons.length === 0 ||
+  furnitureCategoryButtons.length === 0
 ) {
   throw new Error('Missing editor UI element.')
 }
@@ -175,10 +186,17 @@ const wallMaterial = new THREE.MeshBasicMaterial({
 const wallGroup = new THREE.Group()
 room.add(wallGroup)
 
+const furnitureGroup = new THREE.Group()
+room.add(furnitureGroup)
+
 const selectionMaterial = new THREE.LineBasicMaterial({ color: 0x0f172a })
 const selectionLine = new THREE.Line(new THREE.BufferGeometry(), selectionMaterial)
 selectionLine.visible = true
 room.add(selectionLine)
+
+const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0x111827 })
+const furnitureMeshes = new Map<string, THREE.Mesh>()
+const furnitureOutlineObjects: THREE.LineSegments[] = []
 
 const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0x0f172a })
 const cornerMeshes: THREE.Mesh[] = []
@@ -245,6 +263,7 @@ let activeCameraDrag:
     }
   | null = null
 let cameraTransition: CameraTransition | null = null
+let furnitureIdCounter = 0
 
 function resizeRenderer(): void {
   const parent = editorCanvas.parentElement
@@ -335,6 +354,14 @@ for (const button of cameraActionButtons) {
     const action = button.dataset.cameraAction
     if (isCameraAction(action)) {
       applyCameraAction(action)
+    }
+  })
+}
+for (const button of furnitureCategoryButtons) {
+  button.addEventListener('click', () => {
+    const category = button.dataset.furnitureCategory
+    if (isFurnitureCategory(category)) {
+      addFurniture(category)
     }
   })
 }
@@ -434,6 +461,12 @@ editorCanvas.addEventListener('pointerdown', (event) => {
     }
     activeCornerIndex = cornerIndex
     editorCanvas.setPointerCapture(event.pointerId)
+    return
+  }
+
+  const furnitureIntersections = raycaster.intersectObjects([...furnitureMeshes.values()])
+  if (furnitureIntersections.length > 0) {
+    selectFurniture(furnitureIntersections[0].object.userData.objectId)
     return
   }
 
@@ -603,12 +636,14 @@ function applySpatialModel(): void {
   )
   syncConfirmedGeometryMeshes()
   rebuildWalls()
+  rebuildFurniture()
   applyViewModeCamera()
   updateSpatialStatus()
 }
 
 function setViewMode(viewMode: ViewMode): void {
   spatialModel = { ...spatialModel, viewMode }
+  rebuildFurniture()
   applyViewModeCamera()
   updateSpatialStatus()
   emitSceneState('roomforge.view.changed')
@@ -675,6 +710,49 @@ function syncConfirmedGeometryMeshes(): void {
   }
 }
 
+function rebuildFurniture(): void {
+  for (const child of [...furnitureGroup.children]) {
+    furnitureGroup.remove(child)
+    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+      child.geometry.dispose()
+    }
+  }
+  furnitureMeshes.clear()
+  furnitureOutlineObjects.length = 0
+
+  for (const item of spatialModel.furniture) {
+    const isSelected =
+      spatialModel.selected?.objectType === 'furniture' &&
+      spatialModel.selected.objectId === item.objectId
+    const height = spatialModel.viewMode === '2d' ? 0.08 : item.size.heightMeters
+    const geometry = new THREE.BoxGeometry(item.size.widthMeters, height, item.size.depthMeters)
+    const material = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(item.color),
+      transparent: true,
+      opacity: spatialModel.viewMode === '2d' ? 0.72 : 0.86,
+    })
+    const mesh = new THREE.Mesh(geometry, material)
+    const position = metricPointToScene(item.position.x, item.position.y, height / 2 + 0.03)
+    mesh.position.copy(position)
+    mesh.rotation.y = THREE.MathUtils.degToRad(item.rotationDegrees)
+    mesh.userData.objectId = item.objectId
+    mesh.userData.objectType = 'furniture'
+    furnitureGroup.add(mesh)
+    furnitureMeshes.set(item.objectId, mesh)
+
+    if (isSelected) {
+      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), furnitureSelectionMaterial)
+      outline.position.copy(position)
+      outline.rotation.copy(mesh.rotation)
+      outline.scale.setScalar(1.05)
+      outline.userData.objectId = item.objectId
+      outline.userData.objectType = 'furniture-selection'
+      furnitureGroup.add(outline)
+      furnitureOutlineObjects.push(outline)
+    }
+  }
+}
+
 function updateSpatialStatus(): void {
   spatialStatusElement.textContent = spatialSummary(spatialModel)
   sceneStatusElement.textContent = spatialSummary(spatialModel)
@@ -705,6 +783,71 @@ function spatialModelPayload(): Record<string, unknown> {
     hasUnsavedChanges: spatialModel.hasUnsavedChanges,
     scale: spatialModel.scale,
     room: spatialModel.room,
+    furniture: spatialModel.furniture,
+  }
+}
+
+function addFurniture(category: FurnitureCategory): void {
+  const item = furnitureDefaults(category)
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    selected: { objectId: item.objectId, objectType: 'furniture' },
+    furniture: [...spatialModel.furniture, item],
+  }
+  rebuildFurniture()
+  updateSpatialStatus()
+  emitSceneState('roomforge.selection.changed')
+}
+
+function selectFurniture(objectId: unknown): void {
+  if (typeof objectId !== 'string') {
+    return
+  }
+  const item = spatialModel.furniture.find((candidate) => candidate.objectId === objectId)
+  if (!item) {
+    return
+  }
+  spatialModel = {
+    ...spatialModel,
+    selected: { objectId: item.objectId, objectType: 'furniture' },
+  }
+  rebuildFurniture()
+  updateSpatialStatus()
+  emitSceneState('roomforge.selection.changed')
+}
+
+function furnitureDefaults(category: FurnitureCategory): FurnitureObject {
+  furnitureIdCounter += 1
+  const bounds = roomBounds(spatialModel)
+  const base = {
+    chair: {
+      label: 'Chair',
+      size: { widthMeters: 0.55, depthMeters: 0.55, heightMeters: 0.85 },
+      color: '#64748b',
+    },
+    table: {
+      label: 'Table',
+      size: { widthMeters: 1.2, depthMeters: 0.75, heightMeters: 0.74 },
+      color: '#7f8f6f',
+    },
+    sofa: {
+      label: 'Sofa',
+      size: { widthMeters: 1.8, depthMeters: 0.85, heightMeters: 0.82 },
+      color: '#8b6f61',
+    },
+  }[category]
+  return {
+    objectId: `furniture-${category}-${Date.now()}-${furnitureIdCounter}`,
+    category,
+    label: base.label,
+    size: base.size,
+    position: {
+      x: Number((bounds.centerX + bounds.widthMeters * 0.18).toFixed(2)),
+      y: Number((bounds.centerY + bounds.depthMeters * 0.18).toFixed(2)),
+    },
+    rotationDegrees: 0,
+    color: base.color,
   }
 }
 
@@ -977,10 +1120,24 @@ function confirmedGeometryPayload(): Record<string, unknown> {
 
 function inspectorSummary(model: SpatialModel): string {
   const bounds = roomBounds(model)
+  if (model.selected?.objectType === 'furniture') {
+    const item = model.furniture.find((candidate) => candidate.objectId === model.selected?.objectId)
+    if (item) {
+      return `${item.label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
+        2,
+      )} m x ${item.size.heightMeters.toFixed(2)} m; position ${item.position.x.toFixed(
+        2,
+      )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg`
+    }
+  }
   const selected = model.selected?.objectId ?? 'none'
   return `${selected}; ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
     2,
   )} m x ${model.room.heightMeters.toFixed(2)} m`
+}
+
+function isFurnitureCategory(value: string | undefined): value is FurnitureCategory {
+  return value === 'chair' || value === 'table' || value === 'sofa'
 }
 
 function setPointerFromEvent(event: PointerEvent): void {

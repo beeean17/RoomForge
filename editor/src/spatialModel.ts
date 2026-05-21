@@ -7,9 +7,28 @@ export type MeterPoint = {
   y: number
 }
 
+export type FurnitureCategory = 'chair' | 'table' | 'sofa'
+
+export type FurnitureObject = {
+  objectId: string
+  category: FurnitureCategory
+  label: string
+  size: {
+    widthMeters: number
+    depthMeters: number
+    heightMeters: number
+  }
+  position: {
+    x: number
+    y: number
+  }
+  rotationDegrees: number
+  color: string
+}
+
 export type SpatialSelection = {
   objectId: string
-  objectType: 'room'
+  objectType: 'room' | 'furniture'
 } | null
 
 export type SpatialModel = {
@@ -35,6 +54,7 @@ export type SpatialModel = {
       }
     }
   }
+  furniture: FurnitureObject[]
 }
 
 export function defaultSpatialModel(): SpatialModel {
@@ -64,6 +84,7 @@ export function defaultSpatialModel(): SpatialModel {
         },
       },
     },
+    furniture: [],
   }
 }
 
@@ -73,6 +94,9 @@ export function spatialModelFromBridgePayload(payload: BridgePayload): SpatialMo
   const room = recordValue(scene.room ?? payload.room)
   const floorPlan = recordValue(room.floorPlan ?? payload.floorPlan)
   const metricGeometry = recordValue(floorPlan.metricGeometry ?? payload.metricGeometry)
+  const rawFurniture = Array.isArray(scene.furniture ?? payload.furniture)
+    ? ((scene.furniture ?? payload.furniture) as unknown[])
+    : []
   const rawPoints = Array.isArray(metricGeometry.points) ? metricGeometry.points : undefined
   const points = rawPoints
     ?.map((point) => recordValue(point))
@@ -108,6 +132,7 @@ export function spatialModelFromBridgePayload(payload: BridgePayload): SpatialMo
         },
       },
     },
+    furniture: rawFurniture.map(furnitureValue).filter((item) => item !== null),
   }
 }
 
@@ -137,7 +162,9 @@ export function spatialSummary(model: SpatialModel): string {
   const bounds = roomBounds(model)
   const selected = model.selected?.objectId ?? 'none'
   const state = model.hasUnsavedChanges ? 'Unsaved changes' : 'Saved'
-  return `${model.viewMode.toUpperCase()} | ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m | selected ${selected} | ${state}`
+  return `${model.viewMode.toUpperCase()} | ${bounds.widthMeters.toFixed(
+    2,
+  )} m x ${bounds.depthMeters.toFixed(2)} m | ${model.furniture.length} furniture | selected ${selected} | ${state}`
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -166,5 +193,41 @@ function selectionValue(value: unknown): SpatialSelection {
   if (typeof objectId !== 'string' || objectId.length === 0) {
     return null
   }
-  return { objectId, objectType: 'room' }
+  const objectType = record.objectType === 'furniture' ? 'furniture' : 'room'
+  return { objectId, objectType }
+}
+
+function furnitureValue(value: unknown): FurnitureObject | null {
+  const record = recordValue(value)
+  const objectId = record.objectId
+  const category = record.category
+  if (typeof objectId !== 'string' || !isFurnitureCategory(category)) {
+    return null
+  }
+  const size = recordValue(record.size)
+  const position = recordValue(record.position)
+  return {
+    objectId,
+    category,
+    label: stringValue(record.label, categoryLabel(category)),
+    size: {
+      widthMeters: numberValue(size.widthMeters, 0.6),
+      depthMeters: numberValue(size.depthMeters, 0.6),
+      heightMeters: numberValue(size.heightMeters, 0.8),
+    },
+    position: {
+      x: numberValue(position.x, 1),
+      y: numberValue(position.y, 1),
+    },
+    rotationDegrees: numberValue(record.rotationDegrees, 0),
+    color: stringValue(record.color, '#64748b'),
+  }
+}
+
+function isFurnitureCategory(value: unknown): value is FurnitureCategory {
+  return value === 'chair' || value === 'table' || value === 'sofa'
+}
+
+function categoryLabel(category: FurnitureCategory): string {
+  return category === 'chair' ? 'Chair' : category === 'table' ? 'Table' : 'Sofa'
 }

@@ -31,6 +31,8 @@ app.innerHTML = `
       <button id="view-2d" type="button" aria-pressed="true">2D</button>
       <button id="view-3d" type="button" aria-pressed="false">3D</button>
     </div>
+    <div class="viewport-measurements" id="measurement-status">Room 4.20 m x 3.60 m</div>
+    <div class="viewport-warning" id="placement-status" hidden>Placement warning</div>
     <canvas class="editor-canvas" aria-label="Three.js reconstruction viewport"></canvas>
     <div class="viewport-status-strip" id="scene-status">Initializing metric room scene</div>
   </div>
@@ -61,6 +63,10 @@ app.innerHTML = `
       <div>
         <dt>Inspector</dt>
         <dd id="inspector-status">Selected room shell</dd>
+      </div>
+      <div>
+        <dt>Placement</dt>
+        <dd id="placement-summary">All objects inside room bounds</dd>
       </div>
     </dl>
     <div class="geometry-controls" aria-label="Geometry correction controls">
@@ -109,6 +115,9 @@ const viewportStatus = document.querySelector<HTMLElement>('#viewport-status')
 const geometryStatus = document.querySelector<HTMLElement>('#geometry-status')
 const spatialStatus = document.querySelector<HTMLElement>('#spatial-status')
 const inspectorStatus = document.querySelector<HTMLElement>('#inspector-status')
+const measurementStatus = document.querySelector<HTMLElement>('#measurement-status')
+const placementStatus = document.querySelector<HTMLElement>('#placement-status')
+const placementSummary = document.querySelector<HTMLElement>('#placement-summary')
 const sceneStatus = document.querySelector<HTMLElement>('#scene-status')
 const cameraStatus = document.querySelector<HTMLElement>('#camera-status')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
@@ -131,6 +140,9 @@ if (
   !geometryStatus ||
   !spatialStatus ||
   !inspectorStatus ||
+  !measurementStatus ||
+  !placementStatus ||
+  !placementSummary ||
   !sceneStatus ||
   !cameraStatus ||
   !view2dButton ||
@@ -149,6 +161,9 @@ const viewportStatusElement = viewportStatus
 const geometryStatusElement = geometryStatus
 const spatialStatusElement = spatialStatus
 const inspectorStatusElement = inspectorStatus
+const measurementStatusElement = measurementStatus
+const placementStatusElement = placementStatus
+const placementSummaryElement = placementSummary
 const sceneStatusElement = sceneStatus
 const cameraStatusElement = cameraStatus
 const view2dButtonElement = view2dButton
@@ -794,6 +809,11 @@ function updateSpatialStatus(): void {
   spatialStatusElement.textContent = spatialSummary(spatialModel)
   sceneStatusElement.textContent = spatialSummary(spatialModel)
   inspectorStatusElement.textContent = inspectorSummary(spatialModel)
+  measurementStatusElement.textContent = measurementSummary(spatialModel)
+  const warning = placementWarning(spatialModel)
+  placementStatusElement.hidden = warning === null
+  placementStatusElement.textContent = warning ?? ''
+  placementSummaryElement.textContent = warning ?? 'All objects inside room bounds'
   selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
   view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d'))
   view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d'))
@@ -1261,6 +1281,38 @@ function inspectorSummary(model: SpatialModel): string {
 
 function isFurnitureCategory(value: string | undefined): value is FurnitureCategory {
   return value === 'chair' || value === 'table' || value === 'sofa'
+}
+
+function measurementSummary(model: SpatialModel): string {
+  const bounds = roomBounds(model)
+  const selected = selectedFurniture()
+  if (selected) {
+    return `${selected.label}: ${selected.size.widthMeters.toFixed(2)} m x ${selected.size.depthMeters.toFixed(
+      2,
+    )} m; room ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m`
+  }
+  return `Room ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m x ${model.room.heightMeters.toFixed(
+    2,
+  )} m`
+}
+
+function placementWarning(model: SpatialModel): string | null {
+  const bounds = roomBounds(model)
+  const outside = model.furniture.find((item) => {
+    const halfWidth = item.size.widthMeters / 2
+    const halfDepth = item.size.depthMeters / 2
+    return (
+      item.position.x - halfWidth < 0 ||
+      item.position.y - halfDepth < 0 ||
+      item.position.x + halfWidth > bounds.widthMeters ||
+      item.position.y + halfDepth > bounds.depthMeters
+    )
+  })
+  return outside
+    ? `Warning: ${outside.label} is outside the ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+        2,
+      )} m room bounds.`
+    : null
 }
 
 function isFurnitureEditAction(value: string | undefined): value is FurnitureEditAction {

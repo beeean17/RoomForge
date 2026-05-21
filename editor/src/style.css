@@ -62,6 +62,36 @@ body {
   color: #ffffff;
 }
 
+.viewport-measurements,
+.viewport-warning {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  max-width: min(520px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #b7c4d4;
+  background: rgba(255, 255, 255, 0.94);
+  color: #172033;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.viewport-measurements {
+  top: 72px;
+}
+
+.viewport-warning {
+  top: 124px;
+  border-width: 2px;
+  border-style: dashed;
+  border-color: #b45309;
+}
+
+.viewport-warning[hidden] {
+  display: none;
+}
+
 .editor-canvas {
   display: block;
   width: 100%;
@@ -220,6 +250,20 @@ button:focus-visible {
     top: 12px;
     left: 12px;
     grid-template-columns: repeat(2, 64px);
+  }
+
+  .viewport-measurements {
+    top: 68px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+
+  .viewport-warning {
+    top: 118px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
   }
 
   .viewport-status-strip {

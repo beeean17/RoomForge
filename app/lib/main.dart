@@ -794,8 +794,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       MaterialPageRoute<void>(
         builder: (context) => EditorBridgeScreen(
           project: project,
+          projectApi: widget.projectApi,
           initialDimensions: _dimensions,
           reconstructionJob: _reconstructionJob,
+          sourceImage: _sourceImage,
         ),
       ),
     );
@@ -1299,14 +1301,18 @@ class _ImageSize {
 class EditorBridgeScreen extends StatefulWidget {
   const EditorBridgeScreen({
     required this.project,
+    required this.projectApi,
     this.initialDimensions,
     this.reconstructionJob,
+    this.sourceImage,
     super.key,
   });
 
   final RoomProject project;
+  final ProjectApi projectApi;
   final RoomDimensions? initialDimensions;
   final ReconstructionJob? reconstructionJob;
+  final SourceImage? sourceImage;
 
   @override
   State<EditorBridgeScreen> createState() => _EditorBridgeScreenState();
@@ -1319,7 +1325,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   String _bridgeStatus = 'Waiting for editor frame.';
   String _runtimeStatus = 'Waiting for OpenCV worker.';
   String _sceneStatus = 'Waiting for metric floor plan handoff.';
+  String _saveStatus = 'Not saved.';
   String _viewMode = '2d';
+  bool _isSavingLayout = false;
+  Map<String, Object?>? _latestScene;
 
   @override
   void initState() {
@@ -1407,6 +1416,14 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                     constraints: const BoxConstraints(maxWidth: 320),
                     child: Text(_runtimeStatus),
                   ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Text(_saveStatus),
+                  ),
+                  FilledButton(
+                    onPressed: _isSavingLayout ? null : _saveLayout,
+                    child: Text(_isSavingLayout ? 'Saving...' : 'Save layout'),
+                  ),
                   OutlinedButton(
                     onPressed: () => _postEditorMessage(
                       type: 'roomforge.editor.ping',
@@ -1449,9 +1466,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _runtimeStatus = 'OpenCV worker asset loading failed.';
       } else if (type == 'roomforge.scene.initialized' ||
           type == 'roomforge.view.changed' ||
-          type == 'roomforge.selection.changed') {
+          type == 'roomforge.selection.changed' ||
+          type == 'roomforge.scene.updated') {
         final payload = data['payload'];
         if (payload is Map) {
+          _latestScene = Map<String, Object?>.from(payload);
           final viewMode = payload['viewMode']?.toString();
           if (viewMode == '2d' || viewMode == '3d') {
             _viewMode = viewMode;
@@ -1466,6 +1485,153 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         }
       }
     });
+  }
+
+  Future<void> _saveLayout() async {
+    setState(() {
+      _isSavingLayout = true;
+      _saveStatus = 'Saving...';
+    });
+
+    try {
+      final scene = _sceneForSave();
+      await widget.projectApi.saveLayout(
+        projectId: widget.project.id,
+        roomDimensions: _roomDimensionsPayload(),
+        floorPlan: _floorPlanPayload(scene),
+        sourceMetadata: _sourceMetadataPayload(),
+        furnitureObjects: _furniturePayload(scene),
+        editorScene: _editorScenePayload(scene),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _saveStatus = 'Saved');
+    } on ProjectApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _saveStatus = 'Save failed: ${error.message}');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _saveStatus = 'Save failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingLayout = false);
+      }
+    }
+  }
+
+  Map<String, Object?> _sceneForSave() {
+    final scene = _latestScene;
+    if (scene != null) {
+      return scene;
+    }
+    final payload = _sceneInitializePayload();
+    return Map<String, Object?>.from(payload['scene'] as Map);
+  }
+
+  Map<String, Object?> _roomDimensionsPayload() {
+    final dimensions = widget.initialDimensions;
+    return {
+      'unit': dimensions?.unit ?? 'meters',
+      'width_value': dimensions?.widthValue ?? 4.2,
+      'depth_value': dimensions?.depthValue ?? 3.6,
+      'height_value': dimensions?.heightValue ?? 2.7,
+    };
+  }
+
+  Map<String, Object?> _floorPlanPayload(Map<String, Object?> scene) {
+    final room = _recordValue(scene['room']);
+    final floorPlan = _recordValue(room['floorPlan']);
+    final metricGeometry = _recordValue(floorPlan['metricGeometry']);
+    final points = _listValue(metricGeometry['points'])
+        .map(_recordValue)
+        .map(
+          (point) => {
+            'x': _numberValue(point['x'], 0),
+            'y': _numberValue(point['y'], 0),
+          },
+        )
+        .toList();
+
+    return {
+      'floor_plan_id':
+          floorPlan['floorPlanId']?.toString() ??
+          'project-${widget.project.id}-metric-floor-plan',
+      'metric_geometry': {
+        'coordinate_space':
+            metricGeometry['coordinateSpace']?.toString() ?? 'meters',
+        'points': points,
+      },
+    };
+  }
+
+  Map<String, Object?> _sourceMetadataPayload() {
+    return {
+      'source_image_id': widget.sourceImage?.id,
+      'reconstruction_job_id': widget.reconstructionJob?.id,
+      'reconstruction_status': widget.reconstructionJob?.status,
+    };
+  }
+
+  List<Map<String, Object?>> _furniturePayload(Map<String, Object?> scene) {
+    final objects = <Map<String, Object?>>[];
+    for (final item in _listValue(scene['furniture'])) {
+      final furniture = _recordValue(item);
+      if (furniture.isEmpty) {
+        continue;
+      }
+      final size = _recordValue(furniture['size']);
+      final position = _recordValue(furniture['position']);
+      objects.add({
+        'id': furniture['objectId']?.toString() ?? '',
+        'category': furniture['category']?.toString() ?? 'unknown',
+        'position': {
+          'x': _numberValue(position['x'], 0),
+          'y': _numberValue(position['y'], 0),
+        },
+        'size': {
+          'width_meters': _numberValue(size['widthMeters'], 0),
+          'depth_meters': _numberValue(size['depthMeters'], 0),
+          'height_meters': _numberValue(size['heightMeters'], 0),
+        },
+        'rotation_degrees': _numberValue(furniture['rotationDegrees'], 0),
+        'color': furniture['color']?.toString() ?? '#64748b',
+      });
+    }
+    return objects;
+  }
+
+  Map<String, Object?> _editorScenePayload(Map<String, Object?> scene) {
+    final selected = _recordValue(scene['selected']);
+    return {
+      'scene_id':
+          scene['sceneId']?.toString() ??
+          'project-${widget.project.id}-planning-scene',
+      'view_mode': scene['viewMode']?.toString() ?? _viewMode,
+      'selected': selected.isEmpty
+          ? null
+          : {
+              'object_id': selected['objectId']?.toString(),
+              'object_type': selected['objectType']?.toString(),
+            },
+      'has_unsaved_changes': scene['hasUnsavedChanges'] == true,
+    };
+  }
+
+  Map<String, Object?> _recordValue(Object? value) {
+    return value is Map ? Map<String, Object?>.from(value) : {};
+  }
+
+  List<Object?> _listValue(Object? value) {
+    return value is List ? value.cast<Object?>() : const [];
+  }
+
+  double _numberValue(Object? value, double fallback) {
+    return value is num ? value.toDouble() : fallback;
   }
 
   void _postEditorMessage({

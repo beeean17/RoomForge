@@ -13,6 +13,7 @@ from app.routers import (
     dimensions,
     floor_plans,
     health,
+    layouts,
     opencv_results,
     projects,
     reconstruction_jobs,
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(opencv_results.router)
     app.include_router(confirmed_geometries.router)
     app.include_router(floor_plans.router)
+    app.include_router(layouts.router)
     app.include_router(health.router)
     return app
 

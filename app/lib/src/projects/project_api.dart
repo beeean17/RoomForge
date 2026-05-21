@@ -172,6 +172,51 @@ class ReconstructionJob {
   }
 }
 
+class SavedLayout {
+  const SavedLayout({
+    required this.id,
+    required this.projectId,
+    required this.userId,
+    required this.roomDimensions,
+    required this.floorPlan,
+    required this.sourceMetadata,
+    required this.furnitureObjects,
+    required this.editorScene,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final int id;
+  final int projectId;
+  final int userId;
+  final Map<String, Object?> roomDimensions;
+  final Map<String, Object?> floorPlan;
+  final Map<String, Object?> sourceMetadata;
+  final List<Object?> furnitureObjects;
+  final Map<String, Object?> editorScene;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory SavedLayout.fromJson(Map<String, Object?> json) {
+    return SavedLayout(
+      id: json['id'] as int,
+      projectId: json['project_id'] as int,
+      userId: json['user_id'] as int,
+      roomDimensions: Map<String, Object?>.from(
+        json['room_dimensions'] as Map,
+      ),
+      floorPlan: Map<String, Object?>.from(json['floor_plan'] as Map),
+      sourceMetadata: Map<String, Object?>.from(
+        json['source_metadata'] as Map,
+      ),
+      furnitureObjects: json['furniture_objects'] as List<Object?>,
+      editorScene: Map<String, Object?>.from(json['editor_scene'] as Map),
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+}
+
 class ProjectApi {
   ProjectApi({
     required this.authRepository,
@@ -334,6 +379,30 @@ class ProjectApi {
     final body = _decodeEnvelope(response);
     final data = body['data'] as Map<String, Object?>;
     return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
+  }
+
+  Future<SavedLayout> saveLayout({
+    required int projectId,
+    required Map<String, Object?> roomDimensions,
+    required Map<String, Object?> floorPlan,
+    required Map<String, Object?> sourceMetadata,
+    required List<Map<String, Object?>> furnitureObjects,
+    required Map<String, Object?> editorScene,
+  }) async {
+    final response = await _client.post(
+      _baseUri.resolve('/room-projects/$projectId/layouts'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'room_dimensions': roomDimensions,
+        'floor_plan': floorPlan,
+        'source_metadata': sourceMetadata,
+        'furniture_objects': furnitureObjects,
+        'editor_scene': editorScene,
+      }),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return SavedLayout.fromJson(data['layout'] as Map<String, Object?>);
   }
 
   Future<Map<String, String>> _headers() async {

@@ -19,6 +19,7 @@ from app.repositories.floor_plans import (
     FloorPlanRecord,
     metric_geometry_from_dimensions,
 )
+from app.repositories.layouts import LayoutRecord, LayoutSave
 from app.repositories.opencv_results import (
     OpenCvResultCreate,
     OpenCvResultNotFound,
@@ -56,6 +57,7 @@ class InMemoryRoomForgeStore:
         self.opencv_results: dict[int, OpenCvResultRecord] = {}
         self.confirmed_geometries: dict[int, ConfirmedGeometryRecord] = {}
         self.floor_plans: dict[int, FloorPlanRecord] = {}
+        self.layouts: dict[int, LayoutRecord] = {}
         self._next_ids: dict[str, int] = {}
 
     def next_id(self, key: str) -> int:
@@ -388,6 +390,31 @@ class InMemoryFloorPlanRepository:
         return record
 
 
+class InMemoryLayoutRepository:
+    def __init__(self, store: InMemoryRoomForgeStore) -> None:
+        self._store = store
+
+    def save_for_project(
+        self, user: UserRecord, project_id: int, payload: LayoutSave
+    ) -> LayoutRecord:
+        ensure_project(self._store, user, project_id)
+        now = utc_now()
+        record = LayoutRecord(
+            id=self._store.next_id("layouts"),
+            project_id=project_id,
+            user_id=user.id,
+            room_dimensions=payload.room_dimensions,
+            floor_plan=payload.floor_plan,
+            source_metadata=payload.source_metadata,
+            furniture_objects=payload.furniture_objects,
+            editor_scene=payload.editor_scene,
+            created_at=now,
+            updated_at=now,
+        )
+        self._store.layouts[record.id] = record
+        return record
+
+
 def install_in_memory_repositories(app) -> None:
     store = InMemoryRoomForgeStore()
     app.state.in_memory_store = store
@@ -399,6 +426,7 @@ def install_in_memory_repositories(app) -> None:
     app.state.opencv_result_repository = InMemoryOpenCvResultRepository(store)
     app.state.confirmed_geometry_repository = InMemoryConfirmedGeometryRepository(store)
     app.state.floor_plan_repository = InMemoryFloorPlanRepository(store)
+    app.state.layout_repository = InMemoryLayoutRepository(store)
 
 
 def utc_now() -> datetime:

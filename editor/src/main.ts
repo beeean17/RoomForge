@@ -31,10 +31,22 @@ app.innerHTML = `
       <button id="view-2d" type="button" aria-pressed="true">2D</button>
       <button id="view-3d" type="button" aria-pressed="false">3D</button>
     </div>
-    <div class="viewport-measurements" id="measurement-status">Room 4.20 m x 3.60 m</div>
-    <div class="viewport-warning" id="placement-status" hidden>Placement warning</div>
-    <canvas class="editor-canvas" aria-label="Three.js reconstruction viewport"></canvas>
-    <div class="viewport-status-strip" id="scene-status">Initializing metric room scene</div>
+    <div class="viewport-measurements" id="measurement-status" role="status" aria-live="polite">
+      Room 4.20 m x 3.60 m
+    </div>
+    <div class="viewport-warning" id="placement-status" role="status" aria-live="assertive" hidden>
+      Placement warning
+    </div>
+    <canvas
+      class="editor-canvas"
+      aria-describedby="scene-status inspector-status placement-summary"
+      aria-label="Three.js reconstruction viewport"
+      role="application"
+      tabindex="0"
+    ></canvas>
+    <div class="viewport-status-strip" id="scene-status" role="status" aria-live="polite">
+      Initializing metric room scene
+    </div>
   </div>
   <aside class="status-panel" aria-label="Inspector and status">
     <p class="eyebrow">RoomForge editor</p>
@@ -42,11 +54,11 @@ app.innerHTML = `
     <dl class="status-list">
       <div>
         <dt>Bridge</dt>
-        <dd id="bridge-status">Waiting for Flutter shell</dd>
+        <dd id="bridge-status" role="status" aria-live="polite">Waiting for Flutter shell</dd>
       </div>
       <div>
         <dt>OpenCV runtime</dt>
-        <dd id="opencv-status">Loading worker assets</dd>
+        <dd id="opencv-status" role="status" aria-live="polite">Loading worker assets</dd>
       </div>
       <div>
         <dt>Viewport</dt>
@@ -58,15 +70,15 @@ app.innerHTML = `
       </div>
       <div>
         <dt>Scene</dt>
-        <dd id="spatial-status">Waiting for metric floor plan</dd>
+        <dd id="spatial-status" role="status" aria-live="polite">Waiting for metric floor plan</dd>
       </div>
       <div>
         <dt>Inspector</dt>
-        <dd id="inspector-status">Selected room shell</dd>
+        <dd id="inspector-status" role="status" aria-live="polite">Selected room shell</dd>
       </div>
       <div>
         <dt>Placement</dt>
-        <dd id="placement-summary">All objects inside room bounds</dd>
+        <dd id="placement-summary" role="status" aria-live="polite">All objects inside room bounds</dd>
       </div>
     </dl>
     <div class="geometry-controls" aria-label="Geometry correction controls">
@@ -617,6 +629,24 @@ editorCanvas.addEventListener(
 )
 
 editorCanvas.addEventListener('contextmenu', (event) => event.preventDefault())
+editorCanvas.addEventListener('keydown', (event) => {
+  if (event.key === '2') {
+    setViewMode('2d')
+    event.preventDefault()
+  } else if (event.key === '3') {
+    setViewMode('3d')
+    event.preventDefault()
+  } else if (event.key === 'Escape') {
+    spatialModel = {
+      ...spatialModel,
+      selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
+    }
+    rebuildFurniture()
+    updateSpatialStatus()
+    emitSceneState('roomforge.selection.changed')
+    event.preventDefault()
+  }
+})
 
 const worker = new Worker(new URL('./opencvWorker.ts', import.meta.url), {
   type: 'module',

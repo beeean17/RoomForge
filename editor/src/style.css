@@ -23,6 +23,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   min-height: 100vh;
+  max-height: 100vh;
 }
 
 .viewport {
@@ -121,6 +122,8 @@ body {
   flex-direction: column;
   justify-content: center;
   gap: 18px;
+  max-height: 100vh;
+  overflow: auto;
   padding: 32px;
   border-left: 1px solid #d9e2ef;
   background: #ffffff;
@@ -231,9 +234,20 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+@media (max-width: 1024px) {
+  .editor-shell {
+    grid-template-columns: minmax(0, 1fr) 288px;
+  }
+
+  .status-panel {
+    padding: 24px;
+  }
+}
+
 @media (max-width: 800px) {
   .editor-shell {
     grid-template-columns: 1fr;
+    max-height: none;
   }
 
   .viewport,
@@ -242,6 +256,7 @@ button:focus-visible {
   }
 
   .status-panel {
+    max-height: none;
     border-left: 0;
     border-top: 1px solid #d9e2ef;
   }
@@ -271,5 +286,16 @@ button:focus-visible {
     bottom: 12px;
     left: 12px;
     max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
   }
 }

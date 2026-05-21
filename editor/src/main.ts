@@ -69,6 +69,15 @@ app.innerHTML = `
       <button id="reset-candidate" type="button">Reset</button>
       <button id="generate-floor-plan" type="button">Generate floor plan</button>
     </div>
+    <div class="camera-controls" aria-label="3D camera controls">
+      <button type="button" data-camera-action="reset">Reset</button>
+      <button type="button" data-camera-action="fit">Fit</button>
+      <button type="button" data-camera-action="top">Top</button>
+      <button type="button" data-camera-action="front">Front</button>
+      <button type="button" data-camera-action="corner">Corner</button>
+      <button type="button" data-camera-action="eye">Eye-level</button>
+    </div>
+    <p class="camera-status" id="camera-status">Camera ready</p>
   </aside>
 </section>
 `
@@ -81,8 +90,12 @@ const geometryStatus = document.querySelector<HTMLElement>('#geometry-status')
 const spatialStatus = document.querySelector<HTMLElement>('#spatial-status')
 const inspectorStatus = document.querySelector<HTMLElement>('#inspector-status')
 const sceneStatus = document.querySelector<HTMLElement>('#scene-status')
+const cameraStatus = document.querySelector<HTMLElement>('#camera-status')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
 const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
+const cameraActionButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-camera-action]'),
+)
 
 if (
   !canvas ||
@@ -93,8 +106,10 @@ if (
   !spatialStatus ||
   !inspectorStatus ||
   !sceneStatus ||
+  !cameraStatus ||
   !view2dButton ||
-  !view3dButton
+  !view3dButton ||
+  cameraActionButtons.length === 0
 ) {
   throw new Error('Missing editor UI element.')
 }
@@ -107,6 +122,7 @@ const geometryStatusElement = geometryStatus
 const spatialStatusElement = spatialStatus
 const inspectorStatusElement = inspectorStatus
 const sceneStatusElement = sceneStatus
+const cameraStatusElement = cameraStatus
 const view2dButtonElement = view2dButton
 const view3dButtonElement = view3dButton
 
@@ -200,6 +216,35 @@ let activeCornerIndex: number | null = null
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02)
+const cameraTarget = new THREE.Vector3()
+const reducedMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+type CameraAction = 'reset' | 'fit' | 'top' | 'front' | 'corner' | 'eye'
+type CameraDragMode = 'orbit' | 'pan'
+
+type CameraSnapshot = {
+  position: THREE.Vector3
+  target: THREE.Vector3
+  up: THREE.Vector3
+  label: string
+}
+
+type CameraTransition = {
+  from: CameraSnapshot
+  to: CameraSnapshot
+  startedAt: number
+  durationMs: number
+}
+
+let activeCameraDrag:
+  | {
+      pointerId: number
+      mode: CameraDragMode
+      lastX: number
+      lastY: number
+    }
+  | null = null
+let cameraTransition: CameraTransition | null = null
 
 function resizeRenderer(): void {
   const parent = editorCanvas.parentElement
@@ -217,6 +262,7 @@ function resizeRenderer(): void {
 }
 
 function render(): void {
+  updateCameraTransition()
   renderer.render(scene, camera)
   requestAnimationFrame(render)
 }
@@ -243,6 +289,7 @@ function respondToFlutter(message: BridgeMessage): void {
         height: editorCanvas.clientHeight,
       },
       focusable: true,
+      cameraPose: cameraPosePayload(),
       spatialModel: spatialModelPayload(),
     },
   })
@@ -283,6 +330,14 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
 
 view2dButtonElement.addEventListener('click', () => setViewMode('2d'))
 view3dButtonElement.addEventListener('click', () => setViewMode('3d'))
+for (const button of cameraActionButtons) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.cameraAction
+    if (isCameraAction(action)) {
+      applyCameraAction(action)
+    }
+  })
+}
 
 document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
@@ -382,6 +437,21 @@ editorCanvas.addEventListener('pointerdown', (event) => {
     return
   }
 
+  if (spatialModel.viewMode === '3d') {
+    activeCameraDrag = {
+      pointerId: event.pointerId,
+      mode: event.shiftKey || event.button === 1 || event.button === 2 ? 'pan' : 'orbit',
+      lastX: event.clientX,
+      lastY: event.clientY,
+    }
+    cameraTransition = null
+    cameraStatusElement.textContent =
+      activeCameraDrag.mode === 'pan' ? 'Panning 3D camera' : 'Orbiting 3D camera'
+    editorCanvas.setPointerCapture(event.pointerId)
+    event.preventDefault()
+    return
+  }
+
   const roomIntersections = raycaster.intersectObject(floor)
   if (roomIntersections.length > 0) {
     spatialModel = {
@@ -394,6 +464,20 @@ editorCanvas.addEventListener('pointerdown', (event) => {
 })
 
 editorCanvas.addEventListener('pointermove', (event) => {
+  if (activeCameraDrag) {
+    const deltaX = event.clientX - activeCameraDrag.lastX
+    const deltaY = event.clientY - activeCameraDrag.lastY
+    activeCameraDrag.lastX = event.clientX
+    activeCameraDrag.lastY = event.clientY
+    if (activeCameraDrag.mode === 'pan') {
+      panCamera(deltaX, deltaY)
+    } else {
+      orbitCamera(deltaX, deltaY)
+    }
+    event.preventDefault()
+    return
+  }
+
   if (activeCornerIndex === null) {
     return
   }
@@ -407,6 +491,16 @@ editorCanvas.addEventListener('pointermove', (event) => {
 })
 
 editorCanvas.addEventListener('pointerup', (event) => {
+  if (activeCameraDrag?.pointerId === event.pointerId) {
+    if (editorCanvas.hasPointerCapture(event.pointerId)) {
+      editorCanvas.releasePointerCapture(event.pointerId)
+    }
+    activeCameraDrag = null
+    cameraStatusElement.textContent = 'Camera adjusted'
+    emitCameraChanged()
+    return
+  }
+
   if (activeCornerIndex !== null) {
     updateConfirmedGeometry('Updated confirmed boundary by dragging corner.')
     if (editorCanvas.hasPointerCapture(event.pointerId)) {
@@ -415,6 +509,29 @@ editorCanvas.addEventListener('pointerup', (event) => {
   }
   activeCornerIndex = null
 })
+
+editorCanvas.addEventListener('pointercancel', (event) => {
+  if (activeCameraDrag?.pointerId === event.pointerId) {
+    activeCameraDrag = null
+  }
+  activeCornerIndex = null
+})
+
+editorCanvas.addEventListener(
+  'wheel',
+  (event) => {
+    if (spatialModel.viewMode !== '3d') {
+      return
+    }
+    zoomCamera(event.deltaY)
+    cameraStatusElement.textContent = 'Zoomed 3D camera'
+    emitCameraChanged()
+    event.preventDefault()
+  },
+  { passive: false },
+)
+
+editorCanvas.addEventListener('contextmenu', (event) => event.preventDefault())
 
 const worker = new Worker(new URL('./opencvWorker.ts', import.meta.url), {
   type: 'module',
@@ -498,22 +615,13 @@ function setViewMode(viewMode: ViewMode): void {
 }
 
 function applyViewModeCamera(): void {
-  const bounds = roomBounds(spatialModel)
-  const maxDimension = Math.max(bounds.widthMeters, bounds.depthMeters, 1)
-  const distance = maxDimension / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
-
   if (spatialModel.viewMode === '2d') {
     wallGroup.visible = false
-    camera.position.set(0, distance * 1.35, 0.001)
-    camera.up.set(0, 0, -1)
+    queueCameraSnapshot(cameraSnapshotFor('top'), '2D top view', false)
   } else {
     wallGroup.visible = true
-    camera.position.set(maxDimension * 0.85, maxDimension * 0.75, maxDimension * 0.95)
-    camera.up.set(0, 1, 0)
+    queueCameraSnapshot(cameraSnapshotFor('corner'), '3D corner view', true)
   }
-
-  camera.lookAt(0, 0, 0)
-  camera.updateProjectionMatrix()
 }
 
 function rebuildWalls(): void {
@@ -598,6 +706,194 @@ function spatialModelPayload(): Record<string, unknown> {
     scale: spatialModel.scale,
     room: spatialModel.room,
   }
+}
+
+function applyCameraAction(action: CameraAction): void {
+  if (spatialModel.viewMode !== '3d') {
+    spatialModel = { ...spatialModel, viewMode: '3d' }
+    wallGroup.visible = true
+    updateSpatialStatus()
+  }
+  queueCameraSnapshot(cameraSnapshotFor(action), cameraLabelFor(action), true)
+}
+
+function cameraSnapshotFor(action: CameraAction): CameraSnapshot {
+  const bounds = roomBounds(spatialModel)
+  const maxDimension = Math.max(bounds.widthMeters, bounds.depthMeters, 1)
+  const height = Math.max(spatialModel.room.heightMeters, 2.4)
+  const fitDistance = maxDimension / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
+  const target = new THREE.Vector3(0, height * 0.38, 0)
+
+  if (action === 'top') {
+    return {
+      position: new THREE.Vector3(0, fitDistance * 1.35, 0.001),
+      target: new THREE.Vector3(0, 0, 0),
+      up: new THREE.Vector3(0, 0, -1),
+      label: 'Top camera preset',
+    }
+  }
+
+  if (action === 'front') {
+    return {
+      position: new THREE.Vector3(0, height * 0.55, maxDimension * 1.45),
+      target,
+      up: new THREE.Vector3(0, 1, 0),
+      label: 'Front camera preset',
+    }
+  }
+
+  if (action === 'eye') {
+    return {
+      position: new THREE.Vector3(0, 1.6, maxDimension * 0.95),
+      target: new THREE.Vector3(0, 1.35, 0),
+      up: new THREE.Vector3(0, 1, 0),
+      label: 'Eye-level camera preset',
+    }
+  }
+
+  const multiplier = action === 'fit' ? 0.78 : 0.95
+  return {
+    position: new THREE.Vector3(
+      maxDimension * multiplier,
+      Math.max(height * 0.72, maxDimension * 0.55),
+      maxDimension * multiplier,
+    ),
+    target,
+    up: new THREE.Vector3(0, 1, 0),
+    label: action === 'fit' ? 'Fit-to-room camera preset' : 'Corner camera preset',
+  }
+}
+
+function queueCameraSnapshot(snapshot: CameraSnapshot, status: string, animate: boolean): void {
+  const reducedMotion = reducedMotionMedia.matches
+  cameraStatusElement.textContent = reducedMotion
+    ? `${status}; reduced motion`
+    : `${status}; camera moving`
+  if (reducedMotion || !animate) {
+    applyCameraSnapshot(snapshot)
+    emitCameraChanged()
+    return
+  }
+  cameraTransition = {
+    from: currentCameraSnapshot('Current camera'),
+    to: snapshot,
+    startedAt: performance.now(),
+    durationMs: 180,
+  }
+}
+
+function updateCameraTransition(): void {
+  if (!cameraTransition) {
+    return
+  }
+  const elapsed = performance.now() - cameraTransition.startedAt
+  const progress = Math.min(elapsed / cameraTransition.durationMs, 1)
+  const eased = 1 - (1 - progress) ** 3
+  camera.position.lerpVectors(cameraTransition.from.position, cameraTransition.to.position, eased)
+  camera.up.lerpVectors(cameraTransition.from.up, cameraTransition.to.up, eased).normalize()
+  cameraTarget.lerpVectors(cameraTransition.from.target, cameraTransition.to.target, eased)
+  camera.lookAt(cameraTarget)
+  camera.updateProjectionMatrix()
+  if (progress >= 1) {
+    const label = cameraTransition.to.label
+    cameraTransition = null
+    cameraStatusElement.textContent = label
+    emitCameraChanged()
+  }
+}
+
+function applyCameraSnapshot(snapshot: CameraSnapshot): void {
+  camera.position.copy(snapshot.position)
+  camera.up.copy(snapshot.up)
+  cameraTarget.copy(snapshot.target)
+  camera.lookAt(cameraTarget)
+  camera.updateProjectionMatrix()
+  cameraStatusElement.textContent = snapshot.label
+}
+
+function currentCameraSnapshot(label: string): CameraSnapshot {
+  return {
+    position: camera.position.clone(),
+    target: cameraTarget.clone(),
+    up: camera.up.clone(),
+    label,
+  }
+}
+
+function orbitCamera(deltaX: number, deltaY: number): void {
+  const offset = camera.position.clone().sub(cameraTarget)
+  const spherical = new THREE.Spherical().setFromVector3(offset)
+  spherical.theta -= deltaX * 0.006
+  spherical.phi = THREE.MathUtils.clamp(spherical.phi - deltaY * 0.006, 0.18, Math.PI - 0.18)
+  camera.position.copy(new THREE.Vector3().setFromSpherical(spherical).add(cameraTarget))
+  camera.up.set(0, 1, 0)
+  camera.lookAt(cameraTarget)
+  camera.updateProjectionMatrix()
+}
+
+function panCamera(deltaX: number, deltaY: number): void {
+  const distance = Math.max(camera.position.distanceTo(cameraTarget), 1)
+  const amount = distance * 0.0015
+  const forward = new THREE.Vector3()
+  camera.getWorldDirection(forward)
+  const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize()
+  const up = camera.up.clone().normalize()
+  const offset = right.multiplyScalar(-deltaX * amount).add(up.multiplyScalar(deltaY * amount))
+  camera.position.add(offset)
+  cameraTarget.add(offset)
+  camera.lookAt(cameraTarget)
+  camera.updateProjectionMatrix()
+}
+
+function zoomCamera(deltaY: number): void {
+  const offset = camera.position.clone().sub(cameraTarget)
+  const scale = THREE.MathUtils.clamp(1 + deltaY * 0.001, 0.72, 1.32)
+  const nextDistance = THREE.MathUtils.clamp(offset.length() * scale, 0.8, 30)
+  camera.position.copy(cameraTarget.clone().add(offset.normalize().multiplyScalar(nextDistance)))
+  camera.lookAt(cameraTarget)
+  camera.updateProjectionMatrix()
+}
+
+function emitCameraChanged(): void {
+  postToParent({
+    type: 'roomforge.camera.changed',
+    version: BRIDGE_VERSION,
+    payload: {
+      cameraPose: cameraPosePayload(),
+      reducedMotion: reducedMotionMedia.matches,
+    },
+  })
+}
+
+function cameraPosePayload(): Record<string, unknown> {
+  return {
+    position: vectorPayload(camera.position),
+    target: vectorPayload(cameraTarget),
+    up: vectorPayload(camera.up),
+  }
+}
+
+function vectorPayload(vector: THREE.Vector3): Record<string, number> {
+  return {
+    x: Number(vector.x.toFixed(3)),
+    y: Number(vector.y.toFixed(3)),
+    z: Number(vector.z.toFixed(3)),
+  }
+}
+
+function cameraLabelFor(action: CameraAction): string {
+  return action === 'fit' ? 'Fit-to-room' : `${action[0].toUpperCase()}${action.slice(1)} view`
+}
+
+function isCameraAction(value: string | undefined): value is CameraAction {
+  return (
+    value === 'reset' ||
+    value === 'fit' ||
+    value === 'top' ||
+    value === 'front' ||
+    value === 'corner' ||
+    value === 'eye'
+  )
 }
 
 function metricPointToScene(x: number, y: number, height = 0): THREE.Vector3 {

@@ -792,7 +792,11 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
 
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => EditorBridgeScreen(project: project),
+        builder: (context) => EditorBridgeScreen(
+          project: project,
+          initialDimensions: _dimensions,
+          reconstructionJob: _reconstructionJob,
+        ),
       ),
     );
   }
@@ -970,7 +974,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: _openReconstruction,
-                child: const Text('Open reconstruction'),
+                child: const Text('Open planning editor'),
               ),
               const SizedBox(height: 8),
               FilledButton(onPressed: widget.onEdit, child: const Text('Edit')),
@@ -1293,9 +1297,16 @@ class _ImageSize {
 }
 
 class EditorBridgeScreen extends StatefulWidget {
-  const EditorBridgeScreen({required this.project, super.key});
+  const EditorBridgeScreen({
+    required this.project,
+    this.initialDimensions,
+    this.reconstructionJob,
+    super.key,
+  });
 
   final RoomProject project;
+  final RoomDimensions? initialDimensions;
+  final ReconstructionJob? reconstructionJob;
 
   @override
   State<EditorBridgeScreen> createState() => _EditorBridgeScreenState();
@@ -1307,6 +1318,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   StreamSubscription<html.MessageEvent>? _messageSubscription;
   String _bridgeStatus = 'Waiting for editor frame.';
   String _runtimeStatus = 'Waiting for OpenCV worker.';
+  String _sceneStatus = 'Waiting for metric floor plan handoff.';
+  String _viewMode = '2d';
 
   @override
   void initState() {
@@ -1326,9 +1339,14 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         type: 'roomforge.reconstruction.open',
         requestId: 'open-project-${widget.project.id}',
         payload: {
-          'project_id': widget.project.id,
-          'project_name': widget.project.name,
+          'projectId': widget.project.id,
+          'projectName': widget.project.name,
         },
+      );
+      _postEditorMessage(
+        type: 'roomforge.scene.initialize',
+        requestId: 'initialize-scene-${widget.project.id}',
+        payload: _sceneInitializePayload(),
       );
     });
 
@@ -1348,19 +1366,47 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Reconstruction: ${widget.project.name}')),
+      appBar: AppBar(title: Text('Planning editor: ${widget.project.name}')),
       body: Column(
         children: [
           Material(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(child: Text(_bridgeStatus)),
-                  const SizedBox(width: 16),
-                  Expanded(child: Text(_runtimeStatus)),
-                  const SizedBox(width: 16),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: '2d', label: Text('2D')),
+                      ButtonSegment(value: '3d', label: Text('3D')),
+                    ],
+                    selected: {_viewMode},
+                    onSelectionChanged: (selection) {
+                      final viewMode = selection.first;
+                      setState(() => _viewMode = viewMode);
+                      _postEditorMessage(
+                        type: 'roomforge.view.setMode',
+                        requestId:
+                            'view-mode-${DateTime.now().millisecondsSinceEpoch}',
+                        payload: {'viewMode': viewMode},
+                      );
+                    },
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: Text(_sceneStatus),
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: Text(_bridgeStatus),
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: Text(_runtimeStatus),
+                  ),
                   OutlinedButton(
                     onPressed: () => _postEditorMessage(
                       type: 'roomforge.editor.ping',
@@ -1401,6 +1447,23 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _runtimeStatus = 'OpenCV worker assets loaded.';
       } else if (type == 'roomforge.opencv.runtimeFailed') {
         _runtimeStatus = 'OpenCV worker asset loading failed.';
+      } else if (type == 'roomforge.scene.initialized' ||
+          type == 'roomforge.view.changed' ||
+          type == 'roomforge.selection.changed') {
+        final payload = data['payload'];
+        if (payload is Map) {
+          final viewMode = payload['viewMode']?.toString();
+          if (viewMode == '2d' || viewMode == '3d') {
+            _viewMode = viewMode;
+          }
+          final hasUnsavedChanges = payload['hasUnsavedChanges'] == true;
+          final room = payload['room'];
+          final label = room is Map ? room['label']?.toString() : null;
+          final statusLabel = hasUnsavedChanges ? 'Unsaved changes' : 'Saved';
+          _sceneStatus =
+              '${viewMode?.toUpperCase() ?? _viewMode.toUpperCase()} scene: '
+              '${label ?? 'Room shell'}; $statusLabel';
+        }
       }
     });
   }
@@ -1416,6 +1479,44 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       'requestId': requestId,
       'payload': payload,
     }, '*');
+  }
+
+  Map<String, Object?> _sceneInitializePayload() {
+    final dimensions = widget.initialDimensions;
+    final width = dimensions?.widthValue ?? 4.2;
+    final depth = dimensions?.depthValue ?? 3.6;
+    final height = dimensions?.heightValue ?? 2.7;
+    final reviewRequired =
+        widget.reconstructionJob?.status == 'review_required';
+
+    return {
+      'scene': {
+        'sceneId': 'project-${widget.project.id}-planning-scene',
+        'viewMode': _viewMode,
+        'hasUnsavedChanges': false,
+        'selected': {'objectId': 'room-shell', 'objectType': 'room'},
+        'room': {
+          'objectId': 'room-shell',
+          'label': 'Room shell',
+          'heightMeters': height,
+          'floorPlan': {
+            'floorPlanId': 'project-${widget.project.id}-metric-floor-plan',
+            'metricGeometry': {
+              'coordinateSpace': 'meters',
+              'points': [
+                {'x': 0.0, 'y': 0.0},
+                {'x': width, 'y': 0.0},
+                {'x': width, 'y': depth},
+                {'x': 0.0, 'y': depth},
+              ],
+            },
+          },
+        },
+      },
+      'reconstructionStatus': reviewRequired
+          ? {'status': 'review_required', 'label': 'Needs review'}
+          : null,
+    };
   }
 
   String _editorUrlFor(RoomProject project) {

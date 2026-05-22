@@ -286,6 +286,27 @@ class InMemoryReconstructionJobRepository:
             reverse=True,
         )
 
+    def get_for_admin(self, job_id: int) -> ReconstructionJobRecord:
+        job = self._store.reconstruction_jobs.get(job_id)
+        if job is None:
+            raise ReconstructionJobNotFound()
+        return job
+
+    def list_transitions_for_admin(
+        self, job_id: int
+    ) -> list[ReconstructionJobTransitionRecord]:
+        self.get_for_admin(job_id)
+        return self._store.job_transitions.get(job_id, [])
+
+    def count_retries_for_admin(self, job_id: int) -> int:
+        return len(
+            [
+                job
+                for job in self._store.reconstruction_jobs.values()
+                if job.retry_of_job_id == job_id
+            ]
+        )
+
 
 class InMemoryOpenCvResultRepository:
     def __init__(self, store: InMemoryRoomForgeStore) -> None:

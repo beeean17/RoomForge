@@ -293,6 +293,7 @@ class AdminShellScreen extends StatefulWidget {
 class _AdminShellScreenState extends State<AdminShellScreen> {
   String? _statusFilter;
   Future<AdminJobList>? _jobsFuture;
+  Future<AdminJobDetail>? _jobDetailFuture;
 
   @override
   void initState() {
@@ -304,6 +305,13 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
     setState(() {
       _statusFilter = status;
       _jobsFuture = widget.adminApi.loadJobs(status: status);
+      _jobDetailFuture = null;
+    });
+  }
+
+  void _selectJob(AdminJob job) {
+    setState(() {
+      _jobDetailFuture = widget.adminApi.loadJobDetail(job.id);
     });
   }
 
@@ -366,7 +374,13 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                         else if (snapshot.hasError)
                           Text('Admin jobs failed: ${snapshot.error}')
                         else
-                          _AdminJobListView(jobs: data?.jobs ?? const []),
+                          _AdminJobListView(
+                            jobs: data?.jobs ?? const [],
+                            onSelect: _selectJob,
+                          ),
+                        const SizedBox(height: 16),
+                        if (_jobDetailFuture != null)
+                          _AdminJobDetailView(future: _jobDetailFuture!),
                       ],
                     );
                   },
@@ -381,9 +395,10 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
 }
 
 class _AdminJobListView extends StatelessWidget {
-  const _AdminJobListView({required this.jobs});
+  const _AdminJobListView({required this.jobs, required this.onSelect});
 
   final List<AdminJob> jobs;
+  final ValueChanged<AdminJob> onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -405,6 +420,7 @@ class _AdminJobListView extends StatelessWidget {
           Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
+              onTap: () => onSelect(job),
               title: Text('Job ${job.id} - ${job.statusLabel}'),
               subtitle: Text(
                 'Project ${job.projectId} | User ${job.userId} | ${job.provider}',
@@ -413,6 +429,78 @@ class _AdminJobListView extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _AdminJobDetailView extends StatelessWidget {
+  const _AdminJobDetailView({required this.future});
+
+  final Future<AdminJobDetail> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<AdminJobDetail>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text('Job detail failed: ${snapshot.error}');
+        }
+        final detail = snapshot.data;
+        if (detail == null) {
+          return const SizedBox.shrink();
+        }
+        final job = detail.job;
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Job ${job.id} detail',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text('Status: ${job.statusLabel} (${job.status})'),
+                Text('Project: ${job.projectId} | User: ${job.userId}'),
+                Text('Provider: ${job.provider}'),
+                Text('Retry count: ${detail.retryCount}'),
+                if (job.failureReasonCode != null)
+                  Text('Failure: ${job.failureReasonCode}'),
+                if (job.failureReasonMessage != null)
+                  Text(job.failureReasonMessage!),
+                const SizedBox(height: 12),
+                Text(
+                  'Event trail',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                for (final transition in detail.transitions)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      '${_adminStatusLabel(transition.status)} - ${transition.actor}',
+                    ),
+                    subtitle: Text(
+                      [
+                        if (transition.reasonCode != null)
+                          transition.reasonCode!,
+                        if (transition.reasonMessage != null)
+                          transition.reasonMessage!,
+                      ].join(' | '),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

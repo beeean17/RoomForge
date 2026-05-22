@@ -91,6 +91,17 @@ class ReconstructionJobRepository(Protocol):
     ) -> list[ReconstructionJobRecord]:
         pass
 
+    def get_for_admin(self, job_id: int) -> ReconstructionJobRecord:
+        pass
+
+    def list_transitions_for_admin(
+        self, job_id: int
+    ) -> list[ReconstructionJobTransitionRecord]:
+        pass
+
+    def count_retries_for_admin(self, job_id: int) -> int:
+        pass
+
 
 class OracleReconstructionJobRepository:
     def __init__(self, settings: Settings) -> None:
@@ -313,6 +324,62 @@ class OracleReconstructionJobRepository:
 
         return [reconstruction_job_record_from_row(row) for row in rows]
 
+    def get_for_admin(self, job_id: int) -> ReconstructionJobRecord:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                row = self._fetch_job_for_admin(cursor, job_id)
+
+        if row is None:
+            raise ReconstructionJobNotFound()
+        return reconstruction_job_record_from_row(row)
+
+    def list_transitions_for_admin(
+        self, job_id: int
+    ) -> list[ReconstructionJobTransitionRecord]:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                if self._fetch_job_for_admin(cursor, job_id) is None:
+                    raise ReconstructionJobNotFound()
+                cursor.execute(
+                    """
+                    SELECT id, job_id, status, actor, reason_code, reason_message, created_at
+                    FROM reconstruction_job_transitions
+                    WHERE job_id = :job_id
+                    ORDER BY created_at ASC, id ASC
+                    """,
+                    job_id=job_id,
+                )
+                rows = cursor.fetchall()
+
+        return [reconstruction_job_transition_record_from_row(row) for row in rows]
+
+    def count_retries_for_admin(self, job_id: int) -> int:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM reconstruction_jobs
+                    WHERE retry_of_job_id = :job_id
+                    """,
+                    job_id=job_id,
+                )
+                row = cursor.fetchone()
+
+        return int(row[0]) if row is not None else 0
+
     def _ensure_project_ready(
         self, cursor, user_id: int, project_id: int, source_image_id: int
     ) -> None:
@@ -353,6 +420,19 @@ class OracleReconstructionJobRepository:
             job_id=job_id,
             project_id=project_id,
             user_id=user_id,
+        )
+        return cursor.fetchone()
+
+    def _fetch_job_for_admin(self, cursor, job_id: int):
+        cursor.execute(
+            """
+            SELECT id, project_id, user_id, source_image_id, status, provider,
+                   retry_of_job_id, failure_reason_code, failure_reason_message,
+                   created_at, updated_at
+            FROM reconstruction_jobs
+            WHERE id = :job_id
+            """,
+            job_id=job_id,
         )
         return cursor.fetchone()
 

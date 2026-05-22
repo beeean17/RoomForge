@@ -12,9 +12,13 @@ from app.core.request import request_id_from
 from app.repositories.reconstruction_jobs import (
     ALLOWED_RECONSTRUCTION_STATUSES,
     OracleReconstructionJobRepository,
+    ReconstructionJobNotFound,
     ReconstructionJobRepository,
 )
-from app.routers.reconstruction_jobs import reconstruction_job_response_from
+from app.routers.reconstruction_jobs import (
+    reconstruction_job_response_from,
+    reconstruction_job_transition_response_from,
+)
 from app.schemas.auth import SessionUser
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -98,3 +102,43 @@ def admin_jobs(
         "error": None,
         "meta": {"request_id": request_id_from(request)},
     }
+
+
+@router.get("/jobs/{job_id}")
+def admin_job_detail(
+    job_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, object]:
+    try:
+        authorize_admin_request(request, credentials)
+        repository = reconstruction_job_repository_from(request)
+        job = repository.get_for_admin(job_id)
+        transitions = repository.list_transitions_for_admin(job_id)
+        retry_count = repository.count_retries_for_admin(job_id)
+    except AuthErrorResponse as exc:
+        return exc.response
+    except ReconstructionJobNotFound:
+        return not_found_response(request)
+
+    return {
+        "data": {
+            "job": reconstruction_job_response_from(job).model_dump(),
+            "retry_count": retry_count,
+            "transitions": [
+                reconstruction_job_transition_response_from(transition).model_dump()
+                for transition in transitions
+            ],
+        },
+        "error": None,
+        "meta": {"request_id": request_id_from(request)},
+    }
+
+
+def not_found_response(request: Request):
+    return error_response(
+        code="not_found",
+        message="Reconstruction job was not found.",
+        status_code=404,
+        request_id=request_id_from(request),
+    )

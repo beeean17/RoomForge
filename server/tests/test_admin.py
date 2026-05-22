@@ -3,7 +3,11 @@ from datetime import UTC, datetime
 
 from app.auth.firebase import FirebaseIdentity, InvalidAuthToken
 from app.main import create_app
-from app.repositories.reconstruction_jobs import ReconstructionJobRecord
+from app.repositories.reconstruction_jobs import (
+    ReconstructionJobNotFound,
+    ReconstructionJobRecord,
+    ReconstructionJobTransitionRecord,
+)
 from app.repositories.users import UserRecord
 
 
@@ -78,6 +82,28 @@ class FakeReconstructionJobRepository:
                 updated_at=datetime(2026, 5, 22, tzinfo=UTC),
             ),
         ]
+        self.transitions = {
+            2: [
+                ReconstructionJobTransitionRecord(
+                    id=1,
+                    job_id=2,
+                    status="created",
+                    actor="api",
+                    reason_code=None,
+                    reason_message="Reconstruction job created.",
+                    created_at=datetime(2026, 5, 22, tzinfo=UTC),
+                ),
+                ReconstructionJobTransitionRecord(
+                    id=2,
+                    job_id=2,
+                    status="review_required",
+                    actor="worker",
+                    reason_code="low_confidence",
+                    reason_message="Needs review.",
+                    created_at=datetime(2026, 5, 22, tzinfo=UTC),
+                ),
+            ]
+        }
 
     def list_for_admin(
         self, status: str | None = None
@@ -85,6 +111,21 @@ class FakeReconstructionJobRepository:
         if status is None:
             return self.jobs
         return [job for job in self.jobs if job.status == status]
+
+    def get_for_admin(self, job_id: int) -> ReconstructionJobRecord:
+        for job in self.jobs:
+            if job.id == job_id:
+                return job
+        raise ReconstructionJobNotFound()
+
+    def list_transitions_for_admin(
+        self, job_id: int
+    ) -> list[ReconstructionJobTransitionRecord]:
+        self.get_for_admin(job_id)
+        return self.transitions.get(job_id, [])
+
+    def count_retries_for_admin(self, job_id: int) -> int:
+        return len([job for job in self.jobs if job.retry_of_job_id == job_id])
 
 
 def test_admin_session_requires_authentication() -> None:
@@ -204,3 +245,50 @@ def test_admin_jobs_rejects_unknown_status() -> None:
     body = response.json()
     assert body["data"] is None
     assert body["error"]["code"] == "validation_error"
+
+
+def test_admin_job_detail_returns_header_retry_count_and_event_trail() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    app.state.reconstruction_job_repository = FakeReconstructionJobRepository()
+
+    response = TestClient(app).get(
+        "/admin/jobs/2",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    job = body["data"]["job"]
+    transitions = body["data"]["transitions"]
+    assert body["error"] is None
+    assert body["meta"]["request_id"]
+    assert job["id"] == 2
+    assert job["status"] == "review_required"
+    assert job["status_label"] == "Needs review"
+    assert job["provider"] == "browser-opencv"
+    assert body["data"]["retry_count"] == 0
+    assert transitions[0]["status"] == "created"
+    assert transitions[0]["actor"] == "api"
+    assert transitions[1]["reason_code"] == "low_confidence"
+    assert transitions[1]["reason_message"] == "Needs review."
+
+
+def test_admin_job_detail_rejects_normal_user() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="user")
+    app.state.reconstruction_job_repository = FakeReconstructionJobRepository()
+
+    response = TestClient(app).get(
+        "/admin/jobs/2",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "unauthorized"

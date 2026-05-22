@@ -112,6 +112,62 @@ class AdminJobList {
   }
 }
 
+class AdminJobTransition {
+  const AdminJobTransition({
+    required this.id,
+    required this.jobId,
+    required this.status,
+    required this.actor,
+    required this.createdAt,
+    this.reasonCode,
+    this.reasonMessage,
+  });
+
+  final int id;
+  final int jobId;
+  final String status;
+  final String actor;
+  final String? reasonCode;
+  final String? reasonMessage;
+  final DateTime createdAt;
+
+  factory AdminJobTransition.fromJson(Map<String, Object?> json) {
+    return AdminJobTransition(
+      id: json['id'] as int,
+      jobId: json['job_id'] as int,
+      status: json['status'] as String,
+      actor: json['actor'] as String,
+      reasonCode: json['reason_code'] as String?,
+      reasonMessage: json['reason_message'] as String?,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+}
+
+class AdminJobDetail {
+  const AdminJobDetail({
+    required this.job,
+    required this.retryCount,
+    required this.transitions,
+  });
+
+  final AdminJob job;
+  final int retryCount;
+  final List<AdminJobTransition> transitions;
+
+  factory AdminJobDetail.fromJson(Map<String, Object?> json) {
+    final transitions = json['transitions'] as List<Object?>;
+    return AdminJobDetail(
+      job: AdminJob.fromJson(json['job'] as Map<String, Object?>),
+      retryCount: json['retry_count'] as int,
+      transitions: transitions
+          .cast<Map<String, Object?>>()
+          .map(AdminJobTransition.fromJson)
+          .toList(),
+    );
+  }
+}
+
 class AdminApi {
   AdminApi({
     required this.authRepository,
@@ -140,6 +196,15 @@ class AdminApi {
     final response = await _client.get(uri, headers: await _headers());
     final body = _decodeEnvelope(response);
     return AdminJobList.fromJson(body['data'] as Map<String, Object?>);
+  }
+
+  Future<AdminJobDetail> loadJobDetail(int jobId) async {
+    final response = await _client.get(
+      _baseUri.resolve('/admin/jobs/$jobId'),
+      headers: await _headers(),
+    );
+    final body = _decodeEnvelope(response);
+    return AdminJobDetail.fromJson(body['data'] as Map<String, Object?>);
   }
 
   Future<Map<String, String>> _headers() async {

@@ -1,10 +1,12 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from math import ceil
+from time import perf_counter
 
 from app.auth.firebase import FirebaseIdentity, InvalidAuthToken
 from app.main import create_app
 from app.repositories.layouts import LayoutNotFound, LayoutRecord, LayoutSave
-from app.repositories.projects import ProjectNotFound
+from app.repositories.projects import ProjectNotFound, ProjectRecord
 from app.repositories.users import UserRecord
 
 
@@ -27,6 +29,29 @@ class FakeUserRepository:
             display_name="Test User",
             role="user",
         )
+
+
+class FakeProjectRepository:
+    def __init__(self) -> None:
+        self.projects = [
+            ProjectRecord(
+                id=1,
+                user_id=42,
+                name="Existing Project",
+                description=None,
+                created_at=datetime(2026, 5, 22, tzinfo=UTC),
+                updated_at=datetime(2026, 5, 22, tzinfo=UTC),
+            )
+        ]
+
+    def list_for_user(self, user: UserRecord) -> list[ProjectRecord]:
+        return [project for project in self.projects if project.user_id == user.id]
+
+    def get_for_user(self, user: UserRecord, project_id: int) -> ProjectRecord:
+        for project in self.projects:
+            if project.id == project_id and project.user_id == user.id:
+                return project
+        raise ProjectNotFound()
 
 
 class FakeLayoutRepository:
@@ -83,11 +108,16 @@ class FakeLayoutRepository:
         return records[-1]
 
 
-def configured_app(repository: FakeLayoutRepository):
+def configured_app(
+    repository: FakeLayoutRepository,
+    project_repository: FakeProjectRepository | None = None,
+):
     app = create_app()
     app.state.token_verifier = FakeTokenVerifier()
     app.state.user_repository = FakeUserRepository()
     app.state.layout_repository = repository
+    if project_repository is not None:
+        app.state.project_repository = project_repository
     return app
 
 
@@ -139,6 +169,21 @@ def save_record(repository: FakeLayoutRepository) -> LayoutRecord:
         1,
         LayoutSave(**layout_payload()),
     )
+
+
+def required_layout_fields(layout: dict) -> dict:
+    return {
+        "room_dimensions": layout["room_dimensions"],
+        "floor_plan": layout["floor_plan"],
+        "source_metadata": layout["source_metadata"],
+        "furniture_objects": layout["furniture_objects"],
+        "editor_scene": layout["editor_scene"],
+    }
+
+
+def p95_seconds(durations: list[float]) -> float:
+    ordered = sorted(durations)
+    return ordered[max(ceil(len(ordered) * 0.95) - 1, 0)]
 
 
 def test_save_layout_requires_authentication() -> None:
@@ -271,3 +316,75 @@ def test_export_layout_rejects_cross_user_access() -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+def test_save_load_export_round_trip_preserves_required_fields() -> None:
+    from fastapi.testclient import TestClient
+
+    repository = FakeLayoutRepository()
+    client = TestClient(configured_app(repository))
+    expected = layout_payload()
+
+    save_response = client.post(
+        "/room-projects/1/layouts",
+        headers={"Authorization": "Bearer valid-token"},
+        json=expected,
+    )
+    load_response = client.get(
+        "/room-projects/1/layouts/latest",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+    export_response = client.get(
+        "/room-projects/1/layouts/latest/export",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert save_response.status_code == 201
+    assert load_response.status_code == 200
+    assert export_response.status_code == 200
+    saved = required_layout_fields(save_response.json()["data"]["layout"])
+    loaded = required_layout_fields(load_response.json()["data"]["layout"])
+    exported = required_layout_fields(
+        export_response.json()["data"]["export"]["layout"]
+    )
+    assert saved == expected
+    assert loaded == expected
+    assert exported == expected
+
+
+def test_non_cv_api_p95_stays_under_one_second_for_layout_flow() -> None:
+    from fastapi.testclient import TestClient
+
+    repository = FakeLayoutRepository()
+    app = configured_app(repository, project_repository=FakeProjectRepository())
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer valid-token"}
+    durations: list[float] = []
+
+    for _ in range(20):
+        started = perf_counter()
+        assert client.get("/room-projects", headers=headers).status_code == 200
+        durations.append(perf_counter() - started)
+
+        started = perf_counter()
+        assert client.get("/room-projects/1", headers=headers).status_code == 200
+        durations.append(perf_counter() - started)
+
+        started = perf_counter()
+        save_response = client.post(
+            "/room-projects/1/layouts",
+            headers=headers,
+            json=layout_payload(),
+        )
+        assert save_response.status_code == 201
+        durations.append(perf_counter() - started)
+
+        started = perf_counter()
+        load_response = client.get(
+            "/room-projects/1/layouts/latest",
+            headers=headers,
+        )
+        assert load_response.status_code == 200
+        durations.append(perf_counter() - started)
+
+    assert p95_seconds(durations) < 1.0

@@ -274,6 +274,18 @@ class InMemoryReconstructionJobRepository:
         ]
         return retry
 
+    def list_for_admin(
+        self, status: str | None = None
+    ) -> list[ReconstructionJobRecord]:
+        records = list(self._store.reconstruction_jobs.values())
+        if status is not None:
+            records = [record for record in records if record.status == status]
+        return sorted(
+            records,
+            key=lambda record: (record.updated_at, record.id),
+            reverse=True,
+        )
+
 
 class InMemoryOpenCvResultRepository:
     def __init__(self, store: InMemoryRoomForgeStore) -> None:

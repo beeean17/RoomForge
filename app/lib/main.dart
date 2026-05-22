@@ -223,7 +223,10 @@ class ProjectWorkspaceScreen extends StatelessWidget {
       }
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (context) => AdminShellScreen(session: adminSession),
+          builder: (context) => AdminShellScreen(
+            session: adminSession,
+            adminApi: adminApi,
+          ),
         ),
       );
     } on AdminApiException catch (error) {
@@ -273,15 +276,43 @@ class ProjectWorkspaceScreen extends StatelessWidget {
   }
 }
 
-class AdminShellScreen extends StatelessWidget {
-  const AdminShellScreen({required this.session, super.key});
+class AdminShellScreen extends StatefulWidget {
+  const AdminShellScreen({
+    required this.session,
+    required this.adminApi,
+    super.key,
+  });
 
   final AdminSession session;
+  final AdminApi adminApi;
+
+  @override
+  State<AdminShellScreen> createState() => _AdminShellScreenState();
+}
+
+class _AdminShellScreenState extends State<AdminShellScreen> {
+  String? _statusFilter;
+  Future<AdminJobList>? _jobsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _jobsFuture = widget.adminApi.loadJobs();
+  }
+
+  void _setStatusFilter(String? status) {
+    setState(() {
+      _statusFilter = status;
+      _jobsFuture = widget.adminApi.loadJobs(status: status);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final displayName =
-        session.admin.displayName ?? session.admin.email ?? 'admin user';
+        widget.session.admin.displayName ??
+        widget.session.admin.email ??
+        'admin user';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Admin Operations')),
@@ -298,18 +329,47 @@ class AdminShellScreen extends StatelessWidget {
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
-                Text('Role: ${session.admin.role}'),
+                Text('Role: ${widget.session.admin.role}'),
                 const SizedBox(height: 24),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.fromBorderSide(
-                      BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('No operational records yet.'),
-                  ),
+                FutureBuilder<AdminJobList>(
+                  future: _jobsFuture,
+                  builder: (context, snapshot) {
+                    final data = snapshot.data;
+                    final statuses = data?.allowedStatuses ?? const <String>[];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        DropdownButtonFormField<String?>(
+                          value: _statusFilter,
+                          decoration: const InputDecoration(
+                            labelText: 'Job status',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('All statuses'),
+                            ),
+                            ...statuses.map(
+                              (status) => DropdownMenuItem<String?>(
+                                value: status,
+                                child: Text(_adminStatusLabel(status)),
+                              ),
+                            ),
+                          ],
+                          onChanged: _setStatusFilter,
+                        ),
+                        const SizedBox(height: 16),
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting)
+                          const LinearProgressIndicator()
+                        else if (snapshot.hasError)
+                          Text('Admin jobs failed: ${snapshot.error}')
+                        else
+                          _AdminJobListView(jobs: data?.jobs ?? const []),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -318,6 +378,50 @@ class AdminShellScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AdminJobListView extends StatelessWidget {
+  const _AdminJobListView({required this.jobs});
+
+  final List<AdminJob> jobs;
+
+  @override
+  Widget build(BuildContext context) {
+    if (jobs.isEmpty) {
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Text('No jobs match the current filter.'),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (final job in jobs)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              title: Text('Job ${job.id} - ${job.statusLabel}'),
+              subtitle: Text(
+                'Project ${job.projectId} | User ${job.userId} | ${job.provider}',
+              ),
+              trailing: Text(job.status),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _adminStatusLabel(String status) {
+  if (status == 'review_required') {
+    return 'Needs review';
+  }
+  return status;
 }
 
 class ProjectWorkspaceBody extends StatefulWidget {

@@ -86,6 +86,11 @@ class ReconstructionJobRepository(Protocol):
     ) -> ReconstructionJobRecord:
         pass
 
+    def list_for_admin(
+        self, status: str | None = None
+    ) -> list[ReconstructionJobRecord]:
+        pass
+
 
 class OracleReconstructionJobRepository:
     def __init__(self, settings: Settings) -> None:
@@ -272,6 +277,41 @@ class OracleReconstructionJobRepository:
         if row is None or retry_job_id is None:
             raise RuntimeError("Oracle reconstruction retry creation failed.")
         return reconstruction_job_record_from_row(row)
+
+    def list_for_admin(
+        self, status: str | None = None
+    ) -> list[ReconstructionJobRecord]:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                if status is None:
+                    cursor.execute(
+                        """
+                        SELECT id, project_id, user_id, source_image_id, status, provider,
+                               retry_of_job_id, failure_reason_code,
+                               failure_reason_message, created_at, updated_at
+                        FROM reconstruction_jobs
+                        ORDER BY updated_at DESC, id DESC
+                        """
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, project_id, user_id, source_image_id, status, provider,
+                               retry_of_job_id, failure_reason_code,
+                               failure_reason_message, created_at, updated_at
+                        FROM reconstruction_jobs
+                        WHERE status = :status
+                        ORDER BY updated_at DESC, id DESC
+                        """,
+                        status=status,
+                    )
+                rows = cursor.fetchall()
+
+        return [reconstruction_job_record_from_row(row) for row in rows]
 
     def _ensure_project_ready(
         self, cursor, user_id: int, project_id: int, source_image_id: int

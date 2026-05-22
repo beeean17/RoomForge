@@ -229,3 +229,45 @@ def test_load_layout_rejects_cross_user_access() -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+def test_export_latest_layout_returns_json_export_payload() -> None:
+    from fastapi.testclient import TestClient
+
+    repository = FakeLayoutRepository()
+    save_record(repository)
+
+    response = TestClient(configured_app(repository)).get(
+        "/room-projects/1/layouts/latest/export",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    export = body["data"]["export"]
+    layout = export["layout"]
+    furniture = layout["furniture_objects"][0]
+    assert body["error"] is None
+    assert body["meta"]["request_id"]
+    assert export["format"] == "roomforge_layout_json"
+    assert export["version"] == 1
+    assert layout["room_dimensions"]["height_value"] == 2.7
+    assert layout["floor_plan"]["coordinate_space"] == "meters"
+    assert layout["source_metadata"]["source_image_id"] == 7
+    assert furniture["category"] == "chair"
+    assert furniture["rotation_degrees"] == 15
+
+
+def test_export_layout_rejects_cross_user_access() -> None:
+    from fastapi.testclient import TestClient
+
+    repository = FakeLayoutRepository()
+    record = save_record(repository)
+
+    response = TestClient(configured_app(repository)).get(
+        f"/room-projects/99/layouts/{record.id}/export",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

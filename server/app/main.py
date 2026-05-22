@@ -11,6 +11,7 @@ from app.routers import (
     auth,
     confirmed_geometries,
     dimensions,
+    exports,
     floor_plans,
     health,
     layouts,
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(confirmed_geometries.router)
     app.include_router(floor_plans.router)
     app.include_router(layouts.router)
+    app.include_router(exports.router)
     app.include_router(health.router)
     return app
 

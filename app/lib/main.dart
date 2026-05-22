@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
@@ -1327,9 +1328,12 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   String _sceneStatus = 'Waiting for metric floor plan handoff.';
   String _saveStatus = 'Not saved.';
   String _loadStatus = 'No layout loaded.';
+  String _exportStatus = 'Not exported.';
   String _viewMode = '2d';
   bool _isSavingLayout = false;
   bool _isLoadingLayout = false;
+  bool _isExportingLayout = false;
+  bool _reviewExportConfirmed = false;
   Map<String, Object?>? _latestScene;
 
   @override
@@ -1426,6 +1430,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                     constraints: const BoxConstraints(maxWidth: 240),
                     child: Text(_loadStatus),
                   ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: Text(_exportStatus),
+                  ),
                   FilledButton(
                     onPressed: _isSavingLayout ? null : _saveLayout,
                     child: Text(_isSavingLayout ? 'Saving...' : 'Save layout'),
@@ -1433,6 +1441,12 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                   OutlinedButton(
                     onPressed: _isLoadingLayout ? null : _loadLayout,
                     child: Text(_isLoadingLayout ? 'Loading...' : 'Load layout'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _isExportingLayout ? null : _exportLayout,
+                    child: Text(
+                      _isExportingLayout ? 'Exporting...' : 'Export JSON',
+                    ),
                   ),
                   OutlinedButton(
                     onPressed: () => _postEditorMessage(
@@ -1576,6 +1590,61 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       if (mounted) {
         setState(() => _isLoadingLayout = false);
       }
+    }
+  }
+
+  Future<void> _exportLayout() async {
+    if (widget.reconstructionJob?.status == 'review_required' &&
+        !_reviewExportConfirmed) {
+      setState(() {
+        _reviewExportConfirmed = true;
+        _exportStatus =
+            'Needs review before export. Press Export JSON again to continue.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isExportingLayout = true;
+      _exportStatus = 'Exporting...';
+    });
+
+    try {
+      final exportPayload = await widget.projectApi.exportLatestLayout(
+        projectId: widget.project.id,
+      );
+      _downloadLayoutExport(exportPayload);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _exportStatus = 'Exported JSON');
+    } on ProjectApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _exportStatus = 'Export failed: ${error.message}');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _exportStatus = 'Export failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingLayout = false);
+      }
+    }
+  }
+
+  void _downloadLayoutExport(Map<String, Object?> exportPayload) {
+    final encoded = const JsonEncoder.withIndent('  ').convert(exportPayload);
+    final blob = html.Blob([encoded], 'application/json');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    try {
+      html.AnchorElement(href: url)
+        ..download = 'roomforge-project-${widget.project.id}-layout.json'
+        ..click();
+    } finally {
+      html.Url.revokeObjectUrl(url);
     }
   }
 

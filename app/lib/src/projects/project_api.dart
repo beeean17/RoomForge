@@ -415,6 +415,18 @@ class ProjectApi {
     return SavedLayout.fromJson(data['layout'] as Map<String, Object?>);
   }
 
+  Future<Map<String, Object?>> exportLatestLayout({
+    required int projectId,
+  }) async {
+    final response = await _client.get(
+      _baseUri.resolve('/room-projects/$projectId/layouts/latest/export'),
+      headers: await _headers(),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return Map<String, Object?>.from(data['export'] as Map);
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await authRepository.idToken();
     if (token == null || token.isEmpty) {

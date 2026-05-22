@@ -3,6 +3,9 @@ from datetime import UTC, datetime
 
 from app.auth.firebase import FirebaseIdentity, InvalidAuthToken
 from app.main import create_app
+from app.repositories.confirmed_geometries import ConfirmedGeometryRecord
+from app.repositories.floor_plans import FloorPlanRecord
+from app.repositories.opencv_results import OpenCvResultNotFound, OpenCvResultRecord
 from app.repositories.reconstruction_jobs import (
     ReconstructionJobNotFound,
     ReconstructionJobRecord,
@@ -126,6 +129,72 @@ class FakeReconstructionJobRepository:
 
     def count_retries_for_admin(self, job_id: int) -> int:
         return len([job for job in self.jobs if job.retry_of_job_id == job_id])
+
+
+class FakeOpenCvResultRepository:
+    def get_latest_for_admin_job(self, job_id: int) -> OpenCvResultRecord:
+        if job_id != 2:
+            raise OpenCvResultNotFound()
+        return OpenCvResultRecord(
+            id=7,
+            project_id=11,
+            user_id=21,
+            job_id=2,
+            coordinate_space="image_pixels",
+            candidate_geometry={"points": [{"x": 1, "y": 2}]},
+            confidence=0.72,
+            algorithm="browser-opencv",
+            created_at=datetime(2026, 5, 22, tzinfo=UTC),
+        )
+
+
+class FakeConfirmedGeometryRepository:
+    def list_for_admin_opencv_result(
+        self, opencv_result_id: int
+    ) -> list[ConfirmedGeometryRecord]:
+        return [
+            ConfirmedGeometryRecord(
+                id=8,
+                project_id=11,
+                user_id=21,
+                opencv_result_id=opencv_result_id,
+                coordinate_space="image_pixels",
+                geometry_kind="floor_polygon",
+                points=[{"x": 3, "y": 4}],
+                created_at=datetime(2026, 5, 22, tzinfo=UTC),
+                updated_at=datetime(2026, 5, 22, tzinfo=UTC),
+            )
+        ]
+
+
+class FakeFloorPlanRepository:
+    def list_for_admin_confirmed_geometry(
+        self, confirmed_geometry_id: int
+    ) -> list[FloorPlanRecord]:
+        return [
+            FloorPlanRecord(
+                id=9,
+                project_id=11,
+                user_id=21,
+                confirmed_geometry_id=confirmed_geometry_id,
+                unit="meters",
+                width_value=4.2,
+                depth_value=3.6,
+                width_deviation_ratio=0,
+                depth_deviation_ratio=0,
+                aspect_ratio_error=0,
+                perspective_assumptions={"model": "mvp_rectangular_projection"},
+                image_geometry={"coordinate_space": "image_pixels"},
+                metric_geometry={"coordinate_space": "meters"},
+                created_at=datetime(2026, 5, 22, tzinfo=UTC),
+            )
+        ]
+
+
+def configure_artifact_repositories(app) -> None:
+    app.state.opencv_result_repository = FakeOpenCvResultRepository()
+    app.state.confirmed_geometry_repository = FakeConfirmedGeometryRepository()
+    app.state.floor_plan_repository = FakeFloorPlanRepository()
 
 
 def test_admin_session_requires_authentication() -> None:
@@ -287,6 +356,51 @@ def test_admin_job_detail_rejects_normal_user() -> None:
 
     response = TestClient(app).get(
         "/admin/jobs/2",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_admin_job_artifacts_separates_candidate_confirmed_and_calibration() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    app.state.reconstruction_job_repository = FakeReconstructionJobRepository()
+    configure_artifact_repositories(app)
+
+    response = TestClient(app).get(
+        "/admin/jobs/2/artifacts",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    data = body["data"]
+    assert body["error"] is None
+    assert data["source_image"] == {"id": 31, "access": "restricted"}
+    assert data["candidate"]["coordinate_space"] == "image_pixels"
+    assert data["candidate"]["geometry"] == {"points": [{"x": 1, "y": 2}]}
+    assert data["candidate"]["confidence"] == 0.72
+    assert data["confirmed"][0]["points"] == [{"x": 3, "y": 4}]
+    assert data["confirmed"][0]["coordinate_space"] == "image_pixels"
+    assert data["calibration"][0]["metric_geometry"]["coordinate_space"] == "meters"
+
+
+def test_admin_job_artifacts_rejects_normal_user() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="user")
+    app.state.reconstruction_job_repository = FakeReconstructionJobRepository()
+    configure_artifact_repositories(app)
+
+    response = TestClient(app).get(
+        "/admin/jobs/2/artifacts",
         headers={"Authorization": "Bearer valid-token"},
     )
 

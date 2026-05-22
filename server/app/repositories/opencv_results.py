@@ -47,6 +47,9 @@ class OpenCvResultRepository(Protocol):
     ) -> OpenCvResultRecord:
         pass
 
+    def get_latest_for_admin_job(self, job_id: int) -> OpenCvResultRecord:
+        pass
+
 
 class OracleOpenCvResultRepository:
     def __init__(self, settings: Settings) -> None:
@@ -115,6 +118,30 @@ class OracleOpenCvResultRepository:
         ) as connection:
             with connection.cursor() as cursor:
                 row = self._fetch_result(cursor, user.id, project_id, result_id)
+
+        if row is None:
+            raise OpenCvResultNotFound()
+        return opencv_result_record_from_row(row)
+
+    def get_latest_for_admin_job(self, job_id: int) -> OpenCvResultRecord:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, project_id, user_id, job_id, coordinate_space,
+                           candidate_geometry_json, confidence, algorithm, created_at
+                    FROM opencv_results
+                    WHERE job_id = :job_id
+                    ORDER BY created_at DESC, id DESC
+                    FETCH FIRST 1 ROWS ONLY
+                    """,
+                    job_id=job_id,
+                )
+                row = cursor.fetchone()
 
         if row is None:
             raise OpenCvResultNotFound()

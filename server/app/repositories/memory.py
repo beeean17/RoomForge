@@ -338,6 +338,16 @@ class InMemoryOpenCvResultRepository:
             raise OpenCvResultNotFound()
         return record
 
+    def get_latest_for_admin_job(self, job_id: int) -> OpenCvResultRecord:
+        records = [
+            record
+            for record in self._store.opencv_results.values()
+            if record.job_id == job_id
+        ]
+        if not records:
+            raise OpenCvResultNotFound()
+        return max(records, key=lambda record: (record.created_at, record.id))
+
 
 class InMemoryConfirmedGeometryRepository:
     def __init__(self, store: InMemoryRoomForgeStore) -> None:
@@ -371,6 +381,15 @@ class InMemoryConfirmedGeometryRepository:
         if record is None or record.user_id != user.id or record.project_id != project_id:
             raise ConfirmedGeometryNotFound()
         return record
+
+    def list_for_admin_opencv_result(
+        self, opencv_result_id: int
+    ) -> list[ConfirmedGeometryRecord]:
+        return [
+            record
+            for record in self._store.confirmed_geometries.values()
+            if record.opencv_result_id == opencv_result_id
+        ]
 
 
 class InMemoryFloorPlanRepository:
@@ -421,6 +440,15 @@ class InMemoryFloorPlanRepository:
         if record is None or record.user_id != user.id or record.project_id != project_id:
             raise FloorPlanNotFound()
         return record
+
+    def list_for_admin_confirmed_geometry(
+        self, confirmed_geometry_id: int
+    ) -> list[FloorPlanRecord]:
+        return [
+            record
+            for record in self._store.floor_plans.values()
+            if record.confirmed_geometry_id == confirmed_geometry_id
+        ]
 
 
 class InMemoryLayoutRepository:

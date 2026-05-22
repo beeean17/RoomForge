@@ -49,6 +49,11 @@ class FloorPlanRepository(Protocol):
     def get_for_project(self, user: UserRecord, project_id: int, floor_plan_id: int) -> FloorPlanRecord:
         pass
 
+    def list_for_admin_confirmed_geometry(
+        self, confirmed_geometry_id: int
+    ) -> list[FloorPlanRecord]:
+        pass
+
 
 class OracleFloorPlanRepository:
     def __init__(self, settings: Settings) -> None:
@@ -150,6 +155,32 @@ class OracleFloorPlanRepository:
         if row is None:
             raise FloorPlanNotFound()
         return floor_plan_record_from_row(row)
+
+    def list_for_admin_confirmed_geometry(
+        self, confirmed_geometry_id: int
+    ) -> list[FloorPlanRecord]:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, project_id, user_id, confirmed_geometry_id, unit,
+                           width_value, depth_value, width_deviation_ratio,
+                           depth_deviation_ratio, aspect_ratio_error,
+                           perspective_assumptions_json, image_geometry_json,
+                           metric_geometry_json, created_at
+                    FROM floor_plans
+                    WHERE confirmed_geometry_id = :confirmed_geometry_id
+                    ORDER BY created_at DESC, id DESC
+                    """,
+                    confirmed_geometry_id=confirmed_geometry_id,
+                )
+                rows = cursor.fetchall()
+
+        return [floor_plan_record_from_row(row) for row in rows]
 
     def _fetch_confirmed_geometry(self, cursor, user_id: int, project_id: int, geometry_id: int):
         cursor.execute(

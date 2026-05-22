@@ -46,6 +46,11 @@ class ConfirmedGeometryRepository(Protocol):
     ) -> ConfirmedGeometryRecord:
         pass
 
+    def list_for_admin_opencv_result(
+        self, opencv_result_id: int
+    ) -> list[ConfirmedGeometryRecord]:
+        pass
+
 
 class OracleConfirmedGeometryRepository:
     def __init__(self, settings: Settings) -> None:
@@ -122,6 +127,29 @@ class OracleConfirmedGeometryRepository:
         if row is None:
             raise ConfirmedGeometryNotFound()
         return confirmed_geometry_record_from_row(row)
+
+    def list_for_admin_opencv_result(
+        self, opencv_result_id: int
+    ) -> list[ConfirmedGeometryRecord]:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, project_id, user_id, opencv_result_id, coordinate_space,
+                           geometry_kind, points_json, created_at, updated_at
+                    FROM confirmed_geometries
+                    WHERE opencv_result_id = :opencv_result_id
+                    ORDER BY updated_at DESC, id DESC
+                    """,
+                    opencv_result_id=opencv_result_id,
+                )
+                rows = cursor.fetchall()
+
+        return [confirmed_geometry_record_from_row(row) for row in rows]
 
     def _ensure_owned_project_or_result(
         self, cursor, user_id: int, project_id: int, opencv_result_id: int | None

@@ -207,6 +207,15 @@ class AdminApi {
     return AdminJobDetail.fromJson(body['data'] as Map<String, Object?>);
   }
 
+  Future<Map<String, Object?>> loadJobArtifacts(int jobId) async {
+    final response = await _client.get(
+      _baseUri.resolve('/admin/jobs/$jobId/artifacts'),
+      headers: await _headers(),
+    );
+    final body = _decodeEnvelope(response);
+    return Map<String, Object?>.from(body['data'] as Map);
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await authRepository.idToken();
     if (token == null || token.isEmpty) {

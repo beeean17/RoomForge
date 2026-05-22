@@ -294,6 +294,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   String? _statusFilter;
   Future<AdminJobList>? _jobsFuture;
   Future<AdminJobDetail>? _jobDetailFuture;
+  Future<Map<String, Object?>>? _artifactFuture;
 
   @override
   void initState() {
@@ -306,12 +307,14 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
       _statusFilter = status;
       _jobsFuture = widget.adminApi.loadJobs(status: status);
       _jobDetailFuture = null;
+      _artifactFuture = null;
     });
   }
 
   void _selectJob(AdminJob job) {
     setState(() {
       _jobDetailFuture = widget.adminApi.loadJobDetail(job.id);
+      _artifactFuture = widget.adminApi.loadJobArtifacts(job.id);
     });
   }
 
@@ -381,6 +384,9 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                         const SizedBox(height: 16),
                         if (_jobDetailFuture != null)
                           _AdminJobDetailView(future: _jobDetailFuture!),
+                        const SizedBox(height: 16),
+                        if (_artifactFuture != null)
+                          _AdminArtifactView(future: _artifactFuture!),
                       ],
                     );
                   },
@@ -496,6 +502,63 @@ class _AdminJobDetailView extends StatelessWidget {
                       ].join(' | '),
                     ),
                   ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminArtifactView extends StatelessWidget {
+  const _AdminArtifactView({required this.future});
+
+  final Future<Map<String, Object?>> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, Object?>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text('Artifacts unavailable: ${snapshot.error}');
+        }
+        final data = snapshot.data;
+        if (data == null) {
+          return const SizedBox.shrink();
+        }
+        final candidate = data['candidate'] is Map
+            ? Map<String, Object?>.from(data['candidate'] as Map)
+            : const <String, Object?>{};
+        final confirmed = data['confirmed'] is List
+            ? (data['confirmed'] as List).length
+            : 0;
+        final calibration = data['calibration'] is List
+            ? (data['calibration'] as List).length
+            : 0;
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'OpenCV artifacts',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text('Candidate geometry: ${candidate['coordinate_space']}'),
+                Text('Confidence: ${candidate['confidence'] ?? 'unknown'}'),
+                Text('Algorithm: ${candidate['algorithm'] ?? 'unknown'}'),
+                Text('Confirmed geometries: $confirmed'),
+                Text('Calibration summaries: $calibration'),
               ],
             ),
           ),

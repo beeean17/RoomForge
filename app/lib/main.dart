@@ -291,10 +291,12 @@ class AdminShellScreen extends StatefulWidget {
 }
 
 class _AdminShellScreenState extends State<AdminShellScreen> {
+  final _searchController = TextEditingController();
   String? _statusFilter;
   Future<AdminJobList>? _jobsFuture;
   Future<AdminJobDetail>? _jobDetailFuture;
   Future<Map<String, Object?>>? _artifactFuture;
+  Future<List<Map<String, Object?>>>? _searchFuture;
 
   @override
   void initState() {
@@ -316,6 +318,20 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
       _jobDetailFuture = widget.adminApi.loadJobDetail(job.id);
       _artifactFuture = widget.adminApi.loadJobArtifacts(job.id);
     });
+  }
+
+  void _search() {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      return;
+    }
+    setState(() => _searchFuture = widget.adminApi.search(query));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -341,6 +357,29 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text('Role: ${widget.session.admin.role}'),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          labelText: 'Search user, project, layout, or job id',
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => _search(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _search,
+                      child: const Text('Search'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_searchFuture != null)
+                  _AdminSearchResultsView(future: _searchFuture!),
                 const SizedBox(height: 24),
                 FutureBuilder<AdminJobList>(
                   future: _jobsFuture,
@@ -438,6 +477,42 @@ class _AdminJobListView extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _AdminSearchResultsView extends StatelessWidget {
+  const _AdminSearchResultsView({required this.future});
+
+  final Future<List<Map<String, Object?>>> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, Object?>>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text('Search failed: ${snapshot.error}');
+        }
+        final results = snapshot.data ?? const [];
+        if (results.isEmpty) {
+          return const Text('No matching records.');
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final result in results)
+              ListTile(
+                dense: true,
+                title: Text('${result['type']} ${result['id']}'),
+                subtitle: Text(result['label']?.toString() ?? ''),
+              ),
+          ],
+        );
+      },
     );
   }
 }

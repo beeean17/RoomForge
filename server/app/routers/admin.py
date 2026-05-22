@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials
+import oracledb
 
 from app.auth.dependencies import (
     AuthErrorResponse,
@@ -83,6 +84,36 @@ def floor_plan_repository_from(request: Request) -> FloorPlanRepository:
     repository = OracleFloorPlanRepository(settings)
     request.app.state.floor_plan_repository = repository
     return repository
+
+
+def admin_search_records(request: Request, query: str) -> list[dict[str, object]]:
+    repository = getattr(request.app.state, "admin_search_repository", None)
+    if repository is not None:
+        return repository.search(query)
+
+    if not query.isdigit():
+        return []
+    record_id = int(query)
+    records: list[dict[str, object]] = []
+    with oracledb.connect(
+        user=settings.oracle_user,
+        password=settings.oracle_password,
+        dsn=settings.oracle_dsn,
+    ) as connection:
+        with connection.cursor() as cursor:
+            for table, kind in (
+                ("users", "user"),
+                ("room_projects", "project"),
+                ("layouts", "layout"),
+                ("reconstruction_jobs", "job"),
+            ):
+                cursor.execute(
+                    f"SELECT id FROM {table} WHERE id = :record_id",
+                    record_id=record_id,
+                )
+                if cursor.fetchone() is not None:
+                    records.append({"type": kind, "id": record_id})
+    return records
 
 
 @router.get("/session")
@@ -275,6 +306,33 @@ def admin_retry_job(
             "retry_count": 0,
             "retry_of_job_id": job_id,
         },
+        "error": None,
+        "meta": {"request_id": request_id_from(request)},
+    }
+
+
+@router.get("/search")
+def admin_search(
+    request: Request,
+    q: str,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, object]:
+    try:
+        authorize_admin_request(request, credentials)
+    except AuthErrorResponse as exc:
+        return exc.response
+
+    query = q.strip()
+    if not query:
+        return error_response(
+            code="validation_error",
+            message="Search query is required.",
+            status_code=422,
+            request_id=request_id_from(request),
+        )
+
+    return {
+        "data": {"query": query, "results": admin_search_records(request, query)},
         "error": None,
         "meta": {"request_id": request_id_from(request)},
     }

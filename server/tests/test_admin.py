@@ -226,6 +226,18 @@ def configure_artifact_repositories(app) -> None:
     app.state.floor_plan_repository = FakeFloorPlanRepository()
 
 
+class FakeAdminSearchRepository:
+    def search(self, query: str) -> list[dict[str, object]]:
+        if query == "42":
+            return [
+                {"type": "user", "id": 42, "label": "user@example.com"},
+                {"type": "project", "id": 42, "label": "Kitchen"},
+                {"type": "layout", "id": 42, "label": "Saved layout"},
+                {"type": "job", "id": 42, "label": "failed"},
+            ]
+        return []
+
+
 def test_admin_session_requires_authentication() -> None:
     from fastapi.testclient import TestClient
 
@@ -481,3 +493,62 @@ def test_admin_retry_explains_unavailable_for_non_failed_job() -> None:
     body = response.json()
     assert body["data"] is None
     assert body["error"]["code"] == "retry_unavailable"
+
+
+def test_admin_search_returns_scoped_operational_records() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    app.state.admin_search_repository = FakeAdminSearchRepository()
+
+    response = TestClient(app).get(
+        "/admin/search?q=42",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["error"] is None
+    assert body["data"]["query"] == "42"
+    assert [result["type"] for result in body["data"]["results"]] == [
+        "user",
+        "project",
+        "layout",
+        "job",
+    ]
+
+
+def test_admin_search_rejects_normal_user() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="user")
+    app.state.admin_search_repository = FakeAdminSearchRepository()
+
+    response = TestClient(app).get(
+        "/admin/search?q=42",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_admin_search_returns_empty_results_for_no_match() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    app.state.admin_search_repository = FakeAdminSearchRepository()
+
+    response = TestClient(app).get(
+        "/admin/search?q=missing",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["results"] == []

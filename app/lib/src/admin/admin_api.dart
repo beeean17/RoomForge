@@ -225,6 +225,19 @@ class AdminApi {
     return AdminJobDetail.fromJson(body['data'] as Map<String, Object?>);
   }
 
+  Future<List<Map<String, Object?>>> search(String query) async {
+    final response = await _client.get(
+      _baseUri.resolve('/admin/search').replace(queryParameters: {'q': query}),
+      headers: await _headers(),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    final results = data['results'] as List<Object?>;
+    return results
+        .map((result) => Map<String, Object?>.from(result as Map))
+        .toList();
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await authRepository.idToken();
     if (token == null || token.isEmpty) {

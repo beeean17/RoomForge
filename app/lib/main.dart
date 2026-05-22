@@ -1326,8 +1326,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   String _runtimeStatus = 'Waiting for OpenCV worker.';
   String _sceneStatus = 'Waiting for metric floor plan handoff.';
   String _saveStatus = 'Not saved.';
+  String _loadStatus = 'No layout loaded.';
   String _viewMode = '2d';
   bool _isSavingLayout = false;
+  bool _isLoadingLayout = false;
   Map<String, Object?>? _latestScene;
 
   @override
@@ -1420,9 +1422,17 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                     constraints: const BoxConstraints(maxWidth: 240),
                     child: Text(_saveStatus),
                   ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Text(_loadStatus),
+                  ),
                   FilledButton(
                     onPressed: _isSavingLayout ? null : _saveLayout,
                     child: Text(_isSavingLayout ? 'Saving...' : 'Save layout'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _isLoadingLayout ? null : _loadLayout,
+                    child: Text(_isLoadingLayout ? 'Loading...' : 'Load layout'),
                   ),
                   OutlinedButton(
                     onPressed: () => _postEditorMessage(
@@ -1524,6 +1534,51 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     }
   }
 
+  Future<void> _loadLayout() async {
+    setState(() {
+      _isLoadingLayout = true;
+      _loadStatus = 'Loading...';
+    });
+
+    try {
+      final layout = await widget.projectApi.loadLatestLayout(
+        projectId: widget.project.id,
+      );
+      final scene = _sceneFromSavedLayout(layout);
+      final viewMode = scene['viewMode']?.toString();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestScene = scene;
+        if (viewMode == '2d' || viewMode == '3d') {
+          _viewMode = viewMode;
+        }
+        _saveStatus = 'Saved';
+        _loadStatus = 'Loaded layout';
+      });
+      _postEditorMessage(
+        type: 'roomforge.scene.initialize',
+        requestId: 'load-layout-${layout.id}',
+        payload: {'scene': scene},
+      );
+    } on ProjectApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _loadStatus = 'Load failed: ${error.message}');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _loadStatus = 'Load failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingLayout = false);
+      }
+    }
+  }
+
   Map<String, Object?> _sceneForSave() {
     final scene = _latestScene;
     if (scene != null) {
@@ -1574,6 +1629,128 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       'source_image_id': widget.sourceImage?.id,
       'reconstruction_job_id': widget.reconstructionJob?.id,
       'reconstruction_status': widget.reconstructionJob?.status,
+    };
+  }
+
+  Map<String, Object?> _sceneFromSavedLayout(SavedLayout layout) {
+    final roomDimensions = layout.roomDimensions;
+    final width = _numberValue(roomDimensions['width_value'], 4.2);
+    final depth = _numberValue(roomDimensions['depth_value'], 3.6);
+    final height = _numberValue(roomDimensions['height_value'], 2.7);
+    final floorPlan = layout.floorPlan;
+    final metricGeometry = _recordValue(floorPlan['metric_geometry']);
+    final points = _savedMetricPoints(floorPlan, metricGeometry, width, depth);
+    final editorScene = layout.editorScene;
+    final viewMode = editorScene['view_mode']?.toString() == '3d' ? '3d' : '2d';
+
+    return {
+      'sceneId':
+          editorScene['scene_id']?.toString() ??
+          'project-${widget.project.id}-planning-scene',
+      'coordinateSpace': 'meters',
+      'unit': roomDimensions['unit']?.toString() ?? 'meters',
+      'viewMode': viewMode,
+      'selected': _savedSelection(editorScene),
+      'hasUnsavedChanges': false,
+      'scale': {'metersPerSceneUnit': 1},
+      'room': {
+        'objectId': 'room-shell',
+        'label': 'Room shell',
+        'heightMeters': height,
+        'floorPlan': {
+          'floorPlanId':
+              floorPlan['floor_plan_id']?.toString() ??
+              'project-${widget.project.id}-metric-floor-plan',
+          'metricGeometry': {
+            'coordinateSpace':
+                metricGeometry['coordinate_space']?.toString() ??
+                floorPlan['coordinate_space']?.toString() ??
+                'meters',
+            'points': points,
+          },
+        },
+      },
+      'furniture': _savedFurniture(layout.furnitureObjects),
+    };
+  }
+
+  List<Map<String, double>> _savedMetricPoints(
+    Map<String, Object?> floorPlan,
+    Map<String, Object?> metricGeometry,
+    double width,
+    double depth,
+  ) {
+    final rawPoints = _listValue(metricGeometry['points']).isNotEmpty
+        ? _listValue(metricGeometry['points'])
+        : _listValue(floorPlan['points']);
+    final points = rawPoints
+        .map(_recordValue)
+        .map(
+          (point) => {
+            'x': _numberValue(point['x'], 0),
+            'y': _numberValue(point['y'], 0),
+          },
+        )
+        .toList();
+    if (points.length >= 3) {
+      return points;
+    }
+    return [
+      {'x': 0.0, 'y': 0.0},
+      {'x': width, 'y': 0.0},
+      {'x': width, 'y': depth},
+      {'x': 0.0, 'y': depth},
+    ];
+  }
+
+  Map<String, Object?> _savedSelection(Map<String, Object?> editorScene) {
+    final selected = _recordValue(editorScene['selected']);
+    final objectId = selected['object_id'] ?? selected['objectId'];
+    if (objectId == null) {
+      return {'objectId': 'room-shell', 'objectType': 'room'};
+    }
+    return {
+      'objectId': objectId.toString(),
+      'objectType': selected['object_type']?.toString() == 'furniture'
+          ? 'furniture'
+          : 'room',
+    };
+  }
+
+  List<Map<String, Object?>> _savedFurniture(List<Object?> furnitureObjects) {
+    final objects = <Map<String, Object?>>[];
+    for (final item in furnitureObjects) {
+      final furniture = _recordValue(item);
+      if (furniture.isEmpty) {
+        continue;
+      }
+      final size = _recordValue(furniture['size']);
+      final position = _recordValue(furniture['position']);
+      objects.add({
+        'objectId': furniture['id']?.toString() ?? '',
+        'category': furniture['category']?.toString() ?? 'chair',
+        'label': _furnitureLabel(furniture['category']?.toString()),
+        'size': {
+          'widthMeters': _numberValue(size['width_meters'], 0.6),
+          'depthMeters': _numberValue(size['depth_meters'], 0.6),
+          'heightMeters': _numberValue(size['height_meters'], 0.8),
+        },
+        'position': {
+          'x': _numberValue(position['x'], 1),
+          'y': _numberValue(position['y'], 1),
+        },
+        'rotationDegrees': _numberValue(furniture['rotation_degrees'], 0),
+        'color': furniture['color']?.toString() ?? '#64748b',
+      });
+    }
+    return objects;
+  }
+
+  String _furnitureLabel(String? category) {
+    return switch (category) {
+      'table' => 'Table',
+      'sofa' => 'Sofa',
+      _ => 'Chair',
     };
   }
 

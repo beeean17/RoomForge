@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from app.auth.firebase import FirebaseIdentity, InvalidAuthToken
 from app.main import create_app
-from app.repositories.layouts import LayoutRecord, LayoutSave
+from app.repositories.layouts import LayoutNotFound, LayoutRecord, LayoutSave
 from app.repositories.projects import ProjectNotFound
 from app.repositories.users import UserRecord
 
@@ -34,7 +34,9 @@ class FakeLayoutRepository:
         self.owned_projects = {(42, 1)}
         self.saved: list[LayoutRecord] = []
 
-    def save_for_project(self, user: UserRecord, project_id: int, payload: LayoutSave) -> LayoutRecord:
+    def save_for_project(
+        self, user: UserRecord, project_id: int, payload: LayoutSave
+    ) -> LayoutRecord:
         if (user.id, project_id) not in self.owned_projects:
             raise ProjectNotFound()
         record = LayoutRecord(
@@ -51,6 +53,34 @@ class FakeLayoutRepository:
         )
         self.saved.append(record)
         return record
+
+    def get_for_project(
+        self, user: UserRecord, project_id: int, layout_id: int
+    ) -> LayoutRecord:
+        if (user.id, project_id) not in self.owned_projects:
+            raise ProjectNotFound()
+        for record in self.saved:
+            if (
+                record.id == layout_id
+                and record.project_id == project_id
+                and record.user_id == user.id
+            ):
+                return record
+        raise LayoutNotFound()
+
+    def get_latest_for_project(
+        self, user: UserRecord, project_id: int
+    ) -> LayoutRecord:
+        if (user.id, project_id) not in self.owned_projects:
+            raise ProjectNotFound()
+        records = [
+            record
+            for record in self.saved
+            if record.project_id == project_id and record.user_id == user.id
+        ]
+        if not records:
+            raise LayoutNotFound()
+        return records[-1]
 
 
 def configured_app(repository: FakeLayoutRepository):
@@ -97,6 +127,20 @@ def layout_payload():
     }
 
 
+def save_record(repository: FakeLayoutRepository) -> LayoutRecord:
+    return repository.save_for_project(
+        UserRecord(
+            id=42,
+            firebase_uid="firebase-user-1",
+            email="user@example.com",
+            display_name="Test User",
+            role="user",
+        ),
+        1,
+        LayoutSave(**layout_payload()),
+    )
+
+
 def test_save_layout_requires_authentication() -> None:
     from fastapi.testclient import TestClient
 
@@ -141,6 +185,46 @@ def test_save_layout_rejects_cross_user_project() -> None:
         "/room-projects/99/layouts",
         headers={"Authorization": "Bearer valid-token"},
         json=layout_payload(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_load_latest_layout_returns_saved_state() -> None:
+    from fastapi.testclient import TestClient
+
+    repository = FakeLayoutRepository()
+    save_record(repository)
+
+    response = TestClient(configured_app(repository)).get(
+        "/room-projects/1/layouts/latest",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    layout = body["data"]["layout"]
+    furniture = layout["furniture_objects"][0]
+    assert body["error"] is None
+    assert body["meta"]["request_id"]
+    assert layout["room_dimensions"]["width_value"] == 4.2
+    assert layout["floor_plan"]["coordinate_space"] == "meters"
+    assert layout["source_metadata"]["reconstruction_job_id"] == 9
+    assert furniture["id"] == "furniture-chair-1"
+    assert furniture["position"] == {"x": 1.2, "y": 1.4}
+    assert furniture["size"]["height_meters"] == 0.85
+
+
+def test_load_layout_rejects_cross_user_access() -> None:
+    from fastapi.testclient import TestClient
+
+    repository = FakeLayoutRepository()
+    record = save_record(repository)
+
+    response = TestClient(configured_app(repository)).get(
+        f"/room-projects/99/layouts/{record.id}",
+        headers={"Authorization": "Bearer valid-token"},
     )
 
     assert response.status_code == 404

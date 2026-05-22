@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.errors import error_response
 from app.core.request import request_id_from
 from app.repositories.layouts import (
+    LayoutNotFound,
     LayoutRecord,
     LayoutRepository,
     LayoutSave,
@@ -58,6 +59,52 @@ def save_layout(
     except ProjectNotFound:
         return not_found_response(request)
 
+    return layout_envelope(request, layout)
+
+
+@router.get("/{project_id}/layouts/latest")
+def get_latest_layout(
+    project_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, object]:
+    try:
+        user = authenticate_request(request, credentials)
+        layout = layout_repository_from(request).get_latest_for_project(
+            user,
+            project_id,
+        )
+    except AuthErrorResponse as exc:
+        return exc.response
+    except (LayoutNotFound, ProjectNotFound):
+        return not_found_response(request)
+
+    return layout_envelope(request, layout)
+
+
+@router.get("/{project_id}/layouts/{layout_id}")
+def get_layout(
+    project_id: int,
+    layout_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, object]:
+    try:
+        user = authenticate_request(request, credentials)
+        layout = layout_repository_from(request).get_for_project(
+            user,
+            project_id,
+            layout_id,
+        )
+    except AuthErrorResponse as exc:
+        return exc.response
+    except (LayoutNotFound, ProjectNotFound):
+        return not_found_response(request)
+
+    return layout_envelope(request, layout)
+
+
+def layout_envelope(request: Request, layout: LayoutRecord) -> dict[str, object]:
     return {
         "data": {"layout": layout_response_from(layout).model_dump()},
         "error": None,

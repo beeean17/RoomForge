@@ -43,6 +43,16 @@ class LayoutRepository(Protocol):
     ) -> LayoutRecord:
         pass
 
+    def get_for_project(
+        self, user: UserRecord, project_id: int, layout_id: int
+    ) -> LayoutRecord:
+        pass
+
+    def get_latest_for_project(
+        self, user: UserRecord, project_id: int
+    ) -> LayoutRecord:
+        pass
+
 
 class OracleLayoutRepository:
     def __init__(self, settings: Settings) -> None:
@@ -110,6 +120,40 @@ class OracleLayoutRepository:
             raise RuntimeError("Oracle layout save failed.")
         return layout_record_from_row(row)
 
+    def get_for_project(
+        self, user: UserRecord, project_id: int, layout_id: int
+    ) -> LayoutRecord:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                if self._fetch_project(cursor, user.id, project_id) is None:
+                    raise ProjectNotFound()
+                row = self._fetch_layout(cursor, user.id, project_id, layout_id)
+
+        if row is None:
+            raise LayoutNotFound()
+        return layout_record_from_row(row)
+
+    def get_latest_for_project(
+        self, user: UserRecord, project_id: int
+    ) -> LayoutRecord:
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                if self._fetch_project(cursor, user.id, project_id) is None:
+                    raise ProjectNotFound()
+                row = self._fetch_latest_layout(cursor, user.id, project_id)
+
+        if row is None:
+            raise LayoutNotFound()
+        return layout_record_from_row(row)
+
     def _fetch_project(self, cursor, user_id: int, project_id: int):
         cursor.execute(
             """
@@ -136,6 +180,23 @@ class OracleLayoutRepository:
               AND user_id = :user_id
             """,
             layout_id=layout_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
+        return cursor.fetchone()
+
+    def _fetch_latest_layout(self, cursor, user_id: int, project_id: int):
+        cursor.execute(
+            """
+            SELECT id, project_id, user_id, room_dimensions_json, floor_plan_json,
+                   source_metadata_json, furniture_objects_json, editor_scene_json,
+                   created_at, updated_at
+            FROM layouts
+            WHERE project_id = :project_id
+              AND user_id = :user_id
+            ORDER BY updated_at DESC, id DESC
+            FETCH FIRST 1 ROWS ONLY
+            """,
             project_id=project_id,
             user_id=user_id,
         )

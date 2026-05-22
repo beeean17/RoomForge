@@ -209,7 +209,7 @@ class SavedLayout {
       sourceMetadata: Map<String, Object?>.from(
         json['source_metadata'] as Map,
       ),
-      furnitureObjects: json['furniture_objects'] as List<Object?>,
+      furnitureObjects: (json['furniture_objects'] as List).cast<Object?>(),
       editorScene: Map<String, Object?>.from(json['editor_scene'] as Map),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
@@ -399,6 +399,16 @@ class ProjectApi {
         'furniture_objects': furnitureObjects,
         'editor_scene': editorScene,
       }),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return SavedLayout.fromJson(data['layout'] as Map<String, Object?>);
+  }
+
+  Future<SavedLayout> loadLatestLayout({required int projectId}) async {
+    final response = await _client.get(
+      _baseUri.resolve('/room-projects/$projectId/layouts/latest'),
+      headers: await _headers(),
     );
     final body = _decodeEnvelope(response);
     final data = body['data'] as Map<String, Object?>;

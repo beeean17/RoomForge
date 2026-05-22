@@ -19,7 +19,7 @@ from app.repositories.floor_plans import (
     FloorPlanRecord,
     metric_geometry_from_dimensions,
 )
-from app.repositories.layouts import LayoutRecord, LayoutSave
+from app.repositories.layouts import LayoutNotFound, LayoutRecord, LayoutSave
 from app.repositories.opencv_results import (
     OpenCvResultCreate,
     OpenCvResultNotFound,
@@ -413,6 +413,28 @@ class InMemoryLayoutRepository:
         )
         self._store.layouts[record.id] = record
         return record
+
+    def get_for_project(
+        self, user: UserRecord, project_id: int, layout_id: int
+    ) -> LayoutRecord:
+        ensure_project(self._store, user, project_id)
+        record = self._store.layouts.get(layout_id)
+        if record is None or record.user_id != user.id or record.project_id != project_id:
+            raise LayoutNotFound()
+        return record
+
+    def get_latest_for_project(
+        self, user: UserRecord, project_id: int
+    ) -> LayoutRecord:
+        ensure_project(self._store, user, project_id)
+        records = [
+            record
+            for record in self._store.layouts.values()
+            if record.user_id == user.id and record.project_id == project_id
+        ]
+        if not records:
+            raise LayoutNotFound()
+        return max(records, key=lambda record: (record.updated_at, record.id))
 
 
 def install_in_memory_repositories(app) -> None:

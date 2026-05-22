@@ -241,6 +241,45 @@ def admin_job_artifacts(
     }
 
 
+@router.post("/jobs/{job_id}/retry", status_code=201)
+def admin_retry_job(
+    job_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, object]:
+    try:
+        authorize_admin_request(request, credentials)
+        repository = reconstruction_job_repository_from(request)
+        original = repository.get_for_admin(job_id)
+        if original.status not in {"failed", "timeout"}:
+            return error_response(
+                code="retry_unavailable",
+                message="Retry is only available for failed or timed-out jobs.",
+                status_code=409,
+                request_id=request_id_from(request),
+            )
+        retry = repository.retry_for_admin(job_id)
+        transitions = repository.list_transitions_for_admin(retry.id)
+    except AuthErrorResponse as exc:
+        return exc.response
+    except ReconstructionJobNotFound:
+        return not_found_response(request)
+
+    return {
+        "data": {
+            "job": reconstruction_job_response_from(retry).model_dump(),
+            "transitions": [
+                reconstruction_job_transition_response_from(transition).model_dump()
+                for transition in transitions
+            ],
+            "retry_count": 0,
+            "retry_of_job_id": job_id,
+        },
+        "error": None,
+        "meta": {"request_id": request_id_from(request)},
+    }
+
+
 def not_found_response(request: Request):
     return error_response(
         code="not_found",

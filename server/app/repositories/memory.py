@@ -307,6 +307,36 @@ class InMemoryReconstructionJobRepository:
             ]
         )
 
+    def retry_for_admin(self, job_id: int) -> ReconstructionJobRecord:
+        original = self.get_for_admin(job_id)
+        retry = reconstruction_job_record(
+            store=self._store,
+            user=UserRecord(
+                id=original.user_id,
+                firebase_uid="admin-retry-owner",
+                email=None,
+                display_name=None,
+                role="user",
+            ),
+            project_id=original.project_id,
+            source_image_id=original.source_image_id,
+            status="retrying",
+            provider=original.provider,
+            retry_of_job_id=original.id,
+        )
+        self._store.reconstruction_jobs[retry.id] = retry
+        self._store.job_transitions[retry.id] = [
+            transition_record(
+                self._store,
+                retry.id,
+                "retrying",
+                "admin",
+                "admin_retry_requested",
+                "Admin requested reconstruction retry.",
+            )
+        ]
+        return retry
+
 
 class InMemoryOpenCvResultRepository:
     def __init__(self, store: InMemoryRoomForgeStore) -> None:

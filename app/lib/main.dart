@@ -383,7 +383,10 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                           ),
                         const SizedBox(height: 16),
                         if (_jobDetailFuture != null)
-                          _AdminJobDetailView(future: _jobDetailFuture!),
+                          _AdminJobDetailView(
+                            future: _jobDetailFuture!,
+                            adminApi: widget.adminApi,
+                          ),
                         const SizedBox(height: 16),
                         if (_artifactFuture != null)
                           _AdminArtifactView(future: _artifactFuture!),
@@ -439,15 +442,40 @@ class _AdminJobListView extends StatelessWidget {
   }
 }
 
-class _AdminJobDetailView extends StatelessWidget {
-  const _AdminJobDetailView({required this.future});
+class _AdminJobDetailView extends StatefulWidget {
+  const _AdminJobDetailView({required this.future, required this.adminApi});
 
   final Future<AdminJobDetail> future;
+  final AdminApi adminApi;
+
+  @override
+  State<_AdminJobDetailView> createState() => _AdminJobDetailViewState();
+}
+
+class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
+  Future<AdminJobDetail>? _retryFuture;
+  String? _retryMessage;
+
+  void _retry(AdminJob job) {
+    setState(() {
+      _retryMessage = 'Retrying...';
+      _retryFuture = widget.adminApi.retryJob(job.id);
+    });
+    _retryFuture!.then((detail) {
+      if (mounted) {
+        setState(() => _retryMessage = 'Retry job ${detail.job.id} created.');
+      }
+    }).catchError((Object error) {
+      if (mounted) {
+        setState(() => _retryMessage = 'Retry unavailable: $error');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<AdminJobDetail>(
-      future: future,
+      future: widget.future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LinearProgressIndicator();
@@ -482,6 +510,14 @@ class _AdminJobDetailView extends StatelessWidget {
                   Text('Failure: ${job.failureReasonCode}'),
                 if (job.failureReasonMessage != null)
                   Text(job.failureReasonMessage!),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: job.status == 'failed' || job.status == 'timeout'
+                      ? () => _retry(job)
+                      : null,
+                  child: const Text('Retry job'),
+                ),
+                if (_retryMessage != null) Text(_retryMessage!),
                 const SizedBox(height: 12),
                 Text(
                   'Event trail',

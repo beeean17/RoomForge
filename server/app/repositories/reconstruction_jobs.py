@@ -102,6 +102,9 @@ class ReconstructionJobRepository(Protocol):
     def count_retries_for_admin(self, job_id: int) -> int:
         pass
 
+    def retry_for_admin(self, job_id: int) -> ReconstructionJobRecord:
+        pass
+
 
 class OracleReconstructionJobRepository:
     def __init__(self, settings: Settings) -> None:
@@ -379,6 +382,77 @@ class OracleReconstructionJobRepository:
                 row = cursor.fetchone()
 
         return int(row[0]) if row is not None else 0
+
+    def retry_for_admin(self, job_id: int) -> ReconstructionJobRecord:
+        retry_job_id = None
+        with oracledb.connect(
+            user=self._settings.oracle_user,
+            password=self._settings.oracle_password,
+            dsn=self._settings.oracle_dsn,
+        ) as connection:
+            with connection.cursor() as cursor:
+                original = self._fetch_job_for_admin(cursor, job_id)
+                if original is None:
+                    raise ReconstructionJobNotFound()
+                original_job = reconstruction_job_record_from_row(original)
+                retry_job_id_var = cursor.var(oracledb.NUMBER)
+                cursor.execute(
+                    """
+                    INSERT INTO reconstruction_jobs (
+                      project_id,
+                      user_id,
+                      source_image_id,
+                      status,
+                      provider,
+                      retry_of_job_id,
+                      created_at,
+                      updated_at
+                    ) VALUES (
+                      :project_id,
+                      :user_id,
+                      :source_image_id,
+                      'retrying',
+                      :provider,
+                      :retry_of_job_id,
+                      SYSTIMESTAMP,
+                      SYSTIMESTAMP
+                    )
+                    RETURNING id INTO :retry_job_id
+                    """,
+                    project_id=original_job.project_id,
+                    user_id=original_job.user_id,
+                    source_image_id=original_job.source_image_id,
+                    provider=original_job.provider,
+                    retry_of_job_id=job_id,
+                    retry_job_id=retry_job_id_var,
+                )
+                retry_job_id = int(retry_job_id_var.getvalue()[0])
+                cursor.execute(
+                    """
+                    INSERT INTO reconstruction_job_transitions (
+                      job_id,
+                      status,
+                      actor,
+                      reason_code,
+                      reason_message,
+                      created_at
+                    ) VALUES (
+                      :job_id,
+                      'retrying',
+                      'admin',
+                      'admin_retry_requested',
+                      'Admin requested reconstruction retry.',
+                      SYSTIMESTAMP
+                    )
+                    """,
+                    job_id=retry_job_id,
+                )
+                connection.commit()
+                row = self._fetch_job_for_admin(cursor, retry_job_id)
+
+        if row is None or retry_job_id is None:
+            raise RuntimeError("Oracle admin reconstruction retry creation failed.")
+        return reconstruction_job_record_from_row(row)
 
     def _ensure_project_ready(
         self, cursor, user_id: int, project_id: int, source_image_id: int

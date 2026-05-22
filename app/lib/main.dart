@@ -297,6 +297,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   Future<AdminJobDetail>? _jobDetailFuture;
   Future<Map<String, Object?>>? _artifactFuture;
   Future<List<Map<String, Object?>>>? _searchFuture;
+  Future<Map<String, Object?>>? _diagnosisFuture;
 
   @override
   void initState() {
@@ -310,6 +311,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
       _jobsFuture = widget.adminApi.loadJobs(status: status);
       _jobDetailFuture = null;
       _artifactFuture = null;
+      _diagnosisFuture = null;
     });
   }
 
@@ -317,6 +319,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
     setState(() {
       _jobDetailFuture = widget.adminApi.loadJobDetail(job.id);
       _artifactFuture = widget.adminApi.loadJobArtifacts(job.id);
+      _diagnosisFuture = widget.adminApi.loadJobDiagnosis(job.id);
     });
   }
 
@@ -429,6 +432,9 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                         const SizedBox(height: 16),
                         if (_artifactFuture != null)
                           _AdminArtifactView(future: _artifactFuture!),
+                        const SizedBox(height: 16),
+                        if (_diagnosisFuture != null)
+                          _AdminDiagnosisView(future: _diagnosisFuture!),
                       ],
                     );
                   },
@@ -670,6 +676,60 @@ class _AdminArtifactView extends StatelessWidget {
                 Text('Algorithm: ${candidate['algorithm'] ?? 'unknown'}'),
                 Text('Confirmed geometries: $confirmed'),
                 Text('Calibration summaries: $calibration'),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminDiagnosisView extends StatelessWidget {
+  const _AdminDiagnosisView({required this.future});
+
+  final Future<Map<String, Object?>> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, Object?>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text('Diagnosis unavailable: ${snapshot.error}');
+        }
+        final data = snapshot.data;
+        if (data == null) {
+          return const SizedBox.shrink();
+        }
+        final providerState = data['provider_state'] is Map
+            ? Map<String, Object?>.from(data['provider_state'] as Map)
+            : const <String, Object?>{};
+        final failureSource = data['failure_source'] is Map
+            ? Map<String, Object?>.from(data['failure_source'] as Map)
+            : const <String, Object?>{};
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Failure diagnosis',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text('Provider: ${providerState['provider'] ?? 'unknown'}'),
+                Text('Provider status: ${providerState['status'] ?? 'unknown'}'),
+                Text('Failure source: ${failureSource['source'] ?? 'unknown'}'),
+                if (providerState['failure_reason_code'] != null)
+                  Text('Reason: ${providerState['failure_reason_code']}'),
               ],
             ),
           ),

@@ -552,3 +552,42 @@ def test_admin_search_returns_empty_results_for_no_match() -> None:
 
     assert response.status_code == 200
     assert response.json()["data"]["results"] == []
+
+
+def test_admin_job_diagnosis_distinguishes_failure_source() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    app.state.reconstruction_job_repository = FakeReconstructionJobRepository()
+
+    response = TestClient(app).get(
+        "/admin/jobs/3/diagnosis",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["error"] is None
+    assert body["data"]["provider_state"]["provider"] == "browser-opencv"
+    assert body["data"]["provider_state"]["status"] == "failed"
+    assert body["data"]["failure_source"]["source"] == "opencv_candidate_detection"
+    assert "database_state" in body["data"]["failure_source"]["supported_sources"]
+
+
+def test_admin_job_diagnosis_rejects_normal_user() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="user")
+    app.state.reconstruction_job_repository = FakeReconstructionJobRepository()
+
+    response = TestClient(app).get(
+        "/admin/jobs/3/diagnosis",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "unauthorized"

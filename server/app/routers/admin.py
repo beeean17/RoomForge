@@ -338,6 +338,65 @@ def admin_search(
     }
 
 
+@router.get("/jobs/{job_id}/diagnosis")
+def admin_job_diagnosis(
+    job_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict[str, object]:
+    try:
+        authorize_admin_request(request, credentials)
+        job = reconstruction_job_repository_from(request).get_for_admin(job_id)
+    except AuthErrorResponse as exc:
+        return exc.response
+    except ReconstructionJobNotFound:
+        return not_found_response(request)
+
+    return {
+        "data": {
+            "job": reconstruction_job_response_from(job).model_dump(),
+            "provider_state": {
+                "provider": job.provider,
+                "status": job.status,
+                "retry_of_job_id": job.retry_of_job_id,
+                "failure_reason_code": job.failure_reason_code,
+                "failure_reason_message": job.failure_reason_message,
+            },
+            "failure_source": failure_source_for(job.failure_reason_code),
+        },
+        "error": None,
+        "meta": {"request_id": request_id_from(request)},
+    }
+
+
+def failure_source_for(reason_code: str | None) -> dict[str, object]:
+    code = (reason_code or "").lower()
+    if any(token in code for token in ("input", "photo", "image")):
+        source = "input_quality"
+    elif any(token in code for token in ("opencv", "candidate", "detection", "confidence")):
+        source = "opencv_candidate_detection"
+    elif any(token in code for token in ("calibration", "scale", "geometry")):
+        source = "user_calibration"
+    elif any(token in code for token in ("api", "validation", "request")):
+        source = "api_handling"
+    elif any(token in code for token in ("db", "database", "oracle")):
+        source = "database_state"
+    else:
+        source = "provider_processing"
+    return {
+        "source": source,
+        "reason_code": reason_code,
+        "supported_sources": [
+            "input_quality",
+            "opencv_candidate_detection",
+            "user_calibration",
+            "api_handling",
+            "database_state",
+            "provider_processing",
+        ],
+    }
+
+
 def not_found_response(request: Request):
     return error_response(
         code="not_found",

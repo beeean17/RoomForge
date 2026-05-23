@@ -223,10 +223,8 @@ class ProjectWorkspaceScreen extends StatelessWidget {
       }
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (context) => AdminShellScreen(
-            session: adminSession,
-            adminApi: adminApi,
-          ),
+          builder: (context) =>
+              AdminShellScreen(session: adminSession, adminApi: adminApi),
         ),
       );
     } on AdminApiException catch (error) {
@@ -413,8 +411,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                           onChanged: _setStatusFilter,
                         ),
                         const SizedBox(height: 16),
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting)
+                        if (snapshot.connectionState == ConnectionState.waiting)
                           const LinearProgressIndicator()
                         else if (snapshot.hasError)
                           Text('Admin jobs failed: ${snapshot.error}')
@@ -542,15 +539,19 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
       _retryMessage = 'Retrying...';
       _retryFuture = widget.adminApi.retryJob(job.id);
     });
-    _retryFuture!.then((detail) {
-      if (mounted) {
-        setState(() => _retryMessage = 'Retry job ${detail.job.id} created.');
-      }
-    }).catchError((Object error) {
-      if (mounted) {
-        setState(() => _retryMessage = 'Retry unavailable: $error');
-      }
-    });
+    _retryFuture!
+        .then((detail) {
+          if (mounted) {
+            setState(
+              () => _retryMessage = 'Retry job ${detail.job.id} created.',
+            );
+          }
+        })
+        .catchError((Object error) {
+          if (mounted) {
+            setState(() => _retryMessage = 'Retry unavailable: $error');
+          }
+        });
   }
 
   @override
@@ -726,7 +727,9 @@ class _AdminDiagnosisView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text('Provider: ${providerState['provider'] ?? 'unknown'}'),
-                Text('Provider status: ${providerState['status'] ?? 'unknown'}'),
+                Text(
+                  'Provider status: ${providerState['status'] ?? 'unknown'}',
+                ),
                 Text('Failure source: ${failureSource['source'] ?? 'unknown'}'),
                 if (providerState['failure_reason_code'] != null)
                   Text('Reason: ${providerState['failure_reason_code']}'),
@@ -1866,7 +1869,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                   ),
                   OutlinedButton(
                     onPressed: _isLoadingLayout ? null : _loadLayout,
-                    child: Text(_isLoadingLayout ? 'Loading...' : 'Load layout'),
+                    child: Text(
+                      _isLoadingLayout ? 'Loading...' : 'Load layout',
+                    ),
                   ),
                   OutlinedButton(
                     onPressed: _isExportingLayout ? null : _exportLayout,
@@ -1922,8 +1927,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         if (payload is Map) {
           _latestScene = Map<String, Object?>.from(payload);
           final viewMode = payload['viewMode']?.toString();
-          if (viewMode == '2d' || viewMode == '3d') {
-            _viewMode = viewMode;
+          final nextViewMode = viewMode == '2d' || viewMode == '3d'
+              ? viewMode
+              : null;
+          if (nextViewMode != null) {
+            _viewMode = nextViewMode;
           }
           final hasUnsavedChanges = payload['hasUnsavedChanges'] == true;
           final room = payload['room'];
@@ -1991,8 +1999,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _latestScene = scene;
-        if (viewMode == '2d' || viewMode == '3d') {
-          _viewMode = viewMode;
+        final nextViewMode = viewMode == '2d' || viewMode == '3d'
+            ? viewMode
+            : null;
+        if (nextViewMode != null) {
+          _viewMode = nextViewMode;
         }
         _saveStatus = 'Saved';
         _loadStatus = 'Loaded layout';

@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test:firebase-rules:smoke": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-rules-smoke.mjs\""
+  },
   "dependencies": {
     "firebase": "^12.13.0"
   }

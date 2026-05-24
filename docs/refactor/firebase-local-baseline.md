@@ -79,7 +79,28 @@ The FES-1.1 rules baseline is deny-by-default:
 - helper functions exist for signed-in, admin, ownership, source image content type, and source image size checks;
 - feature-specific allow rules are intentionally deferred to later stories.
 
-Story FES-1.2 adds the rules test harness and smoke tests.
+## Rules Smoke Test
+
+Story FES-1.2 adds the first Firebase rules smoke harness:
+
+```bash
+npm run test:firebase-rules:smoke
+```
+
+The command starts Auth, Firestore, and Storage emulators from `app/`, then runs:
+
+```text
+scripts/firebase-rules-smoke.mjs
+```
+
+Smoke test IDs:
+
+- `fs-unauth-read-deny`
+- `fs-unauth-write-deny`
+- `st-unauth-read-deny`
+- `st-unauth-write-deny`
+
+These tests only verify unauthenticated denial. Owner, admin, status, coordinate-space, and file-validation tests are intentionally deferred to later stories.
 
 ## Out of Scope
 

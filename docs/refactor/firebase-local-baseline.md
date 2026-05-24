@@ -102,6 +102,16 @@ Smoke test IDs:
 
 These tests only verify unauthenticated denial. Owner, admin, status, coordinate-space, and file-validation tests are intentionally deferred to later stories.
 
+## Flutter and Editor Boundary Check
+
+Story FES-1.3 keeps Firebase initialization in the Flutter app layer and adds an editor boundary check:
+
+```bash
+npm run check:editor-firebase-boundary
+```
+
+The check fails if `editor/src` or `editor/package.json` contains direct Firebase SDK references. The editor may exchange bridge payloads with Flutter, but it must not import Firebase SDKs or call Firestore, Storage, Auth, or Firebase config directly.
+
 ## Out of Scope
 
 FES-1.1 does not migrate project, upload, reconstruction, layout, admin, or legacy API flows. Those changes belong to later Firebase refactor stories.

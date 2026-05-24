@@ -7,40 +7,23 @@ import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'src/admin/admin_api.dart';
 import 'src/auth/auth_repository.dart';
-import 'src/auth/firebase_options_from_env.dart';
 import 'src/editor/editor_config.dart';
+import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/projects/project_api.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final AuthRepository authRepository;
-  String? authSetupMessage;
-
-  if (FirebaseOptionsFromEnv.isConfigured) {
-    await Firebase.initializeApp(
-      options: FirebaseOptionsFromEnv.currentPlatform,
-    );
-    final firebaseAuth = FirebaseAuth.instance;
-    if (FirebaseOptionsFromEnv.useAuthEmulator) {
-      await firebaseAuth.useAuthEmulator('localhost', 9099);
-    }
-    authRepository = FirebaseAuthRepository(firebaseAuth);
-  } else {
-    authRepository = DisabledAuthRepository();
-    authSetupMessage =
-        'Firebase web configuration is missing. Provide ROOMFORGE_FIREBASE_* dart defines to enable Google sign-in.';
-  }
+  final firebaseBootstrap = await FirebaseAppBootstrap.initialize();
 
   runApp(
     RoomForgeApp(
-      authRepository: authRepository,
-      authSetupMessage: authSetupMessage,
+      authRepository: firebaseBootstrap.authRepository,
+      authSetupMessage: firebaseBootstrap.authSetupMessage,
     ),
   );
 }

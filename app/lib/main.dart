@@ -18,6 +18,7 @@ import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/projects/firebase_project_api.dart';
 import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/project_api.dart';
+import 'src/projects/source_image_upload_status.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1227,8 +1228,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   SourceImage? _sourceImage;
   RoomDimensions? _dimensions;
   ReconstructionJob? _reconstructionJob;
-  String _uploadState = 'empty';
+  SourceImageUploadStatus _uploadState = SourceImageUploadStatus.empty;
   String? _uploadMessage;
+  double? _uploadProgress;
+  html.File? _lastUploadFile;
   bool _isSavingDimensions = false;
   bool _isSubmittingReconstruction = false;
   String? _dimensionMessage;
@@ -1260,8 +1263,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       _sourceImage = null;
       _dimensions = null;
       _reconstructionJob = null;
-      _uploadState = 'empty';
+      _uploadState = SourceImageUploadStatus.empty;
       _uploadMessage = null;
+      _uploadProgress = null;
+      _lastUploadFile = null;
       _dimensionMessage = null;
       _reconstructionMessage = null;
       _widthController.clear();
@@ -1291,19 +1296,27 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       return;
     }
     event.preventDefault();
+    if (_uploadState == SourceImageUploadStatus.uploading) {
+      return;
+    }
     setState(() {
-      _uploadState = 'dragging';
+      _uploadState = SourceImageUploadStatus.ready;
       _uploadMessage = 'Drop a JPEG, PNG, or WebP room photo.';
+      _uploadProgress = null;
     });
   }
 
   void _handleDragLeave(html.MouseEvent event) {
-    if (widget.project == null || _uploadState != 'dragging') {
+    if (widget.project == null ||
+        _uploadState != SourceImageUploadStatus.ready) {
       return;
     }
     setState(() {
-      _uploadState = _sourceImage == null ? 'empty' : 'uploaded';
+      _uploadState = _sourceImage == null
+          ? SourceImageUploadStatus.empty
+          : SourceImageUploadStatus.uploaded;
       _uploadMessage = _sourceImage == null ? null : _uploadMessage;
+      _uploadProgress = null;
     });
   }
 
@@ -1312,12 +1325,16 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       return;
     }
     event.preventDefault();
+    if (_uploadState == SourceImageUploadStatus.uploading) {
+      return;
+    }
     final files = event.dataTransfer.files;
     final file = files?.isNotEmpty == true ? files!.first : null;
     if (file == null) {
       setState(() {
-        _uploadState = 'rejected';
+        _uploadState = SourceImageUploadStatus.validationError;
         _uploadMessage = 'Drop one supported room photo file.';
+        _uploadProgress = null;
       });
       return;
     }
@@ -1326,13 +1343,14 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
 
   Future<void> _selectAndUploadImage() async {
     final project = widget.project;
-    if (project == null) {
+    if (project == null || _uploadState == SourceImageUploadStatus.uploading) {
       return;
     }
 
     setState(() {
-      _uploadState = 'dragging';
+      _uploadState = SourceImageUploadStatus.ready;
       _uploadMessage = 'Select a JPEG, PNG, or WebP room photo.';
+      _uploadProgress = null;
     });
 
     final input = html.FileUploadInputElement()
@@ -1344,8 +1362,11 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     final file = input.files?.isNotEmpty == true ? input.files!.first : null;
     if (file == null) {
       setState(() {
-        _uploadState = 'empty';
-        _uploadMessage = null;
+        _uploadState = _sourceImage == null
+            ? SourceImageUploadStatus.empty
+            : SourceImageUploadStatus.uploaded;
+        _uploadMessage = _sourceImage == null ? null : _uploadMessage;
+        _uploadProgress = null;
       });
       return;
     }
@@ -1353,9 +1374,19 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     await _uploadFile(file);
   }
 
+  Future<void> _retryUpload() async {
+    final file = _lastUploadFile;
+    if (file == null ||
+        widget.project == null ||
+        _uploadState == SourceImageUploadStatus.uploading) {
+      return;
+    }
+    await _uploadFile(file);
+  }
+
   Future<void> _uploadFile(html.File file) async {
     final project = widget.project;
-    if (project == null) {
+    if (project == null || _uploadState == SourceImageUploadStatus.uploading) {
       return;
     }
 
@@ -1363,20 +1394,22 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     final validationMessage = _clientImageValidationMessage(file, contentType);
     if (validationMessage != null) {
       setState(() {
-        _uploadState = 'rejected';
+        _uploadState = SourceImageUploadStatus.validationError;
         _uploadMessage = validationMessage;
+        _uploadProgress = null;
+        _lastUploadFile = null;
         _sourceImage = null;
       });
       return;
     }
 
     setState(() {
-      _uploadState = file.size < _lowQualityImageBytes
-          ? 'lowQualityWarning'
-          : 'uploading';
+      _uploadState = SourceImageUploadStatus.uploading;
       _uploadMessage = file.size < _lowQualityImageBytes
-          ? 'Low-quality warning: this file is small. Use a sharper, brighter image if reconstruction looks weak.'
-          : 'Uploading source image metadata.';
+          ? 'Uploading. Low-quality warning: this file is small. Use a sharper, brighter image if reconstruction looks weak.'
+          : 'Uploading source image to cloud storage.';
+      _uploadProgress = 0;
+      _lastUploadFile = file;
     });
 
     try {
@@ -1389,24 +1422,41 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         bytes: bytes,
         widthPx: imageSize?.width,
         heightPx: imageSize?.height,
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _uploadState = SourceImageUploadStatus.uploading;
+            _uploadProgress = progress.clamp(0, 1).toDouble();
+            _uploadMessage = uploadProgressLabel(_uploadProgress);
+          });
+        },
       );
       setState(() {
         _sourceImage = sourceImage;
-        _uploadState = 'uploaded';
+        _uploadState = SourceImageUploadStatus.uploaded;
         _uploadMessage = imageSize == null
             ? 'Uploaded. Image dimensions were not available from the browser.'
             : 'Uploaded ${imageSize.width} x ${imageSize.height}px source image.';
+        _uploadProgress = 1;
+        _lastUploadFile = null;
       });
     } on ProjectApiException catch (error) {
       setState(() {
-        _uploadState = 'rejected';
-        _uploadMessage = error.message;
+        _uploadState = uploadStatusForProjectApiException(error);
+        _uploadMessage = uploadRecoveryMessage(error);
+        _uploadProgress = null;
         _sourceImage = null;
+        if (_uploadState == SourceImageUploadStatus.validationError) {
+          _lastUploadFile = null;
+        }
       });
     } catch (error) {
       setState(() {
-        _uploadState = 'rejected';
+        _uploadState = SourceImageUploadStatus.uploadFailed;
         _uploadMessage = 'Upload failed: $error';
+        _uploadProgress = null;
         _sourceImage = null;
       });
     }
@@ -1659,8 +1709,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
               PhotoIntakeSection(
                 state: _uploadState,
                 message: _uploadMessage,
+                progress: _uploadProgress,
                 sourceImage: _sourceImage,
                 onSelectImage: _selectAndUploadImage,
+                onRetryUpload: _retryUpload,
               ),
               const SizedBox(height: 20),
               RoomDimensionsSection(
@@ -1764,25 +1816,34 @@ class PhotoIntakeSection extends StatelessWidget {
   const PhotoIntakeSection({
     required this.state,
     required this.message,
+    required this.progress,
     required this.sourceImage,
     required this.onSelectImage,
+    required this.onRetryUpload,
     super.key,
   });
 
-  final String state;
+  final SourceImageUploadStatus state;
   final String? message;
+  final double? progress;
   final SourceImage? sourceImage;
   final VoidCallback onSelectImage;
+  final VoidCallback onRetryUpload;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final borderColor = switch (state) {
-      'rejected' => theme.colorScheme.error,
-      'uploaded' => theme.colorScheme.primary,
-      'lowQualityWarning' => const Color(0xFFB45309),
+      SourceImageUploadStatus.validationError ||
+      SourceImageUploadStatus.permissionFailure ||
+      SourceImageUploadStatus.metadataSaveFailed ||
+      SourceImageUploadStatus.uploadFailed => theme.colorScheme.error,
+      SourceImageUploadStatus.uploaded => theme.colorScheme.primary,
+      SourceImageUploadStatus.lowQualityWarning => const Color(0xFFB45309),
       _ => const Color(0xFFE2E8F0),
     };
+    final progressValue = progress?.clamp(0, 1).toDouble();
+    final progressText = uploadProgressLabel(progressValue);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1802,7 +1863,23 @@ class PhotoIntakeSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(_stateLabel),
+                Semantics(
+                  liveRegion: true,
+                  label: state == SourceImageUploadStatus.uploading
+                      ? progressText
+                      : state.label,
+                  child: Text(state.label),
+                ),
+                if (state == SourceImageUploadStatus.uploading) ...[
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: progressValue,
+                    semanticsLabel: 'Source image upload progress',
+                    semanticsValue: progressText,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(progressText),
+                ],
                 if (message != null) ...[
                   const SizedBox(height: 8),
                   Text(message!),
@@ -1814,29 +1891,42 @@ class PhotoIntakeSection extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: state == 'uploading' ? null : onSelectImage,
-                  child: Text(
-                    state == 'uploading' ? 'Uploading...' : 'Choose photo',
-                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: state == SourceImageUploadStatus.uploading
+                          ? null
+                          : onSelectImage,
+                      icon: const Icon(Icons.photo_outlined),
+                      label: Text(
+                        state == SourceImageUploadStatus.uploading
+                            ? 'Uploading...'
+                            : 'Choose photo',
+                      ),
+                    ),
+                    if (state.canRetryUpload)
+                      FilledButton.icon(
+                        onPressed: onRetryUpload,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry upload'),
+                      ),
+                  ],
                 ),
+                if (state == SourceImageUploadStatus.validationError) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Choose another photo that matches the format and size requirements.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),
         ),
       ],
     );
-  }
-
-  String get _stateLabel {
-    return switch (state) {
-      'dragging' => 'Ready to select',
-      'uploading' => 'Uploading',
-      'uploaded' => 'Uploaded',
-      'rejected' => 'Rejected',
-      'lowQualityWarning' => 'Low-quality warning',
-      _ => 'No source image selected',
-    };
   }
 }
 

@@ -298,7 +298,9 @@ class ProjectApi {
     required Uint8List bytes,
     int? widthPx,
     int? heightPx,
+    void Function(double progress)? onProgress,
   }) async {
+    onProgress?.call(0.05);
     final response = await _client.post(
       _baseUri.resolve('/room-projects/$projectId/source-images'),
       headers: await _headers(),
@@ -313,7 +315,11 @@ class ProjectApi {
     );
     final body = _decodeEnvelope(response);
     final data = body['data'] as Map<String, Object?>;
-    return SourceImage.fromJson(data['source_image'] as Map<String, Object?>);
+    final sourceImage = SourceImage.fromJson(
+      data['source_image'] as Map<String, Object?>,
+    );
+    onProgress?.call(1);
+    return sourceImage;
   }
 
   Future<RoomDimensions> saveRoomDimensions({

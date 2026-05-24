@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:firebase_core/firebase_core.dart';
+
 import '../auth/auth_repository.dart';
 import '../firebase/firebase_models.dart';
 import '../firebase/firebase_repositories.dart';
@@ -141,6 +143,7 @@ class FirebaseProjectApi extends ProjectApi {
     required Uint8List bytes,
     int? widthPx,
     int? heightPx,
+    void Function(double progress)? onProgress,
   }) async {
     if (!FirebaseSourceImageUpload.isAllowedContentType(contentType)) {
       throw const ProjectApiException(
@@ -161,10 +164,20 @@ class FirebaseProjectApi extends ProjectApi {
       );
     }
 
-    final project = await _projectRepository.getProject(
-      ownerUid: _session.uid,
-      projectId: projectId,
-    );
+    late final FirebaseRoomProject project;
+    try {
+      project = await _projectRepository.getProject(
+        ownerUid: _session.uid,
+        projectId: projectId,
+      );
+    } on FirebaseException catch (error) {
+      throw _projectAccessException(error);
+    } on FirebaseContractException {
+      throw const ProjectApiException(
+        'Project access is no longer available. Reopen the project or choose another one.',
+        code: 'permission_denied',
+      );
+    }
     final sourceImageId = _sourceImageRepository.newSourceImageId(
       projectId: project.projectId,
     );
@@ -178,6 +191,7 @@ class FirebaseProjectApi extends ProjectApi {
     final sha256Hex = FirebaseSourceImageUpload.sha256Hex(bytes);
 
     try {
+      onProgress?.call(0);
       await _sourceImageUploader.uploadBytes(
         storagePath: storagePath,
         bytes: bytes,
@@ -189,7 +203,10 @@ class FirebaseProjectApi extends ProjectApi {
           'sha256_hex': sha256Hex,
           'uploaded_by_uid': _session.uid,
         },
+        onProgress: onProgress,
       );
+    } on FirebaseException catch (error) {
+      throw _uploadException(error);
     } catch (error) {
       throw ProjectApiException(
         'Source image upload failed: $error',
@@ -338,5 +355,35 @@ class FirebaseProjectApi extends ProjectApi {
       retentionStatus: sourceImage.retentionStatus.wireValue,
       uploadedAt: sourceImage.uploadedAt,
     );
+  }
+
+  ProjectApiException _projectAccessException(FirebaseException error) {
+    if (_isPermissionError(error.code)) {
+      return const ProjectApiException(
+        'Permission blocked project access. Check that you still have access to this project, then retry.',
+        code: 'permission_denied',
+      );
+    }
+    return ProjectApiException(
+      'Project access failed: ${error.message ?? error.code}',
+      code: 'upload_failed',
+    );
+  }
+
+  ProjectApiException _uploadException(FirebaseException error) {
+    if (_isPermissionError(error.code)) {
+      return const ProjectApiException(
+        'Permission blocked the source image upload. Check that you still have access to this project, then retry.',
+        code: 'permission_denied',
+      );
+    }
+    return ProjectApiException(
+      'Source image upload failed: ${error.message ?? error.code}',
+      code: 'upload_failed',
+    );
+  }
+
+  bool _isPermissionError(String code) {
+    return code == 'permission-denied' || code == 'unauthorized';
   }
 }

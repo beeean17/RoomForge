@@ -68,6 +68,7 @@ void main() {
       await projects.createProject(ownerUid: 'user-1', name: 'Studio');
       final sourceImages = _FakeSourceImageRepository();
       final uploader = _FakeSourceImageUploader();
+      final progressUpdates = <double>[];
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
@@ -84,8 +85,10 @@ void main() {
         bytes: Uint8List.fromList([1, 2, 3, 4]),
         widthPx: 1280,
         heightPx: 720,
+        onProgress: progressUpdates.add,
       );
 
+      expect(progressUpdates, containsAllInOrder([0, 0.5, 1]));
       expect(uploader.uploadedPath, sourceImages.saved?.storagePath);
       expect(
         sourceImages.saved?.storagePath,
@@ -270,11 +273,14 @@ class _FakeSourceImageUploader implements FirebaseSourceImageUploader {
     required Uint8List bytes,
     required String contentType,
     required Map<String, String> metadata,
+    void Function(double progress)? onProgress,
   }) async {
     if (shouldFail) {
       throw StateError('upload failed');
     }
+    onProgress?.call(0.5);
     uploadedPath = storagePath;
     uploadedMetadata = metadata;
+    onProgress?.call(1);
   }
 }

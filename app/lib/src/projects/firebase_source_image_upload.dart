@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -43,6 +44,7 @@ abstract class FirebaseSourceImageUploader {
     required Uint8List bytes,
     required String contentType,
     required Map<String, String> metadata,
+    void Function(double progress)? onProgress,
   });
 }
 
@@ -59,13 +61,36 @@ class FirebaseStorageSourceImageUploader
     required Uint8List bytes,
     required String contentType,
     required Map<String, String> metadata,
+    void Function(double progress)? onProgress,
   }) async {
-    await _storage
+    final task = _storage
         .ref(storagePath)
         .putData(
           bytes,
           SettableMetadata(contentType: contentType, customMetadata: metadata),
         );
+    StreamSubscription<TaskSnapshot>? subscription;
+    if (onProgress != null) {
+      subscription = task.snapshotEvents.listen(
+        (snapshot) {
+          final totalBytes = snapshot.totalBytes;
+          if (totalBytes <= 0) {
+            return;
+          }
+          onProgress(snapshot.bytesTransferred / totalBytes);
+        },
+        onError: (_) {
+          // The awaited upload task below surfaces the failure path.
+        },
+      );
+    }
+
+    try {
+      await task;
+      onProgress?.call(1);
+    } finally {
+      await subscription?.cancel();
+    }
   }
 }
 
@@ -79,6 +104,7 @@ class DisabledFirebaseSourceImageUploader
     required Uint8List bytes,
     required String contentType,
     required Map<String, String> metadata,
+    void Function(double progress)? onProgress,
   }) {
     throw UnsupportedError('Firebase source image upload is unavailable.');
   }

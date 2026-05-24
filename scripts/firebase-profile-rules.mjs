@@ -135,6 +135,25 @@ const tests = [
       );
     },
   },
+  {
+    id: 'fs-admin-non-admin-actions-read-deny',
+    run: async () => {
+      const user = await createSignedInUser('non-admin-actions');
+
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        display_name: 'Non Admin Actions User',
+        created_at: new Date(),
+        updated_at: new Date(),
+        schema_version: 1,
+      });
+
+      await expectPermissionDenied(() =>
+        getDoc(doc(db, 'projects', `project-${runId}`, 'admin_actions', 'action-1')),
+      );
+    },
+  },
 ];
 
 let failed = 0;

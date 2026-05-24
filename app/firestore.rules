@@ -88,6 +88,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /projects/{projectId}/admin_actions/{actionId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

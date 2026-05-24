@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'src/admin/admin_api.dart';
 import 'src/auth/auth_repository.dart';
 import 'src/editor/editor_config.dart';
+import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/projects/project_api.dart';
@@ -24,7 +25,9 @@ Future<void> main() async {
   runApp(
     RoomForgeApp(
       authRepository: firebaseBootstrap.authRepository,
+      adminRepository: firebaseBootstrap.adminRepository,
       userRepository: firebaseBootstrap.userRepository,
+      backendMode: firebaseBootstrap.backendMode,
       authSetupMessage: firebaseBootstrap.authSetupMessage,
     ),
   );
@@ -33,13 +36,17 @@ Future<void> main() async {
 class RoomForgeApp extends StatelessWidget {
   const RoomForgeApp({
     required this.authRepository,
+    required this.adminRepository,
     required this.userRepository,
+    required this.backendMode,
     this.authSetupMessage,
     super.key,
   });
 
   final AuthRepository authRepository;
+  final FirebaseAdminRepository adminRepository;
   final FirebaseUserRepository userRepository;
+  final BackendMode backendMode;
   final String? authSetupMessage;
 
   @override
@@ -52,7 +59,9 @@ class RoomForgeApp extends StatelessWidget {
       ),
       home: AuthGate(
         authRepository: authRepository,
+        adminRepository: adminRepository,
         userRepository: userRepository,
+        backendMode: backendMode,
         authSetupMessage: authSetupMessage,
       ),
     );
@@ -62,13 +71,17 @@ class RoomForgeApp extends StatelessWidget {
 class AuthGate extends StatelessWidget {
   const AuthGate({
     required this.authRepository,
+    required this.adminRepository,
     required this.userRepository,
+    required this.backendMode,
     this.authSetupMessage,
     super.key,
   });
 
   final AuthRepository authRepository;
+  final FirebaseAdminRepository adminRepository;
   final FirebaseUserRepository userRepository;
+  final BackendMode backendMode;
   final String? authSetupMessage;
 
   @override
@@ -89,8 +102,10 @@ class AuthGate extends StatelessWidget {
           session: session,
           child: ProjectWorkspaceScreen(
             authRepository: authRepository,
+            adminRepository: adminRepository,
             session: session,
             adminApi: AdminApi(authRepository: authRepository),
+            backendMode: backendMode,
             projectApi: ProjectApi(authRepository: authRepository),
           ),
         );
@@ -263,48 +278,20 @@ class _SignInScreenState extends State<SignInScreen> {
 class ProjectWorkspaceScreen extends StatelessWidget {
   const ProjectWorkspaceScreen({
     required this.authRepository,
+    required this.adminRepository,
     required this.session,
     required this.adminApi,
+    required this.backendMode,
     required this.projectApi,
     super.key,
   });
 
   final AuthRepository authRepository;
+  final FirebaseAdminRepository adminRepository;
   final AuthSession session;
   final AdminApi adminApi;
+  final BackendMode backendMode;
   final ProjectApi projectApi;
-
-  Future<void> _openAdmin(BuildContext context) async {
-    try {
-      final adminSession = await adminApi.loadSession();
-      if (!context.mounted) {
-        return;
-      }
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (context) =>
-              AdminShellScreen(session: adminSession, adminApi: adminApi),
-        ),
-      );
-    } on AdminApiException catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      final message = error.code == 'unauthorized'
-          ? 'Admin access is required.'
-          : error.message;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Admin access check failed: $error')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -315,9 +302,11 @@ class ProjectWorkspaceScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('RoomForge Workspace'),
         actions: [
-          TextButton(
-            onPressed: () => _openAdmin(context),
-            child: const Text('Admin'),
+          AdminRouteGuardButton(
+            session: session,
+            adminRepository: adminRepository,
+            adminApi: adminApi,
+            backendMode: backendMode,
           ),
           TextButton(
             onPressed: authRepository.signOut,
@@ -328,6 +317,152 @@ class ProjectWorkspaceScreen extends StatelessWidget {
       body: ProjectWorkspaceBody(
         displayName: displayName,
         projectApi: projectApi,
+      ),
+    );
+  }
+}
+
+class AdminRouteGuardButton extends StatefulWidget {
+  const AdminRouteGuardButton({
+    required this.session,
+    required this.adminRepository,
+    required this.adminApi,
+    required this.backendMode,
+    super.key,
+  });
+
+  final AuthSession session;
+  final FirebaseAdminRepository adminRepository;
+  final AdminApi adminApi;
+  final BackendMode backendMode;
+
+  @override
+  State<AdminRouteGuardButton> createState() => _AdminRouteGuardButtonState();
+}
+
+class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
+  bool _isChecking = false;
+
+  Future<void> _openAdmin() async {
+    setState(() => _isChecking = true);
+
+    try {
+      if (widget.backendMode == BackendMode.legacyApi) {
+        await _openLegacyAdmin();
+        return;
+      }
+
+      final isAdmin = await widget.adminRepository.isCurrentUserAdmin(
+        widget.session,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      if (!isAdmin) {
+        _showDeniedMessage();
+        return;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) =>
+              FirebaseAdminPlaceholderScreen(session: widget.session),
+        ),
+      );
+    } on AdminApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final message = error.code == 'unauthorized'
+          ? 'Admin role required.'
+          : error.message;
+      _showSnackBar(message);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar('Admin role could not be refreshed. Try again.');
+    } finally {
+      if (mounted) {
+        setState(() => _isChecking = false);
+      }
+    }
+  }
+
+  Future<void> _openLegacyAdmin() async {
+    final adminSession = await widget.adminApi.loadSession();
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            AdminShellScreen(session: adminSession, adminApi: widget.adminApi),
+      ),
+    );
+  }
+
+  void _showDeniedMessage() {
+    _showSnackBar('Admin role required. Refresh role or contact an admin.');
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: SnackBarAction(label: 'Refresh role', onPressed: _openAdmin),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: _isChecking ? null : _openAdmin,
+      child: Text(_isChecking ? 'Checking admin role...' : 'Admin'),
+    );
+  }
+}
+
+class FirebaseAdminPlaceholderScreen extends StatelessWidget {
+  const FirebaseAdminPlaceholderScreen({required this.session, super.key});
+
+  final AuthSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = session.displayName ?? session.email ?? session.uid;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Admin')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Admin access verified',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 12),
+                Text('Signed in as $displayName.'),
+                const SizedBox(height: 12),
+                const Text(
+                  'Firebase admin diagnostics are not enabled in this story.',
+                ),
+                const SizedBox(height: 24),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Back to workspace'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

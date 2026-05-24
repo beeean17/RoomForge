@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import '../admin/firebase_admin_access_repository.dart';
 import '../api/backend_mode.dart';
 import '../auth/auth_repository.dart';
 import '../auth/firebase_options_from_env.dart';
@@ -11,12 +12,14 @@ import '../users/firebase_user_repository.dart';
 class FirebaseAppBootstrapResult {
   const FirebaseAppBootstrapResult({
     required this.authRepository,
+    required this.adminRepository,
     required this.userRepository,
     required this.backendMode,
     this.authSetupMessage,
   });
 
   final AuthRepository authRepository;
+  final FirebaseAdminRepository adminRepository;
   final FirebaseUserRepository userRepository;
   final BackendMode backendMode;
   final String? authSetupMessage;
@@ -29,6 +32,7 @@ class FirebaseAppBootstrap {
     if (!FirebaseOptionsFromEnv.isConfigured) {
       return FirebaseAppBootstrapResult(
         authRepository: DisabledAuthRepository(),
+        adminRepository: const DisabledFirebaseAdminRepository(),
         userRepository: DisabledFirebaseUserRepository(),
         backendMode: backendMode,
         authSetupMessage:
@@ -49,6 +53,7 @@ class FirebaseAppBootstrap {
 
     return FirebaseAppBootstrapResult(
       authRepository: FirebaseAuthRepository(firebaseAuth),
+      adminRepository: FirebaseAdminAccessRepository(firestore: firestore),
       userRepository: FirebaseUserProfileRepository(firestore: firestore),
       backendMode: backendMode,
     );

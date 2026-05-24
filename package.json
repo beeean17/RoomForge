@@ -3,6 +3,7 @@
     "check:editor-firebase-boundary": "bash scripts/check-editor-firebase-boundary.sh",
     "test:firebase-rules:projects": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-project-rules.mjs\"",
     "test:firebase-rules:profile": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-profile-rules.mjs\"",
+    "test:firebase-rules:source-images": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-source-image-rules.mjs\"",
     "test:firebase-rules:smoke": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-rules-smoke.mjs\""
   },
   "dependencies": {

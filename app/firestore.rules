@@ -108,6 +108,65 @@ service cloud.firestore {
       ];
     }
 
+    function sourceImageKeys() {
+      return [
+        'source_image_id',
+        'project_id',
+        'owner_uid',
+        'storage_path',
+        'original_filename',
+        'stored_filename',
+        'content_type',
+        'byte_size',
+        'sha256_hex',
+        'width_px',
+        'height_px',
+        'capture_source',
+        'retention_status',
+        'uploaded_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function isAllowedSourceImageContentType(contentType) {
+      return contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    function validSourceImageCreate(projectId, sourceImageId) {
+      return ownsProject(projectId)
+        && request.resource.data.source_image_id == sourceImageId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/source-images/' + sourceImageId + '/' + request.resource.data.stored_filename
+        && isAllowedSourceImageContentType(request.resource.data.content_type)
+        && request.resource.data.byte_size <= 10 * 1024 * 1024
+        && request.resource.data.byte_size > 0
+        && request.resource.data.width_px > 0
+        && request.resource.data.height_px > 0
+        && request.resource.data.retention_status == 'active'
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(sourceImageKeys())
+        && request.resource.data.keys().hasAll([
+          'source_image_id',
+          'project_id',
+          'owner_uid',
+          'storage_path',
+          'stored_filename',
+          'content_type',
+          'byte_size',
+          'sha256_hex',
+          'width_px',
+          'height_px',
+          'retention_status',
+          'uploaded_at',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
     function validUserProfileCreate(uid) {
       return isSelf(uid)
         && request.resource.data.uid == uid
@@ -200,6 +259,12 @@ service cloud.firestore {
       allow get, list: if dimensionsId == 'current' && (ownsProject(projectId) || isAdmin());
       allow create, update: if dimensionsId == 'current' && validRoomDimensionsWrite(projectId);
       allow delete: if false;
+    }
+
+    match /projects/{projectId}/source_images/{sourceImageId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validSourceImageCreate(projectId, sourceImageId);
+      allow update, delete: if false;
     }
 
     match /projects/{projectId}/admin_actions/{actionId} {

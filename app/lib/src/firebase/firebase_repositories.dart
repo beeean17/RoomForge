@@ -30,6 +30,8 @@ abstract class FirebaseProjectRepository {
 }
 
 abstract class FirebaseSourceImageRepository {
+  String newSourceImageId({required String projectId});
+
   Future<FirebaseSourceImage> createMetadataAfterUpload(
     FirebaseSourceImage sourceImage,
   );

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../auth/auth_repository.dart';
 import '../firebase/firebase_models.dart';
 import '../firebase/firebase_repositories.dart';
+import 'firebase_source_image_upload.dart';
 import 'project_api.dart';
 
 class FirebaseProjectApi extends ProjectApi {
@@ -11,13 +12,19 @@ class FirebaseProjectApi extends ProjectApi {
     required AuthSession session,
     required FirebaseProjectRepository projectRepository,
     required FirebaseRoomDimensionsRepository roomDimensionsRepository,
+    required FirebaseSourceImageRepository sourceImageRepository,
+    required FirebaseSourceImageUploader sourceImageUploader,
   }) : _session = session,
        _projectRepository = projectRepository,
-       _roomDimensionsRepository = roomDimensionsRepository;
+       _roomDimensionsRepository = roomDimensionsRepository,
+       _sourceImageRepository = sourceImageRepository,
+       _sourceImageUploader = sourceImageUploader;
 
   final AuthSession _session;
   final FirebaseProjectRepository _projectRepository;
   final FirebaseRoomDimensionsRepository _roomDimensionsRepository;
+  final FirebaseSourceImageRepository _sourceImageRepository;
+  final FirebaseSourceImageUploader _sourceImageUploader;
 
   @override
   Future<List<RoomProject>> listProjects() async {
@@ -134,11 +141,94 @@ class FirebaseProjectApi extends ProjectApi {
     required Uint8List bytes,
     int? widthPx,
     int? heightPx,
-  }) {
-    throw const ProjectApiException(
-      'Firebase source image upload is implemented in Story 4.2.',
-      code: 'not_implemented',
+  }) async {
+    if (!FirebaseSourceImageUpload.isAllowedContentType(contentType)) {
+      throw const ProjectApiException(
+        'Unsupported image type. Use JPEG, PNG, or WebP.',
+        code: 'invalid_content_type',
+      );
+    }
+    if (bytes.length > FirebaseSourceImageUpload.maxBytes) {
+      throw const ProjectApiException(
+        'Room photo must be 10 MB or smaller.',
+        code: 'file_too_large',
+      );
+    }
+    if (widthPx == null || widthPx <= 0 || heightPx == null || heightPx <= 0) {
+      throw const ProjectApiException(
+        'Image dimensions are required before source image metadata can be saved.',
+        code: 'missing_image_dimensions',
+      );
+    }
+
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
     );
+    final sourceImageId = _sourceImageRepository.newSourceImageId(
+      projectId: project.projectId,
+    );
+    final storedFilename = FirebaseSourceImageUpload.sanitizeFilename(filename);
+    final storagePath = FirebaseSourceImageUpload.storagePath(
+      ownerUid: _session.uid,
+      projectId: project.projectId,
+      sourceImageId: sourceImageId,
+      storedFilename: storedFilename,
+    );
+    final sha256Hex = FirebaseSourceImageUpload.sha256Hex(bytes);
+
+    try {
+      await _sourceImageUploader.uploadBytes(
+        storagePath: storagePath,
+        bytes: bytes,
+        contentType: contentType,
+        metadata: {
+          'owner_uid': _session.uid,
+          'project_id': project.projectId,
+          'source_image_id': sourceImageId,
+          'sha256_hex': sha256Hex,
+          'uploaded_by_uid': _session.uid,
+        },
+      );
+    } catch (error) {
+      throw ProjectApiException(
+        'Source image upload failed: $error',
+        code: 'upload_failed',
+      );
+    }
+
+    final now = DateTime.now().toUtc();
+    final sourceImage = FirebaseSourceImage(
+      sourceImageId: sourceImageId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      storagePath: storagePath,
+      originalFilename: filename,
+      storedFilename: storedFilename,
+      contentType: FirebaseImageContentType.fromWireValue(contentType),
+      byteSize: bytes.length,
+      sha256Hex: sha256Hex,
+      widthPx: widthPx,
+      heightPx: heightPx,
+      captureSource: 'file_upload',
+      retentionStatus: FirebaseRetentionStatus.active,
+      uploadedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+
+    try {
+      final metadata = await _sourceImageRepository.createMetadataAfterUpload(
+        sourceImage,
+      );
+      return _sourceImageFromFirebase(metadata);
+    } catch (error) {
+      throw ProjectApiException(
+        'Upload succeeded, but source image metadata could not be saved. Retry the upload or remove the uploaded file.',
+        code: 'metadata_save_failed',
+      );
+    }
   }
 
   @override
@@ -229,6 +319,24 @@ class FirebaseProjectApi extends ProjectApi {
       heightSource: dimensions.source == 'default_height' ? 'default' : 'user',
       createdAt: dimensions.createdAt,
       updatedAt: dimensions.updatedAt,
+    );
+  }
+
+  SourceImage _sourceImageFromFirebase(FirebaseSourceImage sourceImage) {
+    return SourceImage(
+      id: sourceImage.sourceImageId,
+      projectId: sourceImage.projectId,
+      userId: sourceImage.ownerUid,
+      originalFilename:
+          sourceImage.originalFilename ?? sourceImage.storedFilename,
+      storedName: sourceImage.storedFilename,
+      contentType: sourceImage.contentType.wireValue,
+      byteSize: sourceImage.byteSize,
+      widthPx: sourceImage.widthPx,
+      heightPx: sourceImage.heightPx,
+      sha256Hex: sourceImage.sha256Hex,
+      retentionStatus: sourceImage.retentionStatus.wireValue,
+      uploadedAt: sourceImage.uploadedAt,
     );
   }
 }

@@ -16,6 +16,7 @@ import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/projects/firebase_project_api.dart';
+import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/project_api.dart';
 
 Future<void> main() async {
@@ -29,6 +30,8 @@ Future<void> main() async {
       adminRepository: firebaseBootstrap.adminRepository,
       projectRepository: firebaseBootstrap.projectRepository,
       roomDimensionsRepository: firebaseBootstrap.roomDimensionsRepository,
+      sourceImageRepository: firebaseBootstrap.sourceImageRepository,
+      sourceImageUploader: firebaseBootstrap.sourceImageUploader,
       userRepository: firebaseBootstrap.userRepository,
       backendMode: firebaseBootstrap.backendMode,
       authSetupMessage: firebaseBootstrap.authSetupMessage,
@@ -42,6 +45,8 @@ class RoomForgeApp extends StatelessWidget {
     required this.adminRepository,
     required this.projectRepository,
     required this.roomDimensionsRepository,
+    required this.sourceImageRepository,
+    required this.sourceImageUploader,
     required this.userRepository,
     required this.backendMode,
     this.authSetupMessage,
@@ -52,6 +57,8 @@ class RoomForgeApp extends StatelessWidget {
   final FirebaseAdminRepository adminRepository;
   final FirebaseProjectRepository projectRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
+  final FirebaseSourceImageRepository sourceImageRepository;
+  final FirebaseSourceImageUploader sourceImageUploader;
   final FirebaseUserRepository userRepository;
   final BackendMode backendMode;
   final String? authSetupMessage;
@@ -69,6 +76,8 @@ class RoomForgeApp extends StatelessWidget {
         adminRepository: adminRepository,
         projectRepository: projectRepository,
         roomDimensionsRepository: roomDimensionsRepository,
+        sourceImageRepository: sourceImageRepository,
+        sourceImageUploader: sourceImageUploader,
         userRepository: userRepository,
         backendMode: backendMode,
         authSetupMessage: authSetupMessage,
@@ -83,6 +92,8 @@ class AuthGate extends StatelessWidget {
     required this.adminRepository,
     required this.projectRepository,
     required this.roomDimensionsRepository,
+    required this.sourceImageRepository,
+    required this.sourceImageUploader,
     required this.userRepository,
     required this.backendMode,
     this.authSetupMessage,
@@ -93,6 +104,8 @@ class AuthGate extends StatelessWidget {
   final FirebaseAdminRepository adminRepository;
   final FirebaseProjectRepository projectRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
+  final FirebaseSourceImageRepository sourceImageRepository;
+  final FirebaseSourceImageUploader sourceImageUploader;
   final FirebaseUserRepository userRepository;
   final BackendMode backendMode;
   final String? authSetupMessage;
@@ -125,6 +138,8 @@ class AuthGate extends StatelessWidget {
                     session: session,
                     projectRepository: projectRepository,
                     roomDimensionsRepository: roomDimensionsRepository,
+                    sourceImageRepository: sourceImageRepository,
+                    sourceImageUploader: sourceImageUploader,
                   )
                 : ProjectApi(authRepository: authRepository),
           ),

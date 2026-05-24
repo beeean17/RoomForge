@@ -6,6 +6,10 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function isNewObject() {
+      return resource == null;
+    }
+
     function isPathOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
@@ -22,6 +26,28 @@ service firebase.storage {
     function isAllowedSourceImageSize() {
       return request.resource != null
         && request.resource.size <= 10 * 1024 * 1024;
+    }
+
+    function ownedProjectPath(projectId) {
+      return /databases/(default)/documents/projects/$(projectId);
+    }
+
+    function ownsProject(projectId) {
+      return firestore.exists(ownedProjectPath(projectId))
+        && firestore.get(ownedProjectPath(projectId)).data.owner_uid == request.auth.uid;
+    }
+
+    match /users/{uid}/projects/{projectId}/source-images/{sourceImageId}/{filename} {
+      allow read: if isPathOwner(uid) && ownsProject(projectId);
+      allow write: if isNewObject()
+        && isPathOwner(uid)
+        && ownsProject(projectId)
+        && isAllowedSourceImageContentType()
+        && isAllowedSourceImageSize()
+        && request.resource.metadata.owner_uid == uid
+        && request.resource.metadata.project_id == projectId
+        && request.resource.metadata.source_image_id == sourceImageId
+        && request.resource.metadata.uploaded_by_uid == request.auth.uid;
     }
 
     match /{allPaths=**} {

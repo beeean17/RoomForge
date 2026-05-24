@@ -178,6 +178,60 @@ class FirebaseFirestoreRoomDimensionsRepository
   }
 }
 
+class FirebaseFirestoreSourceImageRepository
+    implements FirebaseSourceImageRepository {
+  const FirebaseFirestoreSourceImageRepository({
+    required FirebaseFirestore firestore,
+  }) : _firestore = firestore;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> _sourceImagesCollection(
+    String projectId,
+  ) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('source_images');
+  }
+
+  @override
+  String newSourceImageId({required String projectId}) {
+    return _sourceImagesCollection(projectId).doc().id;
+  }
+
+  @override
+  Future<FirebaseSourceImage> createMetadataAfterUpload(
+    FirebaseSourceImage sourceImage,
+  ) async {
+    final doc = _sourceImagesCollection(
+      sourceImage.projectId,
+    ).doc(sourceImage.sourceImageId);
+    await doc.set(sourceImage.toFirestoreJson());
+    return sourceImage;
+  }
+
+  @override
+  Stream<List<FirebaseSourceImage>> watchProjectSourceImages({
+    required String ownerUid,
+    required String projectId,
+  }) {
+    return _sourceImagesCollection(
+      projectId,
+    ).where('owner_uid', isEqualTo: ownerUid).snapshots().map((snapshot) {
+      final images = snapshot.docs
+          .map(
+            (doc) => FirebaseModelSerializers.sourceImageFromFirestore(
+              _firestoreJson(doc.data()),
+            ),
+          )
+          .toList();
+      images.sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
+      return images;
+    });
+  }
+}
+
 class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
   const DisabledFirebaseProjectRepository();
 
@@ -216,6 +270,33 @@ class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
     required String projectId,
   }) {
     throw UnsupportedError('Firebase project access is unavailable.');
+  }
+}
+
+class DisabledFirebaseSourceImageRepository
+    implements FirebaseSourceImageRepository {
+  const DisabledFirebaseSourceImageRepository();
+
+  @override
+  String newSourceImageId({required String projectId}) {
+    throw UnsupportedError('Firebase source image access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseSourceImage> createMetadataAfterUpload(
+    FirebaseSourceImage sourceImage,
+  ) {
+    throw UnsupportedError('Firebase source image access is unavailable.');
+  }
+
+  @override
+  Stream<List<FirebaseSourceImage>> watchProjectSourceImages({
+    required String ownerUid,
+    required String projectId,
+  }) {
+    return Stream.error(
+      UnsupportedError('Firebase source image access is unavailable.'),
+    );
   }
 }
 

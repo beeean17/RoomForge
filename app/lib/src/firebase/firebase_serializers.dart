@@ -95,6 +95,30 @@ class FirebaseModelSerializers {
     );
   }
 
+  static FirebaseSourceImage sourceImageFromFirestore(FirebaseJson json) {
+    return FirebaseSourceImage(
+      sourceImageId: _requiredString(json, 'source_image_id'),
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      storagePath: _requiredString(json, 'storage_path'),
+      originalFilename: _optionalString(json, 'original_filename'),
+      storedFilename: _requiredString(json, 'stored_filename'),
+      contentType: FirebaseImageContentType.fromWireValue(json['content_type']),
+      byteSize: _requiredInt(json, 'byte_size'),
+      sha256Hex: _requiredString(json, 'sha256_hex'),
+      widthPx: _requiredInt(json, 'width_px'),
+      heightPx: _requiredInt(json, 'height_px'),
+      captureSource: _optionalString(json, 'capture_source'),
+      retentionStatus: FirebaseRetentionStatus.fromWireValue(
+        json['retention_status'],
+      ),
+      uploadedAt: _requiredDate(json, 'uploaded_at'),
+      createdAt: _requiredDate(json, 'created_at'),
+      updatedAt: _requiredDate(json, 'updated_at'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+    );
+  }
+
   static FirebaseOpenCvResult openCvResultFromFirestore(FirebaseJson json) {
     final coordinateSpace =
         FirebaseContractValidators.requireRawCoordinateSpace(

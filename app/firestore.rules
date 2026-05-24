@@ -6,6 +6,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
     function userDocPath(uid) {
       return /databases/$(database)/documents/users/$(uid);
     }
@@ -24,6 +28,63 @@ service cloud.firestore {
       return isSignedIn()
         && exists(projectDocPath(projectId))
         && get(projectDocPath(projectId)).data.owner_uid == request.auth.uid;
+    }
+
+    function userProfileKeys() {
+      return [
+        'uid',
+        'email',
+        'display_name',
+        'photo_url',
+        'created_at',
+        'updated_at',
+        'last_seen_at',
+        'schema_version'
+      ];
+    }
+
+    function userProfileUpdateKeys() {
+      return [
+        'uid',
+        'email',
+        'display_name',
+        'photo_url',
+        'updated_at',
+        'last_seen_at',
+        'schema_version'
+      ];
+    }
+
+    function privilegedUserRoleKeys() {
+      return ['role', 'role_updated_at', 'role_updated_by_uid'];
+    }
+
+    function validUserProfileCreate(uid) {
+      return isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly(userProfileKeys())
+        && request.resource.data.keys().hasAll([
+          'uid',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validUserProfileUpdate(uid) {
+      return isSelf(uid)
+        && resource.data.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(userProfileUpdateKeys())
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(privilegedUserRoleKeys());
+    }
+
+    match /users/{uid} {
+      allow get: if isSelf(uid) || isAdmin();
+      allow list: if false;
+      allow create: if validUserProfileCreate(uid);
+      allow update: if validUserProfileUpdate(uid);
+      allow delete: if false;
     }
 
     match /{document=**} {

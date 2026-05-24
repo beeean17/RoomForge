@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'src/admin/admin_api.dart';
 import 'src/auth/auth_repository.dart';
 import 'src/editor/editor_config.dart';
+import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/projects/project_api.dart';
 
@@ -23,6 +24,7 @@ Future<void> main() async {
   runApp(
     RoomForgeApp(
       authRepository: firebaseBootstrap.authRepository,
+      userRepository: firebaseBootstrap.userRepository,
       authSetupMessage: firebaseBootstrap.authSetupMessage,
     ),
   );
@@ -31,11 +33,13 @@ Future<void> main() async {
 class RoomForgeApp extends StatelessWidget {
   const RoomForgeApp({
     required this.authRepository,
+    required this.userRepository,
     this.authSetupMessage,
     super.key,
   });
 
   final AuthRepository authRepository;
+  final FirebaseUserRepository userRepository;
   final String? authSetupMessage;
 
   @override
@@ -48,6 +52,7 @@ class RoomForgeApp extends StatelessWidget {
       ),
       home: AuthGate(
         authRepository: authRepository,
+        userRepository: userRepository,
         authSetupMessage: authSetupMessage,
       ),
     );
@@ -57,11 +62,13 @@ class RoomForgeApp extends StatelessWidget {
 class AuthGate extends StatelessWidget {
   const AuthGate({
     required this.authRepository,
+    required this.userRepository,
     this.authSetupMessage,
     super.key,
   });
 
   final AuthRepository authRepository;
+  final FirebaseUserRepository userRepository;
   final String? authSetupMessage;
 
   @override
@@ -77,12 +84,81 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        return ProjectWorkspaceScreen(
-          authRepository: authRepository,
+        return UserProfileSyncGate(
+          userRepository: userRepository,
           session: session,
-          adminApi: AdminApi(authRepository: authRepository),
-          projectApi: ProjectApi(authRepository: authRepository),
+          child: ProjectWorkspaceScreen(
+            authRepository: authRepository,
+            session: session,
+            adminApi: AdminApi(authRepository: authRepository),
+            projectApi: ProjectApi(authRepository: authRepository),
+          ),
         );
+      },
+    );
+  }
+}
+
+class UserProfileSyncGate extends StatefulWidget {
+  const UserProfileSyncGate({
+    required this.userRepository,
+    required this.session,
+    required this.child,
+    super.key,
+  });
+
+  final FirebaseUserRepository userRepository;
+  final AuthSession session;
+  final Widget child;
+
+  @override
+  State<UserProfileSyncGate> createState() => _UserProfileSyncGateState();
+}
+
+class _UserProfileSyncGateState extends State<UserProfileSyncGate> {
+  late Future<void> _syncFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFuture = _syncProfile();
+  }
+
+  @override
+  void didUpdateWidget(UserProfileSyncGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.uid != widget.session.uid) {
+      _syncFuture = _syncProfile();
+    }
+  }
+
+  Future<void> _syncProfile() async {
+    await widget.userRepository.syncProfile(widget.session);
+  }
+
+  void _retry() {
+    setState(() => _syncFuture = _syncProfile());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _syncFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: Text('Syncing profile...')),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return ProjectErrorView(
+            message: 'Profile sync failed: ${snapshot.error}',
+            onRetry: _retry,
+          );
+        }
+
+        return widget.child;
       },
     );
   }

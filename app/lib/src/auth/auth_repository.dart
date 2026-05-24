@@ -3,17 +3,24 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthSession {
-  const AuthSession({required this.uid, this.email, this.displayName});
+  const AuthSession({
+    required this.uid,
+    this.email,
+    this.displayName,
+    this.photoUrl,
+  });
 
   final String uid;
   final String? email;
   final String? displayName;
+  final String? photoUrl;
 
   factory AuthSession.fromFirebaseUser(User user) {
     return AuthSession(
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
+      photoUrl: user.photoURL,
     );
   }
 }

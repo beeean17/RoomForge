@@ -73,6 +73,7 @@ service cloud.firestore {
 
     function validUserProfileUpdate(uid) {
       return isSelf(uid)
+        && exists(userDocPath(uid))
         && resource.data.uid == uid
         && request.resource.data.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(userProfileUpdateKeys())

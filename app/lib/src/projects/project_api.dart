@@ -16,8 +16,8 @@ class RoomProject {
     this.description,
   });
 
-  final int id;
-  final int userId;
+  final String id;
+  final String userId;
   final String name;
   final String? description;
   final DateTime createdAt;
@@ -25,8 +25,8 @@ class RoomProject {
 
   factory RoomProject.fromJson(Map<String, Object?> json) {
     return RoomProject(
-      id: json['id'] as int,
-      userId: json['user_id'] as int,
+      id: _stringId(json['id']),
+      userId: _stringId(json['user_id']),
       name: json['name'] as String,
       description: json['description'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -51,9 +51,9 @@ class SourceImage {
     this.heightPx,
   });
 
-  final int id;
-  final int projectId;
-  final int userId;
+  final String id;
+  final String projectId;
+  final String userId;
   final String originalFilename;
   final String storedName;
   final String contentType;
@@ -66,9 +66,9 @@ class SourceImage {
 
   factory SourceImage.fromJson(Map<String, Object?> json) {
     return SourceImage(
-      id: json['id'] as int,
-      projectId: json['project_id'] as int,
-      userId: json['user_id'] as int,
+      id: _stringId(json['id']),
+      projectId: _stringId(json['project_id']),
+      userId: _stringId(json['user_id']),
       originalFilename: json['original_filename'] as String,
       storedName: json['stored_name'] as String,
       contentType: json['content_type'] as String,
@@ -95,8 +95,8 @@ class RoomDimensions {
     required this.updatedAt,
   });
 
-  final int projectId;
-  final int userId;
+  final String projectId;
+  final String userId;
   final double widthValue;
   final double depthValue;
   final double heightValue;
@@ -109,8 +109,8 @@ class RoomDimensions {
 
   factory RoomDimensions.fromJson(Map<String, Object?> json) {
     return RoomDimensions(
-      projectId: json['project_id'] as int,
-      userId: json['user_id'] as int,
+      projectId: _stringId(json['project_id']),
+      userId: _stringId(json['user_id']),
       widthValue: (json['width_value'] as num).toDouble(),
       depthValue: (json['depth_value'] as num).toDouble(),
       heightValue: (json['height_value'] as num).toDouble(),
@@ -139,15 +139,15 @@ class ReconstructionJob {
     this.failureReasonMessage,
   });
 
-  final int id;
-  final int projectId;
-  final int userId;
-  final int sourceImageId;
+  final String id;
+  final String projectId;
+  final String userId;
+  final String sourceImageId;
   final String status;
   final String statusLabel;
   final bool terminal;
   final String provider;
-  final int? retryOfJobId;
+  final String? retryOfJobId;
   final String? failureReasonCode;
   final String? failureReasonMessage;
   final DateTime createdAt;
@@ -155,15 +155,17 @@ class ReconstructionJob {
 
   factory ReconstructionJob.fromJson(Map<String, Object?> json) {
     return ReconstructionJob(
-      id: json['id'] as int,
-      projectId: json['project_id'] as int,
-      userId: json['user_id'] as int,
-      sourceImageId: json['source_image_id'] as int,
+      id: _stringId(json['id']),
+      projectId: _stringId(json['project_id']),
+      userId: _stringId(json['user_id']),
+      sourceImageId: _stringId(json['source_image_id']),
       status: json['status'] as String,
       statusLabel: json['status_label'] as String,
       terminal: json['terminal'] as bool,
       provider: json['provider'] as String,
-      retryOfJobId: json['retry_of_job_id'] as int?,
+      retryOfJobId: json['retry_of_job_id'] == null
+          ? null
+          : _stringId(json['retry_of_job_id']),
       failureReasonCode: json['failure_reason_code'] as String?,
       failureReasonMessage: json['failure_reason_message'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -186,9 +188,9 @@ class SavedLayout {
     required this.updatedAt,
   });
 
-  final int id;
-  final int projectId;
-  final int userId;
+  final String id;
+  final String projectId;
+  final String userId;
   final Map<String, Object?> roomDimensions;
   final Map<String, Object?> floorPlan;
   final Map<String, Object?> sourceMetadata;
@@ -199,16 +201,12 @@ class SavedLayout {
 
   factory SavedLayout.fromJson(Map<String, Object?> json) {
     return SavedLayout(
-      id: json['id'] as int,
-      projectId: json['project_id'] as int,
-      userId: json['user_id'] as int,
-      roomDimensions: Map<String, Object?>.from(
-        json['room_dimensions'] as Map,
-      ),
+      id: _stringId(json['id']),
+      projectId: _stringId(json['project_id']),
+      userId: _stringId(json['user_id']),
+      roomDimensions: Map<String, Object?>.from(json['room_dimensions'] as Map),
       floorPlan: Map<String, Object?>.from(json['floor_plan'] as Map),
-      sourceMetadata: Map<String, Object?>.from(
-        json['source_metadata'] as Map,
-      ),
+      sourceMetadata: Map<String, Object?>.from(json['source_metadata'] as Map),
       furnitureObjects: (json['furniture_objects'] as List).cast<Object?>(),
       editorScene: Map<String, Object?>.from(json['editor_scene'] as Map),
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -257,7 +255,7 @@ class ProjectApi {
     return RoomProject.fromJson(data['project'] as Map<String, Object?>);
   }
 
-  Future<RoomProject> getProject(int projectId) async {
+  Future<RoomProject> getProject(String projectId) async {
     final response = await _client.get(
       _baseUri.resolve('/room-projects/$projectId'),
       headers: await _headers(),
@@ -268,7 +266,7 @@ class ProjectApi {
   }
 
   Future<RoomProject> updateProject({
-    required int projectId,
+    required String projectId,
     required String name,
     String? description,
   }) async {
@@ -282,7 +280,7 @@ class ProjectApi {
     return RoomProject.fromJson(data['project'] as Map<String, Object?>);
   }
 
-  Future<void> deleteProject(int projectId) async {
+  Future<void> deleteProject(String projectId) async {
     final response = await _client.delete(
       _baseUri.resolve('/room-projects/$projectId'),
       headers: await _headers(),
@@ -294,7 +292,7 @@ class ProjectApi {
   }
 
   Future<SourceImage> uploadSourceImage({
-    required int projectId,
+    required String projectId,
     required String filename,
     required String contentType,
     required Uint8List bytes,
@@ -319,7 +317,7 @@ class ProjectApi {
   }
 
   Future<RoomDimensions> saveRoomDimensions({
-    required int projectId,
+    required String projectId,
     required double widthValue,
     required double depthValue,
     double? heightValue,
@@ -339,14 +337,33 @@ class ProjectApi {
     return RoomDimensions.fromJson(data['dimensions'] as Map<String, Object?>);
   }
 
+  Future<RoomDimensions?> getRoomDimensions({required String projectId}) async {
+    try {
+      final response = await _client.get(
+        _baseUri.resolve('/room-projects/$projectId/dimensions'),
+        headers: await _headers(),
+      );
+      final body = _decodeEnvelope(response);
+      final data = body['data'] as Map<String, Object?>;
+      return RoomDimensions.fromJson(
+        data['dimensions'] as Map<String, Object?>,
+      );
+    } on ProjectApiException catch (error) {
+      if (error.code == 'not_found') {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
   Future<ReconstructionJob> createReconstructionJob({
-    required int projectId,
-    required int sourceImageId,
+    required String projectId,
+    required String sourceImageId,
   }) async {
     final response = await _client.post(
       _baseUri.resolve('/room-projects/$projectId/reconstruction-jobs'),
       headers: await _headers(),
-      body: jsonEncode({'source_image_id': sourceImageId}),
+      body: jsonEncode({'source_image_id': _jsonId(sourceImageId)}),
     );
     final body = _decodeEnvelope(response);
     final data = body['data'] as Map<String, Object?>;
@@ -354,8 +371,8 @@ class ProjectApi {
   }
 
   Future<ReconstructionJob> getReconstructionJob({
-    required int projectId,
-    required int jobId,
+    required String projectId,
+    required String jobId,
   }) async {
     final response = await _client.get(
       _baseUri.resolve('/room-projects/$projectId/reconstruction-jobs/$jobId'),
@@ -367,8 +384,8 @@ class ProjectApi {
   }
 
   Future<ReconstructionJob> retryReconstructionJob({
-    required int projectId,
-    required int jobId,
+    required String projectId,
+    required String jobId,
   }) async {
     final response = await _client.post(
       _baseUri.resolve(
@@ -382,7 +399,7 @@ class ProjectApi {
   }
 
   Future<SavedLayout> saveLayout({
-    required int projectId,
+    required String projectId,
     required Map<String, Object?> roomDimensions,
     required Map<String, Object?> floorPlan,
     required Map<String, Object?> sourceMetadata,
@@ -405,7 +422,7 @@ class ProjectApi {
     return SavedLayout.fromJson(data['layout'] as Map<String, Object?>);
   }
 
-  Future<SavedLayout> loadLatestLayout({required int projectId}) async {
+  Future<SavedLayout> loadLatestLayout({required String projectId}) async {
     final response = await _client.get(
       _baseUri.resolve('/room-projects/$projectId/layouts/latest'),
       headers: await _headers(),
@@ -416,7 +433,7 @@ class ProjectApi {
   }
 
   Future<Map<String, Object?>> exportLatestLayout({
-    required int projectId,
+    required String projectId,
   }) async {
     final response = await _client.get(
       _baseUri.resolve('/room-projects/$projectId/layouts/latest/export'),
@@ -463,4 +480,15 @@ class ProjectApiException implements Exception {
 
   @override
   String toString() => message;
+}
+
+String _stringId(Object? value) {
+  if (value == null) {
+    throw const FormatException('ID value is required.');
+  }
+  return value.toString();
+}
+
+Object _jsonId(String value) {
+  return int.tryParse(value) ?? value;
 }

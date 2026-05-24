@@ -59,6 +59,55 @@ service cloud.firestore {
       return ['role', 'role_updated_at', 'role_updated_by_uid'];
     }
 
+    function projectKeys() {
+      return [
+        'project_id',
+        'owner_uid',
+        'name',
+        'description',
+        'schema_version',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+        'latest_source_image_id',
+        'latest_job_id',
+        'latest_floor_plan_id',
+        'latest_layout_id',
+        'current_reconstruction_status',
+        'last_opened_at'
+      ];
+    }
+
+    function mutableProjectKeys() {
+      return [
+        'name',
+        'description',
+        'updated_at',
+        'deleted_at',
+        'latest_source_image_id',
+        'latest_job_id',
+        'latest_floor_plan_id',
+        'latest_layout_id',
+        'current_reconstruction_status',
+        'last_opened_at'
+      ];
+    }
+
+    function roomDimensionsKeys() {
+      return [
+        'project_id',
+        'owner_uid',
+        'width_m',
+        'depth_m',
+        'height_m',
+        'unit',
+        'source',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
     function validUserProfileCreate(uid) {
       return isSelf(uid)
         && request.resource.data.uid == uid
@@ -80,11 +129,76 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(privilegedUserRoleKeys());
     }
 
+    function validProjectCreate(projectId) {
+      return isSignedIn()
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(projectKeys())
+        && request.resource.data.keys().hasAll([
+          'project_id',
+          'owner_uid',
+          'name',
+          'schema_version',
+          'created_at',
+          'updated_at'
+        ]);
+    }
+
+    function validProjectUpdate(projectId) {
+      return isSignedIn()
+        && resource.data.owner_uid == request.auth.uid
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && request.resource.data.keys().hasOnly(projectKeys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(mutableProjectKeys());
+    }
+
+    function validRoomDimensionsWrite(projectId) {
+      return ownsProject(projectId)
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.unit == 'meters'
+        && request.resource.data.width_m > 0
+        && request.resource.data.depth_m > 0
+        && request.resource.data.height_m > 0
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(roomDimensionsKeys())
+        && request.resource.data.keys().hasAll([
+          'project_id',
+          'owner_uid',
+          'width_m',
+          'depth_m',
+          'height_m',
+          'unit',
+          'source',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
     match /users/{uid} {
       allow get: if isSelf(uid) || isAdmin();
       allow list: if false;
       allow create: if validUserProfileCreate(uid);
       allow update: if validUserProfileUpdate(uid);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow get, list: if (isSignedIn() && resource.data.owner_uid == request.auth.uid) || isAdmin();
+      allow create: if validProjectCreate(projectId);
+      allow update: if validProjectUpdate(projectId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/room_dimensions/{dimensionsId} {
+      allow get, list: if dimensionsId == 'current' && (ownsProject(projectId) || isAdmin());
+      allow create, update: if dimensionsId == 'current' && validRoomDimensionsWrite(projectId);
       allow delete: if false;
     }
 

@@ -72,6 +72,29 @@ class FirebaseSerializerValidators {
 class FirebaseModelSerializers {
   FirebaseModelSerializers._();
 
+  static FirebaseRoomProject roomProjectFromFirestore(FirebaseJson json) {
+    return FirebaseRoomProject(
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      name: _requiredString(json, 'name'),
+      description: _optionalString(json, 'description'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+      createdAt: _requiredDate(json, 'created_at'),
+      updatedAt: _requiredDate(json, 'updated_at'),
+      deletedAt: _optionalDate(json, 'deleted_at'),
+      latestSourceImageId: _optionalString(json, 'latest_source_image_id'),
+      latestJobId: _optionalString(json, 'latest_job_id'),
+      latestFloorPlanId: _optionalString(json, 'latest_floor_plan_id'),
+      latestLayoutId: _optionalString(json, 'latest_layout_id'),
+      currentReconstructionStatus: json['current_reconstruction_status'] == null
+          ? null
+          : FirebaseJobStatus.fromWireValue(
+              json['current_reconstruction_status'],
+            ),
+      lastOpenedAt: _optionalDate(json, 'last_opened_at'),
+    );
+  }
+
   static FirebaseOpenCvResult openCvResultFromFirestore(FirebaseJson json) {
     final coordinateSpace =
         FirebaseContractValidators.requireRawCoordinateSpace(

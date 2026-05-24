@@ -15,6 +15,7 @@ import 'src/editor/editor_config.dart';
 import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
+import 'src/projects/firebase_project_api.dart';
 import 'src/projects/project_api.dart';
 
 Future<void> main() async {
@@ -26,6 +27,8 @@ Future<void> main() async {
     RoomForgeApp(
       authRepository: firebaseBootstrap.authRepository,
       adminRepository: firebaseBootstrap.adminRepository,
+      projectRepository: firebaseBootstrap.projectRepository,
+      roomDimensionsRepository: firebaseBootstrap.roomDimensionsRepository,
       userRepository: firebaseBootstrap.userRepository,
       backendMode: firebaseBootstrap.backendMode,
       authSetupMessage: firebaseBootstrap.authSetupMessage,
@@ -37,6 +40,8 @@ class RoomForgeApp extends StatelessWidget {
   const RoomForgeApp({
     required this.authRepository,
     required this.adminRepository,
+    required this.projectRepository,
+    required this.roomDimensionsRepository,
     required this.userRepository,
     required this.backendMode,
     this.authSetupMessage,
@@ -45,6 +50,8 @@ class RoomForgeApp extends StatelessWidget {
 
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
+  final FirebaseProjectRepository projectRepository;
+  final FirebaseRoomDimensionsRepository roomDimensionsRepository;
   final FirebaseUserRepository userRepository;
   final BackendMode backendMode;
   final String? authSetupMessage;
@@ -60,6 +67,8 @@ class RoomForgeApp extends StatelessWidget {
       home: AuthGate(
         authRepository: authRepository,
         adminRepository: adminRepository,
+        projectRepository: projectRepository,
+        roomDimensionsRepository: roomDimensionsRepository,
         userRepository: userRepository,
         backendMode: backendMode,
         authSetupMessage: authSetupMessage,
@@ -72,6 +81,8 @@ class AuthGate extends StatelessWidget {
   const AuthGate({
     required this.authRepository,
     required this.adminRepository,
+    required this.projectRepository,
+    required this.roomDimensionsRepository,
     required this.userRepository,
     required this.backendMode,
     this.authSetupMessage,
@@ -80,6 +91,8 @@ class AuthGate extends StatelessWidget {
 
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
+  final FirebaseProjectRepository projectRepository;
+  final FirebaseRoomDimensionsRepository roomDimensionsRepository;
   final FirebaseUserRepository userRepository;
   final BackendMode backendMode;
   final String? authSetupMessage;
@@ -106,7 +119,14 @@ class AuthGate extends StatelessWidget {
             session: session,
             adminApi: AdminApi(authRepository: authRepository),
             backendMode: backendMode,
-            projectApi: ProjectApi(authRepository: authRepository),
+            projectApi: backendMode == BackendMode.firebase
+                ? FirebaseProjectApi(
+                    authRepository: authRepository,
+                    session: session,
+                    projectRepository: projectRepository,
+                    roomDimensionsRepository: roomDimensionsRepository,
+                  )
+                : ProjectApi(authRepository: authRepository),
           ),
         );
       },
@@ -1206,6 +1226,9 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   @override
   void initState() {
     super.initState();
+    if (widget.project != null) {
+      unawaited(_loadDimensions());
+    }
     final body = html.document.body;
     if (body == null) {
       return;
@@ -1230,6 +1253,9 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       _depthController.clear();
       _heightController.clear();
       _reconstructionPollTimer?.cancel();
+      if (widget.project != null) {
+        unawaited(_loadDimensions());
+      }
     }
   }
 
@@ -1408,6 +1434,49 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
   }
 
+  Future<void> _loadDimensions() async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
+
+    try {
+      final dimensions = await widget.projectApi.getRoomDimensions(
+        projectId: project.id,
+      );
+      if (!mounted || widget.project?.id != project.id) {
+        return;
+      }
+      if (dimensions == null) {
+        return;
+      }
+      setState(() {
+        _dimensions = dimensions;
+        _widthController.text = dimensions.widthValue.toString();
+        _depthController.text = dimensions.depthValue.toString();
+        _heightController.text = dimensions.usesDefaultHeight
+            ? ''
+            : dimensions.heightValue.toString();
+        _dimensionMessage = dimensions.usesDefaultHeight
+            ? 'Loaded saved dimensions with MVP default height ${dimensions.heightValue.toStringAsFixed(2)} m.'
+            : 'Loaded saved room dimensions.';
+      });
+    } on ProjectApiException catch (error) {
+      if (!mounted || widget.project?.id != project.id) {
+        return;
+      }
+      if (error.code == 'not_found') {
+        return;
+      }
+      setState(() => _dimensionMessage = error.message);
+    } catch (error) {
+      if (!mounted || widget.project?.id != project.id) {
+        return;
+      }
+      setState(() => _dimensionMessage = 'Loading dimensions failed: $error');
+    }
+  }
+
   Future<void> _openReconstruction() async {
     final project = widget.project;
     if (project == null) {
@@ -1473,14 +1542,14 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
   }
 
-  void _startReconstructionPolling(int jobId) {
+  void _startReconstructionPolling(String jobId) {
     _reconstructionPollTimer?.cancel();
     _reconstructionPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       unawaited(_pollReconstructionJob(jobId));
     });
   }
 
-  Future<void> _pollReconstructionJob(int jobId) async {
+  Future<void> _pollReconstructionJob(String jobId) async {
     final project = widget.project;
     if (project == null) {
       return;

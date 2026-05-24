@@ -6,6 +6,7 @@ import '../admin/firebase_admin_access_repository.dart';
 import '../api/backend_mode.dart';
 import '../auth/auth_repository.dart';
 import '../auth/firebase_options_from_env.dart';
+import '../firebase/firebase_project_repository.dart';
 import '../firebase/firebase_repositories.dart';
 import '../users/firebase_user_repository.dart';
 
@@ -13,6 +14,8 @@ class FirebaseAppBootstrapResult {
   const FirebaseAppBootstrapResult({
     required this.authRepository,
     required this.adminRepository,
+    required this.projectRepository,
+    required this.roomDimensionsRepository,
     required this.userRepository,
     required this.backendMode,
     this.authSetupMessage,
@@ -20,6 +23,8 @@ class FirebaseAppBootstrapResult {
 
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
+  final FirebaseProjectRepository projectRepository;
+  final FirebaseRoomDimensionsRepository roomDimensionsRepository;
   final FirebaseUserRepository userRepository;
   final BackendMode backendMode;
   final String? authSetupMessage;
@@ -33,6 +38,9 @@ class FirebaseAppBootstrap {
       return FirebaseAppBootstrapResult(
         authRepository: DisabledAuthRepository(),
         adminRepository: const DisabledFirebaseAdminRepository(),
+        projectRepository: const DisabledFirebaseProjectRepository(),
+        roomDimensionsRepository:
+            const DisabledFirebaseRoomDimensionsRepository(),
         userRepository: DisabledFirebaseUserRepository(),
         backendMode: backendMode,
         authSetupMessage:
@@ -54,6 +62,12 @@ class FirebaseAppBootstrap {
     return FirebaseAppBootstrapResult(
       authRepository: FirebaseAuthRepository(firebaseAuth),
       adminRepository: FirebaseAdminAccessRepository(firestore: firestore),
+      projectRepository: FirebaseFirestoreProjectRepository(
+        firestore: firestore,
+      ),
+      roomDimensionsRepository: FirebaseFirestoreRoomDimensionsRepository(
+        firestore: firestore,
+      ),
       userRepository: FirebaseUserProfileRepository(firestore: firestore),
       backendMode: backendMode,
     );

@@ -22,6 +22,11 @@ abstract class FirebaseProjectRepository {
   });
 
   Future<FirebaseRoomProject> updateProject(FirebaseRoomProject project);
+
+  Future<void> softDeleteProject({
+    required String ownerUid,
+    required String projectId,
+  });
 }
 
 abstract class FirebaseSourceImageRepository {

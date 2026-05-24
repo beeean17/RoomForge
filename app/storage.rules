@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isPathOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAllowedSourceImageContentType() {
+      return request.resource != null
+        && request.resource.contentType in [
+          'image/jpeg',
+          'image/png',
+          'image/webp'
+        ];
+    }
+
+    function isAllowedSourceImageSize() {
+      return request.resource != null
+        && request.resource.size <= 10 * 1024 * 1024;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

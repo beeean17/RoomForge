@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(userDocPath(request.auth.uid))
+        && get(userDocPath(request.auth.uid)).data.role == 'admin';
+    }
+
+    function projectDocPath(projectId) {
+      return /databases/$(database)/documents/projects/$(projectId);
+    }
+
+    function ownsProject(projectId) {
+      return isSignedIn()
+        && exists(projectDocPath(projectId))
+        && get(projectDocPath(projectId)).data.owner_uid == request.auth.uid;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

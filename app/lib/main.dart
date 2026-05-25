@@ -21,6 +21,7 @@ import 'src/layouts/layout_draft_recovery.dart';
 import 'src/layouts/layout_draft_repository.dart';
 import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
+import 'src/layouts/layout_remote_update_guard.dart';
 import 'src/projects/firebase_project_api.dart';
 import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/project_api.dart';
@@ -2172,10 +2173,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   String? _activeLayoutId;
   DateTime? _activeCloudUpdatedAt;
   bool _draftChangedDuringSave = false;
+  bool _syncFailureVisible = false;
   var _draftGeneration = 0;
   Future<void> _pendingDraftWrite = Future<void>.value();
   LayoutDraft? _recoverableDraft;
-  bool _draftHasCloudConflict = false;
   bool _isHandlingDraft = false;
 
   @override
@@ -2289,7 +2290,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                     child: Text(_isSavingLayout ? 'Saving...' : 'Save layout'),
                   ),
                   OutlinedButton(
-                    onPressed: _isLoadingLayout ? null : _loadLayout,
+                    onPressed: _isLoadingLayout ? null : () => _loadLayout(),
                     child: Text(
                       _isLoadingLayout ? 'Loading...' : 'Load layout',
                     ),
@@ -2318,13 +2319,12 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                       onPressed: _isHandlingDraft ? null : _discardDraft,
                       child: const Text('Discard draft'),
                     ),
-                    if (_draftHasCloudConflict)
-                      OutlinedButton(
-                        onPressed: _isHandlingDraft
-                            ? null
-                            : _continueSavedVersion,
-                        child: const Text('Continue saved version'),
-                      ),
+                    OutlinedButton(
+                      onPressed: _isHandlingDraft
+                          ? null
+                          : _continueSavedVersion,
+                      child: const Text('Continue saved version'),
+                    ),
                   ],
                   OutlinedButton(
                     onPressed: () => _postEditorMessage(
@@ -2435,8 +2435,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _activeLayoutId = saved.id;
         _activeCloudUpdatedAt = saved.updatedAt;
         _recoverableDraft = null;
-        _draftHasCloudConflict = false;
         _reviewSaveConfirmed = false;
+        _syncFailureVisible = false;
         _draftStatus = draftCleanupSucceeded
             ? 'Saved'
             : 'Draft cleanup unavailable.';
@@ -2450,6 +2450,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _reviewSaveConfirmed = false;
+        _syncFailureVisible = true;
+        _draftStatus = '$layoutSyncFailedLabel. $layoutRetryAvailableLabel.';
         _saveStatus = 'Save failed: ${error.message}';
       });
     } catch (error) {
@@ -2460,6 +2462,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _reviewSaveConfirmed = false;
+        _syncFailureVisible = true;
+        _draftStatus = '$layoutSyncFailedLabel. $layoutRetryAvailableLabel.';
         _saveStatus = 'Save failed: $error';
       });
     } finally {
@@ -2475,7 +2479,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     }
   }
 
-  Future<void> _loadLayout() async {
+  Future<void> _loadLayout({bool forceApplyCloud = false}) async {
     setState(() {
       _isLoadingLayout = true;
       _loadStatus = 'Loading...';
@@ -2485,6 +2489,21 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       final layout = await widget.projectApi.loadLatestLayout(
         projectId: widget.project.id,
       );
+      final activeDraft = await _recoverableDraftForCloudApply(layout);
+      if (shouldHoldRemoteLayoutForDraft(
+        draft: activeDraft,
+        forceApplyCloud: forceApplyCloud,
+      )) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _recoverableDraft = activeDraft;
+          _draftStatus = layoutRemoteUpdateHeldMessage;
+          _loadStatus = layoutRemoteUpdateHeldMessage;
+        });
+        return;
+      }
       final scene = _sceneFromSavedLayout(layout);
       final viewMode = scene['viewMode']?.toString();
       if (!mounted) {
@@ -2494,6 +2513,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _latestScene = scene;
         _activeLayoutId = layout.id;
         _activeCloudUpdatedAt = layout.updatedAt;
+        _recoverableDraft = null;
+        _syncFailureVisible = false;
         final nextViewMode = viewMode == '2d' || viewMode == '3d'
             ? viewMode
             : null;
@@ -2503,7 +2524,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _saveStatus = 'Saved';
         _loadStatus = 'Loaded layout';
       });
-      unawaited(_detectRecoverableDraft(layoutId: layout.id));
+      if (!forceApplyCloud) {
+        unawaited(_detectRecoverableDraft(layoutId: layout.id));
+      }
       _postEditorMessage(
         type: 'roomforge.scene.initialize',
         requestId: 'load-layout-${layout.id}',
@@ -2611,9 +2634,6 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _recoverableDraft = draft?.isRecoverable == true ? draft : null;
-        _draftHasCloudConflict = draft == null
-            ? false
-            : layoutDraftHasCloudConflict(draft, _activeCloudUpdatedAt);
         _draftStatus = draft == null || !draft.isRecoverable
             ? 'No local draft.'
             : layoutDraftRecoveryMessage(
@@ -2627,6 +2647,23 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() => _draftStatus = 'Draft check unavailable.');
     }
+  }
+
+  Future<LayoutDraft?> _recoverableDraftForCloudApply(
+    SavedLayout layout,
+  ) async {
+    final layoutDraft = await _draftRepository.getDraft(
+      ownerUid: widget.project.userId,
+      projectId: widget.project.id,
+      layoutId: layout.id,
+    );
+    final currentDraft =
+        layoutDraft ??
+        await _draftRepository.getDraft(
+          ownerUid: widget.project.userId,
+          projectId: widget.project.id,
+        );
+    return currentDraft?.isRecoverable == true ? currentDraft : null;
   }
 
   Future<void> _restoreDraft() async {
@@ -2645,7 +2682,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _activeLayoutId = draft.layoutId;
         _activeCloudUpdatedAt = draft.baseCloudUpdatedAt;
         _recoverableDraft = null;
-        _draftHasCloudConflict = false;
+        _syncFailureVisible = false;
         _draftStatus = 'Unsaved draft';
         _saveStatus = 'Unsaved draft';
       });
@@ -2706,7 +2743,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _recoverableDraft = null;
-        _draftHasCloudConflict = false;
+        _syncFailureVisible = false;
         _draftStatus = 'No local draft.';
       });
     } finally {
@@ -2719,9 +2756,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   void _continueSavedVersion() {
     setState(() {
       _recoverableDraft = null;
-      _draftHasCloudConflict = false;
+      _syncFailureVisible = false;
       _draftStatus = 'Using saved cloud layout.';
     });
+    unawaited(_loadLayout(forceApplyCloud: true));
   }
 
   void _queuePersistDraft(Map<String, Object?> scene) {
@@ -2766,7 +2804,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       if (!mounted || generation != _draftGeneration) {
         return;
       }
-      setState(() => _draftStatus = draft.label);
+      if (!_syncFailureVisible) {
+        setState(() => _draftStatus = draft.label);
+      }
     } catch (_) {
       if (!mounted) {
         return;

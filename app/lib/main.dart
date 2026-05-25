@@ -15,6 +15,8 @@ import 'src/editor/editor_config.dart';
 import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
+import 'src/layouts/indexed_db_layout_draft_store.dart';
+import 'src/layouts/layout_draft_repository.dart';
 import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
 import 'src/projects/firebase_project_api.dart';
@@ -2147,6 +2149,7 @@ class EditorBridgeScreen extends StatefulWidget {
 }
 
 class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
+  late final LayoutDraftRepository _draftRepository;
   late final String _viewType;
   late final html.IFrameElement _iframe;
   StreamSubscription<html.MessageEvent>? _messageSubscription;
@@ -2155,6 +2158,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   String _sceneStatus = 'Waiting for metric floor plan handoff.';
   String _saveStatus = 'Not saved.';
   String _loadStatus = 'No layout loaded.';
+  String _draftStatus = 'No local draft.';
   String _exportStatus = 'Not exported.';
   String _viewMode = '2d';
   bool _isSavingLayout = false;
@@ -2163,10 +2167,18 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   bool _reviewSaveConfirmed = false;
   bool _reviewExportConfirmed = false;
   Map<String, Object?>? _latestScene;
+  String? _activeLayoutId;
+  DateTime? _activeCloudUpdatedAt;
+  bool _draftChangedDuringSave = false;
+  var _draftGeneration = 0;
+  Future<void> _pendingDraftWrite = Future<void>.value();
 
   @override
   void initState() {
     super.initState();
+    _draftRepository = LayoutDraftRepository(
+      store: const IndexedDbLayoutDraftStore(),
+    );
     _viewType =
         'roomforge-editor-${widget.project.id}-${DateTime.now().microsecondsSinceEpoch}';
     _iframe = html.IFrameElement()
@@ -2198,6 +2210,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     });
 
     _messageSubscription = html.window.onMessage.listen(_handleEditorMessage);
+    unawaited(_detectRecoverableDraft());
   }
 
   @override
@@ -2259,6 +2272,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                     child: Text(_loadStatus),
                   ),
                   ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 260),
+                    child: Text(_draftStatus),
+                  ),
+                  ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 300),
                     child: Text(_exportStatus),
                   ),
@@ -2309,6 +2326,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       return;
     }
 
+    Map<String, Object?>? draftScene;
     setState(() {
       if (type == 'roomforge.editor.ready') {
         _bridgeStatus = 'Editor ready.';
@@ -2333,6 +2351,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
             _viewMode = nextViewMode;
           }
           final hasUnsavedChanges = payload['hasUnsavedChanges'] == true;
+          if (hasUnsavedChanges) {
+            draftScene = Map<String, Object?>.from(payload);
+          }
           final room = payload['room'];
           final label = room is Map ? room['label']?.toString() : null;
           final statusLabel = hasUnsavedChanges ? 'Unsaved changes' : 'Saved';
@@ -2342,6 +2363,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         }
       }
     });
+    if (draftScene != null) {
+      _queuePersistDraft(draftScene!);
+    }
   }
 
   Future<void> _saveLayout() async {
@@ -2361,7 +2385,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
 
     try {
       final scene = _sceneForSave();
-      await widget.projectApi.saveLayout(
+      _draftGeneration += 1;
+      final pendingDraftWrite = _pendingDraftWrite;
+      final saved = await widget.projectApi.saveLayout(
         projectId: widget.project.id,
         roomDimensions: _roomDimensionsPayload(),
         floorPlan: _floorPlanPayload(scene),
@@ -2372,11 +2398,20 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       if (!mounted) {
         return;
       }
+      await _drainDraftWrite(pendingDraftWrite);
+      final draftCleanupSucceeded = await _clearDraftAfterCloudSave(saved);
       setState(() {
+        _activeLayoutId = saved.id;
+        _activeCloudUpdatedAt = saved.updatedAt;
         _reviewSaveConfirmed = false;
+        _draftStatus = draftCleanupSucceeded
+            ? 'Saved'
+            : 'Draft cleanup unavailable.';
         _saveStatus = 'Saved';
       });
     } on ProjectApiException catch (error) {
+      _latestScene = _sceneForSave();
+      _queuePersistDraft(_latestScene!);
       if (!mounted) {
         return;
       }
@@ -2385,6 +2420,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _saveStatus = 'Save failed: ${error.message}';
       });
     } catch (error) {
+      _latestScene = _sceneForSave();
+      _queuePersistDraft(_latestScene!);
       if (!mounted) {
         return;
       }
@@ -2394,7 +2431,13 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       });
     } finally {
       if (mounted) {
+        final shouldPersistPostSaveDraft =
+            _draftChangedDuringSave && _latestScene != null;
+        _draftChangedDuringSave = false;
         setState(() => _isSavingLayout = false);
+        if (shouldPersistPostSaveDraft) {
+          _queuePersistDraft(_latestScene!);
+        }
       }
     }
   }
@@ -2416,6 +2459,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _latestScene = scene;
+        _activeLayoutId = layout.id;
+        _activeCloudUpdatedAt = layout.updatedAt;
         final nextViewMode = viewMode == '2d' || viewMode == '3d'
             ? viewMode
             : null;
@@ -2425,6 +2470,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _saveStatus = 'Saved';
         _loadStatus = 'Loaded layout';
       });
+      unawaited(_detectRecoverableDraft(layoutId: layout.id));
       _postEditorMessage(
         type: 'roomforge.scene.initialize',
         requestId: 'load-layout-${layout.id}',
@@ -2512,6 +2558,124 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     } finally {
       html.Url.revokeObjectUrl(url);
     }
+  }
+
+  Future<void> _detectRecoverableDraft({String? layoutId}) async {
+    try {
+      final draft = await _draftRepository.getDraft(
+        ownerUid: widget.project.userId,
+        projectId: widget.project.id,
+        layoutId: layoutId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draftStatus = draft == null || !draft.isRecoverable
+            ? 'No local draft.'
+            : '${draft.label} available.';
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _draftStatus = 'Draft check unavailable.');
+    }
+  }
+
+  void _queuePersistDraft(Map<String, Object?> scene) {
+    if (_isSavingLayout) {
+      _draftChangedDuringSave = true;
+      return;
+    }
+    final generation = _draftGeneration;
+    _pendingDraftWrite = _pendingDraftWrite
+        .catchError((_) {})
+        .then((_) => _persistDraft(scene, generation));
+    unawaited(_pendingDraftWrite);
+  }
+
+  Future<void> _drainDraftWrite(Future<void> pendingDraftWrite) async {
+    try {
+      await pendingDraftWrite;
+    } catch (_) {}
+  }
+
+  Future<void> _persistDraft(Map<String, Object?> scene, int generation) async {
+    if (generation != _draftGeneration) {
+      return;
+    }
+    try {
+      final draft = await _draftRepository.saveDraft(
+        ownerUid: widget.project.userId,
+        projectId: widget.project.id,
+        layoutId: _activeLayoutId,
+        baseCloudLayoutId: _activeLayoutId,
+        baseCloudUpdatedAt: _activeCloudUpdatedAt,
+        roomDimensionsSnapshot: _roomDimensionsPayload(),
+        floorPlanSnapshot: _floorPlanPayload(scene),
+        sourceMetadataSnapshot: _sourceMetadataPayload(),
+        editorScene: _editorScenePayload(scene),
+        furnitureObjects: _furniturePayload(scene),
+        reconstructionStatus: widget.reconstructionJob?.status ?? 'created',
+        reviewRequired: layoutStatusNeedsReview(
+          widget.reconstructionJob?.status,
+        ),
+      );
+      if (!mounted || generation != _draftGeneration) {
+        return;
+      }
+      setState(() => _draftStatus = draft.label);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _draftStatus = 'Draft save failed.');
+    }
+  }
+
+  Future<bool> _clearDraftAfterCloudSave(SavedLayout saved) async {
+    try {
+      final previousLayoutId = _activeLayoutId;
+      await _draftRepository.clearDraft(
+        ownerUid: widget.project.userId,
+        projectId: widget.project.id,
+      );
+      if (previousLayoutId != null && previousLayoutId != saved.id) {
+        await _draftRepository.clearDraft(
+          ownerUid: widget.project.userId,
+          projectId: widget.project.id,
+          layoutId: previousLayoutId,
+        );
+      }
+      await _draftRepository.clearDraft(
+        ownerUid: widget.project.userId,
+        projectId: widget.project.id,
+        layoutId: saved.id,
+      );
+      await _draftRepository.saveProjectCache(
+        ownerUid: widget.project.userId,
+        projects: [_projectCacheSnapshot(latestLayoutId: saved.id)],
+      );
+      return true;
+    } catch (_) {
+      if (!mounted) {
+        return false;
+      }
+      setState(() => _draftStatus = 'Draft cleanup unavailable.');
+      return false;
+    }
+  }
+
+  Map<String, Object?> _projectCacheSnapshot({String? latestLayoutId}) {
+    return {
+      'project_id': widget.project.id,
+      'owner_uid': widget.project.userId,
+      'name': widget.project.name,
+      'description': widget.project.description,
+      'latest_layout_id': latestLayoutId,
+      'updated_at': widget.project.updatedAt.toUtc().toIso8601String(),
+    };
   }
 
   Map<String, Object?> _sceneForSave() {

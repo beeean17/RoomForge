@@ -506,6 +506,7 @@ void main() {
       },
     );
     final reloaded = await api.loadLatestLayout(projectId: 'project-1');
+    final exportPayload = await api.exportLatestLayout(projectId: 'project-1');
 
     expect(saved.projectId, 'project-1');
     expect(saved.roomDimensions['width_m'], 4.2);
@@ -577,7 +578,57 @@ void main() {
     expect(persistedFurniture, contains('size_m'));
     expect(persistedFurniture, isNot(contains('objectId')));
     expect(persistedFurniture, isNot(contains('rotationDegrees')));
+    FirebaseSerializerValidators.requireSnakeCasePayload(
+      exportPayload,
+      'layout_export',
+    );
+    expect(exportPayload, containsPair('layout_id', saved.id));
+    expect(exportPayload, containsPair('reconstruction_status', 'created'));
+    expect(exportPayload, containsPair('review_required', true));
+    expect(exportPayload, contains('furniture_objects'));
+    expect(exportPayload, isNot(contains('layoutId')));
+    final exportedFurniture = Map<String, Object?>.from(
+      (exportPayload['furniture_objects'] as List<Object?>).single as Map,
+    );
+    expect(exportedFurniture, containsPair('furniture_id', 'chair-1'));
+    expect(exportedFurniture, containsPair('category', 'chair'));
+    expect(exportedFurniture, containsPair('rotation_deg', 15.0));
+    expect(exportedFurniture, containsPair('color', '#64748b'));
+    expect(exportedFurniture, containsPair('label', 'Desk chair'));
+    expect(exportedFurniture, containsPair('locked', false));
+    expect(exportedFurniture, contains('position_m'));
+    expect(exportedFurniture, contains('size_m'));
+    expect(exportedFurniture, isNot(contains('objectId')));
   });
+
+  test(
+    'FirebaseProjectApi rejects export without saved cloud layout',
+    () async {
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: _FakeProjectRepository(),
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      await expectLater(
+        api.exportLatestLayout(projectId: 'project-1'),
+        throwsA(
+          isA<ProjectApiException>().having(
+            (error) => error.code,
+            'code',
+            'not_found',
+          ),
+        ),
+      );
+    },
+  );
 
   test(
     'FirebaseProjectApi rejects layout dimensions that differ from floor plan',

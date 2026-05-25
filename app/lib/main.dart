@@ -15,6 +15,7 @@ import 'src/editor/editor_config.dart';
 import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
+import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
 import 'src/projects/firebase_project_api.dart';
 import 'src/projects/firebase_source_image_upload.dart';
@@ -2159,6 +2160,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   bool _isSavingLayout = false;
   bool _isLoadingLayout = false;
   bool _isExportingLayout = false;
+  bool _reviewSaveConfirmed = false;
   bool _reviewExportConfirmed = false;
   Map<String, Object?>? _latestScene;
 
@@ -2343,6 +2345,15 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   }
 
   Future<void> _saveLayout() async {
+    if (layoutStatusNeedsReview(widget.reconstructionJob?.status) &&
+        !_reviewSaveConfirmed) {
+      setState(() {
+        _reviewSaveConfirmed = true;
+        _saveStatus = layoutNeedsReviewSaveWarning;
+      });
+      return;
+    }
+
     setState(() {
       _isSavingLayout = true;
       _saveStatus = 'Saving...';
@@ -2361,17 +2372,26 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _saveStatus = 'Saved');
+      setState(() {
+        _reviewSaveConfirmed = false;
+        _saveStatus = 'Saved';
+      });
     } on ProjectApiException catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _saveStatus = 'Save failed: ${error.message}');
+      setState(() {
+        _reviewSaveConfirmed = false;
+        _saveStatus = 'Save failed: ${error.message}';
+      });
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _saveStatus = 'Save failed: $error');
+      setState(() {
+        _reviewSaveConfirmed = false;
+        _saveStatus = 'Save failed: $error';
+      });
     } finally {
       if (mounted) {
         setState(() => _isSavingLayout = false);
@@ -2428,40 +2448,52 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   }
 
   Future<void> _exportLayout() async {
-    if (widget.reconstructionJob?.status == 'review_required' &&
-        !_reviewExportConfirmed) {
-      setState(() {
-        _reviewExportConfirmed = true;
-        _exportStatus =
-            'Needs review before export. Press Export JSON again to continue.';
-      });
-      return;
-    }
-
     setState(() {
       _isExportingLayout = true;
-      _exportStatus = 'Exporting...';
+      _exportStatus = 'Checking latest saved layout...';
     });
 
     try {
       final exportPayload = await widget.projectApi.exportLatestLayout(
         projectId: widget.project.id,
       );
+      final needsReview = layoutExportNeedsReviewWarning(exportPayload);
+      if (needsReview && !_reviewExportConfirmed) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _reviewExportConfirmed = true;
+          _exportStatus = layoutNeedsReviewExportWarning;
+        });
+        return;
+      }
       _downloadLayoutExport(exportPayload);
       if (!mounted) {
         return;
       }
-      setState(() => _exportStatus = 'Exported JSON');
+      setState(() {
+        _reviewExportConfirmed = false;
+        _exportStatus = needsReview
+            ? 'Exported JSON with $layoutNeedsReviewLabel warning'
+            : 'Exported JSON';
+      });
     } on ProjectApiException catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _exportStatus = 'Export failed: ${error.message}');
+      setState(() {
+        _reviewExportConfirmed = false;
+        _exportStatus = 'Export failed: ${error.message}';
+      });
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _exportStatus = 'Export failed: $error');
+      setState(() {
+        _reviewExportConfirmed = false;
+        _exportStatus = 'Export failed: $error';
+      });
     } finally {
       if (mounted) {
         setState(() => _isExportingLayout = false);

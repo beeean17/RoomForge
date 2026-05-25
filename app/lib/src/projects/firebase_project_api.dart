@@ -704,11 +704,25 @@ class FirebaseProjectApi extends ProjectApi {
   }
 
   @override
-  Future<Map<String, Object?>> exportLatestLayout({required String projectId}) {
-    throw const ProjectApiException(
-      'Firebase layout export is implemented in Epic 7.',
-      code: 'not_implemented',
-    );
+  Future<Map<String, Object?>> exportLatestLayout({
+    required String projectId,
+  }) async {
+    try {
+      final exportPayload = await _layoutRepository.exportLatestLayout(
+        ownerUid: _session.uid,
+        projectId: projectId,
+      );
+      return Map<String, Object?>.from(
+        _layoutPayloadValue(exportPayload) as Map,
+      );
+    } on FirebaseException catch (error) {
+      throw _projectAccessException(error);
+    } on FirebaseContractException {
+      throw const ProjectApiException(
+        'No saved layout is available for export.',
+        code: 'not_found',
+      );
+    }
   }
 
   FirebaseRoomDimensions _firebaseRoomDimensionsFromLayoutPayload({

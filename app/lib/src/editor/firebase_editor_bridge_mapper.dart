@@ -158,7 +158,7 @@ class FirebaseEditorBridgeMapper {
         'rotation_deg': _numberValue(item['rotationDegrees'], 0),
         'color': item['color']?.toString(),
         'label': item['label']?.toString(),
-        'locked': item['locked'] == true ? true : null,
+        'locked': item['locked'] is bool ? item['locked'] as bool : null,
       });
     }).toList();
   }

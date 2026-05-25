@@ -20,6 +20,16 @@ void main() {
       expect(scene, contains('hasUnsavedChanges'));
       expect(scene, isNot(contains('scene_id')));
       expect(scene, isNot(contains('coordinate_space')));
+      final furniture = scene['furniture'] as List<Object?>;
+      final chair = Map<String, Object?>.from(furniture.single as Map);
+      expect(chair, containsPair('objectId', 'chair-1'));
+      expect(chair, containsPair('category', 'chair'));
+      expect(chair, containsPair('label', 'Desk chair'));
+      expect(chair, containsPair('color', '#64748b'));
+      expect(chair, containsPair('locked', false));
+      expect(chair, containsPair('rotationDegrees', 15.0));
+      expect(chair, isNot(contains('furniture_id')));
+      expect(chair, isNot(contains('position_m')));
     });
 
     test('maps editor bridge scene back to snake_case persisted state', () {
@@ -55,6 +65,7 @@ void main() {
             'position': {'x': 1.2, 'y': 2.4},
             'rotationDegrees': 15,
             'color': '#64748b',
+            'locked': false,
           },
         ],
       });
@@ -66,8 +77,13 @@ void main() {
       );
       expect(furniture.single, containsPair('furniture_id', 'chair-1'));
       expect(furniture.single, containsPair('rotation_deg', 15.0));
+      expect(furniture.single, containsPair('label', 'Desk chair'));
+      expect(furniture.single, containsPair('color', '#64748b'));
+      expect(furniture.single, containsPair('locked', false));
       expect(furniture.single, contains('position_m'));
+      expect(furniture.single, contains('size_m'));
       expect(furniture.single, isNot(contains('objectId')));
+      expect(furniture.single, isNot(contains('rotationDegrees')));
     });
 
     test('keeps candidate and confirmed bridge payloads distinct', () {
@@ -210,10 +226,12 @@ FirebaseSavedLayout _layout() {
       FirebaseFurnitureObject(
         furnitureId: 'chair-1',
         category: FirebaseFurnitureCategory.chair,
-        label: 'Chair',
+        color: '#64748b',
+        label: 'Desk chair',
+        locked: false,
         positionM: FirebasePoint3d(x: 1, y: 0, z: 1),
         sizeM: FirebasePoint3d(x: 0.6, y: 0.8, z: 0.6),
-        rotationDeg: 0,
+        rotationDeg: 15.0,
       ),
     ],
     savedAt: _now,

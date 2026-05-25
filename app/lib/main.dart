@@ -15,6 +15,7 @@ import 'src/editor/editor_config.dart';
 import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
+import 'src/layouts/layout_furniture_bridge_mapper.dart';
 import 'src/projects/firebase_project_api.dart';
 import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/project_api.dart';
@@ -2632,68 +2633,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   }
 
   List<Map<String, Object?>> _savedFurniture(List<Object?> furnitureObjects) {
-    final objects = <Map<String, Object?>>[];
-    for (final item in furnitureObjects) {
-      final furniture = _recordValue(item);
-      if (furniture.isEmpty) {
-        continue;
-      }
-      final size = _recordValue(furniture['size']);
-      final position = _recordValue(furniture['position']);
-      objects.add({
-        'objectId': furniture['id']?.toString() ?? '',
-        'category': furniture['category']?.toString() ?? 'chair',
-        'label': _furnitureLabel(furniture['category']?.toString()),
-        'size': {
-          'widthMeters': _numberValue(size['width_meters'], 0.6),
-          'depthMeters': _numberValue(size['depth_meters'], 0.6),
-          'heightMeters': _numberValue(size['height_meters'], 0.8),
-        },
-        'position': {
-          'x': _numberValue(position['x'], 1),
-          'y': _numberValue(position['y'], 1),
-        },
-        'rotationDegrees': _numberValue(furniture['rotation_degrees'], 0),
-        'color': furniture['color']?.toString() ?? '#64748b',
-      });
-    }
-    return objects;
-  }
-
-  String _furnitureLabel(String? category) {
-    return switch (category) {
-      'table' => 'Table',
-      'sofa' => 'Sofa',
-      _ => 'Chair',
-    };
+    return savedFurnitureToBridge(furnitureObjects);
   }
 
   List<Map<String, Object?>> _furniturePayload(Map<String, Object?> scene) {
-    final objects = <Map<String, Object?>>[];
-    for (final item in _listValue(scene['furniture'])) {
-      final furniture = _recordValue(item);
-      if (furniture.isEmpty) {
-        continue;
-      }
-      final size = _recordValue(furniture['size']);
-      final position = _recordValue(furniture['position']);
-      objects.add({
-        'id': furniture['objectId']?.toString() ?? '',
-        'category': furniture['category']?.toString() ?? 'unknown',
-        'position': {
-          'x': _numberValue(position['x'], 0),
-          'y': _numberValue(position['y'], 0),
-        },
-        'size': {
-          'width_meters': _numberValue(size['widthMeters'], 0),
-          'depth_meters': _numberValue(size['depthMeters'], 0),
-          'height_meters': _numberValue(size['heightMeters'], 0),
-        },
-        'rotation_degrees': _numberValue(furniture['rotationDegrees'], 0),
-        'color': furniture['color']?.toString() ?? '#64748b',
-      });
-    }
-    return objects;
+    return bridgeFurnitureToLayoutPayload(scene['furniture']);
   }
 
   Map<String, Object?> _editorScenePayload(Map<String, Object?> scene) {

@@ -495,6 +495,8 @@ void main() {
           },
           'rotation_degrees': 15.0,
           'color': '#64748b',
+          'label': 'Desk chair',
+          'locked': false,
         },
       ],
       editorScene: const {
@@ -527,10 +529,14 @@ void main() {
     expect(saved.schemaVersion, 1);
     expect(saved.exportVersion, 1);
     expect(saved.furnitureObjects.single, isA<Map<String, Object?>>());
-    expect(
-      Map<String, Object?>.from(saved.furnitureObjects.single as Map)['id'],
-      'chair-1',
+    final savedFurniture = Map<String, Object?>.from(
+      saved.furnitureObjects.single as Map,
     );
+    expect(savedFurniture, containsPair('id', 'chair-1'));
+    expect(savedFurniture, containsPair('category', 'chair'));
+    expect(savedFurniture, containsPair('color', '#64748b'));
+    expect(savedFurniture, containsPair('label', 'Desk chair'));
+    expect(savedFurniture, containsPair('locked', false));
     expect(reloaded.id, saved.id);
     expect(reloaded.floorPlan['job_id'], 'job-1');
     expect(reloaded.floorPlan['calibration'], isA<Map<String, Object?>>());
@@ -538,6 +544,13 @@ void main() {
     expect(reloaded.schemaVersion, 1);
     expect(reloaded.exportVersion, 1);
     expect(reloaded.editorScene['view_mode'], '3d');
+    final reloadedFurniture = Map<String, Object?>.from(
+      reloaded.furnitureObjects.single as Map,
+    );
+    expect(reloadedFurniture, containsPair('id', 'chair-1'));
+    expect(reloadedFurniture, containsPair('color', '#64748b'));
+    expect(reloadedFurniture, containsPair('label', 'Desk chair'));
+    expect(reloadedFurniture, containsPair('locked', false));
     expect(layouts.saved?.coordinateSpace, FirebaseCoordinateSpace.meters);
     expect(layouts.saved?.roomDimensions.source, 'user_entered');
     expect(layouts.saved?.roomDimensions.createdAt, _now);
@@ -548,6 +561,22 @@ void main() {
       layouts.saved?.floorPlan.roomDimensions.widthM,
     );
     expect(layouts.saved?.sourceMetadata['reconstruction_status'], 'created');
+    final persistedFurniture = layouts.saved!.furnitureObjects.single
+        .toFirestoreJson();
+    FirebaseSerializerValidators.requireSnakeCasePayload(
+      persistedFurniture,
+      'persisted_furniture',
+    );
+    expect(persistedFurniture, containsPair('furniture_id', 'chair-1'));
+    expect(persistedFurniture, containsPair('category', 'chair'));
+    expect(persistedFurniture, containsPair('rotation_deg', 15.0));
+    expect(persistedFurniture, containsPair('color', '#64748b'));
+    expect(persistedFurniture, containsPair('label', 'Desk chair'));
+    expect(persistedFurniture, containsPair('locked', false));
+    expect(persistedFurniture, contains('position_m'));
+    expect(persistedFurniture, contains('size_m'));
+    expect(persistedFurniture, isNot(contains('objectId')));
+    expect(persistedFurniture, isNot(contains('rotationDegrees')));
   });
 
   test(

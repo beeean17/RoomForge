@@ -157,12 +157,212 @@ abstract class FirebaseDraftRepository {
   });
 }
 
+enum FirebaseAdminCollectionGroup {
+  reconstructionJobs('reconstruction_jobs'),
+  transitions('transitions'),
+  openCvResults('opencv_results'),
+  layouts('layouts'),
+  adminActions('admin_actions');
+
+  const FirebaseAdminCollectionGroup(this.wireValue);
+
+  final String wireValue;
+}
+
+class FirebaseAdminQueryFilter {
+  const FirebaseAdminQueryFilter({
+    required this.field,
+    required this.isEqualTo,
+  });
+
+  final String field;
+  final Object isEqualTo;
+}
+
+class FirebaseAdminQueryOrder {
+  const FirebaseAdminQueryOrder({
+    required this.field,
+    required this.descending,
+  });
+
+  final String field;
+  final bool descending;
+}
+
+class FirebaseAdminQuerySpec {
+  const FirebaseAdminQuerySpec({
+    required this.collectionGroup,
+    required this.filters,
+    required this.orderBy,
+    this.limit = 50,
+  });
+
+  final FirebaseAdminCollectionGroup collectionGroup;
+  final List<FirebaseAdminQueryFilter> filters;
+  final List<FirebaseAdminQueryOrder> orderBy;
+  final int? limit;
+
+  String get diagnosticName {
+    final filterText = filters
+        .map((filter) => '${filter.field} == ${filter.isEqualTo}')
+        .join(', ');
+    final orderText = orderBy
+        .map((order) => '${order.field} ${order.descending ? 'desc' : 'asc'}')
+        .join(', ');
+    return '${collectionGroup.wireValue} filters=[$filterText] order=[$orderText] limit=$limit';
+  }
+}
+
+class FirebaseAdminJobQuery {
+  const FirebaseAdminJobQuery({
+    this.status,
+    this.ownerUid,
+    this.projectId,
+    this.jobId,
+    this.retryOfJobId,
+    this.limit = 50,
+  });
+
+  final FirebaseJobStatus? status;
+  final String? ownerUid;
+  final String? projectId;
+  final String? jobId;
+  final String? retryOfJobId;
+  final int? limit;
+
+  FirebaseAdminQuerySpec toSpec() {
+    final filters = <FirebaseAdminQueryFilter>[
+      if (status != null)
+        FirebaseAdminQueryFilter(field: 'status', isEqualTo: status!.wireValue),
+      if (ownerUid != null)
+        FirebaseAdminQueryFilter(field: 'owner_uid', isEqualTo: ownerUid!),
+      if (projectId != null)
+        FirebaseAdminQueryFilter(field: 'project_id', isEqualTo: projectId!),
+      if (jobId != null)
+        FirebaseAdminQueryFilter(field: 'job_id', isEqualTo: jobId!),
+      if (retryOfJobId != null)
+        FirebaseAdminQueryFilter(
+          field: 'retry_of_job_id',
+          isEqualTo: retryOfJobId!,
+        ),
+    ];
+    if (filters.isEmpty) {
+      throw const FirebaseContractException(
+        'Admin job queries require at least one explicit filter.',
+      );
+    }
+    if (filters.length > 1) {
+      throw const FirebaseContractException(
+        'Admin job queries support one indexed lookup filter at a time.',
+      );
+    }
+    return FirebaseAdminQuerySpec(
+      collectionGroup: FirebaseAdminCollectionGroup.reconstructionJobs,
+      filters: filters,
+      orderBy: [
+        FirebaseAdminQueryOrder(
+          field: status != null ? 'updated_at' : 'created_at',
+          descending: true,
+        ),
+      ],
+      limit: limit,
+    );
+  }
+}
+
+class FirebaseAdminQuerySpecs {
+  const FirebaseAdminQuerySpecs._();
+
+  static FirebaseAdminQuerySpec transitionsForJob({
+    required String jobId,
+    int? limit = 100,
+  }) {
+    return FirebaseAdminQuerySpec(
+      collectionGroup: FirebaseAdminCollectionGroup.transitions,
+      filters: [FirebaseAdminQueryFilter(field: 'job_id', isEqualTo: jobId)],
+      orderBy: const [
+        FirebaseAdminQueryOrder(field: 'occurred_at', descending: false),
+      ],
+      limit: limit,
+    );
+  }
+
+  static FirebaseAdminQuerySpec resultsForJob({
+    required String jobId,
+    int? limit = 50,
+  }) {
+    return FirebaseAdminQuerySpec(
+      collectionGroup: FirebaseAdminCollectionGroup.openCvResults,
+      filters: [FirebaseAdminQueryFilter(field: 'job_id', isEqualTo: jobId)],
+      orderBy: const [
+        FirebaseAdminQueryOrder(field: 'created_at', descending: true),
+      ],
+      limit: limit,
+    );
+  }
+
+  static FirebaseAdminQuerySpec layoutsByOwner({
+    required String ownerUid,
+    int? limit = 50,
+  }) {
+    return FirebaseAdminQuerySpec(
+      collectionGroup: FirebaseAdminCollectionGroup.layouts,
+      filters: [
+        FirebaseAdminQueryFilter(field: 'owner_uid', isEqualTo: ownerUid),
+      ],
+      orderBy: const [
+        FirebaseAdminQueryOrder(field: 'updated_at', descending: true),
+      ],
+      limit: limit,
+    );
+  }
+
+  static FirebaseAdminQuerySpec adminActionsForTarget({
+    required String targetType,
+    required String targetId,
+    int? limit = 50,
+  }) {
+    return FirebaseAdminQuerySpec(
+      collectionGroup: FirebaseAdminCollectionGroup.adminActions,
+      filters: [
+        FirebaseAdminQueryFilter(field: 'target_type', isEqualTo: targetType),
+        FirebaseAdminQueryFilter(field: 'target_id', isEqualTo: targetId),
+      ],
+      orderBy: const [
+        FirebaseAdminQueryOrder(field: 'created_at', descending: true),
+      ],
+      limit: limit,
+    );
+  }
+}
+
 abstract class FirebaseAdminRepository {
   Future<bool> isCurrentUserAdmin(AuthSession session);
+
+  Stream<List<FirebaseReconstructionJob>> watchJobs(
+    FirebaseAdminJobQuery query,
+  );
 
   Stream<List<FirebaseReconstructionJob>> watchJobsByStatus(
     FirebaseJobStatus status,
   );
+
+  Stream<List<FirebaseJobStatusTransition>> watchTransitionsForJob({
+    required String jobId,
+  });
+
+  Stream<List<FirebaseOpenCvResult>> watchResultsForJob({
+    required String jobId,
+  });
+
+  Stream<List<FirebaseSavedLayout>> watchLayoutsByOwner({
+    required String ownerUid,
+  });
+
+  Stream<List<FirebaseAdminAction>> watchAdminActionsForTarget({
+    required String targetType,
+    required String targetId,
+  });
 
   Future<FirebaseAdminAction> appendAdminAction(FirebaseAdminAction action);
 }

@@ -336,6 +336,28 @@ class FirebaseModelSerializers {
     model.validate();
     return model;
   }
+
+  static FirebaseAdminAction adminActionFromFirestore(FirebaseJson json) {
+    return FirebaseAdminAction(
+      actionId: _requiredString(json, 'action_id'),
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      createdByUid: _requiredString(json, 'created_by_uid'),
+      createdByRole: FirebaseAdminRole.fromWireValue(json['created_by_role']),
+      actionType: _requiredString(json, 'action_type'),
+      targetType: _requiredString(json, 'target_type'),
+      targetId: _requiredString(json, 'target_id'),
+      reasonCode: _optionalString(json, 'reason_code'),
+      reasonMessage: _optionalString(json, 'reason_message'),
+      permissionOutcome: _optionalString(json, 'permission_outcome'),
+      retryJobId: _optionalString(json, 'retry_job_id'),
+      metadata: json['metadata'] == null
+          ? const {}
+          : _requiredJson(json, 'metadata'),
+      createdAt: _requiredDate(json, 'created_at'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+    );
+  }
 }
 
 extension FirebaseArtifactRefSerializers on FirebaseArtifactRef {

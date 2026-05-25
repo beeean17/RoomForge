@@ -1140,6 +1140,31 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /{path=**}/reconstruction_jobs/{jobId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/transitions/{transitionId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/opencv_results/{resultId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/layouts/{layoutId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/admin_actions/{actionId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

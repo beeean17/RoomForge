@@ -36,6 +36,7 @@ Use this order when starting a Firebase refactor story:
    - [Firebase Default Smoke Flow](firebase-default-smoke-flow.md)
    - [Firebase Local Baseline](firebase-local-baseline.md)
    - [Firebase Admin Role Bootstrap](firebase-admin-role-bootstrap.md)
+   - [Firebase Readiness Review Inputs](firebase-readiness-review-inputs.md)
    - [Firebase Implementation Readiness Report](firebase-implementation-readiness-report.md)
 
 If product PRD or product UX still mention Oracle or the old API server, treat

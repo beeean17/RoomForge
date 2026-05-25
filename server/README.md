@@ -1,6 +1,12 @@
 # RoomForge Server
 
-Lightweight FastAPI service for Firebase token verification, authorization, Oracle DB access, job metadata, layout persistence, and admin operations.
+This is the legacy FastAPI/Oracle service. It is inactive in the default
+Firebase application path and should be used only when `legacy_api` mode is
+selected intentionally.
+
+The service provides Firebase token verification, authorization, Oracle DB
+access, job metadata, layout persistence, and admin operations for the legacy
+path.
 
 The Oracle Cloud 1GB API server must not run heavy OpenCV, deep-learning, or GPU inference workloads. MVP OpenCV candidate extraction runs in the browser/editor layer.
 
@@ -31,8 +37,8 @@ reset when the server restarts.
 The local script uses `http://127.0.0.1:8010` by default to avoid common local
 port conflicts. Override with `ROOMFORGE_SERVER_PORT=8000` if needed.
 
-See `docs/local-service-test.md` from the repository root for the full local
-browser test flow.
+See `docs/legacy/local-service-test.md` from the repository root for the full
+legacy local browser test flow.
 
 ## Auth Session Mapping
 

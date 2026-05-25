@@ -49,8 +49,10 @@ docs/      Project documentation
 The default application backend is Firebase Auth, Firestore, and Storage. The
 FastAPI/Oracle path is retained as legacy/reference code only.
 
-See [docs/project-structure.md](docs/project-structure.md) and [docs/baseline-verification.md](docs/baseline-verification.md).
-Firebase Auth setup is documented in [docs/firebase-auth-setup.md](docs/firebase-auth-setup.md).
+Current Firebase refactor guidance starts at
+[docs/refactor/README.md](docs/refactor/README.md). Historical FastAPI/Oracle
+setup notes live under [docs/legacy/](docs/legacy/) and apply only when
+`legacy_api` mode is selected intentionally.
 
 ## Verification
 

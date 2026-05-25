@@ -400,6 +400,101 @@ class FirebaseFirestoreReconstructionRepository
   }
 }
 
+class FirebaseFirestoreGeometryRepository
+    implements FirebaseGeometryRepository {
+  const FirebaseFirestoreGeometryRepository({
+    required FirebaseFirestore firestore,
+  }) : _firestore = firestore;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> _openCvResultsCollection(
+    String projectId,
+  ) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('opencv_results');
+  }
+
+  CollectionReference<Map<String, dynamic>> _confirmedGeometriesCollection(
+    String projectId,
+  ) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('confirmed_geometries');
+  }
+
+  @override
+  Future<FirebaseOpenCvResult> saveOpenCvResult(
+    FirebaseOpenCvResult result,
+  ) async {
+    result.validate();
+    await _openCvResultsCollection(
+      result.projectId,
+    ).doc(result.resultId).set(result.toFirestoreJson());
+    return result;
+  }
+
+  @override
+  Future<FirebaseConfirmedGeometry> saveConfirmedGeometry(
+    FirebaseConfirmedGeometry geometry,
+  ) async {
+    geometry.validate();
+    await _confirmedGeometriesCollection(
+      geometry.projectId,
+    ).doc(geometry.geometryId).set(geometry.toFirestoreJson());
+    return geometry;
+  }
+
+  @override
+  Future<FirebaseOpenCvResult?> getOpenCvResult({
+    required String ownerUid,
+    required String projectId,
+    required String resultId,
+  }) async {
+    final snapshot = await _openCvResultsCollection(
+      projectId,
+    ).doc(resultId).get(const GetOptions(source: Source.server));
+    final data = snapshot.data();
+    if (data == null) {
+      return null;
+    }
+    final result = FirebaseModelSerializers.openCvResultFromFirestore(
+      _firestoreJson(data),
+    );
+    if (result.ownerUid != ownerUid) {
+      throw const FirebaseContractException('OpenCV result is not available.');
+    }
+    return result;
+  }
+
+  @override
+  Future<FirebaseConfirmedGeometry?> getConfirmedGeometry({
+    required String ownerUid,
+    required String projectId,
+    required String geometryId,
+  }) async {
+    final snapshot = await _confirmedGeometriesCollection(
+      projectId,
+    ).doc(geometryId).get(const GetOptions(source: Source.server));
+    final data = snapshot.data();
+    if (data == null) {
+      return null;
+    }
+    final geometry = FirebaseModelSerializers.confirmedGeometryFromFirestore(
+      _firestoreJson(data),
+    );
+    if (geometry.ownerUid != ownerUid) {
+      throw const FirebaseContractException(
+        'Confirmed geometry is not available.',
+      );
+    }
+    return geometry;
+  }
+}
+
 class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
   const DisabledFirebaseProjectRepository();
 
@@ -529,6 +624,40 @@ class DisabledFirebaseReconstructionRepository
     return Stream.error(
       UnsupportedError('Firebase reconstruction access is unavailable.'),
     );
+  }
+}
+
+class DisabledFirebaseGeometryRepository implements FirebaseGeometryRepository {
+  const DisabledFirebaseGeometryRepository();
+
+  @override
+  Future<FirebaseOpenCvResult> saveOpenCvResult(FirebaseOpenCvResult result) {
+    throw UnsupportedError('Firebase geometry access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseConfirmedGeometry> saveConfirmedGeometry(
+    FirebaseConfirmedGeometry geometry,
+  ) {
+    throw UnsupportedError('Firebase geometry access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseOpenCvResult?> getOpenCvResult({
+    required String ownerUid,
+    required String projectId,
+    required String resultId,
+  }) {
+    throw UnsupportedError('Firebase geometry access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseConfirmedGeometry?> getConfirmedGeometry({
+    required String ownerUid,
+    required String projectId,
+    required String geometryId,
+  }) {
+    throw UnsupportedError('Firebase geometry access is unavailable.');
   }
 }
 

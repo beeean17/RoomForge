@@ -16,6 +16,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -42,6 +43,7 @@ void main() {
     final api = FirebaseProjectApi(
       authRepository: DisabledAuthRepository(),
       session: _session(),
+      geometryRepository: _FakeGeometryRepository(),
       projectRepository: _FakeProjectRepository(),
       reconstructionRepository: _FakeReconstructionRepository(),
       roomDimensionsRepository: dimensions,
@@ -74,6 +76,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -132,6 +135,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -169,6 +173,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: reconstructions,
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -214,6 +219,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: reconstructions,
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -265,6 +271,7 @@ void main() {
     final api = FirebaseProjectApi(
       authRepository: DisabledAuthRepository(),
       session: _session(),
+      geometryRepository: _FakeGeometryRepository(),
       projectRepository: projects,
       reconstructionRepository: _FakeReconstructionRepository(),
       roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -297,6 +304,7 @@ void main() {
     final api = FirebaseProjectApi(
       authRepository: DisabledAuthRepository(),
       session: _session(),
+      geometryRepository: _FakeGeometryRepository(),
       projectRepository: projects,
       reconstructionRepository: reconstructions,
       roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -337,10 +345,103 @@ void main() {
       ]),
     );
   });
+
+  test(
+    'FirebaseProjectApi persists candidate and confirmed geometry separately',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final geometry = _FakeGeometryRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        geometryRepository: geometry,
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      final candidate = await api.saveOpenCvResult(_openCvResult());
+      final confirmed = await api.saveConfirmedGeometry(_confirmedGeometry());
+      final reloadedCandidate = await api.getOpenCvResult(
+        projectId: 'project-1',
+        resultId: candidate.resultId,
+      );
+      final reloadedConfirmed = await api.getConfirmedGeometry(
+        projectId: 'project-1',
+        geometryId: confirmed.geometryId,
+      );
+
+      expect(candidate.coordinateSpace, FirebaseCoordinateSpace.imagePixels);
+      expect(confirmed.coordinateSpace, FirebaseCoordinateSpace.imagePixels);
+      expect(geometry.openCvResults, contains(candidate.resultId));
+      expect(geometry.confirmedGeometries, contains(confirmed.geometryId));
+      expect(
+        geometry.openCvResults[candidate.resultId],
+        isNot(isA<FirebaseConfirmedGeometry>()),
+      );
+      expect(
+        geometry.confirmedGeometries[confirmed.geometryId],
+        isNot(isA<FirebaseOpenCvResult>()),
+      );
+      expect(reloadedCandidate?.resultId, candidate.resultId);
+      expect(reloadedConfirmed?.geometryId, confirmed.geometryId);
+    },
+  );
 }
 
 AuthSession _session() {
   return const AuthSession(uid: 'user-1', email: 'user@example.test');
+}
+
+DateTime get _now => DateTime.utc(2026, 5, 24, 12);
+
+FirebaseOpenCvResult _openCvResult() {
+  return FirebaseOpenCvResult(
+    resultId: 'result-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    jobId: 'job-1',
+    sourceImageId: 'source-1',
+    coordinateSpace: FirebaseCoordinateSpace.imagePixels,
+    algorithmId: 'opencv_lines_corners_v1',
+    candidateCorners: const [
+      FirebasePoint2d(x: 0, y: 0),
+      FirebasePoint2d(x: 100, y: 0),
+      FirebasePoint2d(x: 100, y: 80),
+      FirebasePoint2d(x: 0, y: 80),
+    ],
+    qualityStatus: FirebaseQualityStatus.reviewRequired,
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
+FirebaseConfirmedGeometry _confirmedGeometry() {
+  return FirebaseConfirmedGeometry(
+    geometryId: 'geometry-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    jobId: 'job-1',
+    sourceImageId: 'source-1',
+    openCvResultId: 'result-1',
+    coordinateSpace: FirebaseCoordinateSpace.imagePixels,
+    boundaryType: FirebaseBoundaryType.rectangle,
+    boundaryPoints: const [
+      FirebasePoint2d(x: 0, y: 0),
+      FirebasePoint2d(x: 100, y: 0),
+      FirebasePoint2d(x: 100, y: 80),
+      FirebasePoint2d(x: 0, y: 80),
+    ],
+    correctionMethod: 'candidate_adjusted',
+    confirmedByUid: 'user-1',
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
 }
 
 class _FakeProjectRepository implements FirebaseProjectRepository {
@@ -524,6 +625,59 @@ class _FakeReconstructionRepository
     return Stream.fromFuture(
       getJob(ownerUid: ownerUid, projectId: projectId, jobId: jobId),
     );
+  }
+}
+
+class _FakeGeometryRepository implements FirebaseGeometryRepository {
+  final openCvResults = <String, FirebaseOpenCvResult>{};
+  final confirmedGeometries = <String, FirebaseConfirmedGeometry>{};
+
+  @override
+  Future<FirebaseOpenCvResult> saveOpenCvResult(
+    FirebaseOpenCvResult result,
+  ) async {
+    result.validate();
+    openCvResults[result.resultId] = result;
+    return result;
+  }
+
+  @override
+  Future<FirebaseConfirmedGeometry> saveConfirmedGeometry(
+    FirebaseConfirmedGeometry geometry,
+  ) async {
+    geometry.validate();
+    confirmedGeometries[geometry.geometryId] = geometry;
+    return geometry;
+  }
+
+  @override
+  Future<FirebaseOpenCvResult?> getOpenCvResult({
+    required String ownerUid,
+    required String projectId,
+    required String resultId,
+  }) async {
+    final result = openCvResults[resultId];
+    if (result == null ||
+        result.ownerUid != ownerUid ||
+        result.projectId != projectId) {
+      return null;
+    }
+    return result;
+  }
+
+  @override
+  Future<FirebaseConfirmedGeometry?> getConfirmedGeometry({
+    required String ownerUid,
+    required String projectId,
+    required String geometryId,
+  }) async {
+    final geometry = confirmedGeometries[geometryId];
+    if (geometry == null ||
+        geometry.ownerUid != ownerUid ||
+        geometry.projectId != projectId) {
+      return null;
+    }
+    return geometry;
   }
 }
 

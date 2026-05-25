@@ -29,6 +29,7 @@ Future<void> main() async {
     RoomForgeApp(
       authRepository: firebaseBootstrap.authRepository,
       adminRepository: firebaseBootstrap.adminRepository,
+      geometryRepository: firebaseBootstrap.geometryRepository,
       projectRepository: firebaseBootstrap.projectRepository,
       reconstructionRepository: firebaseBootstrap.reconstructionRepository,
       roomDimensionsRepository: firebaseBootstrap.roomDimensionsRepository,
@@ -45,6 +46,7 @@ class RoomForgeApp extends StatelessWidget {
   const RoomForgeApp({
     required this.authRepository,
     required this.adminRepository,
+    required this.geometryRepository,
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
@@ -58,6 +60,7 @@ class RoomForgeApp extends StatelessWidget {
 
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
+  final FirebaseGeometryRepository geometryRepository;
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
@@ -78,6 +81,7 @@ class RoomForgeApp extends StatelessWidget {
       home: AuthGate(
         authRepository: authRepository,
         adminRepository: adminRepository,
+        geometryRepository: geometryRepository,
         projectRepository: projectRepository,
         reconstructionRepository: reconstructionRepository,
         roomDimensionsRepository: roomDimensionsRepository,
@@ -95,6 +99,7 @@ class AuthGate extends StatelessWidget {
   const AuthGate({
     required this.authRepository,
     required this.adminRepository,
+    required this.geometryRepository,
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
@@ -108,6 +113,7 @@ class AuthGate extends StatelessWidget {
 
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
+  final FirebaseGeometryRepository geometryRepository;
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
@@ -143,6 +149,7 @@ class AuthGate extends StatelessWidget {
                 ? FirebaseProjectApi(
                     authRepository: authRepository,
                     session: session,
+                    geometryRepository: geometryRepository,
                     projectRepository: projectRepository,
                     reconstructionRepository: reconstructionRepository,
                     roomDimensionsRepository: roomDimensionsRepository,

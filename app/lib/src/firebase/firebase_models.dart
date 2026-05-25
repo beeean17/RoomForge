@@ -709,6 +709,11 @@ class FirebaseConfirmedGeometry {
       FirebaseCoordinateSpace.imagePixels,
       'confirmed_geometries',
     );
+    if (boundaryPoints.length < 3) {
+      throw const FirebaseContractException(
+        'confirmed_geometries must include at least three boundary points.',
+      );
+    }
   }
 }
 

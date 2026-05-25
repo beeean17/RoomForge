@@ -16,6 +16,7 @@ class FirebaseAppBootstrapResult {
   const FirebaseAppBootstrapResult({
     required this.authRepository,
     required this.adminRepository,
+    required this.geometryRepository,
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
@@ -28,6 +29,7 @@ class FirebaseAppBootstrapResult {
 
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
+  final FirebaseGeometryRepository geometryRepository;
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
@@ -46,6 +48,7 @@ class FirebaseAppBootstrap {
       return FirebaseAppBootstrapResult(
         authRepository: DisabledAuthRepository(),
         adminRepository: const DisabledFirebaseAdminRepository(),
+        geometryRepository: const DisabledFirebaseGeometryRepository(),
         projectRepository: const DisabledFirebaseProjectRepository(),
         reconstructionRepository:
             const DisabledFirebaseReconstructionRepository(),
@@ -76,6 +79,9 @@ class FirebaseAppBootstrap {
     return FirebaseAppBootstrapResult(
       authRepository: FirebaseAuthRepository(firebaseAuth),
       adminRepository: FirebaseAdminAccessRepository(firestore: firestore),
+      geometryRepository: FirebaseFirestoreGeometryRepository(
+        firestore: firestore,
+      ),
       projectRepository: FirebaseFirestoreProjectRepository(
         firestore: firestore,
       ),

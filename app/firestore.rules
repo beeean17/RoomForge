@@ -202,6 +202,52 @@ service cloud.firestore {
       ];
     }
 
+    function openCvResultKeys() {
+      return [
+        'result_id',
+        'project_id',
+        'owner_uid',
+        'job_id',
+        'source_image_id',
+        'coordinate_space',
+        'algorithm_id',
+        'opencv_version',
+        'candidate_edges',
+        'candidate_lines',
+        'candidate_corners',
+        'boundary_hints',
+        'confidence_score',
+        'quality_status',
+        'failure_reason_code',
+        'failure_reason',
+        'artifact_refs',
+        'processing_started_at',
+        'processing_completed_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function confirmedGeometryKeys() {
+      return [
+        'geometry_id',
+        'project_id',
+        'owner_uid',
+        'job_id',
+        'source_image_id',
+        'opencv_result_id',
+        'coordinate_space',
+        'boundary_type',
+        'boundary_points',
+        'correction_method',
+        'confirmed_by_uid',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
     function isAllowedSourceImageContentType(contentType) {
       return contentType in ['image/jpeg', 'image/png', 'image/webp'];
     }
@@ -226,6 +272,10 @@ service cloud.firestore {
 
     function isAllowedActorType(actorType) {
       return actorType in ['user', 'system', 'admin', 'worker'];
+    }
+
+    function isAllowedBoundaryType(boundaryType) {
+      return boundaryType in ['rectangle', 'simple_polygon'];
     }
 
     function validProjectReconstructionState(data) {
@@ -364,6 +414,10 @@ service cloud.firestore {
 
     function jobTransitionDocPath(projectId, jobId, transitionId) {
       return /databases/$(database)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId)/transitions/$(transitionId);
+    }
+
+    function openCvResultDocPath(projectId, resultId) {
+      return /databases/$(database)/documents/projects/$(projectId)/opencv_results/$(resultId);
     }
 
     function validJobQualityStatus(data) {
@@ -518,6 +572,113 @@ service cloud.firestore {
         ]);
     }
 
+    function validOpenCvResultWrite(projectId, resultId) {
+      return ownsProject(projectId)
+        && request.resource.data.result_id == resultId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.coordinate_space == 'image_pixels'
+        && request.resource.data.quality_status is string
+        && isAllowedQualityStatus(request.resource.data.quality_status)
+        && exists(reconstructionJobDocPath(projectId, request.resource.data.job_id))
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.owner_uid == request.auth.uid
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.source_image_id == request.resource.data.source_image_id
+        && exists(sourceImageDocPath(projectId, request.resource.data.source_image_id))
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(openCvResultKeys())
+        && request.resource.data.keys().hasAll([
+          'result_id',
+          'project_id',
+          'owner_uid',
+          'job_id',
+          'source_image_id',
+          'coordinate_space',
+          'algorithm_id',
+          'quality_status',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validOpenCvResultCreate(projectId, resultId) {
+      return validOpenCvResultWrite(projectId, resultId);
+    }
+
+    function validOpenCvResultUpdate(projectId, resultId) {
+      return validOpenCvResultWrite(projectId, resultId)
+        && request.resource.data.result_id == resource.data.result_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version;
+    }
+
+    function validConfirmedGeometryWrite(projectId, geometryId) {
+      return ownsProject(projectId)
+        && request.resource.data.geometry_id == geometryId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.confirmed_by_uid == request.auth.uid
+        && request.resource.data.coordinate_space == 'image_pixels'
+        && isAllowedBoundaryType(request.resource.data.boundary_type)
+        && request.resource.data.boundary_points is list
+        && request.resource.data.boundary_points.size() >= 3
+        && exists(reconstructionJobDocPath(projectId, request.resource.data.job_id))
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.owner_uid == request.auth.uid
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.source_image_id == request.resource.data.source_image_id
+        && validConfirmedGeometryOpenCvResultLink(projectId)
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(confirmedGeometryKeys())
+        && request.resource.data.keys().hasAll([
+          'geometry_id',
+          'project_id',
+          'owner_uid',
+          'job_id',
+          'source_image_id',
+          'coordinate_space',
+          'boundary_type',
+          'boundary_points',
+          'confirmed_by_uid',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validConfirmedGeometryOpenCvResultLink(projectId) {
+      return !request.resource.data.keys().hasAny(['opencv_result_id'])
+        || request.resource.data.opencv_result_id == null
+        || (
+          exists(openCvResultDocPath(projectId, request.resource.data.opencv_result_id))
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.result_id == request.resource.data.opencv_result_id
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.project_id == projectId
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.owner_uid == request.auth.uid
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.job_id == request.resource.data.job_id
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.source_image_id == request.resource.data.source_image_id
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.coordinate_space == 'image_pixels'
+        );
+    }
+
+    function validConfirmedGeometryCreate(projectId, geometryId) {
+      return validConfirmedGeometryWrite(projectId, geometryId);
+    }
+
+    function validConfirmedGeometryUpdate(projectId, geometryId) {
+      return validConfirmedGeometryWrite(projectId, geometryId)
+        && request.resource.data.geometry_id == resource.data.geometry_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.coordinate_space == resource.data.coordinate_space
+        && request.resource.data.confirmed_by_uid == resource.data.confirmed_by_uid
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version;
+    }
+
     match /users/{uid} {
       allow get: if isSelf(uid) || isAdmin();
       allow list: if false;
@@ -556,6 +717,20 @@ service cloud.firestore {
       allow get, list: if ownsProject(projectId) || isAdmin();
       allow create: if validJobTransitionCreate(projectId, jobId, transitionId);
       allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/opencv_results/{resultId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validOpenCvResultCreate(projectId, resultId);
+      allow update: if validOpenCvResultUpdate(projectId, resultId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/confirmed_geometries/{geometryId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validConfirmedGeometryCreate(projectId, geometryId);
+      allow update: if validConfirmedGeometryUpdate(projectId, geometryId);
+      allow delete: if false;
     }
 
     match /projects/{projectId}/admin_actions/{actionId} {

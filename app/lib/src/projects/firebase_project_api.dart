@@ -12,12 +12,14 @@ class FirebaseProjectApi extends ProjectApi {
   FirebaseProjectApi({
     required super.authRepository,
     required AuthSession session,
+    required FirebaseGeometryRepository geometryRepository,
     required FirebaseProjectRepository projectRepository,
     required FirebaseReconstructionRepository reconstructionRepository,
     required FirebaseRoomDimensionsRepository roomDimensionsRepository,
     required FirebaseSourceImageRepository sourceImageRepository,
     required FirebaseSourceImageUploader sourceImageUploader,
   }) : _session = session,
+       _geometryRepository = geometryRepository,
        _projectRepository = projectRepository,
        _reconstructionRepository = reconstructionRepository,
        _roomDimensionsRepository = roomDimensionsRepository,
@@ -25,6 +27,7 @@ class FirebaseProjectApi extends ProjectApi {
        _sourceImageUploader = sourceImageUploader;
 
   final AuthSession _session;
+  final FirebaseGeometryRepository _geometryRepository;
   final FirebaseProjectRepository _projectRepository;
   final FirebaseReconstructionRepository _reconstructionRepository;
   final FirebaseRoomDimensionsRepository _roomDimensionsRepository;
@@ -511,6 +514,48 @@ class FirebaseProjectApi extends ProjectApi {
     return _reconstructionJobFromFirebase(createdRetry);
   }
 
+  Future<FirebaseOpenCvResult> saveOpenCvResult(
+    FirebaseOpenCvResult result,
+  ) async {
+    await _requireOwnedGeometryProject(
+      projectId: result.projectId,
+      ownerUid: result.ownerUid,
+    );
+    return _geometryRepository.saveOpenCvResult(result);
+  }
+
+  Future<FirebaseConfirmedGeometry> saveConfirmedGeometry(
+    FirebaseConfirmedGeometry geometry,
+  ) async {
+    await _requireOwnedGeometryProject(
+      projectId: geometry.projectId,
+      ownerUid: geometry.ownerUid,
+    );
+    return _geometryRepository.saveConfirmedGeometry(geometry);
+  }
+
+  Future<FirebaseOpenCvResult?> getOpenCvResult({
+    required String projectId,
+    required String resultId,
+  }) {
+    return _geometryRepository.getOpenCvResult(
+      ownerUid: _session.uid,
+      projectId: projectId,
+      resultId: resultId,
+    );
+  }
+
+  Future<FirebaseConfirmedGeometry?> getConfirmedGeometry({
+    required String projectId,
+    required String geometryId,
+  }) {
+    return _geometryRepository.getConfirmedGeometry(
+      ownerUid: _session.uid,
+      projectId: projectId,
+      geometryId: geometryId,
+    );
+  }
+
   @override
   Future<SavedLayout> saveLayout({
     required String projectId,
@@ -670,6 +715,22 @@ class FirebaseProjectApi extends ProjectApi {
       createdAt: job.createdAt,
       updatedAt: updatedAt,
       schemaVersion: job.schemaVersion,
+    );
+  }
+
+  Future<void> _requireOwnedGeometryProject({
+    required String projectId,
+    required String ownerUid,
+  }) async {
+    if (ownerUid != _session.uid) {
+      throw const ProjectApiException(
+        'Geometry owner does not match the signed-in user.',
+        code: 'permission_denied',
+      );
+    }
+    await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
     );
   }
 

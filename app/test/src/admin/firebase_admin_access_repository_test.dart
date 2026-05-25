@@ -19,6 +19,37 @@ void main() {
       expect(FirebaseAdminRoleGuard.isAdminProfileData(const {}), false);
       expect(FirebaseAdminRoleGuard.isAdminProfileData(null), false);
     });
+
+    test('covers minimal admin diagnostics access smoke semantics', () {
+      final adminProfile = const {'role': 'admin', 'uid': 'admin-1'};
+      final nonAdminProfiles = [
+        const {'role': 'user', 'uid': 'user-1'},
+        const <String, Object?>{},
+        null,
+      ];
+
+      expect(FirebaseAdminRoleGuard.isAdminProfileData(adminProfile), isTrue);
+      for (final profile in nonAdminProfiles) {
+        expect(FirebaseAdminRoleGuard.isAdminProfileData(profile), isFalse);
+      }
+
+      final querySpec = FirebaseAdminQuerySpecs.adminActionsForTarget(
+        targetType: 'reconstruction_job',
+        targetId: 'job-1',
+      );
+      final deniedError = FirebaseAdminRepositoryException.fromFirestoreError(
+        FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'permission-denied',
+          message: 'Missing or insufficient permissions.',
+        ),
+        querySpec,
+      );
+
+      expect(deniedError.code, 'permission_denied');
+      expect(deniedError.querySpec, same(querySpec));
+      expect(deniedError.message, contains('denied by Firestore rules'));
+    });
   });
 
   group('Firebase admin retry draft', () {

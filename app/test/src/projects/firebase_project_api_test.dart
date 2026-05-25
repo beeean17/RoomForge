@@ -444,6 +444,129 @@ void main() {
     },
   );
 
+  test(
+    'FirebaseProjectApi exercises the signed-in default smoke flow in order',
+    () async {
+      final projects = _FakeProjectRepository();
+      final roomDimensions = _FakeRoomDimensionsRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final reconstructions = _FakeReconstructionRepository();
+      final geometry = _FakeGeometryRepository();
+      final floorPlans = _FakeFloorPlanRepository();
+      final layouts = _FakeLayoutRepository();
+      final uploader = _FakeSourceImageUploader();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: floorPlans,
+        geometryRepository: geometry,
+        layoutRepository: layouts,
+        projectRepository: projects,
+        reconstructionRepository: reconstructions,
+        roomDimensionsRepository: roomDimensions,
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: uploader,
+      );
+
+      final project = await api.createProject(
+        name: 'Firebase smoke room',
+        description: 'Default path validation',
+      );
+      final openedProject = await api.getProject(project.id);
+      final savedDimensions = await api.saveRoomDimensions(
+        projectId: project.id,
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+      final uploadedImage = await api.uploadSourceImage(
+        projectId: project.id,
+        filename: 'smoke-room.jpg',
+        contentType: 'image/jpeg',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+        widthPx: 1280,
+        heightPx: 720,
+      );
+      final createdJob = await api.createReconstructionJob(
+        projectId: project.id,
+        sourceImageId: uploadedImage.id,
+      );
+      final reviewJob = await api.updateReconstructionJobStatus(
+        projectId: project.id,
+        jobId: createdJob.id,
+        status: 'review_required',
+        reasonCode: 'opencv_candidate_needs_review',
+        reasonMessage: 'Smoke flow persisted a review-required result.',
+      );
+      final persistedJob = await api.getReconstructionJob(
+        projectId: project.id,
+        jobId: createdJob.id,
+      );
+      final candidate = await api.saveOpenCvResult(_openCvResult());
+      final confirmed = await api.saveConfirmedGeometry(_confirmedGeometry());
+      final floorPlan = await api.saveFloorPlan(_floorPlan());
+      final savedLayout = await api.saveLayout(
+        projectId: project.id,
+        roomDimensions: const {
+          'unit': 'meters',
+          'width_value': 4.2,
+          'depth_value': 3.6,
+          'height_value': 2.7,
+        },
+        floorPlan: {'floor_plan_id': floorPlan.floorPlanId},
+        sourceMetadata: {
+          'source_image_id': uploadedImage.id,
+          'reconstruction_job_id': createdJob.id,
+        },
+        furnitureObjects: const [
+          {
+            'id': 'table-1',
+            'category': 'table',
+            'position': {'x': 1.0, 'y': 1.2},
+            'size': {
+              'width_meters': 1.2,
+              'depth_meters': 0.7,
+              'height_meters': 0.75,
+            },
+            'rotation_degrees': 0.0,
+          },
+        ],
+        editorScene: const {
+          'scene_id': 'smoke-scene',
+          'view_mode': '3d',
+          'has_unsaved_changes': false,
+        },
+      );
+      final loadedLayout = await api.loadLatestLayout(projectId: project.id);
+      final exportPayload = await api.exportLatestLayout(projectId: project.id);
+
+      expect(openedProject.id, project.id);
+      expect(openedProject.userId, _session().uid);
+      expect(savedDimensions.unit, 'meters');
+      expect(uploadedImage.id, 'source-1');
+      expect(uploader.uploadedMetadata, containsPair('owner_uid', 'user-1'));
+      expect(createdJob.status, 'created');
+      expect(reviewJob.status, 'review_required');
+      expect(reviewJob.statusLabel, 'Needs review');
+      expect(persistedJob.status, 'review_required');
+      expect(reconstructions.transitions.map((item) => item.toStatus), [
+        FirebaseJobStatus.created,
+        FirebaseJobStatus.reviewRequired,
+      ]);
+      expect(candidate.coordinateSpace, FirebaseCoordinateSpace.imagePixels);
+      expect(confirmed.coordinateSpace, FirebaseCoordinateSpace.imagePixels);
+      expect(floorPlan.coordinateSpace, FirebaseCoordinateSpace.meters);
+      expect(savedLayout.floorPlan['quality_status'], 'review_required');
+      expect(loadedLayout.id, savedLayout.id);
+      expect(exportPayload, containsPair('layout_id', savedLayout.id));
+      expect(
+        exportPayload,
+        containsPair('reconstruction_status', 'review_required'),
+      );
+      expect(exportPayload, containsPair('review_required', true));
+    },
+  );
+
   test('FirebaseProjectApi saves and loads Firebase layouts', () async {
     final projects = _FakeProjectRepository();
     await projects.createProject(ownerUid: 'user-1', name: 'Studio');

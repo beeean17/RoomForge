@@ -7,12 +7,15 @@ import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
 import 'src/admin/admin_api.dart';
+import 'src/admin/firebase_admin_diagnostics.dart';
 import 'src/auth/auth_repository.dart';
 import 'src/editor/editor_config.dart';
 import 'src/api/backend_mode.dart';
+import 'src/firebase/firebase_models.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/layouts/indexed_db_layout_draft_store.dart';
@@ -437,8 +440,10 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
 
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (context) =>
-              FirebaseAdminPlaceholderScreen(session: widget.session),
+          builder: (context) => FirebaseAdminDiagnosticsScreen(
+            session: widget.session,
+            adminRepository: widget.adminRepository,
+          ),
         ),
       );
     } on AdminApiException catch (error) {
@@ -496,45 +501,464 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
   }
 }
 
-class FirebaseAdminPlaceholderScreen extends StatelessWidget {
-  const FirebaseAdminPlaceholderScreen({required this.session, super.key});
+class FirebaseAdminDiagnosticsScreen extends StatefulWidget {
+  const FirebaseAdminDiagnosticsScreen({
+    required this.session,
+    required this.adminRepository,
+    super.key,
+  });
 
   final AuthSession session;
+  final FirebaseAdminRepository adminRepository;
+
+  @override
+  State<FirebaseAdminDiagnosticsScreen> createState() =>
+      _FirebaseAdminDiagnosticsScreenState();
+}
+
+class _FirebaseAdminDiagnosticsScreenState
+    extends State<FirebaseAdminDiagnosticsScreen> {
+  FirebaseJobStatus _statusFilter = FirebaseJobStatus.failed;
+  FirebaseReconstructionJob? _selectedJob;
+  late Stream<List<FirebaseReconstructionJob>> _jobsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _jobsStream = widget.adminRepository.watchJobsByStatus(_statusFilter);
+  }
+
+  void _setStatusFilter(FirebaseJobStatus? status) {
+    if (status == null) {
+      return;
+    }
+    setState(() {
+      _statusFilter = status;
+      _selectedJob = null;
+      _jobsStream = widget.adminRepository.watchJobsByStatus(status);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final displayName = session.displayName ?? session.email ?? session.uid;
+    final displayName =
+        widget.session.displayName ??
+        widget.session.email ??
+        widget.session.uid;
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+      appBar: AppBar(title: const Text('Firebase Admin Diagnostics')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Admin access verified',
+                  'Signed in as $displayName',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 12),
-                Text('Signed in as $displayName.'),
-                const SizedBox(height: 12),
-                const Text(
-                  'Firebase admin diagnostics are not enabled in this story.',
+                DropdownButtonFormField<FirebaseJobStatus>(
+                  value: _statusFilter,
+                  decoration: const InputDecoration(
+                    labelText: 'Job status',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (final status in FirebaseJobStatus.values)
+                      DropdownMenuItem(
+                        value: status,
+                        child: Text(_adminStatusLabel(status.wireValue)),
+                      ),
+                  ],
+                  onChanged: _setStatusFilter,
                 ),
                 const SizedBox(height: 24),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Back to workspace'),
+                StreamBuilder<List<FirebaseReconstructionJob>>(
+                  stream: _jobsStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const LinearProgressIndicator();
+                    }
+                    if (snapshot.hasError) {
+                      return Text(
+                        firebaseAdminSafeErrorMessage(snapshot.error!),
+                      );
+                    }
+                    final jobs = snapshot.data ?? const [];
+                    final jobList = _FirebaseAdminJobList(
+                      jobs: jobs,
+                      selectedJobId: _selectedJob?.jobId,
+                      onSelect: (job) {
+                        setState(() => _selectedJob = job);
+                      },
+                    );
+                    final detail = _selectedJob == null
+                        ? const _FirebaseAdminEmptyDetail()
+                        : _FirebaseAdminJobDetailPanel(
+                            job: _selectedJob!,
+                            adminRepository: widget.adminRepository,
+                          );
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth < 720) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              jobList,
+                              const SizedBox(height: 16),
+                              detail,
+                            ],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 2, child: jobList),
+                            const SizedBox(width: 16),
+                            Expanded(flex: 3, child: detail),
+                          ],
+                        );
+                      },
+                    );
+                  },
                 ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FirebaseAdminJobList extends StatelessWidget {
+  const _FirebaseAdminJobList({
+    required this.jobs,
+    required this.selectedJobId,
+    required this.onSelect,
+  });
+
+  final List<FirebaseReconstructionJob> jobs;
+  final String? selectedJobId;
+  final ValueChanged<FirebaseReconstructionJob> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    if (jobs.isEmpty) {
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('No Firebase jobs match this status.'),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Jobs', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        for (final job in jobs)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              selected: job.jobId == selectedJobId,
+              onTap: () => onSelect(job),
+              title: Text('Job ${job.jobId}'),
+              subtitle: Text(
+                'Owner ${job.ownerUid} | Project ${job.projectId}',
+              ),
+              trailing: Text(_adminStatusLabel(job.status.wireValue)),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FirebaseAdminEmptyDetail extends StatelessWidget {
+  const _FirebaseAdminEmptyDetail();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('Select a job to inspect diagnostics.'),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminJobDetailPanel extends StatelessWidget {
+  const _FirebaseAdminJobDetailPanel({
+    required this.job,
+    required this.adminRepository,
+  });
+
+  final FirebaseReconstructionJob job;
+  final FirebaseAdminRepository adminRepository;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FirebaseAdminSection(
+          title: 'Job detail',
+          children: [
+            Text('Status: ${_adminStatusLabel(job.status.wireValue)}'),
+            Text('Owner: ${job.ownerUid}'),
+            Text('Project: ${job.projectId}'),
+            Text('Job: ${job.jobId}'),
+            Text('Source image: ${job.sourceImageId}'),
+            Text('Provider: ${job.providerType}'),
+            if (job.providerId != null) Text('Provider ID: ${job.providerId}'),
+            if (job.algorithmId != null) Text('Algorithm: ${job.algorithmId}'),
+            if (job.openCvVersion != null) Text('OpenCV: ${job.openCvVersion}'),
+            Text('Retry count: ${job.retryCount}'),
+            if (job.retryOfJobId != null) Text('Retry of: ${job.retryOfJobId}'),
+            if (job.rootJobId != null) Text('Root job: ${job.rootJobId}'),
+            if (job.failureReasonCode != null)
+              Text('Failure: ${job.failureReasonCode}'),
+            if (job.failureReason != null) Text(job.failureReason!),
+            Text('Latest result: ${job.latestResultId ?? 'not_generated'}'),
+            Text(
+              'Latest geometry: ${job.latestConfirmedGeometryId ?? 'not_generated'}',
+            ),
+            Text(
+              'Latest floor plan: ${job.latestFloorPlanId ?? 'not_generated'}',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _FirebaseAdminArtifactRefs(artifactRefs: job.artifactRefs),
+        const SizedBox(height: 12),
+        _FirebaseAdminTransitions(
+          stream: adminRepository.watchTransitionsForJob(jobId: job.jobId),
+        ),
+        const SizedBox(height: 12),
+        _FirebaseAdminResults(
+          stream: adminRepository.watchResultsForJob(jobId: job.jobId),
+        ),
+        const SizedBox(height: 12),
+        _FirebaseAdminLayouts(
+          jobId: job.jobId,
+          stream: adminRepository.watchLayoutsByOwner(ownerUid: job.ownerUid),
+        ),
+      ],
+    );
+  }
+}
+
+class _FirebaseAdminSection extends StatelessWidget {
+  const _FirebaseAdminSection({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminArtifactRefs extends StatelessWidget {
+  const _FirebaseAdminArtifactRefs({required this.artifactRefs});
+
+  final List<FirebaseArtifactRef> artifactRefs;
+
+  @override
+  Widget build(BuildContext context) {
+    if (artifactRefs.isEmpty) {
+      return _FirebaseAdminSection(
+        title: 'Artifact access',
+        children: [Text(FirebaseAdminArtifactReadState.notGenerated.wireValue)],
+      );
+    }
+    return _FirebaseAdminSection(
+      title: 'Artifact access',
+      children: [
+        for (final ref in artifactRefs)
+          FutureBuilder<FirebaseAdminArtifactReadState>(
+            future: _readArtifactState(ref),
+            builder: (context, snapshot) {
+              final state =
+                  snapshot.data ??
+                  (snapshot.connectionState == ConnectionState.waiting
+                      ? null
+                      : FirebaseAdminArtifactReadState.failedToLoad);
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(ref.artifactType),
+                subtitle: Text(ref.storagePath),
+                trailing: Text(state?.wireValue ?? 'checking'),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Future<FirebaseAdminArtifactReadState> _readArtifactState(
+    FirebaseArtifactRef artifactRef,
+  ) async {
+    try {
+      await FirebaseStorage.instance.ref(artifactRef.storagePath).getMetadata();
+      return FirebaseAdminArtifactDiagnostics.stateFor(
+        artifactRef: artifactRef,
+        readSucceeded: true,
+      );
+    } catch (error) {
+      return FirebaseAdminArtifactDiagnostics.stateFor(
+        artifactRef: artifactRef,
+        readError: error,
+      );
+    }
+  }
+}
+
+class _FirebaseAdminTransitions extends StatelessWidget {
+  const _FirebaseAdminTransitions({required this.stream});
+
+  final Stream<List<FirebaseJobStatusTransition>> stream;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<FirebaseJobStatusTransition>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text(firebaseAdminSafeErrorMessage(snapshot.error!));
+        }
+        final transitions = snapshot.data ?? const [];
+        return _FirebaseAdminSection(
+          title: 'Transition history',
+          children: transitions.isEmpty
+              ? const [Text('No transitions found.')]
+              : [
+                  for (final transition in transitions)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        _adminStatusLabel(transition.toStatus.wireValue),
+                      ),
+                      subtitle: Text(
+                        [
+                          transition.actorType.wireValue,
+                          if (transition.reasonCode != null)
+                            transition.reasonCode!,
+                          if (transition.reasonMessage != null)
+                            transition.reasonMessage!,
+                        ].join(' | '),
+                      ),
+                    ),
+                ],
+        );
+      },
+    );
+  }
+}
+
+class _FirebaseAdminResults extends StatelessWidget {
+  const _FirebaseAdminResults({required this.stream});
+
+  final Stream<List<FirebaseOpenCvResult>> stream;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<FirebaseOpenCvResult>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text(firebaseAdminSafeErrorMessage(snapshot.error!));
+        }
+        final results = snapshot.data ?? const [];
+        return _FirebaseAdminSection(
+          title: 'OpenCV results',
+          children: results.isEmpty
+              ? const [Text('No OpenCV result found.')]
+              : [
+                  for (final result in results)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(result.resultId),
+                      subtitle: Text(
+                        '${result.coordinateSpace.wireValue} | ${result.qualityStatus.displayLabel}',
+                      ),
+                    ),
+                ],
+        );
+      },
+    );
+  }
+}
+
+class _FirebaseAdminLayouts extends StatelessWidget {
+  const _FirebaseAdminLayouts({required this.jobId, required this.stream});
+
+  final String jobId;
+  final Stream<List<FirebaseSavedLayout>> stream;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<FirebaseSavedLayout>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text(firebaseAdminSafeErrorMessage(snapshot.error!));
+        }
+        final layouts = (snapshot.data ?? const <FirebaseSavedLayout>[])
+            .where((layout) => layout.reconstructionJobId == jobId)
+            .toList();
+        return _FirebaseAdminSection(
+          title: 'Layout references',
+          children: layouts.isEmpty
+              ? const [Text('No saved layout references found.')]
+              : [
+                  for (final layout in layouts)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(layout.layoutId),
+                      subtitle: Text(
+                        '${layout.coordinateSpace.wireValue} | ${_adminStatusLabel(layout.reconstructionStatus.wireValue)}',
+                      ),
+                    ),
+                ],
+        );
+      },
     );
   }
 }

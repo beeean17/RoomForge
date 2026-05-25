@@ -77,6 +77,7 @@ service firebase.storage {
     function isAdmin() {
       return isSignedIn()
         && firestore.exists(userPath(request.auth.uid))
+        && firestore.get(userPath(request.auth.uid)).data.keys().hasAny(['role'])
         && firestore.get(userPath(request.auth.uid)).data.role == 'admin';
     }
 

@@ -221,18 +221,98 @@ class SavedLayout {
   }
 }
 
-class ProjectApi {
-  ProjectApi({
-    required this.authRepository,
+abstract class ProjectApi {
+  const ProjectApi({required this.authRepository});
+
+  final AuthRepository authRepository;
+
+  Future<List<RoomProject>> listProjects();
+
+  Future<RoomProject> createProject({
+    required String name,
+    String? description,
+  });
+
+  Future<RoomProject> getProject(String projectId);
+
+  Future<RoomProject> updateProject({
+    required String projectId,
+    required String name,
+    String? description,
+  });
+
+  Future<void> deleteProject(String projectId);
+
+  Future<SourceImage> uploadSourceImage({
+    required String projectId,
+    required String filename,
+    required String contentType,
+    required Uint8List bytes,
+    int? widthPx,
+    int? heightPx,
+    void Function(double progress)? onProgress,
+  });
+
+  Future<RoomDimensions> saveRoomDimensions({
+    required String projectId,
+    required double widthValue,
+    required double depthValue,
+    double? heightValue,
+  });
+
+  Future<RoomDimensions?> getRoomDimensions({required String projectId});
+
+  Future<ReconstructionJob> createReconstructionJob({
+    required String projectId,
+    required String sourceImageId,
+  });
+
+  Future<ReconstructionJob> getReconstructionJob({
+    required String projectId,
+    required String jobId,
+  });
+
+  Future<ReconstructionJob> updateReconstructionJobStatus({
+    required String projectId,
+    required String jobId,
+    required String status,
+    required String reasonCode,
+    required String reasonMessage,
+    String? failureReasonCode,
+    String? failureReasonMessage,
+  });
+
+  Future<ReconstructionJob> retryReconstructionJob({
+    required String projectId,
+    required String jobId,
+  });
+
+  Future<SavedLayout> saveLayout({
+    required String projectId,
+    required Map<String, Object?> roomDimensions,
+    required Map<String, Object?> floorPlan,
+    required Map<String, Object?> sourceMetadata,
+    required List<Map<String, Object?>> furnitureObjects,
+    required Map<String, Object?> editorScene,
+  });
+
+  Future<SavedLayout> loadLatestLayout({required String projectId});
+
+  Future<Map<String, Object?>> exportLatestLayout({required String projectId});
+}
+
+class LegacyProjectApi extends ProjectApi {
+  LegacyProjectApi({
+    required super.authRepository,
     http.Client? client,
     String baseUrl = ApiConfig.baseUrl,
   }) : _client = client ?? http.Client(),
        _baseUri = Uri.parse(baseUrl);
 
-  final AuthRepository authRepository;
   final http.Client _client;
   final Uri _baseUri;
 
+  @override
   Future<List<RoomProject>> listProjects() async {
     final response = await _client.get(
       _baseUri.resolve('/room-projects'),
@@ -247,6 +327,7 @@ class ProjectApi {
         .toList();
   }
 
+  @override
   Future<RoomProject> createProject({
     required String name,
     String? description,
@@ -261,6 +342,7 @@ class ProjectApi {
     return RoomProject.fromJson(data['project'] as Map<String, Object?>);
   }
 
+  @override
   Future<RoomProject> getProject(String projectId) async {
     final response = await _client.get(
       _baseUri.resolve('/room-projects/$projectId'),
@@ -271,6 +353,7 @@ class ProjectApi {
     return RoomProject.fromJson(data['project'] as Map<String, Object?>);
   }
 
+  @override
   Future<RoomProject> updateProject({
     required String projectId,
     required String name,
@@ -286,6 +369,7 @@ class ProjectApi {
     return RoomProject.fromJson(data['project'] as Map<String, Object?>);
   }
 
+  @override
   Future<void> deleteProject(String projectId) async {
     final response = await _client.delete(
       _baseUri.resolve('/room-projects/$projectId'),
@@ -297,6 +381,7 @@ class ProjectApi {
     _decodeEnvelope(response);
   }
 
+  @override
   Future<SourceImage> uploadSourceImage({
     required String projectId,
     required String filename,
@@ -328,6 +413,7 @@ class ProjectApi {
     return sourceImage;
   }
 
+  @override
   Future<RoomDimensions> saveRoomDimensions({
     required String projectId,
     required double widthValue,
@@ -349,6 +435,7 @@ class ProjectApi {
     return RoomDimensions.fromJson(data['dimensions'] as Map<String, Object?>);
   }
 
+  @override
   Future<RoomDimensions?> getRoomDimensions({required String projectId}) async {
     try {
       final response = await _client.get(
@@ -368,6 +455,7 @@ class ProjectApi {
     }
   }
 
+  @override
   Future<ReconstructionJob> createReconstructionJob({
     required String projectId,
     required String sourceImageId,
@@ -382,6 +470,7 @@ class ProjectApi {
     return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
   }
 
+  @override
   Future<ReconstructionJob> getReconstructionJob({
     required String projectId,
     required String jobId,
@@ -395,6 +484,7 @@ class ProjectApi {
     return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
   }
 
+  @override
   Future<ReconstructionJob> updateReconstructionJobStatus({
     required String projectId,
     required String jobId,
@@ -422,6 +512,7 @@ class ProjectApi {
     return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
   }
 
+  @override
   Future<ReconstructionJob> retryReconstructionJob({
     required String projectId,
     required String jobId,
@@ -437,6 +528,7 @@ class ProjectApi {
     return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
   }
 
+  @override
   Future<SavedLayout> saveLayout({
     required String projectId,
     required Map<String, Object?> roomDimensions,
@@ -461,6 +553,7 @@ class ProjectApi {
     return SavedLayout.fromJson(data['layout'] as Map<String, Object?>);
   }
 
+  @override
   Future<SavedLayout> loadLatestLayout({required String projectId}) async {
     final response = await _client.get(
       _baseUri.resolve('/room-projects/$projectId/layouts/latest'),
@@ -471,6 +564,7 @@ class ProjectApi {
     return SavedLayout.fromJson(data['layout'] as Map<String, Object?>);
   }
 
+  @override
   Future<Map<String, Object?>> exportLatestLayout({
     required String projectId,
   }) async {

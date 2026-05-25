@@ -1,6 +1,7 @@
 {
   "scripts": {
     "check:editor-firebase-boundary": "bash scripts/check-editor-firebase-boundary.sh",
+    "check:legacy-api-isolation": "bash scripts/check-legacy-api-isolation.sh",
     "test:firebase-rules:projects": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-project-rules.mjs\"",
     "test:firebase-rules:profile": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-profile-rules.mjs\"",
     "test:firebase-rules:geometry": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-geometry-rules.mjs\"",

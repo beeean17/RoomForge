@@ -76,8 +76,8 @@ void main() {
         authRepository: authRepository,
       );
 
+      expect(projectApi, isA<LegacyProjectApi>());
       expect(projectApi, isA<ProjectApi>());
-      expect(projectApi, isNot(isA<FirebaseProjectApi>()));
       expect(legacyAdminApi, isNotNull);
     });
   });

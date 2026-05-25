@@ -23,7 +23,7 @@ class RoomForgeBackendBindings {
     required FirebaseSourceImageUploader sourceImageUploader,
   }) {
     if (backendMode == BackendMode.legacyApi) {
-      return ProjectApi(authRepository: authRepository);
+      return LegacyProjectApi(authRepository: authRepository);
     }
 
     return FirebaseProjectApi(

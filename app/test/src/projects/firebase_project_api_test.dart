@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/src/auth/auth_repository.dart';
 import 'package:app/src/firebase/firebase_models.dart';
 import 'package:app/src/firebase/firebase_repositories.dart';
+import 'package:app/src/firebase/firebase_serializers.dart';
 import 'package:app/src/projects/firebase_project_api.dart';
 import 'package:app/src/projects/firebase_source_image_upload.dart';
 import 'package:app/src/projects/project_api.dart';
@@ -18,6 +19,7 @@ void main() {
         session: _session(),
         floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -46,6 +48,7 @@ void main() {
       session: _session(),
       floorPlanRepository: _FakeFloorPlanRepository(),
       geometryRepository: _FakeGeometryRepository(),
+      layoutRepository: _FakeLayoutRepository(),
       projectRepository: _FakeProjectRepository(),
       reconstructionRepository: _FakeReconstructionRepository(),
       roomDimensionsRepository: dimensions,
@@ -80,6 +83,7 @@ void main() {
         session: _session(),
         floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -140,6 +144,7 @@ void main() {
         session: _session(),
         floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -179,6 +184,7 @@ void main() {
         session: _session(),
         floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
         projectRepository: projects,
         reconstructionRepository: reconstructions,
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -226,6 +232,7 @@ void main() {
         session: _session(),
         floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
         projectRepository: projects,
         reconstructionRepository: reconstructions,
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -279,6 +286,7 @@ void main() {
       session: _session(),
       floorPlanRepository: _FakeFloorPlanRepository(),
       geometryRepository: _FakeGeometryRepository(),
+      layoutRepository: _FakeLayoutRepository(),
       projectRepository: projects,
       reconstructionRepository: _FakeReconstructionRepository(),
       roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -313,6 +321,7 @@ void main() {
       session: _session(),
       floorPlanRepository: _FakeFloorPlanRepository(),
       geometryRepository: _FakeGeometryRepository(),
+      layoutRepository: _FakeLayoutRepository(),
       projectRepository: projects,
       reconstructionRepository: reconstructions,
       roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -365,6 +374,7 @@ void main() {
         session: _session(),
         floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: geometry,
+        layoutRepository: _FakeLayoutRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -411,6 +421,7 @@ void main() {
         session: _session(),
         floorPlanRepository: floorPlans,
         geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
@@ -432,6 +443,233 @@ void main() {
       expect(reloaded?.artifactRefs.single.contentType.wireValue, 'image/png');
     },
   );
+
+  test('FirebaseProjectApi saves and loads Firebase layouts', () async {
+    final projects = _FakeProjectRepository();
+    await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+    final reconstructions = _FakeReconstructionRepository();
+    final floorPlans = _FakeFloorPlanRepository();
+    final layouts = _FakeLayoutRepository();
+    final sourceImages = _FakeSourceImageRepository();
+    final api = FirebaseProjectApi(
+      authRepository: DisabledAuthRepository(),
+      session: _session(),
+      floorPlanRepository: floorPlans,
+      geometryRepository: _FakeGeometryRepository(),
+      layoutRepository: layouts,
+      projectRepository: projects,
+      reconstructionRepository: reconstructions,
+      roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+      sourceImageRepository: sourceImages,
+      sourceImageUploader: _FakeSourceImageUploader(),
+    );
+    await sourceImages.createMetadataAfterUpload(_sourceImage());
+    await api.createReconstructionJob(
+      projectId: 'project-1',
+      sourceImageId: 'source-1',
+    );
+    await api.saveFloorPlan(_floorPlan());
+
+    final saved = await api.saveLayout(
+      projectId: 'project-1',
+      roomDimensions: const {
+        'unit': 'meters',
+        'width_value': 4.2,
+        'depth_value': 3.6,
+        'height_value': 2.7,
+      },
+      floorPlan: const {'floor_plan_id': 'floor-plan-1'},
+      sourceMetadata: const {
+        'source_image_id': 'source-1',
+        'reconstruction_job_id': 'job-1',
+      },
+      furnitureObjects: const [
+        {
+          'id': 'chair-1',
+          'category': 'chair',
+          'position': {'x': 1.0, 'y': 1.2},
+          'size': {
+            'width_meters': 0.6,
+            'depth_meters': 0.6,
+            'height_meters': 0.8,
+          },
+          'rotation_degrees': 15.0,
+          'color': '#64748b',
+        },
+      ],
+      editorScene: const {
+        'scene_id': 'scene-1',
+        'view_mode': '3d',
+        'has_unsaved_changes': false,
+      },
+    );
+    final reloaded = await api.loadLatestLayout(projectId: 'project-1');
+
+    expect(saved.projectId, 'project-1');
+    expect(saved.roomDimensions['width_m'], 4.2);
+    expect(saved.roomDimensions['width_value'], 4.2);
+    expect(saved.roomDimensions['source'], 'user_entered');
+    expect(saved.floorPlan['floor_plan_id'], 'floor-plan-1');
+    expect(saved.floorPlan['job_id'], 'job-1');
+    expect(saved.floorPlan['source_image_id'], 'source-1');
+    expect(saved.floorPlan['room_dimensions'], isA<Map<String, Object?>>());
+    expect(saved.floorPlan['calibration'], isA<Map<String, Object?>>());
+    expect(saved.floorPlan['quality_status'], 'review_required');
+    expect(saved.floorPlan['warnings'], contains('Needs review'));
+    expect(saved.floorPlan['created_at'], isA<String>());
+    expect(saved.floorPlan['updated_at'], isA<String>());
+    expect(saved.sourceMetadata['content_type'], 'image/jpeg');
+    expect(saved.sourceMetadata['byte_size'], 4);
+    expect(saved.sourceMetadata['width_px'], 1280);
+    expect(saved.sourceMetadata['height_px'], 720);
+    expect(saved.sourceMetadata['sha256_hex'], startsWith('9f64a747'));
+    expect(saved.sourceMetadata['uploaded_at'], isA<String>());
+    expect(saved.schemaVersion, 1);
+    expect(saved.exportVersion, 1);
+    expect(saved.furnitureObjects.single, isA<Map<String, Object?>>());
+    expect(
+      Map<String, Object?>.from(saved.furnitureObjects.single as Map)['id'],
+      'chair-1',
+    );
+    expect(reloaded.id, saved.id);
+    expect(reloaded.floorPlan['job_id'], 'job-1');
+    expect(reloaded.floorPlan['calibration'], isA<Map<String, Object?>>());
+    expect(reloaded.sourceMetadata['content_type'], 'image/jpeg');
+    expect(reloaded.schemaVersion, 1);
+    expect(reloaded.exportVersion, 1);
+    expect(reloaded.editorScene['view_mode'], '3d');
+    expect(layouts.saved?.coordinateSpace, FirebaseCoordinateSpace.meters);
+    expect(layouts.saved?.roomDimensions.source, 'user_entered');
+    expect(layouts.saved?.roomDimensions.createdAt, _now);
+    expect(layouts.saved?.roomDimensions.updatedAt, _now);
+    expect(layouts.saved?.floorPlan.floorPlanId, 'floor-plan-1');
+    expect(
+      layouts.saved?.roomDimensions.widthM,
+      layouts.saved?.floorPlan.roomDimensions.widthM,
+    );
+    expect(layouts.saved?.sourceMetadata['reconstruction_status'], 'created');
+  });
+
+  test(
+    'FirebaseProjectApi rejects layout dimensions that differ from floor plan',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final reconstructions = _FakeReconstructionRepository();
+      final floorPlans = _FakeFloorPlanRepository();
+      final layouts = _FakeLayoutRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: floorPlans,
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: layouts,
+        projectRepository: projects,
+        reconstructionRepository: reconstructions,
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+      await sourceImages.createMetadataAfterUpload(_sourceImage());
+      await api.createReconstructionJob(
+        projectId: 'project-1',
+        sourceImageId: 'source-1',
+      );
+      await api.saveFloorPlan(_floorPlan());
+
+      await expectLater(
+        api.saveLayout(
+          projectId: 'project-1',
+          roomDimensions: const {
+            'unit': 'meters',
+            'width_value': 5.0,
+            'depth_value': 3.6,
+            'height_value': 2.7,
+          },
+          floorPlan: const {'floor_plan_id': 'floor-plan-1'},
+          sourceMetadata: const {
+            'source_image_id': 'source-1',
+            'reconstruction_job_id': 'job-1',
+          },
+          furnitureObjects: const [],
+          editorScene: const {'scene_id': 'scene-1'},
+        ),
+        throwsA(
+          isA<ProjectApiException>().having(
+            (error) => error.code,
+            'code',
+            'invalid_layout_payload',
+          ),
+        ),
+      );
+      expect(layouts.saved, isNull);
+    },
+  );
+
+  test(
+    'FirebaseProjectApi rejects incomplete furniture layout payloads',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final reconstructions = _FakeReconstructionRepository();
+      final floorPlans = _FakeFloorPlanRepository();
+      final layouts = _FakeLayoutRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: floorPlans,
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: layouts,
+        projectRepository: projects,
+        reconstructionRepository: reconstructions,
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+      await sourceImages.createMetadataAfterUpload(_sourceImage());
+      await api.createReconstructionJob(
+        projectId: 'project-1',
+        sourceImageId: 'source-1',
+      );
+      await api.saveFloorPlan(_floorPlan());
+
+      await expectLater(
+        api.saveLayout(
+          projectId: 'project-1',
+          roomDimensions: const {
+            'unit': 'meters',
+            'width_value': 4.2,
+            'depth_value': 3.6,
+            'height_value': 2.7,
+          },
+          floorPlan: const {'floor_plan_id': 'floor-plan-1'},
+          sourceMetadata: const {
+            'source_image_id': 'source-1',
+            'reconstruction_job_id': 'job-1',
+          },
+          furnitureObjects: const [
+            {
+              'id': 'chair-1',
+              'category': 'chair',
+              'position': {'x': 1.0, 'y': 1.2},
+              'rotation_degrees': 15.0,
+            },
+          ],
+          editorScene: const {'scene_id': 'scene-1'},
+        ),
+        throwsA(
+          isA<ProjectApiException>().having(
+            (error) => error.code,
+            'code',
+            'invalid_layout_payload',
+          ),
+        ),
+      );
+      expect(layouts.saved, isNull);
+    },
+  );
 }
 
 AuthSession _session() {
@@ -439,6 +677,30 @@ AuthSession _session() {
 }
 
 DateTime get _now => DateTime.utc(2026, 5, 24, 12);
+
+FirebaseSourceImage _sourceImage() {
+  return FirebaseSourceImage(
+    sourceImageId: 'source-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    storagePath:
+        'users/user-1/projects/project-1/source-images/source-1/room.jpg',
+    originalFilename: 'room.jpg',
+    storedFilename: 'room.jpg',
+    contentType: FirebaseImageContentType.jpeg,
+    byteSize: 4,
+    sha256Hex:
+        '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a',
+    widthPx: 1280,
+    heightPx: 720,
+    captureSource: 'file_upload',
+    retentionStatus: FirebaseRetentionStatus.active,
+    uploadedAt: _now,
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
 
 FirebaseOpenCvResult _openCvResult() {
   return FirebaseOpenCvResult(
@@ -623,6 +885,22 @@ class _FakeSourceImageRepository implements FirebaseSourceImageRepository {
   }
 
   @override
+  Future<FirebaseSourceImage?> getSourceImage({
+    required String ownerUid,
+    required String projectId,
+    required String sourceImageId,
+  }) async {
+    final sourceImage = saved;
+    if (sourceImage == null ||
+        sourceImage.ownerUid != ownerUid ||
+        sourceImage.projectId != projectId ||
+        sourceImage.sourceImageId != sourceImageId) {
+      return null;
+    }
+    return sourceImage;
+  }
+
+  @override
   Stream<List<FirebaseSourceImage>> watchProjectSourceImages({
     required String ownerUid,
     required String projectId,
@@ -797,6 +1075,46 @@ class _FakeFloorPlanRepository implements FirebaseFloorPlanRepository {
       return null;
     }
     return floorPlan;
+  }
+}
+
+class _FakeLayoutRepository implements FirebaseLayoutRepository {
+  FirebaseSavedLayout? saved;
+
+  @override
+  Future<FirebaseSavedLayout> saveLayout(FirebaseSavedLayout layout) async {
+    layout.validate();
+    saved = layout;
+    return layout;
+  }
+
+  @override
+  Future<FirebaseSavedLayout?> loadLatestLayout({
+    required String ownerUid,
+    required String projectId,
+  }) async {
+    final layout = saved;
+    if (layout == null ||
+        layout.ownerUid != ownerUid ||
+        layout.projectId != projectId) {
+      return null;
+    }
+    return layout;
+  }
+
+  @override
+  Future<FirebaseJson> exportLatestLayout({
+    required String ownerUid,
+    required String projectId,
+  }) async {
+    final layout = await loadLatestLayout(
+      ownerUid: ownerUid,
+      projectId: projectId,
+    );
+    if (layout == null) {
+      throw const FirebaseContractException('Layout is not available.');
+    }
+    return layout.toExportJson();
   }
 }
 

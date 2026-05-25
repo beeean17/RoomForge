@@ -212,6 +212,28 @@ class FirebaseFirestoreSourceImageRepository
   }
 
   @override
+  Future<FirebaseSourceImage?> getSourceImage({
+    required String ownerUid,
+    required String projectId,
+    required String sourceImageId,
+  }) async {
+    final snapshot = await _sourceImagesCollection(
+      projectId,
+    ).doc(sourceImageId).get(const GetOptions(source: Source.server));
+    final data = snapshot.data();
+    if (data == null) {
+      return null;
+    }
+    final sourceImage = FirebaseModelSerializers.sourceImageFromFirestore(
+      _firestoreJson(data),
+    );
+    if (sourceImage.ownerUid != ownerUid) {
+      throw const FirebaseContractException('Source image is not available.');
+    }
+    return sourceImage;
+  }
+
+  @override
   Stream<List<FirebaseSourceImage>> watchProjectSourceImages({
     required String ownerUid,
     required String projectId,
@@ -544,6 +566,75 @@ class FirebaseFirestoreFloorPlanRepository
   }
 }
 
+class FirebaseFirestoreLayoutRepository implements FirebaseLayoutRepository {
+  const FirebaseFirestoreLayoutRepository({
+    required FirebaseFirestore firestore,
+  }) : _firestore = firestore;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> _layoutsCollection(
+    String projectId,
+  ) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('layouts');
+  }
+
+  @override
+  Future<FirebaseSavedLayout> saveLayout(FirebaseSavedLayout layout) async {
+    layout.validate();
+    final batch = _firestore.batch();
+    batch.set(
+      _layoutsCollection(layout.projectId).doc(layout.layoutId),
+      layout.toFirestoreJson(),
+    );
+    batch.update(_firestore.collection('projects').doc(layout.projectId), {
+      'latest_layout_id': layout.layoutId,
+      'updated_at': layout.updatedAt,
+    });
+    await batch.commit();
+    return layout;
+  }
+
+  @override
+  Future<FirebaseSavedLayout?> loadLatestLayout({
+    required String ownerUid,
+    required String projectId,
+  }) async {
+    final snapshot = await _layoutsCollection(projectId)
+        .orderBy('updated_at', descending: true)
+        .limit(1)
+        .get(const GetOptions(source: Source.server));
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+    final layout = FirebaseModelSerializers.savedLayoutFromFirestore(
+      _firestoreJson(snapshot.docs.first.data()),
+    );
+    if (layout.ownerUid != ownerUid) {
+      throw const FirebaseContractException('Layout is not available.');
+    }
+    return layout;
+  }
+
+  @override
+  Future<FirebaseJson> exportLatestLayout({
+    required String ownerUid,
+    required String projectId,
+  }) async {
+    final layout = await loadLatestLayout(
+      ownerUid: ownerUid,
+      projectId: projectId,
+    );
+    if (layout == null) {
+      throw const FirebaseContractException('Layout is not available.');
+    }
+    return layout.toExportJson();
+  }
+}
+
 class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
   const DisabledFirebaseProjectRepository();
 
@@ -598,6 +689,15 @@ class DisabledFirebaseSourceImageRepository
   Future<FirebaseSourceImage> createMetadataAfterUpload(
     FirebaseSourceImage sourceImage,
   ) {
+    throw UnsupportedError('Firebase source image access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseSourceImage?> getSourceImage({
+    required String ownerUid,
+    required String projectId,
+    required String sourceImageId,
+  }) {
     throw UnsupportedError('Firebase source image access is unavailable.');
   }
 
@@ -726,6 +826,31 @@ class DisabledFirebaseFloorPlanRepository
     required String floorPlanId,
   }) {
     throw UnsupportedError('Firebase floor plan access is unavailable.');
+  }
+}
+
+class DisabledFirebaseLayoutRepository implements FirebaseLayoutRepository {
+  const DisabledFirebaseLayoutRepository();
+
+  @override
+  Future<FirebaseSavedLayout> saveLayout(FirebaseSavedLayout layout) {
+    throw UnsupportedError('Firebase layout access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseSavedLayout?> loadLatestLayout({
+    required String ownerUid,
+    required String projectId,
+  }) {
+    throw UnsupportedError('Firebase layout access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseJson> exportLatestLayout({
+    required String ownerUid,
+    required String projectId,
+  }) {
+    throw UnsupportedError('Firebase layout access is unavailable.');
   }
 }
 

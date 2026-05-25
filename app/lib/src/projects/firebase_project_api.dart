@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import '../auth/auth_repository.dart';
 import '../firebase/firebase_models.dart';
 import '../firebase/firebase_repositories.dart';
+import '../firebase/firebase_serializers.dart';
 import 'firebase_source_image_upload.dart';
 import 'project_api.dart';
 
@@ -14,6 +15,7 @@ class FirebaseProjectApi extends ProjectApi {
     required AuthSession session,
     required FirebaseFloorPlanRepository floorPlanRepository,
     required FirebaseGeometryRepository geometryRepository,
+    required FirebaseLayoutRepository layoutRepository,
     required FirebaseProjectRepository projectRepository,
     required FirebaseReconstructionRepository reconstructionRepository,
     required FirebaseRoomDimensionsRepository roomDimensionsRepository,
@@ -22,6 +24,7 @@ class FirebaseProjectApi extends ProjectApi {
   }) : _session = session,
        _floorPlanRepository = floorPlanRepository,
        _geometryRepository = geometryRepository,
+       _layoutRepository = layoutRepository,
        _projectRepository = projectRepository,
        _reconstructionRepository = reconstructionRepository,
        _roomDimensionsRepository = roomDimensionsRepository,
@@ -31,6 +34,7 @@ class FirebaseProjectApi extends ProjectApi {
   final AuthSession _session;
   final FirebaseFloorPlanRepository _floorPlanRepository;
   final FirebaseGeometryRepository _geometryRepository;
+  final FirebaseLayoutRepository _layoutRepository;
   final FirebaseProjectRepository _projectRepository;
   final FirebaseReconstructionRepository _reconstructionRepository;
   final FirebaseRoomDimensionsRepository _roomDimensionsRepository;
@@ -586,19 +590,117 @@ class FirebaseProjectApi extends ProjectApi {
     required Map<String, Object?> sourceMetadata,
     required List<Map<String, Object?>> furnitureObjects,
     required Map<String, Object?> editorScene,
-  }) {
-    throw const ProjectApiException(
-      'Firebase layout save is implemented in Epic 7.',
-      code: 'not_implemented',
+  }) async {
+    final now = DateTime.now().toUtc();
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
     );
+    final sourceImageId =
+        _stringValue(sourceMetadata['source_image_id']) ??
+        project.latestSourceImageId;
+    final reconstructionJobId =
+        _stringValue(sourceMetadata['reconstruction_job_id']) ??
+        project.latestJobId;
+    final floorPlanId =
+        _stringValue(floorPlan['floor_plan_id']) ?? project.latestFloorPlanId;
+    if (sourceImageId == null ||
+        reconstructionJobId == null ||
+        floorPlanId == null) {
+      throw const ProjectApiException(
+        'Layout requires source image, reconstruction job, and floor plan references before it can be saved.',
+        code: 'missing_layout_reference',
+      );
+    }
+
+    final job = await _reconstructionRepository.getJob(
+      ownerUid: _session.uid,
+      projectId: projectId,
+      jobId: reconstructionJobId,
+    );
+    final sourceImage = await _sourceImageRepository.getSourceImage(
+      ownerUid: _session.uid,
+      projectId: projectId,
+      sourceImageId: sourceImageId,
+    );
+    final metricFloorPlan = await _floorPlanRepository.getFloorPlan(
+      ownerUid: _session.uid,
+      projectId: projectId,
+      floorPlanId: floorPlanId,
+    );
+    if (job == null || sourceImage == null || metricFloorPlan == null) {
+      throw const ProjectApiException(
+        'Layout references are not available. Reload the project and try saving again.',
+        code: 'missing_layout_reference',
+      );
+    }
+    final requestedRoomDimensions = _firebaseRoomDimensionsFromLayoutPayload(
+      projectId: projectId,
+      ownerUid: _session.uid,
+      roomDimensions: roomDimensions,
+      now: now,
+    );
+    if (!_metricRoomDimensionsMatch(
+      requestedRoomDimensions,
+      metricFloorPlan.roomDimensions,
+    )) {
+      throw const ProjectApiException(
+        'Layout room dimensions must match the saved floor plan.',
+        code: 'invalid_layout_payload',
+      );
+    }
+
+    final layoutId = 'layout-${now.microsecondsSinceEpoch}';
+    final normalizedSourceMetadata = _withoutNulls({
+      ...sourceMetadata,
+      ...sourceImage.toFirestoreJson(),
+      'source_image_id': sourceImageId,
+      'reconstruction_job_id': reconstructionJobId,
+      'reconstruction_status': job.status.wireValue,
+    });
+    final layout = FirebaseSavedLayout(
+      layoutId: layoutId,
+      projectId: projectId,
+      ownerUid: _session.uid,
+      sourceImageId: sourceImageId,
+      reconstructionJobId: reconstructionJobId,
+      reconstructionStatus: job.status,
+      reviewRequired:
+          job.status == FirebaseJobStatus.reviewRequired ||
+          metricFloorPlan.qualityStatus == FirebaseQualityStatus.reviewRequired,
+      floorPlanId: metricFloorPlan.floorPlanId,
+      coordinateSpace: FirebaseCoordinateSpace.meters,
+      roomDimensions: metricFloorPlan.roomDimensions,
+      sourceMetadata: normalizedSourceMetadata,
+      floorPlan: metricFloorPlan,
+      editorScene: _withoutNulls(editorScene),
+      furnitureObjects: furnitureObjects
+          .map(_firebaseFurnitureObjectFromLayoutPayload)
+          .toList(),
+      baseFloorPlanUpdatedAt: metricFloorPlan.updatedAt,
+      savedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+      exportVersion: 1,
+    );
+    final saved = await _layoutRepository.saveLayout(layout);
+    return _savedLayoutFromFirebase(saved);
   }
 
   @override
-  Future<SavedLayout> loadLatestLayout({required String projectId}) {
-    throw const ProjectApiException(
-      'Firebase layout load is implemented in Epic 7.',
-      code: 'not_implemented',
+  Future<SavedLayout> loadLatestLayout({required String projectId}) async {
+    final layout = await _layoutRepository.loadLatestLayout(
+      ownerUid: _session.uid,
+      projectId: projectId,
     );
+    if (layout == null) {
+      throw const ProjectApiException(
+        'No saved layout is available for this project.',
+        code: 'not_found',
+      );
+    }
+    return _savedLayoutFromFirebase(layout);
   }
 
   @override
@@ -607,6 +709,159 @@ class FirebaseProjectApi extends ProjectApi {
       'Firebase layout export is implemented in Epic 7.',
       code: 'not_implemented',
     );
+  }
+
+  FirebaseRoomDimensions _firebaseRoomDimensionsFromLayoutPayload({
+    required String projectId,
+    required String ownerUid,
+    required Map<String, Object?> roomDimensions,
+    required DateTime now,
+  }) {
+    return FirebaseRoomDimensions(
+      projectId: projectId,
+      ownerUid: ownerUid,
+      widthM: _requiredNumber(roomDimensions['width_value'], 'width_value'),
+      depthM: _requiredNumber(roomDimensions['depth_value'], 'depth_value'),
+      heightM: _requiredNumber(roomDimensions['height_value'], 'height_value'),
+      unit: roomDimensions['unit']?.toString() ?? 'meters',
+      source: 'layout_save',
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+  }
+
+  bool _metricRoomDimensionsMatch(
+    FirebaseRoomDimensions requested,
+    FirebaseRoomDimensions canonical,
+  ) {
+    return requested.projectId == canonical.projectId &&
+        requested.ownerUid == canonical.ownerUid &&
+        requested.widthM == canonical.widthM &&
+        requested.depthM == canonical.depthM &&
+        requested.heightM == canonical.heightM &&
+        requested.unit == canonical.unit;
+  }
+
+  FirebaseFurnitureObject _firebaseFurnitureObjectFromLayoutPayload(
+    Map<String, Object?> furniture,
+  ) {
+    final position = _requiredRecordValue(furniture['position'], 'position');
+    final size = _requiredRecordValue(furniture['size'], 'size');
+    final category = _requiredStringValue(furniture['category'], 'category');
+    return FirebaseFurnitureObject(
+      furnitureId: _requiredStringValue(furniture['id'], 'id'),
+      category: _furnitureCategoryFromWireValue(category),
+      positionM: FirebasePoint3d(
+        x: _requiredCoordinateValue(position['x'], 'position.x'),
+        y: 0,
+        z: _requiredCoordinateValue(position['y'], 'position.y'),
+      ),
+      sizeM: FirebasePoint3d(
+        x: _requiredNumber(size['width_meters'], 'size.width_meters'),
+        y: _requiredNumber(size['height_meters'], 'size.height_meters'),
+        z: _requiredNumber(size['depth_meters'], 'size.depth_meters'),
+      ),
+      rotationDeg: _requiredCoordinateValue(
+        furniture['rotation_degrees'],
+        'rotation_degrees',
+      ),
+      color: furniture['color']?.toString(),
+      label: furniture['label']?.toString(),
+      locked: furniture['locked'] is bool ? furniture['locked'] as bool : null,
+    );
+  }
+
+  SavedLayout _savedLayoutFromFirebase(FirebaseSavedLayout layout) {
+    return SavedLayout(
+      id: layout.layoutId,
+      projectId: layout.projectId,
+      userId: layout.ownerUid,
+      roomDimensions: _roomDimensionsPayloadFromFirebase(layout.roomDimensions),
+      floorPlan: _floorPlanPayloadFromFirebase(layout.floorPlan),
+      sourceMetadata: _sourceMetadataPayloadFromFirebase(layout.sourceMetadata),
+      furnitureObjects: layout.furnitureObjects
+          .map(_furniturePayloadFromFirebase)
+          .toList(),
+      editorScene: layout.editorScene,
+      createdAt: layout.createdAt,
+      updatedAt: layout.updatedAt,
+      schemaVersion: layout.schemaVersion,
+      exportVersion: layout.exportVersion,
+    );
+  }
+
+  Map<String, Object?> _roomDimensionsPayloadFromFirebase(
+    FirebaseRoomDimensions dimensions,
+  ) {
+    return {
+      ...dimensions.toFirestoreJson(
+        options: FirebaseSerializationOptions.exportJson,
+      ),
+      'unit': dimensions.unit,
+      'width_value': dimensions.widthM,
+      'depth_value': dimensions.depthM,
+      'height_value': dimensions.heightM,
+    };
+  }
+
+  Map<String, Object?> _floorPlanPayloadFromFirebase(
+    FirebaseFloorPlan floorPlan,
+  ) {
+    final points = floorPlan.floorPolygon
+        .map((point) => {'x': point.x, 'y': point.y})
+        .toList();
+    return {
+      ...floorPlan.toExportJson(),
+      'metric_geometry': {
+        'coordinate_space': floorPlan.coordinateSpace.wireValue,
+        'points': points,
+      },
+      'points': points,
+    };
+  }
+
+  Map<String, Object?> _sourceMetadataPayloadFromFirebase(
+    FirebaseJson sourceMetadata,
+  ) {
+    return Map<String, Object?>.from(
+      _layoutPayloadValue(sourceMetadata) as Map,
+    );
+  }
+
+  Map<String, Object?> _furniturePayloadFromFirebase(
+    FirebaseFurnitureObject furniture,
+  ) {
+    return _withoutNulls({
+      'id': furniture.furnitureId,
+      'category': furniture.category.wireValue,
+      'position': {'x': furniture.positionM.x, 'y': furniture.positionM.z},
+      'size': {
+        'width_meters': furniture.sizeM.x,
+        'depth_meters': furniture.sizeM.z,
+        'height_meters': furniture.sizeM.y,
+      },
+      'rotation_degrees': furniture.rotationDeg,
+      'color': furniture.color,
+      'label': furniture.label,
+      'locked': furniture.locked,
+    });
+  }
+
+  Object? _layoutPayloadValue(Object? value) {
+    if (value is DateTime) {
+      return value.toUtc().toIso8601String();
+    }
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          entry.key.toString(): _layoutPayloadValue(entry.value),
+      };
+    }
+    if (value is Iterable) {
+      return value.map(_layoutPayloadValue).toList();
+    }
+    return value;
   }
 
   RoomProject _roomProjectFromFirebase(FirebaseRoomProject project) {
@@ -775,6 +1030,67 @@ class FirebaseProjectApi extends ProjectApi {
         code: 'invalid_status',
       );
     }
+  }
+
+  FirebaseFurnitureCategory _furnitureCategoryFromWireValue(String value) {
+    try {
+      return FirebaseFurnitureCategory.fromWireValue(value);
+    } on FirebaseContractException {
+      return FirebaseFurnitureCategory.custom;
+    }
+  }
+
+  Map<String, Object?> _requiredRecordValue(Object? value, String field) {
+    if (value is Map) {
+      return Map<String, Object?>.from(value);
+    }
+    throw ProjectApiException(
+      'Layout field $field must be an object.',
+      code: 'invalid_layout_payload',
+    );
+  }
+
+  String _requiredStringValue(Object? value, String field) {
+    final text = _stringValue(value);
+    if (text != null) {
+      return text;
+    }
+    throw ProjectApiException(
+      'Layout field $field must be a non-empty string.',
+      code: 'invalid_layout_payload',
+    );
+  }
+
+  String? _stringValue(Object? value) {
+    final text = value?.toString();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  double _requiredCoordinateValue(Object? value, String field) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    throw ProjectApiException(
+      'Layout field $field must be a number.',
+      code: 'invalid_layout_payload',
+    );
+  }
+
+  double _requiredNumber(Object? value, String field) {
+    if (value is num && value > 0) {
+      return value.toDouble();
+    }
+    throw ProjectApiException(
+      'Layout field $field must be a positive number.',
+      code: 'invalid_layout_payload',
+    );
+  }
+
+  Map<String, Object?> _withoutNulls(Map<String, Object?> json) {
+    return {
+      for (final entry in json.entries)
+        if (entry.value != null) entry.key: entry.value,
+    };
   }
 
   ProjectApiException _projectAccessException(FirebaseException error) {

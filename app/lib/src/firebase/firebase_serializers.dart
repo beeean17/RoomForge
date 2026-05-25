@@ -624,9 +624,9 @@ extension FirebaseSavedLayoutSerializers on FirebaseSavedLayout {
       'floor_plan_id': floorPlanId,
       'coordinate_space': coordinateSpace.wireValue,
       'room_dimensions': roomDimensions.toFirestoreJson(options: resolved),
-      'source_metadata': sourceMetadata,
+      'source_metadata': _nestedValue(sourceMetadata, resolved),
       'floor_plan': floorPlan.toFirestoreJson(options: resolved),
-      'editor_scene': editorScene,
+      'editor_scene': _nestedValue(editorScene, resolved),
       'furniture_objects': furnitureObjects
           .map((object) => object.toFirestoreJson())
           .toList(),
@@ -712,6 +712,22 @@ FirebaseJson _withoutNulls(FirebaseJson json) {
 
 Object? _timestamp(DateTime? value, FirebaseSerializationOptions options) {
   return value == null ? null : options.timestampEncoder(value);
+}
+
+Object? _nestedValue(Object? value, FirebaseSerializationOptions options) {
+  if (value is DateTime) {
+    return options.timestampEncoder(value);
+  }
+  if (value is Map) {
+    return {
+      for (final entry in value.entries)
+        entry.key.toString(): _nestedValue(entry.value, options),
+    };
+  }
+  if (value is Iterable) {
+    return value.map((entry) => _nestedValue(entry, options)).toList();
+  }
+  return value;
 }
 
 String _requiredString(FirebaseJson json, String key) {

@@ -186,6 +186,8 @@ class SavedLayout {
     required this.editorScene,
     required this.createdAt,
     required this.updatedAt,
+    this.schemaVersion = 1,
+    this.exportVersion = 1,
   });
 
   final String id;
@@ -198,6 +200,8 @@ class SavedLayout {
   final Map<String, Object?> editorScene;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int schemaVersion;
+  final int exportVersion;
 
   factory SavedLayout.fromJson(Map<String, Object?> json) {
     return SavedLayout(
@@ -211,6 +215,8 @@ class SavedLayout {
       editorScene: Map<String, Object?>.from(json['editor_scene'] as Map),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      schemaVersion: (json['schema_version'] as num?)?.toInt() ?? 1,
+      exportVersion: (json['export_version'] as num?)?.toInt() ?? 1,
     );
   }
 }

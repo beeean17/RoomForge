@@ -31,6 +31,7 @@ Future<void> main() async {
       adminRepository: firebaseBootstrap.adminRepository,
       floorPlanRepository: firebaseBootstrap.floorPlanRepository,
       geometryRepository: firebaseBootstrap.geometryRepository,
+      layoutRepository: firebaseBootstrap.layoutRepository,
       projectRepository: firebaseBootstrap.projectRepository,
       reconstructionRepository: firebaseBootstrap.reconstructionRepository,
       roomDimensionsRepository: firebaseBootstrap.roomDimensionsRepository,
@@ -49,6 +50,7 @@ class RoomForgeApp extends StatelessWidget {
     required this.adminRepository,
     required this.floorPlanRepository,
     required this.geometryRepository,
+    required this.layoutRepository,
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
@@ -64,6 +66,7 @@ class RoomForgeApp extends StatelessWidget {
   final FirebaseAdminRepository adminRepository;
   final FirebaseFloorPlanRepository floorPlanRepository;
   final FirebaseGeometryRepository geometryRepository;
+  final FirebaseLayoutRepository layoutRepository;
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
@@ -86,6 +89,7 @@ class RoomForgeApp extends StatelessWidget {
         adminRepository: adminRepository,
         floorPlanRepository: floorPlanRepository,
         geometryRepository: geometryRepository,
+        layoutRepository: layoutRepository,
         projectRepository: projectRepository,
         reconstructionRepository: reconstructionRepository,
         roomDimensionsRepository: roomDimensionsRepository,
@@ -105,6 +109,7 @@ class AuthGate extends StatelessWidget {
     required this.adminRepository,
     required this.floorPlanRepository,
     required this.geometryRepository,
+    required this.layoutRepository,
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
@@ -120,6 +125,7 @@ class AuthGate extends StatelessWidget {
   final FirebaseAdminRepository adminRepository;
   final FirebaseFloorPlanRepository floorPlanRepository;
   final FirebaseGeometryRepository geometryRepository;
+  final FirebaseLayoutRepository layoutRepository;
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
@@ -157,6 +163,7 @@ class AuthGate extends StatelessWidget {
                     session: session,
                     floorPlanRepository: floorPlanRepository,
                     geometryRepository: geometryRepository,
+                    layoutRepository: layoutRepository,
                     projectRepository: projectRepository,
                     reconstructionRepository: reconstructionRepository,
                     roomDimensionsRepository: roomDimensionsRepository,
@@ -2520,8 +2527,20 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   }
 
   Map<String, Object?> _sourceMetadataPayload() {
+    final sourceImage = widget.sourceImage;
     return {
-      'source_image_id': widget.sourceImage?.id,
+      'source_image_id': sourceImage?.id,
+      'project_id': sourceImage?.projectId,
+      'owner_uid': sourceImage?.userId,
+      'original_filename': sourceImage?.originalFilename,
+      'stored_filename': sourceImage?.storedName,
+      'content_type': sourceImage?.contentType,
+      'byte_size': sourceImage?.byteSize,
+      'width_px': sourceImage?.widthPx,
+      'height_px': sourceImage?.heightPx,
+      'sha256_hex': sourceImage?.sha256Hex,
+      'retention_status': sourceImage?.retentionStatus,
+      'uploaded_at': sourceImage?.uploadedAt.toUtc().toIso8601String(),
       'reconstruction_job_id': widget.reconstructionJob?.id,
       'reconstruction_status': widget.reconstructionJob?.status,
     };

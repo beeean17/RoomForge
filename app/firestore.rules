@@ -286,6 +286,45 @@ service cloud.firestore {
       ];
     }
 
+    function layoutKeys() {
+      return [
+        'layout_id',
+        'project_id',
+        'owner_uid',
+        'name',
+        'source_image_id',
+        'reconstruction_job_id',
+        'reconstruction_status',
+        'review_required',
+        'floor_plan_id',
+        'coordinate_space',
+        'room_dimensions',
+        'source_metadata',
+        'floor_plan',
+        'editor_scene',
+        'furniture_objects',
+        'base_floor_plan_updated_at',
+        'saved_at',
+        'created_at',
+        'updated_at',
+        'schema_version',
+        'export_version'
+      ];
+    }
+
+    function furnitureObjectKeys() {
+      return [
+        'furniture_id',
+        'category',
+        'position_m',
+        'size_m',
+        'rotation_deg',
+        'color',
+        'label',
+        'locked'
+      ];
+    }
+
     function isAllowedSourceImageContentType(contentType) {
       return contentType in ['image/jpeg', 'image/png', 'image/webp'];
     }
@@ -315,6 +354,22 @@ service cloud.firestore {
         'image/webp',
         'application/json'
       ];
+    }
+
+    function isAllowedFurnitureCategory(category) {
+      return category in [
+        'bed',
+        'desk',
+        'chair',
+        'wardrobe',
+        'sofa',
+        'table',
+        'custom'
+      ];
+    }
+
+    function isNumber(value) {
+      return value is int || value is float;
     }
 
     function isSafePathSegment(value) {
@@ -474,6 +529,10 @@ service cloud.firestore {
 
     function confirmedGeometryDocPath(projectId, geometryId) {
       return /databases/$(database)/documents/projects/$(projectId)/confirmed_geometries/$(geometryId);
+    }
+
+    function floorPlanDocPath(projectId, floorPlanId) {
+      return /databases/$(database)/documents/projects/$(projectId)/floor_plans/$(floorPlanId);
     }
 
     function validJobQualityStatus(data) {
@@ -880,6 +939,133 @@ service cloud.firestore {
         && request.resource.data.schema_version == resource.data.schema_version;
     }
 
+    function validLayoutRoomDimensions(projectId) {
+      return request.resource.data.room_dimensions is map
+        && request.resource.data.floor_plan is map
+        && request.resource.data.room_dimensions == request.resource.data.floor_plan.room_dimensions;
+    }
+
+    function validLayoutSourceMetadata(projectId) {
+      return request.resource.data.source_metadata is map
+        && request.resource.data.source_metadata.source_image_id == request.resource.data.source_image_id
+        && request.resource.data.source_metadata.project_id == projectId
+        && request.resource.data.source_metadata.owner_uid == request.auth.uid
+        && request.resource.data.source_metadata.reconstruction_job_id == request.resource.data.reconstruction_job_id
+        && request.resource.data.source_metadata.reconstruction_status == request.resource.data.reconstruction_status
+        && request.resource.data.source_metadata.schema_version == 1;
+    }
+
+    function validLayoutFloorPlanSnapshot(projectId) {
+      return request.resource.data.floor_plan is map
+        && request.resource.data.floor_plan.floor_plan_id == request.resource.data.floor_plan_id
+        && request.resource.data.floor_plan.project_id == projectId
+        && request.resource.data.floor_plan.owner_uid == request.auth.uid;
+    }
+
+    function validPoint3d(value) {
+      return value is map
+        && isNumber(value.x)
+        && isNumber(value.y)
+        && isNumber(value.z);
+    }
+
+    function validLayoutFurnitureObject(object) {
+      return object is map
+        && isSafePathSegment(object.furniture_id)
+        && isAllowedFurnitureCategory(object.category)
+        && validPoint3d(object.position_m)
+        && validPoint3d(object.size_m)
+        && object.size_m.x > 0
+        && object.size_m.y > 0
+        && object.size_m.z > 0
+        && isNumber(object.rotation_deg);
+    }
+
+    function validLayoutFurnitureAt(index) {
+      return request.resource.data.furniture_objects.size() <= index
+        || validLayoutFurnitureObject(
+          request.resource.data.furniture_objects[index]
+        );
+    }
+
+    function validLayoutFurnitureObjects() {
+      return request.resource.data.furniture_objects is list
+        && request.resource.data.furniture_objects.size() <= 8
+        && validLayoutFurnitureAt(0)
+        && validLayoutFurnitureAt(1)
+        && validLayoutFurnitureAt(2)
+        && validLayoutFurnitureAt(3)
+        && validLayoutFurnitureAt(4)
+        && validLayoutFurnitureAt(5)
+        && validLayoutFurnitureAt(6)
+        && validLayoutFurnitureAt(7);
+    }
+
+    function validLayoutExistingReferences(projectId) {
+      let sourcePath = sourceImageDocPath(projectId, request.resource.data.source_image_id);
+      let jobPath = reconstructionJobDocPath(projectId, request.resource.data.reconstruction_job_id);
+      let floorPlanPath = floorPlanDocPath(projectId, request.resource.data.floor_plan_id);
+      let source = get(sourcePath).data;
+      let job = get(jobPath).data;
+      let floorPlan = get(floorPlanPath).data;
+      return source.owner_uid == request.auth.uid
+        && request.resource.data.source_metadata.diff(source).affectedKeys().hasOnly([
+          'reconstruction_job_id',
+          'reconstruction_status'
+        ])
+        && job.owner_uid == request.auth.uid
+        && job.source_image_id == request.resource.data.source_image_id
+        && job.status == request.resource.data.reconstruction_status
+        && floorPlan.owner_uid == request.auth.uid
+        && floorPlan.job_id == request.resource.data.reconstruction_job_id
+        && floorPlan.source_image_id == request.resource.data.source_image_id
+        && floorPlan.coordinate_space == 'meters'
+        && request.resource.data.floor_plan == floorPlan;
+    }
+
+    function validLayoutTimestamps() {
+      return request.resource.data.review_required is bool
+        && request.resource.data.saved_at is timestamp
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.updated_at is timestamp;
+    }
+
+    function validLayoutWrite(projectId, layoutId) {
+      return ownsProject(projectId)
+        && request.resource.data.layout_id == layoutId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.coordinate_space == 'meters'
+        && isAllowedJobStatus(request.resource.data.reconstruction_status)
+        && (
+          request.resource.data.reconstruction_status != 'review_required'
+          || request.resource.data.review_required == true
+        )
+        && validLayoutRoomDimensions(projectId)
+        && validLayoutSourceMetadata(projectId)
+        && validLayoutFloorPlanSnapshot(projectId)
+        && validLayoutExistingReferences(projectId)
+        && request.resource.data.editor_scene is map
+        && validLayoutFurnitureObjects()
+        && validLayoutTimestamps()
+        && request.resource.data.schema_version == 1
+        && request.resource.data.export_version == 1;
+    }
+
+    function validLayoutCreate(projectId, layoutId) {
+      return validLayoutWrite(projectId, layoutId);
+    }
+
+    function validLayoutUpdate(projectId, layoutId) {
+      return validLayoutWrite(projectId, layoutId)
+        && request.resource.data.layout_id == resource.data.layout_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && request.resource.data.export_version == resource.data.export_version;
+    }
+
     match /users/{uid} {
       allow get: if isSelf(uid) || isAdmin();
       allow list: if false;
@@ -939,6 +1125,14 @@ service cloud.firestore {
       allow create: if validFloorPlanCreate(projectId, floorPlanId);
       allow update: if validFloorPlanUpdate(projectId, floorPlanId);
       allow delete: if false;
+    }
+
+    match /projects/{projectId}/layouts/{layoutId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validLayoutCreate(projectId, layoutId);
+      allow update: if validLayoutUpdate(projectId, layoutId);
+      allow delete: if ownsProject(projectId)
+        && resource.data.owner_uid == request.auth.uid;
     }
 
     match /projects/{projectId}/admin_actions/{actionId} {

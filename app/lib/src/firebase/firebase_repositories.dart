@@ -36,6 +36,12 @@ abstract class FirebaseSourceImageRepository {
     FirebaseSourceImage sourceImage,
   );
 
+  Future<FirebaseSourceImage?> getSourceImage({
+    required String ownerUid,
+    required String projectId,
+    required String sourceImageId,
+  });
+
   Stream<List<FirebaseSourceImage>> watchProjectSourceImages({
     required String ownerUid,
     required String projectId,

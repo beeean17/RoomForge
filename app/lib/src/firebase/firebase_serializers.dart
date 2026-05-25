@@ -119,6 +119,70 @@ class FirebaseModelSerializers {
     );
   }
 
+  static FirebaseReconstructionJob reconstructionJobFromFirestore(
+    FirebaseJson json,
+  ) {
+    return FirebaseReconstructionJob(
+      jobId: _requiredString(json, 'job_id'),
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      sourceImageId: _requiredString(json, 'source_image_id'),
+      roomDimensionsId: _requiredString(json, 'room_dimensions_id'),
+      status: FirebaseJobStatus.fromWireValue(json['status']),
+      statusUpdatedAt: _requiredDate(json, 'status_updated_at'),
+      providerType: _requiredString(json, 'provider_type'),
+      providerId: _optionalString(json, 'provider_id'),
+      algorithmId: _optionalString(json, 'algorithm_id'),
+      openCvVersion: _optionalString(json, 'opencv_version'),
+      createdByUid: _requiredString(json, 'created_by_uid'),
+      retryOfJobId: _optionalString(json, 'retry_of_job_id'),
+      rootJobId: _optionalString(json, 'root_job_id'),
+      retryCount: _requiredInt(json, 'retry_count'),
+      latestTransitionId: _optionalString(json, 'latest_transition_id'),
+      latestResultId: _optionalString(json, 'latest_result_id'),
+      latestConfirmedGeometryId: _optionalString(
+        json,
+        'latest_confirmed_geometry_id',
+      ),
+      latestFloorPlanId: _optionalString(json, 'latest_floor_plan_id'),
+      failureReasonCode: _optionalString(json, 'failure_reason_code'),
+      failureReason: _optionalString(json, 'failure_reason'),
+      qualityStatus: json['quality_status'] == null
+          ? null
+          : FirebaseQualityStatus.fromWireValue(json['quality_status']),
+      artifactRefs: _artifactRefList(json, 'artifact_refs'),
+      startedAt: _optionalDate(json, 'started_at'),
+      completedAt: _optionalDate(json, 'completed_at'),
+      timeoutAt: _optionalDate(json, 'timeout_at'),
+      createdAt: _requiredDate(json, 'created_at'),
+      updatedAt: _requiredDate(json, 'updated_at'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+    );
+  }
+
+  static FirebaseJobStatusTransition jobStatusTransitionFromFirestore(
+    FirebaseJson json,
+  ) {
+    return FirebaseJobStatusTransition(
+      transitionId: _requiredString(json, 'transition_id'),
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      jobId: _requiredString(json, 'job_id'),
+      fromStatus: json['from_status'] == null
+          ? null
+          : FirebaseJobStatus.fromWireValue(json['from_status']),
+      toStatus: FirebaseJobStatus.fromWireValue(json['to_status']),
+      occurredAt: _requiredDate(json, 'occurred_at'),
+      actorType: FirebaseActorType.fromWireValue(json['actor_type']),
+      actorUid: _optionalString(json, 'actor_uid'),
+      reasonCode: _optionalString(json, 'reason_code'),
+      reasonMessage: _optionalString(json, 'reason_message'),
+      artifactRefs: _artifactRefList(json, 'artifact_refs'),
+      retryJobId: _optionalString(json, 'retry_job_id'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+    );
+  }
+
   static FirebaseOpenCvResult openCvResultFromFirestore(FirebaseJson json) {
     final coordinateSpace =
         FirebaseContractValidators.requireRawCoordinateSpace(
@@ -404,6 +468,7 @@ extension FirebaseReconstructionJobSerializers on FirebaseReconstructionJob {
       'retry_of_job_id': retryOfJobId,
       'root_job_id': rootJobId,
       'retry_count': retryCount,
+      'latest_transition_id': latestTransitionId,
       'latest_result_id': latestResultId,
       'latest_confirmed_geometry_id': latestConfirmedGeometryId,
       'latest_floor_plan_id': latestFloorPlanId,

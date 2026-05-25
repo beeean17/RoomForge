@@ -30,6 +30,7 @@ Future<void> main() async {
       authRepository: firebaseBootstrap.authRepository,
       adminRepository: firebaseBootstrap.adminRepository,
       projectRepository: firebaseBootstrap.projectRepository,
+      reconstructionRepository: firebaseBootstrap.reconstructionRepository,
       roomDimensionsRepository: firebaseBootstrap.roomDimensionsRepository,
       sourceImageRepository: firebaseBootstrap.sourceImageRepository,
       sourceImageUploader: firebaseBootstrap.sourceImageUploader,
@@ -45,6 +46,7 @@ class RoomForgeApp extends StatelessWidget {
     required this.authRepository,
     required this.adminRepository,
     required this.projectRepository,
+    required this.reconstructionRepository,
     required this.roomDimensionsRepository,
     required this.sourceImageRepository,
     required this.sourceImageUploader,
@@ -57,6 +59,7 @@ class RoomForgeApp extends StatelessWidget {
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
   final FirebaseProjectRepository projectRepository;
+  final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
   final FirebaseSourceImageRepository sourceImageRepository;
   final FirebaseSourceImageUploader sourceImageUploader;
@@ -76,6 +79,7 @@ class RoomForgeApp extends StatelessWidget {
         authRepository: authRepository,
         adminRepository: adminRepository,
         projectRepository: projectRepository,
+        reconstructionRepository: reconstructionRepository,
         roomDimensionsRepository: roomDimensionsRepository,
         sourceImageRepository: sourceImageRepository,
         sourceImageUploader: sourceImageUploader,
@@ -92,6 +96,7 @@ class AuthGate extends StatelessWidget {
     required this.authRepository,
     required this.adminRepository,
     required this.projectRepository,
+    required this.reconstructionRepository,
     required this.roomDimensionsRepository,
     required this.sourceImageRepository,
     required this.sourceImageUploader,
@@ -104,6 +109,7 @@ class AuthGate extends StatelessWidget {
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
   final FirebaseProjectRepository projectRepository;
+  final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
   final FirebaseSourceImageRepository sourceImageRepository;
   final FirebaseSourceImageUploader sourceImageUploader;
@@ -138,6 +144,7 @@ class AuthGate extends StatelessWidget {
                     authRepository: authRepository,
                     session: session,
                     projectRepository: projectRepository,
+                    reconstructionRepository: reconstructionRepository,
                     roomDimensionsRepository: roomDimensionsRepository,
                     sourceImageRepository: sourceImageRepository,
                     sourceImageUploader: sourceImageUploader,

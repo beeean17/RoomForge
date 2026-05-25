@@ -13,17 +13,20 @@ class FirebaseProjectApi extends ProjectApi {
     required super.authRepository,
     required AuthSession session,
     required FirebaseProjectRepository projectRepository,
+    required FirebaseReconstructionRepository reconstructionRepository,
     required FirebaseRoomDimensionsRepository roomDimensionsRepository,
     required FirebaseSourceImageRepository sourceImageRepository,
     required FirebaseSourceImageUploader sourceImageUploader,
   }) : _session = session,
        _projectRepository = projectRepository,
+       _reconstructionRepository = reconstructionRepository,
        _roomDimensionsRepository = roomDimensionsRepository,
        _sourceImageRepository = sourceImageRepository,
        _sourceImageUploader = sourceImageUploader;
 
   final AuthSession _session;
   final FirebaseProjectRepository _projectRepository;
+  final FirebaseReconstructionRepository _reconstructionRepository;
   final FirebaseRoomDimensionsRepository _roomDimensionsRepository;
   final FirebaseSourceImageRepository _sourceImageRepository;
   final FirebaseSourceImageUploader _sourceImageUploader;
@@ -252,33 +255,260 @@ class FirebaseProjectApi extends ProjectApi {
   Future<ReconstructionJob> createReconstructionJob({
     required String projectId,
     required String sourceImageId,
-  }) {
-    throw const ProjectApiException(
-      'Firebase reconstruction jobs are implemented in Epic 5.',
-      code: 'not_implemented',
+  }) async {
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
     );
+    final now = DateTime.now().toUtc();
+    final jobId = _reconstructionRepository.newJobId(
+      projectId: project.projectId,
+    );
+    final transitionId = _reconstructionRepository.newTransitionId(
+      projectId: project.projectId,
+      jobId: jobId,
+    );
+    final job = FirebaseReconstructionJob(
+      jobId: jobId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      sourceImageId: sourceImageId,
+      roomDimensionsId: 'current',
+      status: FirebaseJobStatus.created,
+      statusUpdatedAt: now,
+      providerType: 'manual_assisted_opencv',
+      algorithmId: 'opencv_lines_corners_v1',
+      createdByUid: _session.uid,
+      rootJobId: jobId,
+      retryCount: 0,
+      latestTransitionId: transitionId,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+    final transition = FirebaseJobStatusTransition(
+      transitionId: transitionId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      jobId: jobId,
+      toStatus: FirebaseJobStatus.created,
+      occurredAt: now,
+      actorType: FirebaseActorType.user,
+      actorUid: _session.uid,
+      reasonCode: 'user_submitted',
+      reasonMessage: 'Reconstruction job created from source image.',
+      schemaVersion: 1,
+    );
+    final created = await _reconstructionRepository.createJobWithTransition(
+      job: job,
+      transition: transition,
+      project: _projectWithReconstructionState(
+        project,
+        latestJobId: job.jobId,
+        status: job.status,
+        updatedAt: now,
+      ),
+    );
+    return _reconstructionJobFromFirebase(created);
   }
 
   @override
   Future<ReconstructionJob> getReconstructionJob({
     required String projectId,
     required String jobId,
-  }) {
-    throw const ProjectApiException(
-      'Firebase reconstruction jobs are implemented in Epic 5.',
-      code: 'not_implemented',
+  }) async {
+    final job = await _reconstructionRepository.getJob(
+      ownerUid: _session.uid,
+      projectId: projectId,
+      jobId: jobId,
     );
+    if (job == null) {
+      throw const ProjectApiException(
+        'Reconstruction job was not found.',
+        code: 'not_found',
+      );
+    }
+    return _reconstructionJobFromFirebase(job);
+  }
+
+  @override
+  Future<ReconstructionJob> updateReconstructionJobStatus({
+    required String projectId,
+    required String jobId,
+    required String status,
+    required String reasonCode,
+    required String reasonMessage,
+    String? failureReasonCode,
+    String? failureReasonMessage,
+  }) async {
+    final nextStatus = _jobStatusFromWireValue(status);
+    if (nextStatus == FirebaseJobStatus.retrying) {
+      throw const ProjectApiException(
+        'Use retryReconstructionJob to create a linked retry job.',
+        code: 'invalid_status_transition',
+      );
+    }
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
+    );
+    final current = await _reconstructionRepository.getJob(
+      ownerUid: _session.uid,
+      projectId: project.projectId,
+      jobId: jobId,
+    );
+    if (current == null) {
+      throw const ProjectApiException(
+        'Reconstruction job was not found.',
+        code: 'not_found',
+      );
+    }
+
+    final now = DateTime.now().toUtc();
+    final transitionId = _reconstructionRepository.newTransitionId(
+      projectId: project.projectId,
+      jobId: current.jobId,
+    );
+    final updatedJob = _copyReconstructionJob(
+      current,
+      status: nextStatus,
+      statusUpdatedAt: now,
+      latestTransitionId: transitionId,
+      failureReasonCode: failureReasonCode,
+      failureReason: failureReasonMessage,
+      updatedAt: now,
+    );
+    final transition = FirebaseJobStatusTransition(
+      transitionId: transitionId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      jobId: current.jobId,
+      fromStatus: current.status,
+      toStatus: nextStatus,
+      occurredAt: now,
+      actorType: FirebaseActorType.user,
+      actorUid: _session.uid,
+      reasonCode: reasonCode,
+      reasonMessage: reasonMessage,
+      schemaVersion: 1,
+    );
+    final updated = await _reconstructionRepository.updateJobWithTransition(
+      job: updatedJob,
+      transition: transition,
+      project: _projectWithReconstructionState(
+        project,
+        latestJobId: updatedJob.jobId,
+        status: updatedJob.status,
+        updatedAt: now,
+      ),
+    );
+    return _reconstructionJobFromFirebase(updated);
   }
 
   @override
   Future<ReconstructionJob> retryReconstructionJob({
     required String projectId,
     required String jobId,
-  }) {
-    throw const ProjectApiException(
-      'Firebase reconstruction retry is implemented in Epic 5.',
-      code: 'not_implemented',
+  }) async {
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
     );
+    final current = await _reconstructionRepository.getJob(
+      ownerUid: _session.uid,
+      projectId: project.projectId,
+      jobId: jobId,
+    );
+    if (current == null) {
+      throw const ProjectApiException(
+        'Reconstruction job was not found.',
+        code: 'not_found',
+      );
+    }
+
+    final now = DateTime.now().toUtc();
+    final retryJobId = _reconstructionRepository.newJobId(
+      projectId: project.projectId,
+    );
+    final currentTransitionId = _reconstructionRepository.newTransitionId(
+      projectId: project.projectId,
+      jobId: current.jobId,
+    );
+    final retryTransitionId = _reconstructionRepository.newTransitionId(
+      projectId: project.projectId,
+      jobId: retryJobId,
+    );
+    final retryJob = FirebaseReconstructionJob(
+      jobId: retryJobId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      sourceImageId: current.sourceImageId,
+      roomDimensionsId: current.roomDimensionsId,
+      status: FirebaseJobStatus.created,
+      statusUpdatedAt: now,
+      providerType: current.providerType,
+      providerId: current.providerId,
+      algorithmId: current.algorithmId,
+      openCvVersion: current.openCvVersion,
+      createdByUid: _session.uid,
+      retryOfJobId: current.jobId,
+      rootJobId: current.rootJobId ?? current.jobId,
+      retryCount: current.retryCount + 1,
+      latestTransitionId: retryTransitionId,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+    final updatedCurrent = _copyReconstructionJob(
+      current,
+      status: FirebaseJobStatus.retrying,
+      statusUpdatedAt: now,
+      latestTransitionId: currentTransitionId,
+      updatedAt: now,
+    );
+
+    final currentTransition = FirebaseJobStatusTransition(
+      transitionId: currentTransitionId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      jobId: current.jobId,
+      fromStatus: current.status,
+      toStatus: FirebaseJobStatus.retrying,
+      occurredAt: now,
+      actorType: FirebaseActorType.user,
+      actorUid: _session.uid,
+      reasonCode: 'user_retry',
+      reasonMessage: 'User requested a reconstruction retry.',
+      retryJobId: retryJobId,
+      schemaVersion: 1,
+    );
+    final retryTransition = FirebaseJobStatusTransition(
+      transitionId: retryTransitionId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      jobId: retryJobId,
+      toStatus: FirebaseJobStatus.created,
+      occurredAt: now,
+      actorType: FirebaseActorType.user,
+      actorUid: _session.uid,
+      reasonCode: 'retry_created',
+      reasonMessage: 'Retry reconstruction job created.',
+      schemaVersion: 1,
+    );
+    final createdRetry = await _reconstructionRepository
+        .retryJobWithTransitions(
+          currentJob: updatedCurrent,
+          currentTransition: currentTransition,
+          retryJob: retryJob,
+          retryTransition: retryTransition,
+          project: _projectWithReconstructionState(
+            project,
+            latestJobId: retryJob.jobId,
+            status: retryJob.status,
+            updatedAt: now,
+          ),
+        );
+    return _reconstructionJobFromFirebase(createdRetry);
   }
 
   @override
@@ -355,6 +585,103 @@ class FirebaseProjectApi extends ProjectApi {
       retentionStatus: sourceImage.retentionStatus.wireValue,
       uploadedAt: sourceImage.uploadedAt,
     );
+  }
+
+  ReconstructionJob _reconstructionJobFromFirebase(
+    FirebaseReconstructionJob job,
+  ) {
+    return ReconstructionJob(
+      id: job.jobId,
+      projectId: job.projectId,
+      userId: job.ownerUid,
+      sourceImageId: job.sourceImageId,
+      status: job.status.wireValue,
+      statusLabel: job.status.displayLabel,
+      terminal: job.status.isTerminal,
+      provider: job.providerType,
+      retryOfJobId: job.retryOfJobId,
+      failureReasonCode: job.failureReasonCode,
+      failureReasonMessage: job.failureReason,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    );
+  }
+
+  FirebaseRoomProject _projectWithReconstructionState(
+    FirebaseRoomProject project, {
+    required String latestJobId,
+    required FirebaseJobStatus status,
+    required DateTime updatedAt,
+  }) {
+    return FirebaseRoomProject(
+      projectId: project.projectId,
+      ownerUid: project.ownerUid,
+      name: project.name,
+      description: project.description,
+      schemaVersion: project.schemaVersion,
+      createdAt: project.createdAt,
+      updatedAt: updatedAt,
+      deletedAt: project.deletedAt,
+      latestSourceImageId: project.latestSourceImageId,
+      latestJobId: latestJobId,
+      latestFloorPlanId: project.latestFloorPlanId,
+      latestLayoutId: project.latestLayoutId,
+      currentReconstructionStatus: status,
+      lastOpenedAt: project.lastOpenedAt,
+    );
+  }
+
+  FirebaseReconstructionJob _copyReconstructionJob(
+    FirebaseReconstructionJob job, {
+    required FirebaseJobStatus status,
+    required DateTime statusUpdatedAt,
+    required String latestTransitionId,
+    String? failureReasonCode,
+    String? failureReason,
+    required DateTime updatedAt,
+  }) {
+    return FirebaseReconstructionJob(
+      jobId: job.jobId,
+      projectId: job.projectId,
+      ownerUid: job.ownerUid,
+      sourceImageId: job.sourceImageId,
+      roomDimensionsId: job.roomDimensionsId,
+      status: status,
+      statusUpdatedAt: statusUpdatedAt,
+      providerType: job.providerType,
+      providerId: job.providerId,
+      algorithmId: job.algorithmId,
+      openCvVersion: job.openCvVersion,
+      createdByUid: job.createdByUid,
+      retryOfJobId: job.retryOfJobId,
+      rootJobId: job.rootJobId,
+      retryCount: job.retryCount,
+      latestTransitionId: latestTransitionId,
+      latestResultId: job.latestResultId,
+      latestConfirmedGeometryId: job.latestConfirmedGeometryId,
+      latestFloorPlanId: job.latestFloorPlanId,
+      failureReasonCode: failureReasonCode ?? job.failureReasonCode,
+      failureReason: failureReason ?? job.failureReason,
+      qualityStatus: job.qualityStatus,
+      artifactRefs: job.artifactRefs,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      timeoutAt: job.timeoutAt,
+      createdAt: job.createdAt,
+      updatedAt: updatedAt,
+      schemaVersion: job.schemaVersion,
+    );
+  }
+
+  FirebaseJobStatus _jobStatusFromWireValue(String value) {
+    try {
+      return FirebaseJobStatus.fromWireValue(value);
+    } on FirebaseContractException {
+      throw const ProjectApiException(
+        'Invalid reconstruction job status.',
+        code: 'invalid_status',
+      );
+    }
   }
 
   ProjectApiException _projectAccessException(FirebaseException error) {

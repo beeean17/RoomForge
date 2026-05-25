@@ -130,8 +130,116 @@ service cloud.firestore {
       ];
     }
 
+    function reconstructionJobKeys() {
+      return [
+        'job_id',
+        'project_id',
+        'owner_uid',
+        'source_image_id',
+        'room_dimensions_id',
+        'status',
+        'status_updated_at',
+        'provider_type',
+        'provider_id',
+        'algorithm_id',
+        'opencv_version',
+        'created_by_uid',
+        'retry_of_job_id',
+        'root_job_id',
+        'retry_count',
+        'latest_transition_id',
+        'latest_result_id',
+        'latest_confirmed_geometry_id',
+        'latest_floor_plan_id',
+        'failure_reason_code',
+        'failure_reason',
+        'quality_status',
+        'artifact_refs',
+        'started_at',
+        'completed_at',
+        'timeout_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function mutableReconstructionJobKeys() {
+      return [
+        'status',
+        'status_updated_at',
+        'latest_transition_id',
+        'latest_result_id',
+        'latest_confirmed_geometry_id',
+        'latest_floor_plan_id',
+        'failure_reason_code',
+        'failure_reason',
+        'quality_status',
+        'artifact_refs',
+        'started_at',
+        'completed_at',
+        'timeout_at',
+        'updated_at'
+      ];
+    }
+
+    function jobTransitionKeys() {
+      return [
+        'transition_id',
+        'project_id',
+        'owner_uid',
+        'job_id',
+        'from_status',
+        'to_status',
+        'occurred_at',
+        'actor_type',
+        'actor_uid',
+        'reason_code',
+        'reason_message',
+        'artifact_refs',
+        'retry_job_id',
+        'schema_version'
+      ];
+    }
+
     function isAllowedSourceImageContentType(contentType) {
       return contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    function isAllowedJobStatus(status) {
+      return status in [
+        'created',
+        'uploading',
+        'processing',
+        'review_required',
+        'succeeded',
+        'failed',
+        'timeout',
+        'cancelled',
+        'retrying'
+      ];
+    }
+
+    function isAllowedQualityStatus(status) {
+      return status in ['success', 'review_required', 'failed'];
+    }
+
+    function isAllowedActorType(actorType) {
+      return actorType in ['user', 'system', 'admin', 'worker'];
+    }
+
+    function validProjectReconstructionState(data) {
+      return (
+          (!data.keys().hasAny(['latest_job_id']) || data.latest_job_id == null)
+          && (!data.keys().hasAny(['current_reconstruction_status'])
+            || data.current_reconstruction_status == null)
+        )
+        || (
+          data.latest_job_id is string
+          && isAllowedJobStatus(data.current_reconstruction_status)
+          && getAfter(reconstructionJobDocPath(data.project_id, data.latest_job_id)).data.owner_uid == data.owner_uid
+          && getAfter(reconstructionJobDocPath(data.project_id, data.latest_job_id)).data.status == data.current_reconstruction_status
+        );
     }
 
     function validSourceImageCreate(projectId, sourceImageId) {
@@ -193,6 +301,7 @@ service cloud.firestore {
         && request.resource.data.project_id == projectId
         && request.resource.data.owner_uid == request.auth.uid
         && request.resource.data.schema_version == 1
+        && validProjectReconstructionState(request.resource.data)
         && request.resource.data.keys().hasOnly(projectKeys())
         && request.resource.data.keys().hasAll([
           'project_id',
@@ -212,6 +321,7 @@ service cloud.firestore {
         && request.resource.data.owner_uid == resource.data.owner_uid
         && request.resource.data.created_at == resource.data.created_at
         && request.resource.data.schema_version == resource.data.schema_version
+        && validProjectReconstructionState(request.resource.data)
         && request.resource.data.keys().hasOnly(projectKeys())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(mutableProjectKeys());
     }
@@ -240,6 +350,174 @@ service cloud.firestore {
         ]);
     }
 
+    function sourceImageDocPath(projectId, sourceImageId) {
+      return /databases/$(database)/documents/projects/$(projectId)/source_images/$(sourceImageId);
+    }
+
+    function roomDimensionsDocPath(projectId) {
+      return /databases/$(database)/documents/projects/$(projectId)/room_dimensions/current;
+    }
+
+    function reconstructionJobDocPath(projectId, jobId) {
+      return /databases/$(database)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId);
+    }
+
+    function jobTransitionDocPath(projectId, jobId, transitionId) {
+      return /databases/$(database)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId)/transitions/$(transitionId);
+    }
+
+    function validJobQualityStatus(data) {
+      return !data.keys().hasAny(['quality_status'])
+        || data.quality_status == null
+        || isAllowedQualityStatus(data.quality_status);
+    }
+
+    function validJobTransitionAfter(projectId, jobId) {
+      let transition = getAfter(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id)).data;
+      return request.resource.data.latest_transition_id is string
+        && !exists(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id))
+        && transition.transition_id == request.resource.data.latest_transition_id
+        && transition.job_id == jobId
+        && transition.owner_uid == request.resource.data.owner_uid
+        && transition.to_status == request.resource.data.status;
+    }
+
+    function validRetryJobAfter(projectId, jobId, retryJobId) {
+      let retryJob = getAfter(reconstructionJobDocPath(projectId, retryJobId)).data;
+      return !exists(reconstructionJobDocPath(projectId, retryJobId))
+        && retryJob.job_id == retryJobId
+        && retryJob.project_id == projectId
+        && retryJob.owner_uid == request.resource.data.owner_uid
+        && retryJob.source_image_id == request.resource.data.source_image_id
+        && retryJob.room_dimensions_id == request.resource.data.room_dimensions_id
+        && retryJob.retry_of_job_id == jobId
+        && retryJob.retry_count == resource.data.retry_count + 1
+        && retryJob.status == 'created';
+    }
+
+    function validRetryTransitionLink(projectId, jobId) {
+      let transition = getAfter(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id)).data;
+      return request.resource.data.status != 'retrying'
+        || (
+          transition.keys().hasAny(['retry_job_id'])
+          && transition.retry_job_id is string
+          && validRetryJobAfter(projectId, jobId, transition.retry_job_id)
+        );
+    }
+
+    function validRetryReference(projectId) {
+      return request.resource.data.retry_count == 0
+        || (
+          request.resource.data.retry_of_job_id is string
+          && exists(reconstructionJobDocPath(projectId, request.resource.data.retry_of_job_id))
+          && request.resource.data.root_job_id is string
+        );
+    }
+
+    function validJobTransitionTroubleshootingFields(data) {
+      return data.actor_uid is string
+        && data.reason_code is string
+        && data.reason_message is string;
+    }
+
+    function validReconstructionJobCreate(projectId, jobId) {
+      return ownsProject(projectId)
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.created_by_uid == request.auth.uid
+        && request.resource.data.room_dimensions_id == 'current'
+        && request.resource.data.retry_count >= 0
+        && isAllowedJobStatus(request.resource.data.status)
+        && request.resource.data.status != 'retrying'
+        && validJobQualityStatus(request.resource.data)
+        && validRetryReference(projectId)
+        && validJobTransitionAfter(projectId, jobId)
+        && exists(sourceImageDocPath(projectId, request.resource.data.source_image_id))
+        && exists(roomDimensionsDocPath(projectId))
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.keys().hasAll([
+          'job_id',
+          'project_id',
+          'owner_uid',
+          'source_image_id',
+          'room_dimensions_id',
+          'status',
+          'status_updated_at',
+          'provider_type',
+          'created_by_uid',
+          'retry_count',
+          'latest_transition_id',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ])
+        && request.resource.data.schema_version == 1;
+    }
+
+    function validReconstructionJobUpdate(projectId, jobId) {
+      return ownsProject(projectId)
+        && resource.data.owner_uid == request.auth.uid
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.room_dimensions_id == resource.data.room_dimensions_id
+        && request.resource.data.provider_type == resource.data.provider_type
+        && request.resource.data.created_by_uid == resource.data.created_by_uid
+        && request.resource.data.retry_count == resource.data.retry_count
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && isAllowedJobStatus(request.resource.data.status)
+        && validJobQualityStatus(request.resource.data)
+        && validJobTransitionAfter(projectId, jobId)
+        && request.resource.data.latest_transition_id != resource.data.latest_transition_id
+        && validRetryTransitionLink(projectId, jobId)
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(mutableReconstructionJobKeys());
+    }
+
+    function validJobTransitionCreate(projectId, jobId, transitionId) {
+      let jobAfter = getAfter(reconstructionJobDocPath(projectId, jobId)).data;
+      return (ownsProject(projectId) || isAdmin())
+        && request.resource.data.transition_id == transitionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.job_id == jobId
+        && request.resource.data.owner_uid == jobAfter.owner_uid
+        && jobAfter.latest_transition_id == transitionId
+        && request.resource.data.to_status == jobAfter.status
+        && isAllowedJobStatus(request.resource.data.to_status)
+        && (
+          (
+            !exists(reconstructionJobDocPath(projectId, jobId))
+            && (!request.resource.data.keys().hasAny(['from_status'])
+              || request.resource.data.from_status == null)
+          )
+          || (
+            exists(reconstructionJobDocPath(projectId, jobId))
+            && request.resource.data.from_status == get(reconstructionJobDocPath(projectId, jobId)).data.status
+          )
+        )
+        && isAllowedActorType(request.resource.data.actor_type)
+        && validJobTransitionTroubleshootingFields(request.resource.data)
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(jobTransitionKeys())
+        && request.resource.data.keys().hasAll([
+          'transition_id',
+          'project_id',
+          'owner_uid',
+          'job_id',
+          'to_status',
+          'occurred_at',
+          'actor_type',
+          'actor_uid',
+          'reason_code',
+          'reason_message',
+          'schema_version'
+        ]);
+    }
+
     match /users/{uid} {
       allow get: if isSelf(uid) || isAdmin();
       allow list: if false;
@@ -264,6 +542,19 @@ service cloud.firestore {
     match /projects/{projectId}/source_images/{sourceImageId} {
       allow get, list: if ownsProject(projectId) || isAdmin();
       allow create: if validSourceImageCreate(projectId, sourceImageId);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/reconstruction_jobs/{jobId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validReconstructionJobCreate(projectId, jobId);
+      allow update: if validReconstructionJobUpdate(projectId, jobId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/reconstruction_jobs/{jobId}/transitions/{transitionId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validJobTransitionCreate(projectId, jobId, transitionId);
       allow update, delete: if false;
     }
 

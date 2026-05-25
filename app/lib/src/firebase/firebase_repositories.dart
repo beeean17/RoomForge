@@ -52,11 +52,35 @@ abstract class FirebaseRoomDimensionsRepository {
 }
 
 abstract class FirebaseReconstructionRepository {
-  Future<FirebaseReconstructionJob> createJob(FirebaseReconstructionJob job);
+  String newJobId({required String projectId});
 
-  Future<FirebaseJobStatusTransition> appendTransition(
-    FirebaseJobStatusTransition transition,
-  );
+  String newTransitionId({required String projectId, required String jobId});
+
+  Future<FirebaseReconstructionJob> createJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  });
+
+  Future<FirebaseReconstructionJob> updateJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  });
+
+  Future<FirebaseReconstructionJob> retryJobWithTransitions({
+    required FirebaseReconstructionJob currentJob,
+    required FirebaseJobStatusTransition currentTransition,
+    required FirebaseReconstructionJob retryJob,
+    required FirebaseJobStatusTransition retryTransition,
+    required FirebaseRoomProject project,
+  });
+
+  Future<FirebaseReconstructionJob?> getJob({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  });
 
   Stream<FirebaseReconstructionJob?> watchJob({
     required String ownerUid,

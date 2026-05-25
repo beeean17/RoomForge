@@ -232,6 +232,174 @@ class FirebaseFirestoreSourceImageRepository
   }
 }
 
+class FirebaseFirestoreReconstructionRepository
+    implements FirebaseReconstructionRepository {
+  const FirebaseFirestoreReconstructionRepository({
+    required FirebaseFirestore firestore,
+  }) : _firestore = firestore;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> _jobsCollection(String projectId) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('reconstruction_jobs');
+  }
+
+  DocumentReference<Map<String, dynamic>> _projectDoc(String projectId) {
+    return _firestore.collection('projects').doc(projectId);
+  }
+
+  DocumentReference<Map<String, dynamic>> _jobDoc({
+    required String projectId,
+    required String jobId,
+  }) {
+    return _jobsCollection(projectId).doc(jobId);
+  }
+
+  CollectionReference<Map<String, dynamic>> _transitionsCollection({
+    required String projectId,
+    required String jobId,
+  }) {
+    return _jobsCollection(projectId).doc(jobId).collection('transitions');
+  }
+
+  @override
+  String newJobId({required String projectId}) {
+    return _jobsCollection(projectId).doc().id;
+  }
+
+  @override
+  String newTransitionId({required String projectId, required String jobId}) {
+    return _transitionsCollection(projectId: projectId, jobId: jobId).doc().id;
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> createJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  }) async {
+    final batch = _firestore.batch();
+    batch.set(
+      _jobDoc(projectId: job.projectId, jobId: job.jobId),
+      job.toFirestoreJson(),
+    );
+    batch.set(
+      _transitionsCollection(
+        projectId: transition.projectId,
+        jobId: transition.jobId,
+      ).doc(transition.transitionId),
+      transition.toFirestoreJson(),
+    );
+    batch.set(_projectDoc(project.projectId), project.toFirestoreJson());
+    await batch.commit();
+    return job;
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> updateJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  }) async {
+    final batch = _firestore.batch();
+    batch.set(
+      _jobDoc(projectId: job.projectId, jobId: job.jobId),
+      job.toFirestoreJson(),
+    );
+    batch.set(
+      _transitionsCollection(
+        projectId: transition.projectId,
+        jobId: transition.jobId,
+      ).doc(transition.transitionId),
+      transition.toFirestoreJson(),
+    );
+    batch.set(_projectDoc(project.projectId), project.toFirestoreJson());
+    await batch.commit();
+    return job;
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> retryJobWithTransitions({
+    required FirebaseReconstructionJob currentJob,
+    required FirebaseJobStatusTransition currentTransition,
+    required FirebaseReconstructionJob retryJob,
+    required FirebaseJobStatusTransition retryTransition,
+    required FirebaseRoomProject project,
+  }) async {
+    final batch = _firestore.batch();
+    batch.set(
+      _jobDoc(projectId: currentJob.projectId, jobId: currentJob.jobId),
+      currentJob.toFirestoreJson(),
+    );
+    batch.set(
+      _transitionsCollection(
+        projectId: currentTransition.projectId,
+        jobId: currentTransition.jobId,
+      ).doc(currentTransition.transitionId),
+      currentTransition.toFirestoreJson(),
+    );
+    batch.set(
+      _jobDoc(projectId: retryJob.projectId, jobId: retryJob.jobId),
+      retryJob.toFirestoreJson(),
+    );
+    batch.set(
+      _transitionsCollection(
+        projectId: retryTransition.projectId,
+        jobId: retryTransition.jobId,
+      ).doc(retryTransition.transitionId),
+      retryTransition.toFirestoreJson(),
+    );
+    batch.set(_projectDoc(project.projectId), project.toFirestoreJson());
+    await batch.commit();
+    return retryJob;
+  }
+
+  @override
+  Future<FirebaseReconstructionJob?> getJob({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  }) async {
+    final snapshot = await _jobsCollection(
+      projectId,
+    ).doc(jobId).get(const GetOptions(source: Source.server));
+    return _jobFromSnapshot(snapshot, ownerUid: ownerUid);
+  }
+
+  @override
+  Stream<FirebaseReconstructionJob?> watchJob({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  }) {
+    return _jobsCollection(projectId).doc(jobId).snapshots().map((snapshot) {
+      return _jobFromSnapshot(snapshot, ownerUid: ownerUid);
+    });
+  }
+
+  FirebaseReconstructionJob? _jobFromSnapshot(
+    DocumentSnapshot<Map<String, dynamic>> snapshot, {
+    required String ownerUid,
+  }) {
+    final data = snapshot.data();
+    if (data == null) {
+      return null;
+    }
+    final job = FirebaseModelSerializers.reconstructionJobFromFirestore(
+      _firestoreJson(data),
+    );
+    if (job.ownerUid != ownerUid) {
+      throw const FirebaseContractException(
+        'Reconstruction job is not available.',
+      );
+    }
+    return job;
+  }
+}
+
 class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
   const DisabledFirebaseProjectRepository();
 
@@ -296,6 +464,70 @@ class DisabledFirebaseSourceImageRepository
   }) {
     return Stream.error(
       UnsupportedError('Firebase source image access is unavailable.'),
+    );
+  }
+}
+
+class DisabledFirebaseReconstructionRepository
+    implements FirebaseReconstructionRepository {
+  const DisabledFirebaseReconstructionRepository();
+
+  @override
+  String newJobId({required String projectId}) {
+    throw UnsupportedError('Firebase reconstruction access is unavailable.');
+  }
+
+  @override
+  String newTransitionId({required String projectId, required String jobId}) {
+    throw UnsupportedError('Firebase reconstruction access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> createJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  }) {
+    throw UnsupportedError('Firebase reconstruction access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> updateJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  }) {
+    throw UnsupportedError('Firebase reconstruction access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseReconstructionJob?> getJob({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  }) {
+    throw UnsupportedError('Firebase reconstruction access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> retryJobWithTransitions({
+    required FirebaseReconstructionJob currentJob,
+    required FirebaseJobStatusTransition currentTransition,
+    required FirebaseReconstructionJob retryJob,
+    required FirebaseJobStatusTransition retryTransition,
+    required FirebaseRoomProject project,
+  }) {
+    throw UnsupportedError('Firebase reconstruction access is unavailable.');
+  }
+
+  @override
+  Stream<FirebaseReconstructionJob?> watchJob({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  }) {
+    return Stream.error(
+      UnsupportedError('Firebase reconstruction access is unavailable.'),
     );
   }
 }

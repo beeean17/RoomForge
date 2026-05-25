@@ -534,6 +534,7 @@ class FirebaseReconstructionJob {
     this.openCvVersion,
     this.retryOfJobId,
     this.rootJobId,
+    this.latestTransitionId,
     this.latestResultId,
     this.latestConfirmedGeometryId,
     this.latestFloorPlanId,
@@ -561,6 +562,7 @@ class FirebaseReconstructionJob {
   final String? retryOfJobId;
   final String? rootJobId;
   final int retryCount;
+  final String? latestTransitionId;
   final String? latestResultId;
   final String? latestConfirmedGeometryId;
   final String? latestFloorPlanId;

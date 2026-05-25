@@ -17,6 +17,7 @@ void main() {
         authRepository: DisabledAuthRepository(),
         session: _session(),
         projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
         sourceImageRepository: _FakeSourceImageRepository(),
         sourceImageUploader: _FakeSourceImageUploader(),
@@ -42,6 +43,7 @@ void main() {
       authRepository: DisabledAuthRepository(),
       session: _session(),
       projectRepository: _FakeProjectRepository(),
+      reconstructionRepository: _FakeReconstructionRepository(),
       roomDimensionsRepository: dimensions,
       sourceImageRepository: _FakeSourceImageRepository(),
       sourceImageUploader: _FakeSourceImageUploader(),
@@ -73,6 +75,7 @@ void main() {
         authRepository: DisabledAuthRepository(),
         session: _session(),
         projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
         sourceImageRepository: sourceImages,
         sourceImageUploader: uploader,
@@ -130,6 +133,7 @@ void main() {
         authRepository: DisabledAuthRepository(),
         session: _session(),
         projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
         roomDimensionsRepository: _FakeRoomDimensionsRepository(),
         sourceImageRepository: sourceImages,
         sourceImageUploader: _FakeSourceImageUploader(shouldFail: true),
@@ -155,6 +159,184 @@ void main() {
       expect(sourceImages.saved, isNull);
     },
   );
+
+  test(
+    'FirebaseProjectApi creates reconstruction jobs and transitions',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final reconstructions = _FakeReconstructionRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        projectRepository: projects,
+        reconstructionRepository: reconstructions,
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      final job = await api.createReconstructionJob(
+        projectId: 'project-1',
+        sourceImageId: 'source-1',
+      );
+      final reloaded = await api.getReconstructionJob(
+        projectId: 'project-1',
+        jobId: job.id,
+      );
+
+      expect(job.status, 'created');
+      expect(job.statusLabel, 'created');
+      expect(job.terminal, isFalse);
+      expect(reloaded.id, job.id);
+      expect(
+        reconstructions.transitions.single.toStatus,
+        FirebaseJobStatus.created,
+      );
+      expect(
+        reconstructions.jobs[job.id]?.latestTransitionId,
+        reconstructions.transitions.single.transitionId,
+      );
+      expect(reconstructions.latestProject?.latestJobId, job.id);
+      expect(
+        reconstructions.latestProject?.currentReconstructionStatus,
+        FirebaseJobStatus.created,
+      );
+    },
+  );
+
+  test(
+    'FirebaseProjectApi updates reconstruction status with transition',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final reconstructions = _FakeReconstructionRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        projectRepository: projects,
+        reconstructionRepository: reconstructions,
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+      final created = await api.createReconstructionJob(
+        projectId: 'project-1',
+        sourceImageId: 'source-1',
+      );
+
+      final updated = await api.updateReconstructionJobStatus(
+        projectId: 'project-1',
+        jobId: created.id,
+        status: 'review_required',
+        reasonCode: 'candidate_review_required',
+        reasonMessage: 'Candidate extraction requires user review.',
+      );
+
+      expect(updated.status, 'review_required');
+      expect(updated.statusLabel, 'Needs review');
+      expect(
+        reconstructions.jobs[created.id]?.latestTransitionId,
+        'transition-2',
+      );
+      expect(
+        reconstructions.transitions.last.fromStatus,
+        FirebaseJobStatus.created,
+      );
+      expect(
+        reconstructions.transitions.last.toStatus,
+        FirebaseJobStatus.reviewRequired,
+      );
+      expect(reconstructions.transitions.last.actorUid, 'user-1');
+      expect(
+        reconstructions.transitions.last.reasonCode,
+        'candidate_review_required',
+      );
+      expect(
+        reconstructions.latestProject?.currentReconstructionStatus,
+        FirebaseJobStatus.reviewRequired,
+      );
+    },
+  );
+
+  test('FirebaseProjectApi rejects generic retrying status updates', () async {
+    final projects = _FakeProjectRepository();
+    await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+    final api = FirebaseProjectApi(
+      authRepository: DisabledAuthRepository(),
+      session: _session(),
+      projectRepository: projects,
+      reconstructionRepository: _FakeReconstructionRepository(),
+      roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+      sourceImageRepository: _FakeSourceImageRepository(),
+      sourceImageUploader: _FakeSourceImageUploader(),
+    );
+
+    await expectLater(
+      api.updateReconstructionJobStatus(
+        projectId: 'project-1',
+        jobId: 'job-1',
+        status: 'retrying',
+        reasonCode: 'manual_retry',
+        reasonMessage: 'Retry requested.',
+      ),
+      throwsA(
+        isA<ProjectApiException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_status_transition',
+        ),
+      ),
+    );
+  });
+
+  test('FirebaseProjectApi creates linked retry reconstruction jobs', () async {
+    final projects = _FakeProjectRepository();
+    await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+    final reconstructions = _FakeReconstructionRepository();
+    final api = FirebaseProjectApi(
+      authRepository: DisabledAuthRepository(),
+      session: _session(),
+      projectRepository: projects,
+      reconstructionRepository: reconstructions,
+      roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+      sourceImageRepository: _FakeSourceImageRepository(),
+      sourceImageUploader: _FakeSourceImageUploader(),
+    );
+    final original = await api.createReconstructionJob(
+      projectId: 'project-1',
+      sourceImageId: 'source-1',
+    );
+
+    final retry = await api.retryReconstructionJob(
+      projectId: 'project-1',
+      jobId: original.id,
+    );
+
+    expect(retry.id, isNot(original.id));
+    expect(retry.retryOfJobId, original.id);
+    expect(
+      reconstructions.jobs[original.id]?.status,
+      FirebaseJobStatus.retrying,
+    );
+    expect(
+      reconstructions.jobs[original.id]?.latestTransitionId,
+      reconstructions.transitions[1].transitionId,
+    );
+    expect(reconstructions.jobs[retry.id]?.retryCount, 1);
+    expect(
+      reconstructions.jobs[retry.id]?.latestTransitionId,
+      reconstructions.transitions[2].transitionId,
+    );
+    expect(
+      reconstructions.transitions.map((transition) => transition.toStatus),
+      containsAllInOrder([
+        FirebaseJobStatus.created,
+        FirebaseJobStatus.retrying,
+        FirebaseJobStatus.created,
+      ]),
+    );
+  });
 }
 
 AuthSession _session() {
@@ -257,6 +439,91 @@ class _FakeSourceImageRepository implements FirebaseSourceImageRepository {
           saved!.projectId == projectId)
         saved!,
     ]);
+  }
+}
+
+class _FakeReconstructionRepository
+    implements FirebaseReconstructionRepository {
+  final jobs = <String, FirebaseReconstructionJob>{};
+  final transitions = <FirebaseJobStatusTransition>[];
+  FirebaseRoomProject? latestProject;
+  var _jobCount = 0;
+  var _transitionCount = 0;
+
+  @override
+  String newJobId({required String projectId}) {
+    _jobCount += 1;
+    return 'job-$_jobCount';
+  }
+
+  @override
+  String newTransitionId({required String projectId, required String jobId}) {
+    _transitionCount += 1;
+    return 'transition-$_transitionCount';
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> createJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  }) async {
+    jobs[job.jobId] = job;
+    transitions.add(transition);
+    latestProject = project;
+    return job;
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> updateJobWithTransition({
+    required FirebaseReconstructionJob job,
+    required FirebaseJobStatusTransition transition,
+    required FirebaseRoomProject project,
+  }) async {
+    jobs[job.jobId] = job;
+    transitions.add(transition);
+    latestProject = project;
+    return job;
+  }
+
+  @override
+  Future<FirebaseReconstructionJob> retryJobWithTransitions({
+    required FirebaseReconstructionJob currentJob,
+    required FirebaseJobStatusTransition currentTransition,
+    required FirebaseReconstructionJob retryJob,
+    required FirebaseJobStatusTransition retryTransition,
+    required FirebaseRoomProject project,
+  }) async {
+    jobs[currentJob.jobId] = currentJob;
+    transitions.add(currentTransition);
+    jobs[retryJob.jobId] = retryJob;
+    transitions.add(retryTransition);
+    latestProject = project;
+    return retryJob;
+  }
+
+  @override
+  Future<FirebaseReconstructionJob?> getJob({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  }) async {
+    final job = jobs[jobId];
+    if (job == null || job.ownerUid != ownerUid || job.projectId != projectId) {
+      return null;
+    }
+    return job;
+  }
+
+  @override
+  Stream<FirebaseReconstructionJob?> watchJob({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  }) {
+    return Stream.fromFuture(
+      getJob(ownerUid: ownerUid, projectId: projectId, jobId: jobId),
+    );
   }
 }
 

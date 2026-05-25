@@ -389,6 +389,33 @@ class ProjectApi {
     return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
   }
 
+  Future<ReconstructionJob> updateReconstructionJobStatus({
+    required String projectId,
+    required String jobId,
+    required String status,
+    required String reasonCode,
+    required String reasonMessage,
+    String? failureReasonCode,
+    String? failureReasonMessage,
+  }) async {
+    final response = await _client.patch(
+      _baseUri.resolve(
+        '/room-projects/$projectId/reconstruction-jobs/$jobId/status',
+      ),
+      headers: await _headers(),
+      body: jsonEncode({
+        'status': status,
+        'reason_code': reasonCode,
+        'reason_message': reasonMessage,
+        'failure_reason_code': failureReasonCode,
+        'failure_reason_message': failureReasonMessage,
+      }),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    return ReconstructionJob.fromJson(data['job'] as Map<String, Object?>);
+  }
+
   Future<ReconstructionJob> retryReconstructionJob({
     required String projectId,
     required String jobId,

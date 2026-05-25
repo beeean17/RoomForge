@@ -181,6 +181,12 @@ enum FirebaseQualityStatus {
 
   final String wireValue;
 
+  String get displayLabel {
+    return this == FirebaseQualityStatus.reviewRequired
+        ? 'Needs review'
+        : wireValue;
+  }
+
   static FirebaseQualityStatus fromWireValue(Object? value) {
     return _enumFromWireValue(
       value,
@@ -371,6 +377,39 @@ class FirebaseArtifactRef {
   final int? heightPx;
   final DateTime? createdAt;
   final String? description;
+
+  void validate({
+    required String ownerUid,
+    required String projectId,
+    required String jobId,
+  }) {
+    final expectedPrefix =
+        'users/$ownerUid/projects/$projectId/artifacts/$jobId/$artifactId/';
+    if (!storagePath.startsWith(expectedPrefix)) {
+      throw const FirebaseContractException(
+        'artifact_refs storage_path must match the owning project, job, and artifact.',
+      );
+    }
+    if (byteSize != null && byteSize! <= 0) {
+      throw const FirebaseContractException(
+        'artifact_refs byte_size must be positive when provided.',
+      );
+    }
+    if (byteSize != null &&
+        contentType == FirebaseArtifactContentType.json &&
+        byteSize! > 2 * 1024 * 1024) {
+      throw const FirebaseContractException(
+        'artifact_refs JSON artifacts must be 2 MB or smaller.',
+      );
+    }
+    if (byteSize != null &&
+        contentType != FirebaseArtifactContentType.json &&
+        byteSize! > 10 * 1024 * 1024) {
+      throw const FirebaseContractException(
+        'artifact_refs image artifacts must be 10 MB or smaller.',
+      );
+    }
+  }
 }
 
 class FirebaseUserProfile {
@@ -765,6 +804,18 @@ class FirebaseFloorPlan {
       'floor_plans',
     );
     roomDimensions.validate();
+    if (floorPolygon.length < 3) {
+      throw const FirebaseContractException(
+        'floor_plans must include at least three floor polygon points.',
+      );
+    }
+    for (final artifactRef in artifactRefs) {
+      artifactRef.validate(
+        ownerUid: ownerUid,
+        projectId: projectId,
+        jobId: jobId,
+      );
+    }
   }
 }
 

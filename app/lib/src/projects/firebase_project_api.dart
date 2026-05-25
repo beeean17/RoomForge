@@ -12,6 +12,7 @@ class FirebaseProjectApi extends ProjectApi {
   FirebaseProjectApi({
     required super.authRepository,
     required AuthSession session,
+    required FirebaseFloorPlanRepository floorPlanRepository,
     required FirebaseGeometryRepository geometryRepository,
     required FirebaseProjectRepository projectRepository,
     required FirebaseReconstructionRepository reconstructionRepository,
@@ -19,6 +20,7 @@ class FirebaseProjectApi extends ProjectApi {
     required FirebaseSourceImageRepository sourceImageRepository,
     required FirebaseSourceImageUploader sourceImageUploader,
   }) : _session = session,
+       _floorPlanRepository = floorPlanRepository,
        _geometryRepository = geometryRepository,
        _projectRepository = projectRepository,
        _reconstructionRepository = reconstructionRepository,
@@ -27,6 +29,7 @@ class FirebaseProjectApi extends ProjectApi {
        _sourceImageUploader = sourceImageUploader;
 
   final AuthSession _session;
+  final FirebaseFloorPlanRepository _floorPlanRepository;
   final FirebaseGeometryRepository _geometryRepository;
   final FirebaseProjectRepository _projectRepository;
   final FirebaseReconstructionRepository _reconstructionRepository;
@@ -556,6 +559,25 @@ class FirebaseProjectApi extends ProjectApi {
     );
   }
 
+  Future<FirebaseFloorPlan> saveFloorPlan(FirebaseFloorPlan floorPlan) async {
+    await _requireOwnedFirebaseProject(
+      projectId: floorPlan.projectId,
+      ownerUid: floorPlan.ownerUid,
+    );
+    return _floorPlanRepository.saveFloorPlan(floorPlan);
+  }
+
+  Future<FirebaseFloorPlan?> getFloorPlan({
+    required String projectId,
+    required String floorPlanId,
+  }) {
+    return _floorPlanRepository.getFloorPlan(
+      ownerUid: _session.uid,
+      projectId: projectId,
+      floorPlanId: floorPlanId,
+    );
+  }
+
   @override
   Future<SavedLayout> saveLayout({
     required String projectId,
@@ -721,10 +743,20 @@ class FirebaseProjectApi extends ProjectApi {
   Future<void> _requireOwnedGeometryProject({
     required String projectId,
     required String ownerUid,
+  }) {
+    return _requireOwnedFirebaseProject(
+      projectId: projectId,
+      ownerUid: ownerUid,
+    );
+  }
+
+  Future<void> _requireOwnedFirebaseProject({
+    required String projectId,
+    required String ownerUid,
   }) async {
     if (ownerUid != _session.uid) {
       throw const ProjectApiException(
-        'Geometry owner does not match the signed-in user.',
+        'Firebase document owner does not match the signed-in user.',
         code: 'permission_denied',
       );
     }

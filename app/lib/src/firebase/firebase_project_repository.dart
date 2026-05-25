@@ -495,6 +495,55 @@ class FirebaseFirestoreGeometryRepository
   }
 }
 
+class FirebaseFirestoreFloorPlanRepository
+    implements FirebaseFloorPlanRepository {
+  const FirebaseFirestoreFloorPlanRepository({
+    required FirebaseFirestore firestore,
+  }) : _firestore = firestore;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> _floorPlansCollection(
+    String projectId,
+  ) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('floor_plans');
+  }
+
+  @override
+  Future<FirebaseFloorPlan> saveFloorPlan(FirebaseFloorPlan floorPlan) async {
+    floorPlan.validate();
+    await _floorPlansCollection(
+      floorPlan.projectId,
+    ).doc(floorPlan.floorPlanId).set(floorPlan.toFirestoreJson());
+    return floorPlan;
+  }
+
+  @override
+  Future<FirebaseFloorPlan?> getFloorPlan({
+    required String ownerUid,
+    required String projectId,
+    required String floorPlanId,
+  }) async {
+    final snapshot = await _floorPlansCollection(
+      projectId,
+    ).doc(floorPlanId).get(const GetOptions(source: Source.server));
+    final data = snapshot.data();
+    if (data == null) {
+      return null;
+    }
+    final floorPlan = FirebaseModelSerializers.floorPlanFromFirestore(
+      _firestoreJson(data),
+    );
+    if (floorPlan.ownerUid != ownerUid) {
+      throw const FirebaseContractException('Floor plan is not available.');
+    }
+    return floorPlan;
+  }
+}
+
 class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
   const DisabledFirebaseProjectRepository();
 
@@ -658,6 +707,25 @@ class DisabledFirebaseGeometryRepository implements FirebaseGeometryRepository {
     required String geometryId,
   }) {
     throw UnsupportedError('Firebase geometry access is unavailable.');
+  }
+}
+
+class DisabledFirebaseFloorPlanRepository
+    implements FirebaseFloorPlanRepository {
+  const DisabledFirebaseFloorPlanRepository();
+
+  @override
+  Future<FirebaseFloorPlan> saveFloorPlan(FirebaseFloorPlan floorPlan) {
+    throw UnsupportedError('Firebase floor plan access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseFloorPlan?> getFloorPlan({
+    required String ownerUid,
+    required String projectId,
+    required String floorPlanId,
+  }) {
+    throw UnsupportedError('Firebase floor plan access is unavailable.');
   }
 }
 

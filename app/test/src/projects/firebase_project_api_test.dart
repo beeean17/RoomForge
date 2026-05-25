@@ -16,6 +16,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
@@ -43,6 +44,7 @@ void main() {
     final api = FirebaseProjectApi(
       authRepository: DisabledAuthRepository(),
       session: _session(),
+      floorPlanRepository: _FakeFloorPlanRepository(),
       geometryRepository: _FakeGeometryRepository(),
       projectRepository: _FakeProjectRepository(),
       reconstructionRepository: _FakeReconstructionRepository(),
@@ -76,6 +78,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
@@ -135,6 +138,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
@@ -173,6 +177,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: reconstructions,
@@ -219,6 +224,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: _FakeGeometryRepository(),
         projectRepository: projects,
         reconstructionRepository: reconstructions,
@@ -271,6 +277,7 @@ void main() {
     final api = FirebaseProjectApi(
       authRepository: DisabledAuthRepository(),
       session: _session(),
+      floorPlanRepository: _FakeFloorPlanRepository(),
       geometryRepository: _FakeGeometryRepository(),
       projectRepository: projects,
       reconstructionRepository: _FakeReconstructionRepository(),
@@ -304,6 +311,7 @@ void main() {
     final api = FirebaseProjectApi(
       authRepository: DisabledAuthRepository(),
       session: _session(),
+      floorPlanRepository: _FakeFloorPlanRepository(),
       geometryRepository: _FakeGeometryRepository(),
       projectRepository: projects,
       reconstructionRepository: reconstructions,
@@ -355,6 +363,7 @@ void main() {
       final api = FirebaseProjectApi(
         authRepository: DisabledAuthRepository(),
         session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
         geometryRepository: geometry,
         projectRepository: projects,
         reconstructionRepository: _FakeReconstructionRepository(),
@@ -388,6 +397,39 @@ void main() {
       );
       expect(reloadedCandidate?.resultId, candidate.resultId);
       expect(reloadedConfirmed?.geometryId, confirmed.geometryId);
+    },
+  );
+
+  test(
+    'FirebaseProjectApi persists metric floor plans with artifact refs',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final floorPlans = _FakeFloorPlanRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: floorPlans,
+        geometryRepository: _FakeGeometryRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      final saved = await api.saveFloorPlan(_floorPlan());
+      final reloaded = await api.getFloorPlan(
+        projectId: 'project-1',
+        floorPlanId: saved.floorPlanId,
+      );
+
+      expect(saved.coordinateSpace, FirebaseCoordinateSpace.meters);
+      expect(saved.qualityStatus.displayLabel, 'Needs review');
+      expect(saved.artifactRefs.single.storagePath, contains('/artifacts/'));
+      expect(floorPlans.floorPlans, contains(saved.floorPlanId));
+      expect(reloaded?.floorPlanId, saved.floorPlanId);
+      expect(reloaded?.artifactRefs.single.contentType.wireValue, 'image/png');
     },
   );
 }
@@ -438,6 +480,57 @@ FirebaseConfirmedGeometry _confirmedGeometry() {
     ],
     correctionMethod: 'candidate_adjusted',
     confirmedByUid: 'user-1',
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
+FirebaseFloorPlan _floorPlan() {
+  return FirebaseFloorPlan(
+    floorPlanId: 'floor-plan-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    jobId: 'job-1',
+    sourceImageId: 'source-1',
+    confirmedGeometryId: 'geometry-1',
+    roomDimensionsId: 'current',
+    coordinateSpace: FirebaseCoordinateSpace.meters,
+    roomDimensions: FirebaseRoomDimensions(
+      projectId: 'project-1',
+      ownerUid: 'user-1',
+      widthM: 4.2,
+      depthM: 3.6,
+      heightM: 2.7,
+      unit: 'meters',
+      source: 'user_entered',
+      createdAt: _now,
+      updatedAt: _now,
+      schemaVersion: 1,
+    ),
+    floorPolygon: const [
+      FirebasePoint2d(x: 0, y: 0),
+      FirebasePoint2d(x: 4.2, y: 0),
+      FirebasePoint2d(x: 4.2, y: 3.6),
+      FirebasePoint2d(x: 0, y: 3.6),
+    ],
+    calibration: const {
+      'scale_px_per_meter': 100,
+      'method': 'room_dimensions_rect',
+    },
+    qualityStatus: FirebaseQualityStatus.reviewRequired,
+    warnings: const ['Needs review'],
+    artifactRefs: [
+      FirebaseArtifactRef(
+        artifactId: 'artifact-1',
+        storagePath:
+            'users/user-1/projects/project-1/artifacts/job-1/artifact-1/overlay.png',
+        artifactType: 'opencv_overlay',
+        contentType: FirebaseArtifactContentType.png,
+        byteSize: 4,
+        createdAt: _now,
+      ),
+    ],
     createdAt: _now,
     updatedAt: _now,
     schemaVersion: 1,
@@ -678,6 +771,32 @@ class _FakeGeometryRepository implements FirebaseGeometryRepository {
       return null;
     }
     return geometry;
+  }
+}
+
+class _FakeFloorPlanRepository implements FirebaseFloorPlanRepository {
+  final floorPlans = <String, FirebaseFloorPlan>{};
+
+  @override
+  Future<FirebaseFloorPlan> saveFloorPlan(FirebaseFloorPlan floorPlan) async {
+    floorPlan.validate();
+    floorPlans[floorPlan.floorPlanId] = floorPlan;
+    return floorPlan;
+  }
+
+  @override
+  Future<FirebaseFloorPlan?> getFloorPlan({
+    required String ownerUid,
+    required String projectId,
+    required String floorPlanId,
+  }) async {
+    final floorPlan = floorPlans[floorPlanId];
+    if (floorPlan == null ||
+        floorPlan.ownerUid != ownerUid ||
+        floorPlan.projectId != projectId) {
+      return null;
+    }
+    return floorPlan;
   }
 }
 

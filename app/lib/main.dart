@@ -14,6 +14,7 @@ import 'src/admin/admin_api.dart';
 import 'src/admin/firebase_admin_diagnostics.dart';
 import 'src/auth/auth_repository.dart';
 import 'src/editor/editor_config.dart';
+import 'src/api/backend_bindings.dart';
 import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_models.dart';
 import 'src/firebase/firebase_repositories.dart';
@@ -25,7 +26,6 @@ import 'src/layouts/layout_draft_repository.dart';
 import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
 import 'src/layouts/layout_remote_update_guard.dart';
-import 'src/projects/firebase_project_api.dart';
 import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/project_api.dart';
 import 'src/projects/source_image_upload_status.dart';
@@ -165,22 +165,24 @@ class AuthGate extends StatelessWidget {
             authRepository: authRepository,
             adminRepository: adminRepository,
             session: session,
-            adminApi: AdminApi(authRepository: authRepository),
+            legacyAdminApi: RoomForgeBackendBindings.legacyAdminApi(
+              backendMode: backendMode,
+              authRepository: authRepository,
+            ),
             backendMode: backendMode,
-            projectApi: backendMode == BackendMode.firebase
-                ? FirebaseProjectApi(
-                    authRepository: authRepository,
-                    session: session,
-                    floorPlanRepository: floorPlanRepository,
-                    geometryRepository: geometryRepository,
-                    layoutRepository: layoutRepository,
-                    projectRepository: projectRepository,
-                    reconstructionRepository: reconstructionRepository,
-                    roomDimensionsRepository: roomDimensionsRepository,
-                    sourceImageRepository: sourceImageRepository,
-                    sourceImageUploader: sourceImageUploader,
-                  )
-                : ProjectApi(authRepository: authRepository),
+            projectApi: RoomForgeBackendBindings.projectApi(
+              backendMode: backendMode,
+              authRepository: authRepository,
+              session: session,
+              floorPlanRepository: floorPlanRepository,
+              geometryRepository: geometryRepository,
+              layoutRepository: layoutRepository,
+              projectRepository: projectRepository,
+              reconstructionRepository: reconstructionRepository,
+              roomDimensionsRepository: roomDimensionsRepository,
+              sourceImageRepository: sourceImageRepository,
+              sourceImageUploader: sourceImageUploader,
+            ),
           ),
         );
       },
@@ -354,7 +356,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
     required this.authRepository,
     required this.adminRepository,
     required this.session,
-    required this.adminApi,
+    required this.legacyAdminApi,
     required this.backendMode,
     required this.projectApi,
     super.key,
@@ -363,7 +365,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
   final AuthSession session;
-  final AdminApi adminApi;
+  final AdminApi? legacyAdminApi;
   final BackendMode backendMode;
   final ProjectApi projectApi;
 
@@ -379,7 +381,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
           AdminRouteGuardButton(
             session: session,
             adminRepository: adminRepository,
-            adminApi: adminApi,
+            legacyAdminApi: legacyAdminApi,
             backendMode: backendMode,
           ),
           TextButton(
@@ -400,14 +402,14 @@ class AdminRouteGuardButton extends StatefulWidget {
   const AdminRouteGuardButton({
     required this.session,
     required this.adminRepository,
-    required this.adminApi,
+    required this.legacyAdminApi,
     required this.backendMode,
     super.key,
   });
 
   final AuthSession session;
   final FirebaseAdminRepository adminRepository;
-  final AdminApi adminApi;
+  final AdminApi? legacyAdminApi;
   final BackendMode backendMode;
 
   @override
@@ -467,14 +469,20 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
   }
 
   Future<void> _openLegacyAdmin() async {
-    final adminSession = await widget.adminApi.loadSession();
+    final adminApi = widget.legacyAdminApi;
+    if (adminApi == null) {
+      _showSnackBar('Legacy admin API is not configured.');
+      return;
+    }
+
+    final adminSession = await adminApi.loadSession();
     if (!mounted) {
       return;
     }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) =>
-            AdminShellScreen(session: adminSession, adminApi: widget.adminApi),
+            AdminShellScreen(session: adminSession, adminApi: adminApi),
       ),
     );
   }

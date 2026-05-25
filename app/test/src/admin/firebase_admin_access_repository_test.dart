@@ -1,3 +1,4 @@
+import 'package:app/src/auth/auth_repository.dart';
 import 'package:app/src/firebase/firebase_models.dart';
 import 'package:app/src/firebase/firebase_repositories.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -17,6 +18,70 @@ void main() {
       );
       expect(FirebaseAdminRoleGuard.isAdminProfileData(const {}), false);
       expect(FirebaseAdminRoleGuard.isAdminProfileData(null), false);
+    });
+  });
+
+  group('Firebase admin retry draft', () {
+    test('builds linked retry job, transitions, and audit action', () {
+      final createdAt = DateTime.utc(2026, 5, 24, 12);
+      final now = DateTime.utc(2026, 5, 25, 9, 30);
+      final job = FirebaseReconstructionJob(
+        jobId: 'job-1',
+        projectId: 'project-1',
+        ownerUid: 'owner-1',
+        sourceImageId: 'source-1',
+        roomDimensionsId: 'current',
+        status: FirebaseJobStatus.failed,
+        statusUpdatedAt: createdAt,
+        providerType: 'manual_assisted_opencv',
+        createdByUid: 'owner-1',
+        retryCount: 0,
+        latestTransitionId: 'transition-failed',
+        failureReasonCode: 'opencv_failed',
+        failureReason: 'Synthetic failure.',
+        createdAt: createdAt,
+        updatedAt: createdAt,
+        schemaVersion: 1,
+      );
+
+      final draft = buildFirebaseAdminRetryDraft(
+        session: const AuthSession(uid: 'admin-1'),
+        job: job,
+        reasonMessage: 'Retry from diagnostics.',
+        currentTransitionId: 'transition-retrying',
+        retryJobId: 'retry-job-1',
+        retryTransitionId: 'transition-created',
+        actionId: 'action-1',
+        now: now,
+      );
+
+      expect(draft.currentJob.status, FirebaseJobStatus.retrying);
+      expect(draft.currentJob.rootJobId, 'job-1');
+      expect(draft.currentJob.retryCount, 0);
+      expect(draft.currentJob.createdAt, createdAt);
+      expect(draft.currentJob.updatedAt, now);
+      expect(draft.currentJob.latestTransitionId, 'transition-retrying');
+
+      expect(draft.retryJob.jobId, 'retry-job-1');
+      expect(draft.retryJob.status, FirebaseJobStatus.created);
+      expect(draft.retryJob.createdByUid, 'admin-1');
+      expect(draft.retryJob.retryOfJobId, 'job-1');
+      expect(draft.retryJob.rootJobId, 'job-1');
+      expect(draft.retryJob.retryCount, 1);
+      expect(draft.retryJob.latestTransitionId, 'transition-created');
+
+      expect(draft.currentTransition.fromStatus, FirebaseJobStatus.failed);
+      expect(draft.currentTransition.toStatus, FirebaseJobStatus.retrying);
+      expect(draft.currentTransition.retryJobId, 'retry-job-1');
+      expect(draft.retryTransition.fromStatus, isNull);
+      expect(draft.retryTransition.toStatus, FirebaseJobStatus.created);
+
+      expect(draft.action.actionType, 'retry_reconstruction_job');
+      expect(draft.action.targetId, 'job-1');
+      expect(draft.action.retryJobId, 'retry-job-1');
+      expect(draft.action.metadata['root_job_id'], 'job-1');
+      expect(draft.action.metadata['previous_status'], 'failed');
+      expect(draft.action.createdAt, now);
     });
   });
 

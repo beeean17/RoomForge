@@ -600,6 +600,7 @@ class _FirebaseAdminDiagnosticsScreenState
                         : _FirebaseAdminJobDetailPanel(
                             job: _selectedJob!,
                             adminRepository: widget.adminRepository,
+                            session: widget.session,
                           );
                     return LayoutBuilder(
                       builder: (context, constraints) {
@@ -702,10 +703,12 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
   const _FirebaseAdminJobDetailPanel({
     required this.job,
     required this.adminRepository,
+    required this.session,
   });
 
   final FirebaseReconstructionJob job;
   final FirebaseAdminRepository adminRepository;
+  final AuthSession session;
 
   @override
   Widget build(BuildContext context) {
@@ -738,6 +741,12 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
               'Latest floor plan: ${job.latestFloorPlanId ?? 'not_generated'}',
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        _FirebaseAdminRetryAction(
+          job: job,
+          adminRepository: adminRepository,
+          session: session,
         ),
         const SizedBox(height: 12),
         _FirebaseAdminArtifactRefs(artifactRefs: job.artifactRefs),
@@ -838,6 +847,105 @@ class _FirebaseAdminArtifactRefs extends StatelessWidget {
         readError: error,
       );
     }
+  }
+}
+
+class _FirebaseAdminRetryAction extends StatefulWidget {
+  const _FirebaseAdminRetryAction({
+    required this.job,
+    required this.adminRepository,
+    required this.session,
+  });
+
+  final FirebaseReconstructionJob job;
+  final FirebaseAdminRepository adminRepository;
+  final AuthSession session;
+
+  @override
+  State<_FirebaseAdminRetryAction> createState() =>
+      _FirebaseAdminRetryActionState();
+}
+
+class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
+  bool _isRetrying = false;
+  String? _message;
+
+  Future<void> _confirmRetry() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Retry reconstruction job'),
+          content: Text(
+            'Create a linked retry job for ${widget.job.jobId} and record an admin action?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Create retry'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await _retry();
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _isRetrying = true;
+      _message = 'Retrying...';
+    });
+    try {
+      final retryJob = await widget.adminRepository.retryJobWithAdminAction(
+        session: widget.session,
+        job: widget.job,
+        reasonMessage: 'Admin requested retry from diagnostics.',
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Retry job ${retryJob.jobId} created.';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Retry unavailable: ${firebaseAdminSafeErrorMessage(error)}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isRetrying = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canRetry =
+        widget.job.status == FirebaseJobStatus.failed ||
+        widget.job.status == FirebaseJobStatus.timeout;
+    return _FirebaseAdminSection(
+      title: 'Admin retry',
+      children: [
+        FilledButton(
+          onPressed: canRetry && !_isRetrying ? _confirmRetry : null,
+          child: Text(_isRetrying ? 'Retrying...' : 'Retry job'),
+        ),
+        if (!canRetry)
+          const Text('Only failed or timeout jobs can be retried.'),
+        if (_message != null) Text(_message!),
+      ],
+    );
   }
 }
 

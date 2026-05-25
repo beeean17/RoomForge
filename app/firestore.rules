@@ -184,6 +184,26 @@ service cloud.firestore {
       ];
     }
 
+    function adminRetryCurrentJobMutableKeys() {
+      return [
+        'status',
+        'status_updated_at',
+        'root_job_id',
+        'latest_transition_id',
+        'latest_result_id',
+        'latest_confirmed_geometry_id',
+        'latest_floor_plan_id',
+        'failure_reason_code',
+        'failure_reason',
+        'quality_status',
+        'artifact_refs',
+        'started_at',
+        'completed_at',
+        'timeout_at',
+        'updated_at'
+      ];
+    }
+
     function jobTransitionKeys() {
       return [
         'transition_id',
@@ -323,6 +343,26 @@ service cloud.firestore {
         'color',
         'label',
         'locked'
+      ];
+    }
+
+    function adminActionKeys() {
+      return [
+        'action_id',
+        'project_id',
+        'owner_uid',
+        'created_by_uid',
+        'created_by_role',
+        'action_type',
+        'target_type',
+        'target_id',
+        'reason_code',
+        'reason_message',
+        'permission_outcome',
+        'retry_job_id',
+        'metadata',
+        'created_at',
+        'schema_version'
       ];
     }
 
@@ -536,6 +576,14 @@ service cloud.firestore {
       return /databases/$(database)/documents/projects/$(projectId)/floor_plans/$(floorPlanId);
     }
 
+    function adminActionDocPath(projectId, actionId) {
+      return /databases/$(database)/documents/projects/$(projectId)/admin_actions/$(actionId);
+    }
+
+    function adminRetryActionId(retryJobId) {
+      return 'retry_' + retryJobId;
+    }
+
     function validJobQualityStatus(data) {
       return !data.keys().hasAny(['quality_status'])
         || data.quality_status == null
@@ -573,6 +621,68 @@ service cloud.firestore {
           && transition.retry_job_id is string
           && validRetryJobAfter(projectId, jobId, transition.retry_job_id)
         );
+    }
+
+    function validAdminRetryActionAfter(projectId, sourceJobId, retryJobId) {
+      let actionId = adminRetryActionId(retryJobId);
+      let action = getAfter(adminActionDocPath(projectId, actionId)).data;
+      return !exists(adminActionDocPath(projectId, actionId))
+        && existsAfter(adminActionDocPath(projectId, actionId))
+        && action.action_id == actionId
+        && action.project_id == projectId
+        && action.owner_uid == request.resource.data.owner_uid
+        && action.created_by_uid == request.auth.uid
+        && action.created_by_role == 'admin'
+        && action.action_type == 'retry_reconstruction_job'
+        && action.target_type == 'reconstruction_job'
+        && action.target_id == sourceJobId
+        && action.reason_code == 'admin_retry'
+        && action.reason_message is string
+        && action.retry_job_id == retryJobId
+        && action.created_at is timestamp
+        && action.schema_version == 1
+        && action.keys().hasOnly(adminActionKeys())
+        && action.keys().hasAll([
+          'action_id',
+          'project_id',
+          'owner_uid',
+          'created_by_uid',
+          'created_by_role',
+          'action_type',
+          'target_type',
+          'target_id',
+          'reason_code',
+          'reason_message',
+          'retry_job_id',
+          'created_at',
+          'schema_version'
+        ]);
+    }
+
+    function validAdminRetryCurrentAuditAfter(projectId, jobId) {
+      let transition = getAfter(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id)).data;
+      return validAdminRetryActionAfter(projectId, jobId, transition.retry_job_id);
+    }
+
+    function validAdminRetrySourceJobAfter(projectId, sourceJobId, retryJobId) {
+      let sourceAfter = getAfter(reconstructionJobDocPath(projectId, sourceJobId)).data;
+      let transition = getAfter(jobTransitionDocPath(projectId, sourceJobId, sourceAfter.latest_transition_id)).data;
+      return existsAfter(reconstructionJobDocPath(projectId, sourceJobId))
+        && sourceAfter.job_id == sourceJobId
+        && sourceAfter.project_id == projectId
+        && sourceAfter.owner_uid == request.resource.data.owner_uid
+        && sourceAfter.source_image_id == request.resource.data.source_image_id
+        && sourceAfter.room_dimensions_id == request.resource.data.room_dimensions_id
+        && sourceAfter.status == 'retrying'
+        && sourceAfter.root_job_id == request.resource.data.root_job_id
+        && sourceAfter.retry_count + 1 == request.resource.data.retry_count
+        && sourceAfter.latest_transition_id is string
+        && transition.transition_id == sourceAfter.latest_transition_id
+        && transition.job_id == sourceJobId
+        && transition.to_status == 'retrying'
+        && transition.retry_job_id == retryJobId
+        && transition.actor_type == 'admin'
+        && transition.actor_uid == request.auth.uid;
     }
 
     function validRetryReference(projectId) {
@@ -646,6 +756,83 @@ service cloud.firestore {
         && validRetryTransitionLink(projectId, jobId)
         && request.resource.data.keys().hasOnly(reconstructionJobKeys())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(mutableReconstructionJobKeys());
+    }
+
+    function validAdminRetryCurrentJobUpdate(projectId, jobId) {
+      return isAdmin()
+        && resource.data.status in ['failed', 'timeout']
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.room_dimensions_id == resource.data.room_dimensions_id
+        && request.resource.data.provider_type == resource.data.provider_type
+        && request.resource.data.created_by_uid == resource.data.created_by_uid
+        && request.resource.data.retry_count == resource.data.retry_count
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && request.resource.data.status == 'retrying'
+        && request.resource.data.root_job_id is string
+        && (
+          (
+            resource.data.keys().hasAny(['root_job_id'])
+            && request.resource.data.root_job_id == resource.data.root_job_id
+          )
+          || (
+            !resource.data.keys().hasAny(['root_job_id'])
+            && request.resource.data.root_job_id == jobId
+          )
+        )
+        && validJobTransitionAfter(projectId, jobId)
+        && request.resource.data.latest_transition_id != resource.data.latest_transition_id
+        && validRetryTransitionLink(projectId, jobId)
+        && validAdminRetryCurrentAuditAfter(projectId, jobId)
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(adminRetryCurrentJobMutableKeys());
+    }
+
+    function validAdminRetryJobCreate(projectId, jobId) {
+      let sourceJob = get(reconstructionJobDocPath(projectId, request.resource.data.retry_of_job_id)).data;
+      return isAdmin()
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == sourceJob.owner_uid
+        && request.resource.data.source_image_id == sourceJob.source_image_id
+        && request.resource.data.room_dimensions_id == sourceJob.room_dimensions_id
+        && request.resource.data.provider_type == sourceJob.provider_type
+        && request.resource.data.created_by_uid == request.auth.uid
+        && sourceJob.status in ['failed', 'timeout']
+        && request.resource.data.retry_of_job_id is string
+        && request.resource.data.root_job_id is string
+        && request.resource.data.retry_count == sourceJob.retry_count + 1
+        && request.resource.data.status == 'created'
+        && validJobQualityStatus(request.resource.data)
+        && validJobTransitionAfter(projectId, jobId)
+        && validAdminRetrySourceJobAfter(projectId, request.resource.data.retry_of_job_id, jobId)
+        && validAdminRetryActionAfter(projectId, request.resource.data.retry_of_job_id, jobId)
+        && exists(sourceImageDocPath(projectId, request.resource.data.source_image_id))
+        && exists(roomDimensionsDocPath(projectId))
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.keys().hasAll([
+          'job_id',
+          'project_id',
+          'owner_uid',
+          'source_image_id',
+          'room_dimensions_id',
+          'status',
+          'status_updated_at',
+          'provider_type',
+          'created_by_uid',
+          'retry_of_job_id',
+          'root_job_id',
+          'retry_count',
+          'latest_transition_id',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ])
+        && request.resource.data.schema_version == 1;
     }
 
     function validJobTransitionCreate(projectId, jobId, transitionId) {
@@ -1067,6 +1254,33 @@ service cloud.firestore {
         && request.resource.data.export_version == resource.data.export_version;
     }
 
+    function validAdminActionCreate(projectId, actionId) {
+      return isAdmin()
+        && request.resource.data.action_id == actionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid is string
+        && request.resource.data.created_by_uid == request.auth.uid
+        && request.resource.data.created_by_role == 'admin'
+        && request.resource.data.action_type is string
+        && request.resource.data.target_type is string
+        && request.resource.data.target_id is string
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(adminActionKeys())
+        && request.resource.data.keys().hasAll([
+          'action_id',
+          'project_id',
+          'owner_uid',
+          'created_by_uid',
+          'created_by_role',
+          'action_type',
+          'target_type',
+          'target_id',
+          'created_at',
+          'schema_version'
+        ]);
+    }
+
     match /users/{uid} {
       allow get: if isSelf(uid) || isAdmin();
       allow list: if false;
@@ -1096,8 +1310,10 @@ service cloud.firestore {
 
     match /projects/{projectId}/reconstruction_jobs/{jobId} {
       allow get, list: if ownsProject(projectId) || isAdmin();
-      allow create: if validReconstructionJobCreate(projectId, jobId);
-      allow update: if validReconstructionJobUpdate(projectId, jobId);
+      allow create: if validReconstructionJobCreate(projectId, jobId)
+        || validAdminRetryJobCreate(projectId, jobId);
+      allow update: if validReconstructionJobUpdate(projectId, jobId)
+        || validAdminRetryCurrentJobUpdate(projectId, jobId);
       allow delete: if false;
     }
 
@@ -1138,7 +1354,8 @@ service cloud.firestore {
 
     match /projects/{projectId}/admin_actions/{actionId} {
       allow get, list: if isAdmin();
-      allow create, update, delete: if false;
+      allow create: if validAdminActionCreate(projectId, actionId);
+      allow update, delete: if false;
     }
 
     match /{path=**}/reconstruction_jobs/{jobId} {

@@ -365,4 +365,10 @@ abstract class FirebaseAdminRepository {
   });
 
   Future<FirebaseAdminAction> appendAdminAction(FirebaseAdminAction action);
+
+  Future<FirebaseReconstructionJob> retryJobWithAdminAction({
+    required AuthSession session,
+    required FirebaseReconstructionJob job,
+    required String reasonMessage,
+  });
 }

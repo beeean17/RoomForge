@@ -1,4 +1,5 @@
 import 'package:app/src/layouts/layout_draft_models.dart';
+import 'package:app/src/layouts/layout_draft_recovery.dart';
 import 'package:app/src/layouts/layout_draft_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -101,6 +102,36 @@ void main() {
         expect(reopenedDraft?.layoutId, 'layout-1');
         expect(reopenedDraft?.label, 'Unsaved draft');
         expect(reopenedDraft?.isCloudSourceOfTruth, isFalse);
+      },
+    );
+
+    test(
+      'current mirror exposes conflict when latest cloud layout id changes',
+      () async {
+        final repository = LayoutDraftRepository(
+          store: _MemoryLayoutDraftStore(),
+        );
+
+        await _saveMinimalDraft(repository, layoutId: 'layout-1');
+        final latestLayoutLookup = await repository.getDraft(
+          ownerUid: 'user-1',
+          projectId: 'project-1',
+          layoutId: 'layout-2',
+        );
+        final currentMirror = await repository.getDraft(
+          ownerUid: 'user-1',
+          projectId: 'project-1',
+        );
+
+        expect(latestLayoutLookup, isNull);
+        expect(currentMirror?.layoutId, 'layout-1');
+        expect(
+          layoutDraftHasCloudConflict(
+            currentMirror!,
+            DateTime.utc(2026, 5, 25, 12),
+          ),
+          isTrue,
+        );
       },
     );
 

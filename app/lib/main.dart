@@ -16,6 +16,8 @@ import 'src/api/backend_mode.dart';
 import 'src/firebase/firebase_repositories.dart';
 import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/layouts/indexed_db_layout_draft_store.dart';
+import 'src/layouts/layout_draft_models.dart';
+import 'src/layouts/layout_draft_recovery.dart';
 import 'src/layouts/layout_draft_repository.dart';
 import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
@@ -2172,6 +2174,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   bool _draftChangedDuringSave = false;
   var _draftGeneration = 0;
   Future<void> _pendingDraftWrite = Future<void>.value();
+  LayoutDraft? _recoverableDraft;
+  bool _draftHasCloudConflict = false;
+  bool _isHandlingDraft = false;
 
   @override
   void initState() {
@@ -2295,6 +2300,32 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
                       _isExportingLayout ? 'Exporting...' : 'Export JSON',
                     ),
                   ),
+                  if (_recoverableDraft != null) ...[
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: Text(
+                        layoutDraftRecoveryMessage(
+                          draft: _recoverableDraft!,
+                          latestCloudUpdatedAt: _activeCloudUpdatedAt,
+                        ),
+                      ),
+                    ),
+                    OutlinedButton(
+                      onPressed: _isHandlingDraft ? null : _restoreDraft,
+                      child: const Text('Restore draft'),
+                    ),
+                    OutlinedButton(
+                      onPressed: _isHandlingDraft ? null : _discardDraft,
+                      child: const Text('Discard draft'),
+                    ),
+                    if (_draftHasCloudConflict)
+                      OutlinedButton(
+                        onPressed: _isHandlingDraft
+                            ? null
+                            : _continueSavedVersion,
+                        child: const Text('Continue saved version'),
+                      ),
+                  ],
                   OutlinedButton(
                     onPressed: () => _postEditorMessage(
                       type: 'roomforge.editor.ping',
@@ -2403,6 +2434,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       setState(() {
         _activeLayoutId = saved.id;
         _activeCloudUpdatedAt = saved.updatedAt;
+        _recoverableDraft = null;
+        _draftHasCloudConflict = false;
         _reviewSaveConfirmed = false;
         _draftStatus = draftCleanupSucceeded
             ? 'Saved'
@@ -2562,18 +2595,31 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
 
   Future<void> _detectRecoverableDraft({String? layoutId}) async {
     try {
-      final draft = await _draftRepository.getDraft(
+      var draft = await _draftRepository.getDraft(
         ownerUid: widget.project.userId,
         projectId: widget.project.id,
         layoutId: layoutId,
       );
+      if (draft == null && layoutId != null) {
+        draft = await _draftRepository.getDraft(
+          ownerUid: widget.project.userId,
+          projectId: widget.project.id,
+        );
+      }
       if (!mounted) {
         return;
       }
       setState(() {
+        _recoverableDraft = draft?.isRecoverable == true ? draft : null;
+        _draftHasCloudConflict = draft == null
+            ? false
+            : layoutDraftHasCloudConflict(draft, _activeCloudUpdatedAt);
         _draftStatus = draft == null || !draft.isRecoverable
             ? 'No local draft.'
-            : '${draft.label} available.';
+            : layoutDraftRecoveryMessage(
+                draft: draft,
+                latestCloudUpdatedAt: _activeCloudUpdatedAt,
+              );
       });
     } catch (_) {
       if (!mounted) {
@@ -2581,6 +2627,101 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() => _draftStatus = 'Draft check unavailable.');
     }
+  }
+
+  Future<void> _restoreDraft() async {
+    final draft = _recoverableDraft;
+    if (draft == null) {
+      return;
+    }
+    setState(() => _isHandlingDraft = true);
+    try {
+      final scene = _sceneFromDraft(draft);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestScene = scene;
+        _activeLayoutId = draft.layoutId;
+        _activeCloudUpdatedAt = draft.baseCloudUpdatedAt;
+        _recoverableDraft = null;
+        _draftHasCloudConflict = false;
+        _draftStatus = 'Unsaved draft';
+        _saveStatus = 'Unsaved draft';
+      });
+      _postEditorMessage(
+        type: 'roomforge.scene.initialize',
+        requestId: 'restore-draft-${draft.localRevision}',
+        payload: {'scene': scene},
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isHandlingDraft = false);
+      }
+    }
+  }
+
+  Future<void> _discardDraft() async {
+    final draft = _recoverableDraft;
+    if (draft == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Discard draft?'),
+          content: const Text('This removes the local draft only.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Discard draft'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    setState(() => _isHandlingDraft = true);
+    try {
+      await _draftRepository.clearDraft(
+        ownerUid: widget.project.userId,
+        projectId: widget.project.id,
+      );
+      if (draft.layoutId != null) {
+        await _draftRepository.clearDraft(
+          ownerUid: widget.project.userId,
+          projectId: widget.project.id,
+          layoutId: draft.layoutId,
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _recoverableDraft = null;
+        _draftHasCloudConflict = false;
+        _draftStatus = 'No local draft.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isHandlingDraft = false);
+      }
+    }
+  }
+
+  void _continueSavedVersion() {
+    setState(() {
+      _recoverableDraft = null;
+      _draftHasCloudConflict = false;
+      _draftStatus = 'Using saved cloud layout.';
+    });
   }
 
   void _queuePersistDraft(Map<String, Object?> scene) {
@@ -2782,6 +2923,48 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         },
       },
       'furniture': _savedFurniture(layout.furnitureObjects),
+    };
+  }
+
+  Map<String, Object?> _sceneFromDraft(LayoutDraft draft) {
+    final roomDimensions = draft.roomDimensionsSnapshot;
+    final width = _numberValue(roomDimensions['width_value'], 4.2);
+    final depth = _numberValue(roomDimensions['depth_value'], 3.6);
+    final height = _numberValue(roomDimensions['height_value'], 2.7);
+    final floorPlan = draft.floorPlanSnapshot;
+    final metricGeometry = _recordValue(floorPlan['metric_geometry']);
+    final points = _savedMetricPoints(floorPlan, metricGeometry, width, depth);
+    final editorScene = draft.editorScene;
+    final viewMode = editorScene['view_mode']?.toString() == '3d' ? '3d' : '2d';
+
+    return {
+      'sceneId':
+          editorScene['scene_id']?.toString() ??
+          'project-${widget.project.id}-planning-scene',
+      'coordinateSpace': 'meters',
+      'unit': roomDimensions['unit']?.toString() ?? 'meters',
+      'viewMode': viewMode,
+      'selected': _savedSelection(editorScene),
+      'hasUnsavedChanges': true,
+      'scale': {'metersPerSceneUnit': 1},
+      'room': {
+        'objectId': 'room-shell',
+        'label': 'Room shell',
+        'heightMeters': height,
+        'floorPlan': {
+          'floorPlanId':
+              floorPlan['floor_plan_id']?.toString() ??
+              'project-${widget.project.id}-metric-floor-plan',
+          'metricGeometry': {
+            'coordinateSpace':
+                metricGeometry['coordinate_space']?.toString() ??
+                floorPlan['coordinate_space']?.toString() ??
+                'meters',
+            'points': points,
+          },
+        },
+      },
+      'furniture': savedFurnitureToBridge(draft.furnitureObjects),
     };
   }
 

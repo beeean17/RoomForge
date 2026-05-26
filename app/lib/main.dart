@@ -39,6 +39,59 @@ const _roomForgePrimary = Color(0xFF2563EB);
 const _roomForgeSuccess = Color(0xFF16A34A);
 const _roomForgeWarning = Color(0xFFD97706);
 const _roomForgeError = Color(0xFFDC2626);
+const _roomForgeLocaleOverride = String.fromEnvironment('ROOMFORGE_LOCALE');
+
+bool get _roomForgeUsesKorean {
+  final override = _roomForgeLocaleOverride.toLowerCase();
+  if (override.isNotEmpty) {
+    return override.startsWith('ko');
+  }
+  return WidgetsBinding.instance.platformDispatcher.locales.any(
+    (locale) => locale.languageCode.toLowerCase() == 'ko',
+  );
+}
+
+String rf(String english, String korean) {
+  return _roomForgeUsesKorean ? korean : english;
+}
+
+String _localizedAuthSetupMessage(String message) {
+  if (!_roomForgeUsesKorean) {
+    return message;
+  }
+  if (message.contains('Firebase web configuration is missing')) {
+    return 'Firebase 웹 설정이 없습니다. Google 로그인을 활성화하려면 ROOMFORGE_FIREBASE_* Dart define을 제공하세요.';
+  }
+  return message;
+}
+
+String _localizedAuthErrorMessage(String message) {
+  if (!_roomForgeUsesKorean) {
+    return message;
+  }
+  if (message.contains('Google sign-in is unavailable')) {
+    return 'Firebase 설정을 제공할 때까지 Google 로그인을 사용할 수 없습니다.';
+  }
+  if (message.startsWith('Google sign-in failed:')) {
+    return message.replaceFirst('Google sign-in failed:', 'Google 로그인 실패:');
+  }
+  return message;
+}
+
+String _localizedFirebaseAuthErrorMessage(FirebaseAuthException error) {
+  if (!_roomForgeUsesKorean) {
+    return error.message ?? error.code;
+  }
+  return switch (error.code) {
+    'popup-closed-by-user' => '로그인 창이 닫혔습니다. 다시 시도하세요.',
+    'popup-blocked' => '브라우저가 로그인 팝업을 차단했습니다. 팝업을 허용한 뒤 다시 시도하세요.',
+    'network-request-failed' => '네트워크 요청에 실패했습니다. 연결을 확인한 뒤 다시 시도하세요.',
+    'account-exists-with-different-credential' =>
+      '같은 이메일에 다른 로그인 방식이 연결되어 있습니다.',
+    'unauthorized-domain' => '현재 도메인이 Firebase 인증 허용 도메인에 등록되어 있지 않습니다.',
+    _ => 'Google 로그인 실패: ${error.message ?? error.code}',
+  };
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -298,15 +351,15 @@ class _UserProfileSyncGateState extends State<UserProfileSyncGate> {
       future: _syncFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
+          return Scaffold(
             body: Center(
               child: RoomForgePanel(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 14),
-                    Text('Syncing profile...'),
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 14),
+                    Text(rf('Syncing profile...', '프로필 동기화 중...')),
                   ],
                 ),
               ),
@@ -316,7 +369,8 @@ class _UserProfileSyncGateState extends State<UserProfileSyncGate> {
 
         if (snapshot.hasError) {
           return ProjectErrorView(
-            message: 'Profile sync failed: ${snapshot.error}',
+            message:
+                '${rf('Profile sync failed', '프로필 동기화에 실패했습니다')}: ${snapshot.error}',
             onRetry: _retry,
           );
         }
@@ -354,11 +408,15 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       await widget.authRepository.signInWithGoogle();
     } on AuthUnavailableException catch (error) {
-      setState(() => _errorMessage = error.message);
+      setState(() => _errorMessage = _localizedAuthErrorMessage(error.message));
     } on FirebaseAuthException catch (error) {
-      setState(() => _errorMessage = error.message ?? error.code);
+      setState(() => _errorMessage = _localizedFirebaseAuthErrorMessage(error));
     } catch (error) {
-      setState(() => _errorMessage = 'Google sign-in failed: $error');
+      setState(
+        () => _errorMessage = _localizedAuthErrorMessage(
+          'Google sign-in failed: $error',
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSigningIn = false);
@@ -428,7 +486,10 @@ class _SignInIntro extends StatelessWidget {
           const _RoomForgeWordmark(),
           const SizedBox(height: 28),
           Text(
-            'Turn room photos into measured planning layouts.',
+            rf(
+              'Turn room photos into measured planning layouts.',
+              '방 사진을 측정 가능한 배치 도면으로 바꿉니다.',
+            ),
             style: theme.textTheme.headlineLarge?.copyWith(
               color: _roomForgeInk,
               fontWeight: FontWeight.w700,
@@ -437,28 +498,31 @@ class _SignInIntro extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Sign in to reopen projects, review reconstruction results, and save room layouts across sessions.',
+            rf(
+              'Sign in to reopen projects, review reconstruction results, and save room layouts across sessions.',
+              '로그인하면 프로젝트를 다시 열고, 재구성 결과를 검토하고, 방 배치를 저장할 수 있습니다.',
+            ),
             style: theme.textTheme.titleMedium?.copyWith(
               color: _roomForgeMuted,
               height: 1.45,
             ),
           ),
           const SizedBox(height: 28),
-          const Wrap(
+          Wrap(
             spacing: 10,
             runSpacing: 10,
             children: [
               RoomForgeStatusPill(
                 icon: Icons.photo_camera_outlined,
-                label: 'Photo intake',
+                label: rf('Photo intake', '사진 업로드'),
               ),
               RoomForgeStatusPill(
                 icon: Icons.architecture_outlined,
-                label: 'Measured floor plan',
+                label: rf('Measured floor plan', '측정된 평면도'),
               ),
               RoomForgeStatusPill(
                 icon: Icons.chair_outlined,
-                label: 'Saved furniture layouts',
+                label: rf('Saved furniture layouts', '저장된 가구 배치'),
               ),
             ],
           ),
@@ -492,14 +556,17 @@ class _SignInPanel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Sign in',
+            rf('Sign in', '로그인'),
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Use Google sign-in to access RoomForge workspace data.',
+            rf(
+              'Use Google sign-in to access RoomForge workspace data.',
+              'Google 계정으로 RoomForge 작업공간에 접근합니다.',
+            ),
             style: theme.textTheme.bodyMedium?.copyWith(color: _roomForgeMuted),
           ),
           const SizedBox(height: 24),
@@ -511,14 +578,21 @@ class _SignInPanel extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.login),
-            label: Text(isSigningIn ? 'Signing in...' : 'Sign in with Google'),
+            label: Text(
+              isSigningIn
+                  ? rf('Signing in...', '로그인 중...')
+                  : rf('Sign in with Google', 'Google로 로그인'),
+            ),
           ),
           if (authSetupMessage != null) ...[
             const SizedBox(height: 16),
             RoomForgeNotice(
               icon: Icons.settings_outlined,
-              title: 'Firebase web configuration missing',
-              message: authSetupMessage!,
+              title: rf(
+                'Firebase web configuration missing',
+                'Firebase 웹 설정이 없습니다',
+              ),
+              message: _localizedAuthSetupMessage(authSetupMessage!),
               severity: NoticeSeverity.error,
             ),
           ],
@@ -526,8 +600,8 @@ class _SignInPanel extends StatelessWidget {
             const SizedBox(height: 16),
             RoomForgeNotice(
               icon: Icons.error_outline,
-              title: 'Google sign-in unavailable',
-              message: errorMessage!,
+              title: rf('Google sign-in unavailable', 'Google 로그인을 사용할 수 없습니다'),
+              message: _localizedAuthErrorMessage(errorMessage!),
               severity: NoticeSeverity.error,
             ),
           ],
@@ -902,7 +976,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: authRepository.signOut,
-            child: const Text('Sign out'),
+            child: Text(rf('Sign out', '로그아웃')),
           ),
         ],
       ),
@@ -969,14 +1043,19 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
         return;
       }
       final message = error.code == 'unauthorized'
-          ? 'Admin role required.'
+          ? rf('Admin role required.', '관리자 권한이 필요합니다.')
           : error.message;
       _showSnackBar(message);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Admin role could not be refreshed. Try again.');
+      _showSnackBar(
+        rf(
+          'Admin role could not be refreshed. Try again.',
+          '관리자 권한을 새로고침하지 못했습니다. 다시 시도하세요.',
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isChecking = false);
@@ -987,7 +1066,9 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
   Future<void> _openLegacyAdmin() async {
     final adminApi = widget.legacyAdminApi;
     if (adminApi == null) {
-      _showSnackBar('Legacy admin API is not configured.');
+      _showSnackBar(
+        rf('Legacy admin API is not configured.', '레거시 관리자 API가 설정되지 않았습니다.'),
+      );
       return;
     }
 
@@ -1004,14 +1085,22 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
   }
 
   void _showDeniedMessage() {
-    _showSnackBar('Admin role required. Refresh role or contact an admin.');
+    _showSnackBar(
+      rf(
+        'Admin role required. Refresh role or contact an admin.',
+        '관리자 권한이 필요합니다. 권한을 새로고침하거나 관리자에게 문의하세요.',
+      ),
+    );
   }
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        action: SnackBarAction(label: 'Refresh role', onPressed: _openAdmin),
+        action: SnackBarAction(
+          label: rf('Refresh role', '권한 새로고침'),
+          onPressed: _openAdmin,
+        ),
       ),
     );
   }
@@ -1026,7 +1115,9 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.admin_panel_settings_outlined),
-      label: Text(_isChecking ? 'Checking role...' : 'Admin'),
+      label: Text(
+        _isChecking ? rf('Checking role...', '권한 확인 중...') : rf('Admin', '관리자'),
+      ),
     );
   }
 }
@@ -1120,7 +1211,7 @@ class _FirebaseAdminDiagnosticsScreenState
         widget.session.uid;
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin diagnostics')),
+      appBar: AppBar(title: Text(rf('Admin diagnostics', '관리자 진단'))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
@@ -1138,7 +1229,7 @@ class _FirebaseAdminDiagnosticsScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Firebase operations',
+                              rf('Firebase operations', 'Firebase 운영'),
                               style: theme.textTheme.headlineSmall?.copyWith(
                                 color: _roomForgeInk,
                                 fontWeight: FontWeight.w800,
@@ -1146,7 +1237,7 @@ class _FirebaseAdminDiagnosticsScreenState
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Signed in as $displayName',
+                              '${rf('Signed in as', '로그인 계정')}: $displayName',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: _roomForgeMuted,
                               ),
@@ -1155,9 +1246,9 @@ class _FirebaseAdminDiagnosticsScreenState
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const RoomForgeStatusPill(
+                      RoomForgeStatusPill(
                         icon: Icons.admin_panel_settings_outlined,
-                        label: 'Admin access',
+                        label: rf('Admin access', '관리자 권한'),
                         color: _roomForgeMuted,
                       ),
                     ],
@@ -1167,9 +1258,9 @@ class _FirebaseAdminDiagnosticsScreenState
                     padding: const EdgeInsets.all(14),
                     child: DropdownButtonFormField<FirebaseJobStatus>(
                       value: _statusFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Job status',
-                        prefixIcon: Icon(Icons.filter_alt_outlined),
+                      decoration: InputDecoration(
+                        labelText: rf('Job status', '작업 상태'),
+                        prefixIcon: const Icon(Icons.filter_alt_outlined),
                       ),
                       items: [
                         for (final status in FirebaseJobStatus.values)
@@ -1189,31 +1280,36 @@ class _FirebaseAdminDiagnosticsScreenState
                         final compact = constraints.maxWidth < 720;
                         final fieldPicker = DropdownButtonFormField<String>(
                           value: _adminSearchField,
-                          decoration: const InputDecoration(
-                            labelText: 'Search field',
-                            prefixIcon: Icon(Icons.manage_search_outlined),
+                          decoration: InputDecoration(
+                            labelText: rf('Search field', '검색 필드'),
+                            prefixIcon: const Icon(
+                              Icons.manage_search_outlined,
+                            ),
                           ),
-                          items: const [
+                          items: [
                             DropdownMenuItem(
                               value: 'job_id',
-                              child: Text('Job ID'),
+                              child: Text(rf('Job ID', '작업 ID')),
                             ),
                             DropdownMenuItem(
                               value: 'project_id',
-                              child: Text('Project ID'),
+                              child: Text(rf('Project ID', '프로젝트 ID')),
                             ),
                             DropdownMenuItem(
                               value: 'owner_uid',
-                              child: Text('User ID'),
+                              child: Text(rf('User ID', '사용자 ID')),
                             ),
                           ],
                           onChanged: _setAdminSearchField,
                         );
                         final queryInput = TextField(
                           controller: _adminSearchController,
-                          decoration: const InputDecoration(
-                            labelText: 'Exact admin lookup',
-                            hintText: 'Paste job, project, or user id',
+                          decoration: InputDecoration(
+                            labelText: rf('Exact admin lookup', '정확한 관리자 조회'),
+                            hintText: rf(
+                              'Paste job, project, or user id',
+                              '작업, 프로젝트, 사용자 ID를 붙여넣기',
+                            ),
                           ),
                           onSubmitted: (_) => _searchAdminJobs(),
                         );
@@ -1224,12 +1320,12 @@ class _FirebaseAdminDiagnosticsScreenState
                             FilledButton.icon(
                               onPressed: _searchAdminJobs,
                               icon: const Icon(Icons.search),
-                              label: const Text('Search'),
+                              label: Text(rf('Search', '검색')),
                             ),
                             OutlinedButton.icon(
                               onPressed: _clearAdminSearch,
                               icon: const Icon(Icons.clear),
-                              label: const Text('Clear'),
+                              label: Text(rf('Clear', '초기화')),
                             ),
                           ],
                         );
@@ -1286,20 +1382,25 @@ class _FirebaseAdminDiagnosticsScreenState
                     stream: _jobsStream,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const RoomForgePanel(
+                        return RoomForgePanel(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              LinearProgressIndicator(),
-                              SizedBox(height: 12),
-                              Text('Loading protected job diagnostics...'),
+                              const LinearProgressIndicator(),
+                              const SizedBox(height: 12),
+                              Text(
+                                rf(
+                                  'Loading protected job diagnostics...',
+                                  '보호된 작업 진단 정보를 불러오는 중...',
+                                ),
+                              ),
                             ],
                           ),
                         );
                       }
                       if (snapshot.hasError) {
                         return RoomForgeNotice(
-                          title: 'Admin query failed',
+                          title: rf('Admin query failed', '관리자 조회 실패'),
                           message: firebaseAdminSafeErrorMessage(
                             snapshot.error!,
                           ),
@@ -1370,11 +1471,13 @@ class _FirebaseAdminJobList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (jobs.isEmpty) {
-      return const RoomForgeEmptyState(
+      return RoomForgeEmptyState(
         icon: Icons.search_off_outlined,
-        title: 'No matching Firebase jobs',
-        message:
-            'Change the status filter or wait for a reconstruction job to reach this state.',
+        title: rf('No matching Firebase jobs', '일치하는 Firebase 작업이 없습니다'),
+        message: rf(
+          'Change the status filter or wait for a reconstruction job to reach this state.',
+          '상태 필터를 바꾸거나 재구성 작업이 이 상태가 될 때까지 기다리세요.',
+        ),
       );
     }
     final theme = Theme.of(context);
@@ -1386,7 +1489,7 @@ class _FirebaseAdminJobList extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              'Jobs',
+              rf('Jobs', '작업'),
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
@@ -1397,8 +1500,10 @@ class _FirebaseAdminJobList extends StatelessWidget {
             ListTile(
               selected: job.jobId == selectedJobId,
               onTap: () => onSelect(job),
-              title: Text('Job ${job.jobId}'),
-              subtitle: Text('Owner ${job.ownerUid}\nProject ${job.projectId}'),
+              title: Text('${rf('Job', '작업')} ${job.jobId}'),
+              subtitle: Text(
+                '${rf('Owner', '소유자')} ${job.ownerUid}\n${rf('Project', '프로젝트')} ${job.projectId}',
+              ),
               isThreeLine: true,
               trailing: RoomForgeStatusPill(
                 label: _adminStatusLabel(job.status.wireValue),
@@ -1417,11 +1522,13 @@ class _FirebaseAdminEmptyDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const RoomForgeEmptyState(
+    return RoomForgeEmptyState(
       icon: Icons.manage_search_outlined,
-      title: 'Select a job',
-      message:
-          'Job metadata, status history, artifacts, OpenCV results, layout references, and retry actions appear here.',
+      title: rf('Select a job', '작업 선택'),
+      message: rf(
+        'Job metadata, status history, artifacts, OpenCV results, layout references, and retry actions appear here.',
+        '작업 메타데이터, 상태 이력, 아티팩트, OpenCV 결과, 레이아웃 참조, 재시도 액션이 여기에 표시됩니다.',
+      ),
     );
   }
 }
@@ -1443,7 +1550,7 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _FirebaseAdminSection(
-          title: 'Job detail',
+          title: rf('Job detail', '작업 상세'),
           children: [
             Wrap(
               spacing: 8,
@@ -1454,33 +1561,40 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
                   color: _adminStatusColor(job.status.wireValue),
                 ),
                 RoomForgeStatusPill(
-                  label: 'Retry ${job.retryCount}',
+                  label: '${rf('Retry', '재시도')} ${job.retryCount}',
                   icon: Icons.refresh,
                   color: _roomForgeMuted,
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text('Owner: ${job.ownerUid}'),
-            Text('Project: ${job.projectId}'),
-            Text('Job: ${job.jobId}'),
-            Text('Source image: ${job.sourceImageId}'),
-            Text('Provider: ${job.providerType}'),
-            if (job.providerId != null) Text('Provider ID: ${job.providerId}'),
-            if (job.algorithmId != null) Text('Algorithm: ${job.algorithmId}'),
-            if (job.openCvVersion != null) Text('OpenCV: ${job.openCvVersion}'),
-            Text('Retry count: ${job.retryCount}'),
-            if (job.retryOfJobId != null) Text('Retry of: ${job.retryOfJobId}'),
-            if (job.rootJobId != null) Text('Root job: ${job.rootJobId}'),
+            Text('${rf('Owner', '소유자')}: ${job.ownerUid}'),
+            Text('${rf('Project', '프로젝트')}: ${job.projectId}'),
+            Text('${rf('Job', '작업')}: ${job.jobId}'),
+            Text('${rf('Source image', '소스 이미지')}: ${job.sourceImageId}'),
+            Text('${rf('Provider', '제공자')}: ${job.providerType}'),
+            if (job.providerId != null)
+              Text('${rf('Provider ID', '제공자 ID')}: ${job.providerId}'),
+            if (job.algorithmId != null)
+              Text('${rf('Algorithm', '알고리즘')}: ${job.algorithmId}'),
+            if (job.openCvVersion != null)
+              Text('${rf('OpenCV', 'OpenCV')}: ${job.openCvVersion}'),
+            Text('${rf('Retry count', '재시도 횟수')}: ${job.retryCount}'),
+            if (job.retryOfJobId != null)
+              Text('${rf('Retry of', '원본 재시도 작업')}: ${job.retryOfJobId}'),
+            if (job.rootJobId != null)
+              Text('${rf('Root job', '루트 작업')}: ${job.rootJobId}'),
             if (job.failureReasonCode != null)
-              Text('Failure: ${job.failureReasonCode}'),
+              Text('${rf('Failure', '실패 사유')}: ${job.failureReasonCode}'),
             if (job.failureReason != null) Text(job.failureReason!),
-            Text('Latest result: ${job.latestResultId ?? 'not_generated'}'),
             Text(
-              'Latest geometry: ${job.latestConfirmedGeometryId ?? 'not_generated'}',
+              '${rf('Latest result', '최근 결과')}: ${job.latestResultId ?? 'not_generated'}',
             ),
             Text(
-              'Latest floor plan: ${job.latestFloorPlanId ?? 'not_generated'}',
+              '${rf('Latest geometry', '최근 지오메트리')}: ${job.latestConfirmedGeometryId ?? 'not_generated'}',
+            ),
+            Text(
+              '${rf('Latest floor plan', '최근 평면도')}: ${job.latestFloorPlanId ?? 'not_generated'}',
             ),
           ],
         ),
@@ -1550,12 +1664,19 @@ class _FirebaseAdminArtifactRefs extends StatelessWidget {
   Widget build(BuildContext context) {
     if (artifactRefs.isEmpty) {
       return _FirebaseAdminSection(
-        title: 'Artifact access',
-        children: [Text(FirebaseAdminArtifactReadState.notGenerated.wireValue)],
+        title: rf('Artifact access', '아티팩트 접근'),
+        children: [
+          Text(
+            rf(
+              FirebaseAdminArtifactReadState.notGenerated.wireValue,
+              '생성되지 않음',
+            ),
+          ),
+        ],
       );
     }
     return _FirebaseAdminSection(
-      title: 'Artifact access',
+      title: rf('Artifact access', '아티팩트 접근'),
       children: [
         for (final ref in artifactRefs)
           FutureBuilder<FirebaseAdminArtifactReadState>(
@@ -1570,7 +1691,9 @@ class _FirebaseAdminArtifactRefs extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 title: Text(ref.artifactType),
                 subtitle: Text(ref.storagePath),
-                trailing: Text(state?.wireValue ?? 'checking'),
+                trailing: Text(
+                  _adminArtifactStateLabel(state?.wireValue ?? 'checking'),
+                ),
               );
             },
           ),
@@ -1621,18 +1744,21 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Retry reconstruction job'),
+          title: Text(rf('Retry reconstruction job', '재구성 작업 재시도')),
           content: Text(
-            'Create a linked retry job for ${widget.job.jobId} and record an admin action?',
+            rf(
+              'Create a linked retry job for ${widget.job.jobId} and record an admin action?',
+              '${widget.job.jobId}에 연결된 재시도 작업을 만들고 관리자 액션을 기록할까요?',
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(rf('Cancel', '취소')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Create retry'),
+              child: Text(rf('Create retry', '재시도 생성')),
             ),
           ],
         );
@@ -1647,7 +1773,7 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
   Future<void> _retry() async {
     setState(() {
       _isRetrying = true;
-      _message = 'Retrying...';
+      _message = rf('Retrying...', '재시도 중...');
     });
     try {
       final retryJob = await widget.adminRepository.retryJobWithAdminAction(
@@ -1659,14 +1785,16 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
         return;
       }
       setState(() {
-        _message = 'Retry job ${retryJob.jobId} created.';
+        _message =
+            '${rf('Retry job created', '재시도 작업이 생성되었습니다')}: ${retryJob.jobId}';
       });
     } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _message = 'Retry unavailable: ${firebaseAdminSafeErrorMessage(error)}';
+        _message =
+            '${rf('Retry unavailable', '재시도할 수 없습니다')}: ${firebaseAdminSafeErrorMessage(error)}';
       });
     } finally {
       if (mounted) {
@@ -1681,14 +1809,23 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
         widget.job.status == FirebaseJobStatus.failed ||
         widget.job.status == FirebaseJobStatus.timeout;
     return _FirebaseAdminSection(
-      title: 'Admin retry',
+      title: rf('Admin retry', '관리자 재시도'),
       children: [
         FilledButton(
           onPressed: canRetry && !_isRetrying ? _confirmRetry : null,
-          child: Text(_isRetrying ? 'Retrying...' : 'Retry job'),
+          child: Text(
+            _isRetrying
+                ? rf('Retrying...', '재시도 중...')
+                : rf('Retry job', '작업 재시도'),
+          ),
         ),
         if (!canRetry)
-          const Text('Only failed or timeout jobs can be retried.'),
+          Text(
+            rf(
+              'Only failed or timeout jobs can be retried.',
+              '실패 또는 시간 초과 작업만 재시도할 수 있습니다.',
+            ),
+          ),
         if (_message != null) Text(_message!),
       ],
     );
@@ -1713,9 +1850,9 @@ class _FirebaseAdminTransitions extends StatelessWidget {
         }
         final transitions = snapshot.data ?? const [];
         return _FirebaseAdminSection(
-          title: 'Transition history',
+          title: rf('Transition history', '상태 전환 이력'),
           children: transitions.isEmpty
-              ? const [Text('No transitions found.')]
+              ? [Text(rf('No transitions found.', '상태 전환 이력이 없습니다.'))]
               : [
                   for (final transition in transitions)
                     ListTile(
@@ -1758,9 +1895,9 @@ class _FirebaseAdminResults extends StatelessWidget {
         }
         final results = snapshot.data ?? const [];
         return _FirebaseAdminSection(
-          title: 'OpenCV results',
+          title: rf('OpenCV results', 'OpenCV 결과'),
           children: results.isEmpty
-              ? const [Text('No OpenCV result found.')]
+              ? [Text(rf('No OpenCV result found.', 'OpenCV 결과가 없습니다.'))]
               : [
                   for (final result in results)
                     ListTile(
@@ -1798,9 +1935,16 @@ class _FirebaseAdminLayouts extends StatelessWidget {
             .where((layout) => layout.reconstructionJobId == jobId)
             .toList();
         return _FirebaseAdminSection(
-          title: 'Layout references',
+          title: rf('Layout references', '레이아웃 참조'),
           children: layouts.isEmpty
-              ? const [Text('No saved layout references found.')]
+              ? [
+                  Text(
+                    rf(
+                      'No saved layout references found.',
+                      '저장된 레이아웃 참조가 없습니다.',
+                    ),
+                  ),
+                ]
               : [
                   for (final layout in layouts)
                     ListTile(
@@ -1883,10 +2027,10 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
     final displayName =
         widget.session.admin.displayName ??
         widget.session.admin.email ??
-        'admin user';
+        rf('admin user', '관리자 사용자');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Operations')),
+      appBar: AppBar(title: Text(rf('Admin Operations', '관리자 작업'))),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -1896,19 +2040,22 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Signed in as $displayName',
+                  '${rf('Signed in as', '로그인 사용자')} $displayName',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
-                Text('Role: ${widget.session.admin.role}'),
+                Text('${rf('Role', '역할')}: ${widget.session.admin.role}'),
                 const SizedBox(height: 24),
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _searchController,
-                        decoration: const InputDecoration(
-                          labelText: 'Search user, project, layout, or job id',
+                        decoration: InputDecoration(
+                          labelText: rf(
+                            'Search user, project, layout, or job id',
+                            '사용자, 프로젝트, 레이아웃 또는 작업 ID 검색',
+                          ),
                           border: OutlineInputBorder(),
                         ),
                         onSubmitted: (_) => _search(),
@@ -1917,7 +2064,7 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                     const SizedBox(width: 8),
                     FilledButton(
                       onPressed: _search,
-                      child: const Text('Search'),
+                      child: Text(rf('Search', '검색')),
                     ),
                   ],
                 ),
@@ -1935,14 +2082,14 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                       children: [
                         DropdownButtonFormField<String?>(
                           value: _statusFilter,
-                          decoration: const InputDecoration(
-                            labelText: 'Job status',
+                          decoration: InputDecoration(
+                            labelText: rf('Job status', '작업 상태'),
                             border: OutlineInputBorder(),
                           ),
                           items: [
-                            const DropdownMenuItem<String?>(
+                            DropdownMenuItem<String?>(
                               value: null,
-                              child: Text('All statuses'),
+                              child: Text(rf('All statuses', '모든 상태')),
                             ),
                             ...statuses.map(
                               (status) => DropdownMenuItem<String?>(
@@ -1957,7 +2104,9 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                         if (snapshot.connectionState == ConnectionState.waiting)
                           const LinearProgressIndicator()
                         else if (snapshot.hasError)
-                          Text('Admin jobs failed: ${snapshot.error}')
+                          Text(
+                            '${rf('Admin jobs failed', '관리자 작업 불러오기 실패')}: ${snapshot.error}',
+                          )
                         else
                           _AdminJobListView(
                             jobs: data?.jobs ?? const [],
@@ -1997,13 +2146,15 @@ class _AdminJobListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (jobs.isEmpty) {
-      return const DecoratedBox(
-        decoration: BoxDecoration(
+      return DecoratedBox(
+        decoration: const BoxDecoration(
           border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
         ),
         child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Text('No jobs match the current filter.'),
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            rf('No jobs match the current filter.', '현재 필터와 일치하는 작업이 없습니다.'),
+          ),
         ),
       );
     }
@@ -2015,11 +2166,13 @@ class _AdminJobListView extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
               onTap: () => onSelect(job),
-              title: Text('Job ${job.id} - ${job.statusLabel}'),
-              subtitle: Text(
-                'Project ${job.projectId} | User ${job.userId} | ${job.provider}',
+              title: Text(
+                '${rf('Job', '작업')} ${job.id} - ${_adminStatusLabel(job.status)}',
               ),
-              trailing: Text(job.status),
+              subtitle: Text(
+                '${rf('Project', '프로젝트')} ${job.projectId} | ${rf('User', '사용자')} ${job.userId} | ${job.provider}',
+              ),
+              trailing: Text(_adminStatusLabel(job.status)),
             ),
           ),
       ],
@@ -2041,11 +2194,11 @@ class _AdminSearchResultsView extends StatelessWidget {
           return const LinearProgressIndicator();
         }
         if (snapshot.hasError) {
-          return Text('Search failed: ${snapshot.error}');
+          return Text('${rf('Search failed', '검색 실패')}: ${snapshot.error}');
         }
         final results = snapshot.data ?? const [];
         if (results.isEmpty) {
-          return const Text('No matching records.');
+          return Text(rf('No matching records.', '일치하는 기록이 없습니다.'));
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2079,20 +2232,24 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
 
   void _retry(AdminJob job) {
     setState(() {
-      _retryMessage = 'Retrying...';
+      _retryMessage = rf('Retrying...', '재시도 중...');
       _retryFuture = widget.adminApi.retryJob(job.id);
     });
     _retryFuture!
         .then((detail) {
           if (mounted) {
             setState(
-              () => _retryMessage = 'Retry job ${detail.job.id} created.',
+              () => _retryMessage =
+                  '${rf('Retry job created', '재시도 작업이 생성되었습니다')}: ${detail.job.id}',
             );
           }
         })
         .catchError((Object error) {
           if (mounted) {
-            setState(() => _retryMessage = 'Retry unavailable: $error');
+            setState(
+              () => _retryMessage =
+                  '${rf('Retry unavailable', '재시도할 수 없습니다')}: $error',
+            );
           }
         });
   }
@@ -2106,7 +2263,9 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
           return const LinearProgressIndicator();
         }
         if (snapshot.hasError) {
-          return Text('Job detail failed: ${snapshot.error}');
+          return Text(
+            '${rf('Job detail failed', '작업 상세 불러오기 실패')}: ${snapshot.error}',
+          );
         }
         final detail = snapshot.data;
         if (detail == null) {
@@ -2123,16 +2282,20 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Job ${job.id} detail',
+                  '${rf('Job', '작업')} ${job.id} ${rf('detail', '상세')}',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Text('Status: ${job.statusLabel} (${job.status})'),
-                Text('Project: ${job.projectId} | User: ${job.userId}'),
-                Text('Provider: ${job.provider}'),
-                Text('Retry count: ${detail.retryCount}'),
+                Text(
+                  '${rf('Status', '상태')}: ${_adminStatusLabel(job.status)} (${job.status})',
+                ),
+                Text(
+                  '${rf('Project', '프로젝트')}: ${job.projectId} | ${rf('User', '사용자')}: ${job.userId}',
+                ),
+                Text('${rf('Provider', '제공자')}: ${job.provider}'),
+                Text('${rf('Retry count', '재시도 횟수')}: ${detail.retryCount}'),
                 if (job.failureReasonCode != null)
-                  Text('Failure: ${job.failureReasonCode}'),
+                  Text('${rf('Failure', '실패 사유')}: ${job.failureReasonCode}'),
                 if (job.failureReasonMessage != null)
                   Text(job.failureReasonMessage!),
                 const SizedBox(height: 8),
@@ -2140,12 +2303,12 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
                   onPressed: job.status == 'failed' || job.status == 'timeout'
                       ? () => _retry(job)
                       : null,
-                  child: const Text('Retry job'),
+                  child: Text(rf('Retry job', '작업 재시도')),
                 ),
                 if (_retryMessage != null) Text(_retryMessage!),
                 const SizedBox(height: 12),
                 Text(
-                  'Event trail',
+                  rf('Event trail', '이벤트 이력'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 for (final transition in detail.transitions)
@@ -2186,7 +2349,9 @@ class _AdminArtifactView extends StatelessWidget {
           return const LinearProgressIndicator();
         }
         if (snapshot.hasError) {
-          return Text('Artifacts unavailable: ${snapshot.error}');
+          return Text(
+            '${rf('Artifacts unavailable', '아티팩트를 사용할 수 없습니다')}: ${snapshot.error}',
+          );
         }
         final data = snapshot.data;
         if (data == null) {
@@ -2211,15 +2376,21 @@ class _AdminArtifactView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'OpenCV artifacts',
+                  rf('OpenCV artifacts', 'OpenCV 아티팩트'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Text('Candidate geometry: ${candidate['coordinate_space']}'),
-                Text('Confidence: ${candidate['confidence'] ?? 'unknown'}'),
-                Text('Algorithm: ${candidate['algorithm'] ?? 'unknown'}'),
-                Text('Confirmed geometries: $confirmed'),
-                Text('Calibration summaries: $calibration'),
+                Text(
+                  '${rf('Candidate geometry', '후보 지오메트리')}: ${candidate['coordinate_space']}',
+                ),
+                Text(
+                  '${rf('Confidence', '신뢰도')}: ${candidate['confidence'] ?? rf('unknown', '알 수 없음')}',
+                ),
+                Text(
+                  '${rf('Algorithm', '알고리즘')}: ${candidate['algorithm'] ?? rf('unknown', '알 수 없음')}',
+                ),
+                Text('${rf('Confirmed geometries', '확정 지오메트리')}: $confirmed'),
+                Text('${rf('Calibration summaries', '보정 요약')}: $calibration'),
               ],
             ),
           ),
@@ -2243,7 +2414,9 @@ class _AdminDiagnosisView extends StatelessWidget {
           return const LinearProgressIndicator();
         }
         if (snapshot.hasError) {
-          return Text('Diagnosis unavailable: ${snapshot.error}');
+          return Text(
+            '${rf('Diagnosis unavailable', '진단을 사용할 수 없습니다')}: ${snapshot.error}',
+          );
         }
         final data = snapshot.data;
         if (data == null) {
@@ -2265,17 +2438,23 @@ class _AdminDiagnosisView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Failure diagnosis',
+                  rf('Failure diagnosis', '실패 진단'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Text('Provider: ${providerState['provider'] ?? 'unknown'}'),
                 Text(
-                  'Provider status: ${providerState['status'] ?? 'unknown'}',
+                  '${rf('Provider', '제공자')}: ${providerState['provider'] ?? rf('unknown', '알 수 없음')}',
                 ),
-                Text('Failure source: ${failureSource['source'] ?? 'unknown'}'),
+                Text(
+                  '${rf('Provider status', '제공자 상태')}: ${providerState['status'] ?? rf('unknown', '알 수 없음')}',
+                ),
+                Text(
+                  '${rf('Failure source', '실패 출처')}: ${failureSource['source'] ?? rf('unknown', '알 수 없음')}',
+                ),
                 if (providerState['failure_reason_code'] != null)
-                  Text('Reason: ${providerState['failure_reason_code']}'),
+                  Text(
+                    '${rf('Reason', '사유')}: ${providerState['failure_reason_code']}',
+                  ),
               ],
             ),
           ),
@@ -2286,10 +2465,18 @@ class _AdminDiagnosisView extends StatelessWidget {
 }
 
 String _adminStatusLabel(String status) {
-  if (status == 'review_required') {
-    return 'Needs review';
-  }
-  return status;
+  return switch (status) {
+    'created' => rf('created', '생성됨'),
+    'uploading' => rf('uploading', '업로드 중'),
+    'processing' => rf('processing', '처리 중'),
+    'review_required' => rf('Needs review', '검토 필요'),
+    'succeeded' => rf('succeeded', '성공'),
+    'failed' => rf('failed', '실패'),
+    'timeout' => rf('timeout', '시간 초과'),
+    'cancelled' => rf('cancelled', '취소됨'),
+    'retrying' => rf('retrying', '재시도 중'),
+    _ => status,
+  };
 }
 
 Color _adminStatusColor(String status) {
@@ -2299,6 +2486,70 @@ Color _adminStatusColor(String status) {
     'failed' || 'timeout' || 'cancelled' => _roomForgeError,
     'processing' || 'uploading' || 'retrying' => _roomForgePrimary,
     _ => _roomForgeMuted,
+  };
+}
+
+String _adminArtifactStateLabel(String state) {
+  return switch (state) {
+    'available' => rf('available', '사용 가능'),
+    'restricted' => rf('restricted', '제한됨'),
+    'missing' => rf('missing', '없음'),
+    'failed_to_load' => rf('failed_to_load', '불러오기 실패'),
+    'not_generated' => rf('not_generated', '생성되지 않음'),
+    'checking' => rf('checking', '확인 중'),
+    _ => state,
+  };
+}
+
+String _localizedUploadProgressLabel(double? progress) {
+  if (!_roomForgeUsesKorean) {
+    return uploadProgressLabel(progress);
+  }
+  if (progress == null) {
+    return '업로드 중';
+  }
+  final percent = (progress.clamp(0, 1) * 100).round();
+  return '업로드 중 $percent%';
+}
+
+String _localizedReconstructionStatusLabel(String status) {
+  return _adminStatusLabel(status);
+}
+
+String _localizedDraftLabel(String label) {
+  return switch (label) {
+    'Unsaved draft' => rf('Unsaved draft', '저장되지 않은 드래프트'),
+    'Sync failed' => rf('Sync failed', '동기화 실패'),
+    'Saved' => rf('Saved', '저장됨'),
+    _ => label,
+  };
+}
+
+String _localizedLayoutDraftRecoveryMessage({
+  required LayoutDraft draft,
+  required DateTime? latestCloudUpdatedAt,
+}) {
+  if (!_roomForgeUsesKorean) {
+    return layoutDraftRecoveryMessage(
+      draft: draft,
+      latestCloudUpdatedAt: latestCloudUpdatedAt,
+    );
+  }
+  return layoutDraftHasCloudConflict(draft, latestCloudUpdatedAt)
+      ? '클라우드에 저장된 레이아웃이 이 드래프트 이후 변경되었습니다.'
+      : '저장되지 않은 로컬 드래프트가 있습니다.';
+}
+
+String _localizedEditorObjectLabel(String? label) {
+  if (!_roomForgeUsesKorean) {
+    return label ?? 'Room shell';
+  }
+  return switch (label) {
+    'Room shell' || null => '방 외곽',
+    'Chair' => '의자',
+    'Table' => '테이블',
+    'Sofa' => '소파',
+    _ => label,
   };
 }
 
@@ -2350,18 +2601,18 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       );
       setState(() {
         _selectedProject = created;
-        _workspaceMessage = 'Created "${created.name}".';
+        _workspaceMessage = '${rf('Created', '생성됨')} "${created.name}".';
         _workspaceSeverity = NoticeSeverity.success;
       });
       _reload();
     } on ProjectApiException catch (error) {
       setState(() {
-        _workspaceMessage = 'Create failed: ${error.message}';
+        _workspaceMessage = '${rf('Create failed', '생성 실패')}: ${error.message}';
         _workspaceSeverity = NoticeSeverity.error;
       });
     } catch (error) {
       setState(() {
-        _workspaceMessage = 'Create failed: $error';
+        _workspaceMessage = '${rf('Create failed', '생성 실패')}: $error';
         _workspaceSeverity = NoticeSeverity.error;
       });
     }
@@ -2396,18 +2647,18 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       );
       setState(() {
         _selectedProject = updated;
-        _workspaceMessage = 'Saved "${updated.name}".';
+        _workspaceMessage = '${rf('Saved', '저장됨')} "${updated.name}".';
         _workspaceSeverity = NoticeSeverity.success;
       });
       _reload();
     } on ProjectApiException catch (error) {
       setState(() {
-        _workspaceMessage = 'Save failed: ${error.message}';
+        _workspaceMessage = '${rf('Save failed', '저장 실패')}: ${error.message}';
         _workspaceSeverity = NoticeSeverity.error;
       });
     } catch (error) {
       setState(() {
-        _workspaceMessage = 'Save failed: $error';
+        _workspaceMessage = '${rf('Save failed', '저장 실패')}: $error';
         _workspaceSeverity = NoticeSeverity.error;
       });
     }
@@ -2422,16 +2673,18 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete project'),
-        content: Text('Delete "${project.name}"?'),
+        title: Text(rf('Delete project', '프로젝트 삭제')),
+        content: Text(
+          rf('Delete "${project.name}"?', '"${project.name}" 프로젝트를 삭제할까요?'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(rf('Cancel', '취소')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(rf('Delete', '삭제')),
           ),
         ],
       ),
@@ -2445,18 +2698,18 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       await widget.projectApi.deleteProject(project.id);
       setState(() {
         _selectedProject = null;
-        _workspaceMessage = 'Deleted "${project.name}".';
+        _workspaceMessage = '${rf('Deleted', '삭제됨')} "${project.name}".';
         _workspaceSeverity = NoticeSeverity.success;
       });
       _reload();
     } on ProjectApiException catch (error) {
       setState(() {
-        _workspaceMessage = 'Delete failed: ${error.message}';
+        _workspaceMessage = '${rf('Delete failed', '삭제 실패')}: ${error.message}';
         _workspaceSeverity = NoticeSeverity.error;
       });
     } catch (error) {
       setState(() {
-        _workspaceMessage = 'Delete failed: $error';
+        _workspaceMessage = '${rf('Delete failed', '삭제 실패')}: $error';
         _workspaceSeverity = NoticeSeverity.error;
       });
     }
@@ -2562,7 +2815,7 @@ class _WorkspaceHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Project workspace',
+                    rf('Project workspace', '프로젝트 작업공간'),
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: _roomForgeInk,
                       fontWeight: FontWeight.w800,
@@ -2570,7 +2823,7 @@ class _WorkspaceHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Signed in as $displayName',
+                    '${rf('Signed in as', '로그인 계정')}: $displayName',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: _roomForgeMuted,
                     ),
@@ -2582,7 +2835,7 @@ class _WorkspaceHeader extends StatelessWidget {
             FilledButton.icon(
               onPressed: onCreateProject,
               icon: const Icon(Icons.add),
-              label: const Text('Create project'),
+              label: Text(rf('Create project', '프로젝트 생성')),
             ),
           ],
         ),
@@ -2590,8 +2843,8 @@ class _WorkspaceHeader extends StatelessWidget {
           const SizedBox(height: 12),
           RoomForgeNotice(
             title: severity == NoticeSeverity.error
-                ? 'Project change failed'
-                : 'Project updated',
+                ? rf('Project change failed', '프로젝트 변경 실패')
+                : rf('Project updated', '프로젝트 업데이트됨'),
             message: message!,
             severity: severity,
             icon: severity == NoticeSeverity.error
@@ -2633,14 +2886,14 @@ class _ProjectListPanel extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  'Rooms',
+                  rf('Rooms', '방 프로젝트'),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const Spacer(),
-                const RoomForgeStatusPill(
-                  label: 'Cloud saved',
+                RoomForgeStatusPill(
+                  label: rf('Cloud saved', '클라우드 저장'),
                   icon: Icons.cloud_done_outlined,
                   dense: true,
                 ),
@@ -2666,13 +2919,15 @@ class _ProjectListPanel extends StatelessWidget {
                 if (projects.isEmpty) {
                   return RoomForgeEmptyState(
                     icon: Icons.add_home_work_outlined,
-                    title: 'No room projects yet',
-                    message:
-                        'Start from a room photo, then add dimensions, reconstruction review, and layout saves.',
+                    title: rf('No room projects yet', '아직 방 프로젝트가 없습니다'),
+                    message: rf(
+                      'Start from a room photo, then add dimensions, reconstruction review, and layout saves.',
+                      '방 사진에서 시작한 뒤 치수, 재구성 검토, 레이아웃 저장을 이어서 진행하세요.',
+                    ),
                     action: FilledButton.icon(
                       onPressed: onCreateProject,
                       icon: const Icon(Icons.add),
-                      label: const Text('Create first project'),
+                      label: Text(rf('Create first project', '첫 프로젝트 생성')),
                     ),
                   );
                 }
@@ -2706,14 +2961,14 @@ class _ProjectListLoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(20),
+    return Padding(
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LinearProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Loading saved room projects...'),
+          const LinearProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(rf('Loading saved room projects...', '저장된 방 프로젝트를 불러오는 중...')),
         ],
       ),
     );
@@ -2774,7 +3029,7 @@ class _ProjectListTile extends StatelessWidget {
                     Text(
                       description?.isNotEmpty == true
                           ? description!
-                          : 'No description',
+                          : rf('No description', '설명 없음'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -2783,7 +3038,7 @@ class _ProjectListTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Updated ${_compactDateLabel(project.updatedAt)}',
+                      '${rf('Updated', '수정됨')} ${_compactDateLabel(project.updatedAt)}',
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: _roomForgeMuted,
                         fontWeight: FontWeight.w700,
@@ -2909,7 +3164,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
     setState(() {
       _uploadState = SourceImageUploadStatus.ready;
-      _uploadMessage = 'Drop a JPEG, PNG, or WebP room photo.';
+      _uploadMessage = rf(
+        'Drop a JPEG, PNG, or WebP room photo.',
+        'JPEG, PNG, WebP 방 사진을 놓으세요.',
+      );
       _uploadProgress = null;
     });
   }
@@ -2941,7 +3199,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     if (file == null) {
       setState(() {
         _uploadState = SourceImageUploadStatus.validationError;
-        _uploadMessage = 'Drop one supported room photo file.';
+        _uploadMessage = rf(
+          'Drop one supported room photo file.',
+          '지원되는 방 사진 파일 하나를 놓으세요.',
+        );
         _uploadProgress = null;
       });
       return;
@@ -2957,7 +3218,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
 
     setState(() {
       _uploadState = SourceImageUploadStatus.ready;
-      _uploadMessage = 'Select a JPEG, PNG, or WebP room photo.';
+      _uploadMessage = rf(
+        'Select a JPEG, PNG, or WebP room photo.',
+        'JPEG, PNG, WebP 방 사진을 선택하세요.',
+      );
       _uploadProgress = null;
     });
 
@@ -3014,8 +3278,14 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     setState(() {
       _uploadState = SourceImageUploadStatus.uploading;
       _uploadMessage = file.size < _lowQualityImageBytes
-          ? 'Uploading. Low-quality warning: this file is small. Use a sharper, brighter image if reconstruction looks weak.'
-          : 'Uploading source image to cloud storage.';
+          ? rf(
+              'Uploading. Low-quality warning: this file is small. Use a sharper, brighter image if reconstruction looks weak.',
+              '업로드 중입니다. 파일이 작아 품질 경고가 있습니다. 재구성이 약하면 더 선명하고 밝은 이미지를 사용하세요.',
+            )
+          : rf(
+              'Uploading source image to cloud storage.',
+              '소스 이미지를 클라우드 저장소에 업로드 중입니다.',
+            );
       _uploadProgress = 0;
       _lastUploadFile = file;
     });
@@ -3037,7 +3307,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
           setState(() {
             _uploadState = SourceImageUploadStatus.uploading;
             _uploadProgress = progress.clamp(0, 1).toDouble();
-            _uploadMessage = uploadProgressLabel(_uploadProgress);
+            _uploadMessage = _localizedUploadProgressLabel(_uploadProgress);
           });
         },
       );
@@ -3045,8 +3315,14 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         _sourceImage = sourceImage;
         _uploadState = SourceImageUploadStatus.uploaded;
         _uploadMessage = imageSize == null
-            ? 'Uploaded. Image dimensions were not available from the browser.'
-            : 'Uploaded ${imageSize.width} x ${imageSize.height}px source image.';
+            ? rf(
+                'Uploaded. Image dimensions were not available from the browser.',
+                '업로드되었습니다. 브라우저에서 이미지 크기를 확인하지 못했습니다.',
+              )
+            : rf(
+                'Uploaded ${imageSize.width} x ${imageSize.height}px source image.',
+                '${imageSize.width} x ${imageSize.height}px 소스 이미지를 업로드했습니다.',
+              );
         _uploadProgress = 1;
         _lastUploadFile = null;
       });
@@ -3063,7 +3339,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     } catch (error) {
       setState(() {
         _uploadState = SourceImageUploadStatus.uploadFailed;
-        _uploadMessage = 'Upload failed: $error';
+        _uploadMessage = '${rf('Upload failed', '업로드 실패')}: $error';
         _uploadProgress = null;
         _sourceImage = null;
       });
@@ -3093,13 +3369,19 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       setState(() {
         _dimensions = dimensions;
         _dimensionMessage = dimensions.usesDefaultHeight
-            ? 'Saved with MVP default height ${dimensions.heightValue.toStringAsFixed(2)} m.'
-            : 'Saved room dimensions.';
+            ? rf(
+                'Saved with MVP default height ${dimensions.heightValue.toStringAsFixed(2)} m.',
+                'MVP 기본 높이 ${dimensions.heightValue.toStringAsFixed(2)} m로 저장했습니다.',
+              )
+            : rf('Saved room dimensions.', '방 치수를 저장했습니다.');
       });
     } on ProjectApiException catch (error) {
       setState(() => _dimensionMessage = error.message);
     } catch (error) {
-      setState(() => _dimensionMessage = 'Saving dimensions failed: $error');
+      setState(
+        () => _dimensionMessage =
+            '${rf('Saving dimensions failed', '치수 저장 실패')}: $error',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSavingDimensions = false);
@@ -3131,8 +3413,11 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
             ? ''
             : dimensions.heightValue.toString();
         _dimensionMessage = dimensions.usesDefaultHeight
-            ? 'Loaded saved dimensions with MVP default height ${dimensions.heightValue.toStringAsFixed(2)} m.'
-            : 'Loaded saved room dimensions.';
+            ? rf(
+                'Loaded saved dimensions with MVP default height ${dimensions.heightValue.toStringAsFixed(2)} m.',
+                '저장된 치수를 MVP 기본 높이 ${dimensions.heightValue.toStringAsFixed(2)} m와 함께 불러왔습니다.',
+              )
+            : rf('Loaded saved room dimensions.', '저장된 방 치수를 불러왔습니다.');
       });
     } on ProjectApiException catch (error) {
       if (!mounted || widget.project?.id != project.id) {
@@ -3146,7 +3431,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       if (!mounted || widget.project?.id != project.id) {
         return;
       }
-      setState(() => _dimensionMessage = 'Loading dimensions failed: $error');
+      setState(
+        () => _dimensionMessage =
+            '${rf('Loading dimensions failed', '치수 불러오기 실패')}: $error',
+      );
     }
   }
 
@@ -3174,15 +3462,19 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     final sourceImage = _sourceImage;
     if (project == null || sourceImage == null) {
       setState(() {
-        _reconstructionMessage =
-            'Upload a source image before submitting reconstruction.';
+        _reconstructionMessage = rf(
+          'Upload a source image before submitting reconstruction.',
+          '재구성을 제출하기 전에 소스 이미지를 업로드하세요.',
+        );
       });
       return;
     }
     if (_dimensions == null) {
       setState(() {
-        _reconstructionMessage =
-            'Save room dimensions before submitting reconstruction.';
+        _reconstructionMessage = rf(
+          'Save room dimensions before submitting reconstruction.',
+          '재구성을 제출하기 전에 방 치수를 저장하세요.',
+        );
       });
       return;
     }
@@ -3199,14 +3491,17 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       );
       setState(() {
         _reconstructionJob = job;
-        _reconstructionMessage = job.statusLabel;
+        _reconstructionMessage = _localizedReconstructionStatusLabel(
+          job.status,
+        );
       });
       _startReconstructionPolling(job.id);
     } on ProjectApiException catch (error) {
       setState(() => _reconstructionMessage = error.message);
     } catch (error) {
       setState(
-        () => _reconstructionMessage = 'Reconstruction submit failed: $error',
+        () => _reconstructionMessage =
+            '${rf('Reconstruction submit failed', '재구성 제출 실패')}: $error',
       );
     } finally {
       if (mounted) {
@@ -3238,7 +3533,9 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       }
       setState(() {
         _reconstructionJob = job;
-        _reconstructionMessage = job.statusLabel;
+        _reconstructionMessage = _localizedReconstructionStatusLabel(
+          job.status,
+        );
       });
       if (job.terminal) {
         _reconstructionPollTimer?.cancel();
@@ -3247,7 +3544,10 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       if (!mounted) {
         return;
       }
-      setState(() => _reconstructionMessage = 'Status refresh failed: $error');
+      setState(
+        () => _reconstructionMessage =
+            '${rf('Status refresh failed', '상태 새로고침 실패')}: $error',
+      );
     }
   }
 
@@ -3270,13 +3570,17 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       );
       setState(() {
         _reconstructionJob = retryJob;
-        _reconstructionMessage = 'Retry available: ${retryJob.statusLabel}';
+        _reconstructionMessage =
+            '${rf('Retry available', '재시도 가능')}: ${_localizedReconstructionStatusLabel(retryJob.status)}';
       });
       _startReconstructionPolling(retryJob.id);
     } on ProjectApiException catch (error) {
       setState(() => _reconstructionMessage = error.message);
     } catch (error) {
-      setState(() => _reconstructionMessage = 'Retry failed: $error');
+      setState(
+        () =>
+            _reconstructionMessage = '${rf('Retry failed', '재시도 실패')}: $error',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmittingReconstruction = false);
@@ -3288,11 +3592,13 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   Widget build(BuildContext context) {
     final project = widget.project;
     if (project == null) {
-      return const RoomForgeEmptyState(
+      return RoomForgeEmptyState(
         icon: Icons.dashboard_customize_outlined,
-        title: 'Select a project',
-        message:
-            'Project details, upload state, room dimensions, reconstruction status, and editor entry appear here.',
+        title: rf('Select a project', '프로젝트를 선택하세요'),
+        message: rf(
+          'Project details, upload state, room dimensions, reconstruction status, and editor entry appear here.',
+          '프로젝트 상세, 업로드 상태, 방 치수, 재구성 상태, 편집기 진입점이 여기에 표시됩니다.',
+        ),
       );
     }
 
@@ -3325,7 +3631,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                         Text(
                           description?.isNotEmpty == true
                               ? description!
-                              : 'No description',
+                              : rf('No description', '설명 없음'),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: _roomForgeMuted,
                             height: 1.4,
@@ -3335,8 +3641,8 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const RoomForgeStatusPill(
-                    label: 'Selected',
+                  RoomForgeStatusPill(
+                    label: rf('Selected', '선택됨'),
                     icon: Icons.check_circle_outline,
                     dense: true,
                   ),
@@ -3351,7 +3657,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                     width: 160,
                     child: RoomForgeMetricTile(
                       icon: Icons.schedule_outlined,
-                      label: 'Updated',
+                      label: rf('Updated', '수정됨'),
                       value: _compactDateLabel(project.updatedAt),
                     ),
                   ),
@@ -3359,7 +3665,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                     width: 160,
                     child: RoomForgeMetricTile(
                       icon: Icons.event_available_outlined,
-                      label: 'Created',
+                      label: rf('Created', '생성됨'),
                       value: _compactDateLabel(project.createdAt),
                     ),
                   ),
@@ -3367,7 +3673,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Project ID: ${project.id}',
+                '${rf('Project ID', '프로젝트 ID')}: ${project.id}',
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: _roomForgeMuted,
                 ),
@@ -3403,7 +3709,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: _openReconstruction,
-                child: const Text('Open planning editor'),
+                child: Text(rf('Open planning editor', '배치 편집기 열기')),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -3413,12 +3719,12 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                   OutlinedButton.icon(
                     onPressed: widget.onEdit,
                     icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Edit project'),
+                    label: Text(rf('Edit project', '프로젝트 수정')),
                   ),
                   OutlinedButton.icon(
                     onPressed: widget.onDelete,
                     icon: const Icon(Icons.delete_outline),
-                    label: const Text('Delete'),
+                    label: Text(rf('Delete', '삭제')),
                   ),
                 ],
               ),
@@ -3520,7 +3826,7 @@ class PhotoIntakeSection extends StatelessWidget {
       _ => const Color(0xFFE2E8F0),
     };
     final progressValue = progress?.clamp(0, 1).toDouble();
-    final progressText = uploadProgressLabel(progressValue);
+    final progressText = _localizedUploadProgressLabel(progressValue);
     final isProblemState =
         state.isFailure || state == SourceImageUploadStatus.lowQualityWarning;
     final noticeSeverity = state.isFailure
@@ -3530,11 +3836,13 @@ class PhotoIntakeSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const RoomForgeSectionHeader(
+        RoomForgeSectionHeader(
           icon: Icons.photo_camera_outlined,
-          title: 'Source image upload',
-          description:
-              'Use a sharp, bright JPEG, PNG, or WebP room photo with visible floor-wall boundaries.',
+          title: rf('Source image upload', '소스 이미지 업로드'),
+          description: rf(
+            'Use a sharp, bright JPEG, PNG, or WebP room photo with visible floor-wall boundaries.',
+            '바닥과 벽 경계가 잘 보이는 선명하고 밝은 JPEG, PNG, WebP 방 사진을 사용하세요.',
+          ),
         ),
         const SizedBox(height: 12),
         DecoratedBox(
@@ -3566,9 +3874,9 @@ class PhotoIntakeSection extends StatelessWidget {
                             liveRegion: true,
                             label: state == SourceImageUploadStatus.uploading
                                 ? progressText
-                                : state.label,
+                                : _uploadStateLabel(state),
                             child: Text(
-                              state.label,
+                              _uploadStateLabel(state),
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: _roomForgeInk,
@@ -3590,7 +3898,7 @@ class PhotoIntakeSection extends StatelessWidget {
                     RoomForgeStatusPill(
                       label: state == SourceImageUploadStatus.uploading
                           ? progressText
-                          : state.label,
+                          : _uploadStateLabel(state),
                       color: borderColor,
                       dense: true,
                     ),
@@ -3638,8 +3946,8 @@ class PhotoIntakeSection extends StatelessWidget {
                   isProblemState
                       ? RoomForgeNotice(
                           title: state.isFailure
-                              ? 'Upload needs attention'
-                              : 'Image quality warning',
+                              ? rf('Upload needs attention', '업로드 확인 필요')
+                              : rf('Image quality warning', '이미지 품질 경고'),
                           message: message!,
                           severity: noticeSeverity,
                           icon: state.isFailure
@@ -3665,22 +3973,25 @@ class PhotoIntakeSection extends StatelessWidget {
                       icon: const Icon(Icons.photo_outlined),
                       label: Text(
                         state == SourceImageUploadStatus.uploading
-                            ? 'Uploading...'
-                            : 'Choose photo',
+                            ? rf('Uploading...', '업로드 중...')
+                            : rf('Choose photo', '사진 선택'),
                       ),
                     ),
                     if (state.canRetryUpload)
                       FilledButton.icon(
                         onPressed: onRetryUpload,
                         icon: const Icon(Icons.refresh),
-                        label: const Text('Retry upload'),
+                        label: Text(rf('Retry upload', '업로드 재시도')),
                       ),
                   ],
                 ),
                 if (state == SourceImageUploadStatus.validationError) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Accepted formats: JPEG, PNG, WebP. Maximum size: 10 MB.',
+                    rf(
+                      'Accepted formats: JPEG, PNG, WebP. Maximum size: 10 MB.',
+                      '지원 형식: JPEG, PNG, WebP. 최대 크기: 10 MB.',
+                    ),
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -3708,24 +4019,71 @@ class PhotoIntakeSection extends StatelessWidget {
 
   String _uploadGuidance(SourceImageUploadStatus state) {
     return switch (state) {
-      SourceImageUploadStatus.ready =>
+      SourceImageUploadStatus.ready => rf(
         'Drop the room photo here, or choose a file from this browser.',
-      SourceImageUploadStatus.uploading =>
+        '방 사진을 여기에 놓거나 브라우저에서 파일을 선택하세요.',
+      ),
+      SourceImageUploadStatus.uploading => rf(
         'Keep this tab open while the source image is saved.',
-      SourceImageUploadStatus.uploaded =>
+        '소스 이미지가 저장되는 동안 이 탭을 열어 두세요.',
+      ),
+      SourceImageUploadStatus.uploaded => rf(
         'The uploaded photo is ready for reconstruction review.',
-      SourceImageUploadStatus.validationError =>
+        '업로드된 사진은 재구성 검토에 사용할 수 있습니다.',
+      ),
+      SourceImageUploadStatus.validationError => rf(
         'Choose another file that matches the format and size requirements.',
-      SourceImageUploadStatus.lowQualityWarning =>
+        '형식과 크기 조건에 맞는 다른 파일을 선택하세요.',
+      ),
+      SourceImageUploadStatus.lowQualityWarning => rf(
         'The file may work, but reconstruction might need manual correction.',
-      SourceImageUploadStatus.permissionFailure =>
+        '파일은 사용할 수 있지만 재구성에 수동 보정이 필요할 수 있습니다.',
+      ),
+      SourceImageUploadStatus.permissionFailure => rf(
         'Refresh access or retry after confirming this project belongs to your account.',
-      SourceImageUploadStatus.metadataSaveFailed =>
+        '프로젝트 접근 권한을 확인한 뒤 다시 시도하세요.',
+      ),
+      SourceImageUploadStatus.metadataSaveFailed => rf(
         'Storage received the file, but the project metadata did not finish saving.',
-      SourceImageUploadStatus.uploadFailed =>
+        '파일은 저장소에 업로드됐지만 프로젝트 메타데이터 저장이 완료되지 않았습니다.',
+      ),
+      SourceImageUploadStatus.uploadFailed => rf(
         'Retry upload, or replace the file if the problem repeats.',
-      SourceImageUploadStatus.empty =>
+        '업로드를 재시도하고, 문제가 반복되면 파일을 교체하세요.',
+      ),
+      SourceImageUploadStatus.empty => rf(
         'Drag a photo into the page or choose a file to start reconstruction.',
+        '사진을 페이지에 끌어오거나 파일을 선택해 재구성을 시작하세요.',
+      ),
+    };
+  }
+
+  String _uploadStateLabel(SourceImageUploadStatus state) {
+    return switch (state) {
+      SourceImageUploadStatus.ready => rf('Ready to select', '선택 준비됨'),
+      SourceImageUploadStatus.uploading => rf('Uploading', '업로드 중'),
+      SourceImageUploadStatus.uploaded => rf('Uploaded', '업로드됨'),
+      SourceImageUploadStatus.validationError => rf(
+        'Validation error',
+        '검증 오류',
+      ),
+      SourceImageUploadStatus.lowQualityWarning => rf(
+        'Low-quality warning',
+        '품질 경고',
+      ),
+      SourceImageUploadStatus.permissionFailure => rf(
+        'Permission blocked',
+        '권한 차단',
+      ),
+      SourceImageUploadStatus.metadataSaveFailed => rf(
+        'Metadata save failed',
+        '메타데이터 저장 실패',
+      ),
+      SourceImageUploadStatus.uploadFailed => rf('Upload failed', '업로드 실패'),
+      SourceImageUploadStatus.empty => rf(
+        'No source image selected',
+        '선택된 소스 이미지 없음',
+      ),
     };
   }
 }
@@ -3759,11 +4117,13 @@ class RoomDimensionsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const RoomForgeSectionHeader(
+          RoomForgeSectionHeader(
             icon: Icons.straighten_outlined,
-            title: 'Room dimensions',
-            description:
-                'Enter the room footprint in meters. Height can use the MVP default when unknown.',
+            title: rf('Room dimensions', '방 치수'),
+            description: rf(
+              'Enter the room footprint in meters. Height can use the MVP default when unknown.',
+              '방의 가로/세로를 미터 단위로 입력하세요. 높이를 모르면 MVP 기본값을 사용할 수 있습니다.',
+            ),
           ),
           const SizedBox(height: 12),
           LayoutBuilder(
@@ -3772,29 +4132,29 @@ class RoomDimensionsSection extends StatelessWidget {
               final fields = [
                 TextFormField(
                   controller: widthController,
-                  decoration: const InputDecoration(
-                    labelText: 'Width',
+                  decoration: InputDecoration(
+                    labelText: rf('Width', '너비'),
                     suffixText: 'm',
-                    helperText: 'Wall to wall',
+                    helperText: rf('Wall to wall', '벽에서 벽까지'),
                   ),
                   keyboardType: TextInputType.number,
                   validator: _positiveDimensionValidator,
                 ),
                 TextFormField(
                   controller: depthController,
-                  decoration: const InputDecoration(
-                    labelText: 'Depth',
+                  decoration: InputDecoration(
+                    labelText: rf('Depth', '깊이'),
                     suffixText: 'm',
-                    helperText: 'Front to back',
+                    helperText: rf('Front to back', '앞에서 뒤까지'),
                   ),
                   keyboardType: TextInputType.number,
                   validator: _positiveDimensionValidator,
                 ),
                 TextFormField(
                   controller: heightController,
-                  decoration: const InputDecoration(
-                    labelText: 'Height',
-                    helperText: 'Blank uses default',
+                  decoration: InputDecoration(
+                    labelText: rf('Height', '높이'),
+                    helperText: rf('Blank uses default', '비워두면 기본값 사용'),
                     suffixText: 'm',
                   ),
                   keyboardType: TextInputType.number,
@@ -3833,8 +4193,8 @@ class RoomDimensionsSection extends StatelessWidget {
             const SizedBox(height: 12),
             RoomForgeNotice(
               title: message!.toLowerCase().contains('failed')
-                  ? 'Dimension save issue'
-                  : 'Dimension state',
+                  ? rf('Dimension save issue', '치수 저장 문제')
+                  : rf('Dimension state', '치수 상태'),
               message: message!,
               severity: message!.toLowerCase().contains('failed')
                   ? NoticeSeverity.error
@@ -3856,7 +4216,7 @@ class RoomDimensionsSection extends StatelessWidget {
                 RoomForgeStatusPill(
                   icon: Icons.height_outlined,
                   label:
-                      'Height ${dimensions!.heightValue.toStringAsFixed(2)} ${dimensions!.unit}',
+                      '${rf('Height', '높이')} ${dimensions!.heightValue.toStringAsFixed(2)} ${dimensions!.unit}',
                   color: dimensions!.usesDefaultHeight
                       ? _roomForgeWarning
                       : _roomForgeSuccess,
@@ -3873,7 +4233,11 @@ class RoomDimensionsSection extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.save_outlined),
-            label: Text(isSaving ? 'Saving...' : 'Save dimensions'),
+            label: Text(
+              isSaving
+                  ? rf('Saving...', '저장 중...')
+                  : rf('Save dimensions', '치수 저장'),
+            ),
           ),
         ],
       ),
@@ -3883,7 +4247,7 @@ class RoomDimensionsSection extends StatelessWidget {
   static String? _positiveDimensionValidator(String? value) {
     final parsed = double.tryParse(value?.trim() ?? '');
     if (parsed == null || parsed <= 0) {
-      return 'Enter a positive number.';
+      return rf('Enter a positive number.', '양수를 입력하세요.');
     }
     return null;
   }
@@ -3919,11 +4283,13 @@ class ReconstructionJobSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const RoomForgeSectionHeader(
+        RoomForgeSectionHeader(
           icon: Icons.auto_fix_high_outlined,
-          title: 'Reconstruction status',
-          description:
-              'Submit the uploaded photo for OpenCV-assisted outline detection, then review the result before planning.',
+          title: rf('Reconstruction status', '재구성 상태'),
+          description: rf(
+            'Submit the uploaded photo for OpenCV-assisted outline detection, then review the result before planning.',
+            '업로드한 사진을 OpenCV 기반 윤곽 감지에 제출하고, 배치 전에 결과를 검토하세요.',
+          ),
         ),
         const SizedBox(height: 12),
         DecoratedBox(
@@ -3949,7 +4315,9 @@ class ReconstructionJobSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        job?.statusLabel ?? 'Ready after setup',
+                        job == null
+                            ? rf('Ready after setup', '설정 후 준비됨')
+                            : _localizedReconstructionStatusLabel(job!.status),
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: _roomForgeInk,
                           fontWeight: FontWeight.w800,
@@ -3958,7 +4326,10 @@ class ReconstructionJobSection extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         message ??
-                            'Submit after source image and dimensions are saved.',
+                            rf(
+                              'Submit after source image and dimensions are saved.',
+                              '소스 이미지와 치수가 저장된 뒤 제출하세요.',
+                            ),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: _roomForgeMuted,
                           height: 1.35,
@@ -3969,7 +4340,9 @@ class ReconstructionJobSection extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 RoomForgeStatusPill(
-                  label: job?.statusLabel ?? 'Not submitted',
+                  label: job == null
+                      ? rf('Not submitted', '미제출')
+                      : _localizedReconstructionStatusLabel(job!.status),
                   icon: job == null
                       ? Icons.schedule_outlined
                       : _reconstructionStatusIcon(job!.status),
@@ -3988,18 +4361,19 @@ class ReconstructionJobSection extends StatelessWidget {
             children: [
               RoomForgeStatusPill(
                 icon: Icons.memory_outlined,
-                label: 'Provider ${job!.provider}',
+                label: '${rf('Provider', '제공자')} ${job!.provider}',
                 color: _roomForgeMuted,
               ),
               RoomForgeStatusPill(
                 icon: Icons.update_outlined,
-                label: 'Updated ${_compactDateLabel(job!.updatedAt)}',
+                label:
+                    '${rf('Updated', '수정됨')} ${_compactDateLabel(job!.updatedAt)}',
                 color: _roomForgeMuted,
               ),
               if (job!.retryOfJobId != null)
                 RoomForgeStatusPill(
                   icon: Icons.replay_outlined,
-                  label: 'Retry of ${job!.retryOfJobId}',
+                  label: '${rf('Retry of', '재시도 원본')} ${job!.retryOfJobId}',
                   color: _roomForgeWarning,
                 ),
             ],
@@ -4016,11 +4390,14 @@ class ReconstructionJobSection extends StatelessWidget {
             const SizedBox(height: 12),
             RoomForgeNotice(
               title: job!.status == 'review_required'
-                  ? 'Needs review'
-                  : 'Reconstruction needs attention',
+                  ? rf('Needs review', '검토 필요')
+                  : rf('Reconstruction needs attention', '재구성 확인 필요'),
               message:
                   job!.failureReasonMessage ??
-                  'Check blur, lighting, hidden boundaries, occlusion, distortion, unsupported image, OpenCV failure, invalid geometry, or calibration failure.',
+                  rf(
+                    'Check blur, lighting, hidden boundaries, occlusion, distortion, unsupported image, OpenCV failure, invalid geometry, or calibration failure.',
+                    '흐림, 조명, 숨겨진 경계, 가림, 왜곡, 지원되지 않는 이미지, OpenCV 실패, 잘못된 지오메트리, 보정 실패를 확인하세요.',
+                  ),
               severity: job!.status == 'review_required'
                   ? NoticeSeverity.warning
                   : NoticeSeverity.error,
@@ -4039,7 +4416,11 @@ class ReconstructionJobSection extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.play_arrow_outlined),
-          label: Text(isSubmitting ? 'Submitting...' : 'Submit reconstruction'),
+          label: Text(
+            isSubmitting
+                ? rf('Submitting...', '제출 중...')
+                : rf('Submit reconstruction', '재구성 제출'),
+          ),
         ),
         if (job != null &&
             (job!.terminal || job!.status == 'review_required')) ...[
@@ -4047,7 +4428,7 @@ class ReconstructionJobSection extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: isSubmitting ? null : onRetry,
             icon: const Icon(Icons.refresh),
-            label: const Text('Retry reconstruction'),
+            label: Text(rf('Retry reconstruction', '재구성 재시도')),
           ),
         ],
       ],
@@ -4080,20 +4461,46 @@ class ReconstructionJobSection extends StatelessWidget {
 
   String _reconstructionStatusGuidance(String status) {
     return switch (status) {
-      'created' => 'The job record exists and is waiting for processing.',
-      'uploading' =>
+      'created' => rf(
+        'The job record exists and is waiting for processing.',
+        '작업 레코드가 생성되었고 처리를 기다리는 중입니다.',
+      ),
+      'uploading' => rf(
         'Source artifacts are still being prepared before OpenCV processing.',
-      'processing' => 'OpenCV is extracting candidate room geometry.',
-      'review_required' =>
+        'OpenCV 처리 전에 소스 아티팩트를 준비하는 중입니다.',
+      ),
+      'processing' => rf(
+        'OpenCV is extracting candidate room geometry.',
+        'OpenCV가 후보 방 지오메트리를 추출하는 중입니다.',
+      ),
+      'review_required' => rf(
         'Open the editor, compare candidate and confirmed geometry, and correct the outline if needed.',
-      'succeeded' =>
+        '편집기를 열어 후보/확정 지오메트리를 비교하고 필요하면 윤곽을 보정하세요.',
+      ),
+      'succeeded' => rf(
         'A metric floor plan can be reviewed and used in the planning editor.',
-      'failed' =>
+        '미터 단위 평면도를 검토하고 배치 편집기에서 사용할 수 있습니다.',
+      ),
+      'failed' => rf(
         'Retry with a clearer photo or inspect the failure reason before continuing.',
-      'timeout' => 'Retry is available after the previous job exceeded time.',
-      'cancelled' => 'Submit a new reconstruction when ready.',
-      'retrying' => 'A linked retry job is being prepared.',
-      _ => 'Review the latest reconstruction state before opening the editor.',
+        '더 선명한 사진으로 재시도하거나 실패 사유를 확인한 뒤 계속하세요.',
+      ),
+      'timeout' => rf(
+        'Retry is available after the previous job exceeded time.',
+        '이전 작업이 제한 시간을 초과해 재시도할 수 있습니다.',
+      ),
+      'cancelled' => rf(
+        'Submit a new reconstruction when ready.',
+        '준비되면 새 재구성을 제출하세요.',
+      ),
+      'retrying' => rf(
+        'A linked retry job is being prepared.',
+        '연결된 재시도 작업을 준비 중입니다.',
+      ),
+      _ => rf(
+        'Review the latest reconstruction state before opening the editor.',
+        '편집기를 열기 전에 최신 재구성 상태를 확인하세요.',
+      ),
     };
   }
 }
@@ -4130,13 +4537,16 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   late final String _viewType;
   late final html.IFrameElement _iframe;
   StreamSubscription<html.MessageEvent>? _messageSubscription;
-  String _bridgeStatus = 'Waiting for editor frame.';
-  String _runtimeStatus = 'Waiting for OpenCV worker.';
-  String _sceneStatus = 'Waiting for metric floor plan handoff.';
-  String _saveStatus = 'Not saved.';
-  String _loadStatus = 'No layout loaded.';
-  String _draftStatus = 'No local draft.';
-  String _exportStatus = 'Not exported.';
+  String _bridgeStatus = rf('Waiting for editor frame.', '편집기 프레임 대기 중.');
+  String _runtimeStatus = rf('Waiting for OpenCV worker.', 'OpenCV 워커 대기 중.');
+  String _sceneStatus = rf(
+    'Waiting for metric floor plan handoff.',
+    '미터 단위 평면도 전달 대기 중.',
+  );
+  String _saveStatus = rf('Not saved.', '저장되지 않음.');
+  String _loadStatus = rf('No layout loaded.', '불러온 레이아웃 없음.');
+  String _draftStatus = rf('No local draft.', '로컬 드래프트 없음.');
+  String _exportStatus = rf('Not exported.', '내보내지 않음.');
   String _viewMode = '2d';
   bool _isSavingLayout = false;
   bool _isLoadingLayout = false;
@@ -4202,7 +4612,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Planning editor: ${widget.project.name}')),
+      appBar: AppBar(
+        title: Text(
+          '${rf('Planning editor', '배치 편집기')}: ${widget.project.name}',
+        ),
+      ),
       body: Column(
         children: [
           _EditorBridgeCommandBar(
@@ -4261,13 +4675,19 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     Map<String, Object?>? draftScene;
     setState(() {
       if (type == 'roomforge.editor.ready') {
-        _bridgeStatus = 'Editor ready.';
+        _bridgeStatus = rf('Editor ready.', '편집기 준비됨.');
       } else if (type.endsWith('.response')) {
-        _bridgeStatus = 'Bridge round trip: $type';
+        _bridgeStatus = '${rf('Bridge round trip', '브리지 왕복')}: $type';
       } else if (type == 'roomforge.opencv.runtimeLoaded') {
-        _runtimeStatus = 'OpenCV worker assets loaded.';
+        _runtimeStatus = rf(
+          'OpenCV worker assets loaded.',
+          'OpenCV 워커 자산 로드됨.',
+        );
       } else if (type == 'roomforge.opencv.runtimeFailed') {
-        _runtimeStatus = 'OpenCV worker asset loading failed.';
+        _runtimeStatus = rf(
+          'OpenCV worker asset loading failed.',
+          'OpenCV 워커 자산 로드 실패.',
+        );
       } else if (type == 'roomforge.scene.initialized' ||
           type == 'roomforge.view.changed' ||
           type == 'roomforge.selection.changed' ||
@@ -4288,10 +4708,14 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
           }
           final room = payload['room'];
           final label = room is Map ? room['label']?.toString() : null;
-          final statusLabel = hasUnsavedChanges ? 'Unsaved changes' : 'Saved';
-          _sceneStatus =
-              '${viewMode?.toUpperCase() ?? _viewMode.toUpperCase()} scene: '
-              '${label ?? 'Room shell'}; $statusLabel';
+          final statusLabel = hasUnsavedChanges
+              ? rf('Unsaved changes', '저장되지 않은 변경')
+              : rf('Saved', '저장됨');
+          final modeLabel = viewMode?.toUpperCase() ?? _viewMode.toUpperCase();
+          _sceneStatus = rf(
+            '$modeLabel scene: ${_localizedEditorObjectLabel(label)}; $statusLabel',
+            '$modeLabel 장면: ${_localizedEditorObjectLabel(label)}; $statusLabel',
+          );
         }
       }
     });
@@ -4305,14 +4729,17 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         !_reviewSaveConfirmed) {
       setState(() {
         _reviewSaveConfirmed = true;
-        _saveStatus = layoutNeedsReviewSaveWarning;
+        _saveStatus = rf(
+          layoutNeedsReviewSaveWarning,
+          '검토 필요 상태입니다. 다시 저장하면 계속 진행합니다.',
+        );
       });
       return;
     }
 
     setState(() {
       _isSavingLayout = true;
-      _saveStatus = 'Saving...';
+      _saveStatus = rf('Saving...', '저장 중...');
     });
 
     try {
@@ -4339,9 +4766,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _reviewSaveConfirmed = false;
         _syncFailureVisible = false;
         _draftStatus = draftCleanupSucceeded
-            ? 'Saved'
-            : 'Draft cleanup unavailable.';
-        _saveStatus = 'Saved';
+            ? rf('Saved', '저장됨')
+            : rf('Draft cleanup unavailable.', '드래프트 정리를 사용할 수 없습니다.');
+        _saveStatus = rf('Saved', '저장됨');
       });
     } on ProjectApiException catch (error) {
       _latestScene = _sceneForSave();
@@ -4352,8 +4779,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       setState(() {
         _reviewSaveConfirmed = false;
         _syncFailureVisible = true;
-        _draftStatus = '$layoutSyncFailedLabel. $layoutRetryAvailableLabel.';
-        _saveStatus = 'Save failed: ${error.message}';
+        _draftStatus =
+            '${rf(layoutSyncFailedLabel, '동기화 실패')}. ${rf(layoutRetryAvailableLabel, '재시도 가능')}.';
+        _saveStatus = '${rf('Save failed', '저장 실패')}: ${error.message}';
       });
     } catch (error) {
       _latestScene = _sceneForSave();
@@ -4364,8 +4792,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       setState(() {
         _reviewSaveConfirmed = false;
         _syncFailureVisible = true;
-        _draftStatus = '$layoutSyncFailedLabel. $layoutRetryAvailableLabel.';
-        _saveStatus = 'Save failed: $error';
+        _draftStatus =
+            '${rf(layoutSyncFailedLabel, '동기화 실패')}. ${rf(layoutRetryAvailableLabel, '재시도 가능')}.';
+        _saveStatus = '${rf('Save failed', '저장 실패')}: $error';
       });
     } finally {
       if (mounted) {
@@ -4383,7 +4812,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   Future<void> _loadLayout({bool forceApplyCloud = false}) async {
     setState(() {
       _isLoadingLayout = true;
-      _loadStatus = 'Loading...';
+      _loadStatus = rf('Loading...', '불러오는 중...');
     });
 
     try {
@@ -4400,8 +4829,14 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         }
         setState(() {
           _recoverableDraft = activeDraft;
-          _draftStatus = layoutRemoteUpdateHeldMessage;
-          _loadStatus = layoutRemoteUpdateHeldMessage;
+          _draftStatus = rf(
+            layoutRemoteUpdateHeldMessage,
+            '로컬 드래프트가 있어 클라우드 레이아웃 적용을 보류했습니다.',
+          );
+          _loadStatus = rf(
+            layoutRemoteUpdateHeldMessage,
+            '로컬 드래프트가 있어 클라우드 레이아웃 적용을 보류했습니다.',
+          );
         });
         return;
       }
@@ -4422,8 +4857,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         if (nextViewMode != null) {
           _viewMode = nextViewMode;
         }
-        _saveStatus = 'Saved';
-        _loadStatus = 'Loaded layout';
+        _saveStatus = rf('Saved', '저장됨');
+        _loadStatus = rf('Loaded layout', '레이아웃 불러옴');
       });
       if (!forceApplyCloud) {
         unawaited(_detectRecoverableDraft(layoutId: layout.id));
@@ -4437,12 +4872,14 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _loadStatus = 'Load failed: ${error.message}');
+      setState(
+        () => _loadStatus = '${rf('Load failed', '불러오기 실패')}: ${error.message}',
+      );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _loadStatus = 'Load failed: $error');
+      setState(() => _loadStatus = '${rf('Load failed', '불러오기 실패')}: $error');
     } finally {
       if (mounted) {
         setState(() => _isLoadingLayout = false);
@@ -4453,7 +4890,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   Future<void> _exportLayout() async {
     setState(() {
       _isExportingLayout = true;
-      _exportStatus = 'Checking latest saved layout...';
+      _exportStatus = rf(
+        'Checking latest saved layout...',
+        '최근 저장된 레이아웃 확인 중...',
+      );
     });
 
     try {
@@ -4467,7 +4907,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         }
         setState(() {
           _reviewExportConfirmed = true;
-          _exportStatus = layoutNeedsReviewExportWarning;
+          _exportStatus = rf(
+            layoutNeedsReviewExportWarning,
+            '검토 필요 경고가 있습니다. 다시 내보내면 계속 진행합니다.',
+          );
         });
         return;
       }
@@ -4478,8 +4921,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       setState(() {
         _reviewExportConfirmed = false;
         _exportStatus = needsReview
-            ? 'Exported JSON with $layoutNeedsReviewLabel warning'
-            : 'Exported JSON';
+            ? rf(
+                'Exported JSON with $layoutNeedsReviewLabel warning',
+                '검토 필요 경고와 함께 JSON을 내보냈습니다',
+              )
+            : rf('Exported JSON', 'JSON 내보내기 완료');
       });
     } on ProjectApiException catch (error) {
       if (!mounted) {
@@ -4487,7 +4933,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _reviewExportConfirmed = false;
-        _exportStatus = 'Export failed: ${error.message}';
+        _exportStatus = '${rf('Export failed', '내보내기 실패')}: ${error.message}';
       });
     } catch (error) {
       if (!mounted) {
@@ -4495,7 +4941,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       }
       setState(() {
         _reviewExportConfirmed = false;
-        _exportStatus = 'Export failed: $error';
+        _exportStatus = '${rf('Export failed', '내보내기 실패')}: $error';
       });
     } finally {
       if (mounted) {
@@ -4536,8 +4982,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       setState(() {
         _recoverableDraft = draft?.isRecoverable == true ? draft : null;
         _draftStatus = draft == null || !draft.isRecoverable
-            ? 'No local draft.'
-            : layoutDraftRecoveryMessage(
+            ? rf('No local draft.', '로컬 드래프트 없음.')
+            : _localizedLayoutDraftRecoveryMessage(
                 draft: draft,
                 latestCloudUpdatedAt: _activeCloudUpdatedAt,
               );
@@ -4546,7 +4992,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _draftStatus = 'Draft check unavailable.');
+      setState(
+        () => _draftStatus = rf('Draft check unavailable.', '드래프트 확인 불가.'),
+      );
     }
   }
 
@@ -4584,8 +5032,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _activeCloudUpdatedAt = draft.baseCloudUpdatedAt;
         _recoverableDraft = null;
         _syncFailureVisible = false;
-        _draftStatus = 'Unsaved draft';
-        _saveStatus = 'Unsaved draft';
+        _draftStatus = rf('Unsaved draft', '저장되지 않은 드래프트');
+        _saveStatus = rf('Unsaved draft', '저장되지 않은 드래프트');
       });
       _postEditorMessage(
         type: 'roomforge.scene.initialize',
@@ -4608,16 +5056,18 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Discard draft?'),
-          content: const Text('This removes the local draft only.'),
+          title: Text(rf('Discard draft?', '드래프트를 버릴까요?')),
+          content: Text(
+            rf('This removes the local draft only.', '로컬 드래프트만 삭제합니다.'),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(rf('Cancel', '취소')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Discard draft'),
+              child: Text(rf('Discard draft', '드래프트 버리기')),
             ),
           ],
         );
@@ -4645,7 +5095,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       setState(() {
         _recoverableDraft = null;
         _syncFailureVisible = false;
-        _draftStatus = 'No local draft.';
+        _draftStatus = rf('No local draft.', '로컬 드래프트 없음.');
       });
     } finally {
       if (mounted) {
@@ -4658,7 +5108,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     setState(() {
       _recoverableDraft = null;
       _syncFailureVisible = false;
-      _draftStatus = 'Using saved cloud layout.';
+      _draftStatus = rf('Using saved cloud layout.', '저장된 클라우드 레이아웃 사용 중.');
     });
     unawaited(_loadLayout(forceApplyCloud: true));
   }
@@ -4706,13 +5156,13 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         return;
       }
       if (!_syncFailureVisible) {
-        setState(() => _draftStatus = draft.label);
+        setState(() => _draftStatus = _localizedDraftLabel(draft.label));
       }
     } catch (_) {
       if (!mounted) {
         return;
       }
-      setState(() => _draftStatus = 'Draft save failed.');
+      setState(() => _draftStatus = rf('Draft save failed.', '드래프트 저장 실패.'));
     }
   }
 
@@ -4744,7 +5194,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       if (!mounted) {
         return false;
       }
-      setState(() => _draftStatus = 'Draft cleanup unavailable.');
+      setState(
+        () => _draftStatus = rf('Draft cleanup unavailable.', '드래프트 정리 불가.'),
+      );
       return false;
     }
   }
@@ -5044,6 +5496,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     final uri = Uri.parse(EditorConfig.editorUrl);
     final queryParameters = Map<String, String>.from(uri.queryParameters)
       ..['project_id'] = project.id.toString();
+    if (_roomForgeUsesKorean) {
+      queryParameters['locale'] = 'ko';
+    }
     return uri.replace(queryParameters: queryParameters).toString();
   }
 }
@@ -5130,22 +5585,32 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save_outlined),
-                  label: Text(isSavingLayout ? 'Saving...' : 'Save layout'),
+                  label: Text(
+                    isSavingLayout
+                        ? rf('Saving...', '저장 중...')
+                        : rf('Save layout', '레이아웃 저장'),
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: isLoadingLayout ? null : onLoadLayout,
                   icon: const Icon(Icons.cloud_download_outlined),
-                  label: Text(isLoadingLayout ? 'Loading...' : 'Load layout'),
+                  label: Text(
+                    isLoadingLayout
+                        ? rf('Loading...', '불러오는 중...')
+                        : rf('Load layout', '레이아웃 불러오기'),
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: isExportingLayout ? null : onExportLayout,
                   icon: const Icon(Icons.file_download_outlined),
                   label: Text(
-                    isExportingLayout ? 'Exporting...' : 'Export JSON',
+                    isExportingLayout
+                        ? rf('Exporting...', '내보내는 중...')
+                        : rf('Export JSON', 'JSON 내보내기'),
                   ),
                 ),
                 IconButton.outlined(
-                  tooltip: 'Ping editor bridge',
+                  tooltip: rf('Ping editor bridge', '편집기 브리지 확인'),
                   onPressed: onPingEditor,
                   icon: const Icon(Icons.sensors_outlined),
                 ),
@@ -5207,8 +5672,8 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                   if (recoverableDraft != null) ...[
                     const SizedBox(height: 10),
                     RoomForgeNotice(
-                      title: 'Unsaved draft recovery',
-                      message: layoutDraftRecoveryMessage(
+                      title: rf('Unsaved draft recovery', '저장되지 않은 드래프트 복구'),
+                      message: _localizedLayoutDraftRecoveryMessage(
                         draft: recoverableDraft!,
                         latestCloudUpdatedAt: activeCloudUpdatedAt,
                       ),
@@ -5223,19 +5688,21 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                         FilledButton.icon(
                           onPressed: isHandlingDraft ? null : onRestoreDraft,
                           icon: const Icon(Icons.restore_outlined),
-                          label: const Text('Restore draft'),
+                          label: Text(rf('Restore draft', '드래프트 복원')),
                         ),
                         OutlinedButton.icon(
                           onPressed: isHandlingDraft ? null : onDiscardDraft,
                           icon: const Icon(Icons.delete_sweep_outlined),
-                          label: const Text('Discard draft'),
+                          label: Text(rf('Discard draft', '드래프트 버리기')),
                         ),
                         OutlinedButton.icon(
                           onPressed: isHandlingDraft
                               ? null
                               : onContinueSavedVersion,
                           icon: const Icon(Icons.cloud_done_outlined),
-                          label: const Text('Continue saved version'),
+                          label: Text(
+                            rf('Continue saved version', '저장된 버전 계속 사용'),
+                          ),
                         ),
                       ],
                     ),
@@ -5243,7 +5710,10 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                   if (compact) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Canvas controls remain inside the editor frame.',
+                      rf(
+                        'Canvas controls remain inside the editor frame.',
+                        '캔버스 컨트롤은 편집기 프레임 안에 있습니다.',
+                      ),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: _roomForgeMuted,
                       ),
@@ -5263,21 +5733,39 @@ class _EditorBridgeCommandBar extends StatelessWidget {
     if (lower.contains('failed') ||
         lower.contains('unavailable') ||
         lower.contains('warning') ||
-        lower.contains('review')) {
-      return lower.contains('review') || lower.contains('warning')
+        lower.contains('review') ||
+        lower.contains('실패') ||
+        lower.contains('사용할 수 없') ||
+        lower.contains('불가') ||
+        lower.contains('경고') ||
+        lower.contains('검토')) {
+      return lower.contains('review') ||
+              lower.contains('warning') ||
+              lower.contains('경고') ||
+              lower.contains('검토')
           ? _roomForgeWarning
           : _roomForgeError;
     }
     if (lower.contains('saved') ||
         lower.contains('ready') ||
         lower.contains('loaded') ||
-        lower.contains('exported')) {
+        lower.contains('exported') ||
+        lower.contains('저장됨') ||
+        lower.contains('준비됨') ||
+        lower.contains('로드됨') ||
+        lower.contains('불러옴') ||
+        lower.contains('내보내기 완료')) {
       return _roomForgeSuccess;
     }
     if (lower.contains('saving') ||
         lower.contains('loading') ||
         lower.contains('waiting') ||
-        lower.contains('unsaved')) {
+        lower.contains('unsaved') ||
+        lower.contains('저장 중') ||
+        lower.contains('불러오는 중') ||
+        lower.contains('내보내는 중') ||
+        lower.contains('대기') ||
+        lower.contains('저장되지')) {
       return _roomForgePrimary;
     }
     return _roomForgeMuted;
@@ -5348,7 +5836,7 @@ class ProjectErrorView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               RoomForgeNotice(
-                title: 'Could not load this view',
+                title: rf('Could not load this view', '이 화면을 불러오지 못했습니다'),
                 message: message,
                 severity: NoticeSeverity.error,
                 icon: Icons.error_outline,
@@ -5359,7 +5847,7 @@ class ProjectErrorView extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
+                  label: Text(rf('Retry', '재시도')),
                 ),
               ),
             ],
@@ -5434,7 +5922,11 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(isCreate ? 'Create room project' : 'Edit project'),
+            child: Text(
+              isCreate
+                  ? rf('Create room project', '방 프로젝트 생성')
+                  : rf('Edit project', '프로젝트 수정'),
+            ),
           ),
         ],
       ),
@@ -5448,8 +5940,14 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
             children: [
               Text(
                 isCreate
-                    ? 'Name the room before uploading a source photo.'
-                    : 'Update the visible project metadata. Saved layouts remain attached to this project.',
+                    ? rf(
+                        'Name the room before uploading a source photo.',
+                        '소스 사진을 업로드하기 전에 방 이름을 정하세요.',
+                      )
+                    : rf(
+                        'Update the visible project metadata. Saved layouts remain attached to this project.',
+                        '보이는 프로젝트 메타데이터를 수정합니다. 저장된 레이아웃은 이 프로젝트에 계속 연결됩니다.',
+                      ),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: _roomForgeMuted,
                   height: 1.4,
@@ -5458,15 +5956,18 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Project name',
-                  helperText: 'Shown in the workspace and layout export.',
+                decoration: InputDecoration(
+                  labelText: rf('Project name', '프로젝트 이름'),
+                  helperText: rf(
+                    'Shown in the workspace and layout export.',
+                    '작업공간과 레이아웃 내보내기에 표시됩니다.',
+                  ),
                 ),
                 maxLength: 120,
                 textInputAction: TextInputAction.next,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Enter a project name.';
+                    return rf('Enter a project name.', '프로젝트 이름을 입력하세요.');
                   }
                   return null;
                 },
@@ -5474,9 +5975,12 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  helperText: 'Optional notes such as room, client, or goal.',
+                decoration: InputDecoration(
+                  labelText: rf('Description', '설명'),
+                  helperText: rf(
+                    'Optional notes such as room, client, or goal.',
+                    '방, 고객, 목표 같은 선택 메모입니다.',
+                  ),
                   alignLabelWithHint: true,
                 ),
                 maxLength: 1000,
@@ -5490,12 +5994,12 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(rf('Cancel', '취소')),
         ),
         FilledButton.icon(
           onPressed: _submit,
           icon: Icon(isCreate ? Icons.add : Icons.check),
-          label: Text(isCreate ? 'Create' : 'Save'),
+          label: Text(isCreate ? rf('Create', '생성') : rf('Save', '저장')),
         ),
       ],
     );

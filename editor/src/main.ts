@@ -11,7 +11,6 @@ import {
   defaultSpatialModel,
   roomBounds,
   spatialModelFromBridgePayload,
-  spatialSummary,
   type FurnitureCategory,
   type FurnitureObject,
   type SpatialModel,
@@ -24,98 +23,102 @@ if (!app) {
   throw new Error('Missing editor root element.')
 }
 
+const localeOverride = new URLSearchParams(window.location.search).get('locale')?.toLowerCase() ?? ''
+const usesKorean = localeOverride.startsWith('ko') || navigator.language.toLowerCase().startsWith('ko')
+const t = (english: string, korean: string): string => (usesKorean ? korean : english)
+
 app.innerHTML = `
 <section class="editor-shell">
-  <div class="viewport" aria-label="RoomForge editor viewport">
-    <div class="viewport-toolbar" aria-label="Planning view controls">
+  <div class="viewport" aria-label="${t('RoomForge editor viewport', 'RoomForge 편집기 뷰포트')}">
+    <div class="viewport-toolbar" aria-label="${t('Planning view controls', '배치 보기 컨트롤')}">
       <button id="view-2d" type="button" aria-pressed="true">2D</button>
       <button id="view-3d" type="button" aria-pressed="false">3D</button>
     </div>
     <div class="viewport-measurements" id="measurement-status" role="status" aria-live="polite">
-      Room 4.20 m x 3.60 m
+      ${t('Room 4.20 m x 3.60 m', '방 4.20 m x 3.60 m')}
     </div>
     <div class="viewport-warning" id="placement-status" role="status" aria-live="assertive" hidden>
-      Placement warning
+      ${t('Placement warning', '배치 경고')}
     </div>
     <canvas
       class="editor-canvas"
       aria-describedby="scene-status inspector-status placement-summary"
-      aria-label="Three.js reconstruction viewport"
+      aria-label="${t('Three.js reconstruction viewport', 'Three.js 재구성 뷰포트')}"
       role="application"
       tabindex="0"
     ></canvas>
     <div class="viewport-status-strip" id="scene-status" role="status" aria-live="polite">
-      Initializing metric room scene
+      ${t('Initializing metric room scene', '미터 단위 방 장면 초기화 중')}
     </div>
   </div>
-  <aside class="status-panel" aria-label="Inspector and status">
-    <p class="eyebrow">RoomForge editor</p>
-    <h1>Planning editor</h1>
+  <aside class="status-panel" aria-label="${t('Inspector and status', '인스펙터 및 상태')}">
+    <p class="eyebrow">${t('RoomForge editor', 'RoomForge 편집기')}</p>
+    <h1>${t('Planning editor', '배치 편집기')}</h1>
     <dl class="status-list">
       <div>
-        <dt>Bridge</dt>
-        <dd id="bridge-status" role="status" aria-live="polite">Waiting for Flutter shell</dd>
+        <dt>${t('Bridge', '브리지')}</dt>
+        <dd id="bridge-status" role="status" aria-live="polite">${t('Waiting for Flutter shell', 'Flutter 셸 대기 중')}</dd>
       </div>
       <div>
-        <dt>OpenCV runtime</dt>
-        <dd id="opencv-status" role="status" aria-live="polite">Loading worker assets</dd>
+        <dt>${t('OpenCV runtime', 'OpenCV 런타임')}</dt>
+        <dd id="opencv-status" role="status" aria-live="polite">${t('Loading worker assets', '워커 자산 로드 중')}</dd>
       </div>
       <div>
-        <dt>Viewport</dt>
-        <dd id="viewport-status">Sizing scene</dd>
+        <dt>${t('Viewport', '뷰포트')}</dt>
+        <dd id="viewport-status">${t('Sizing scene', '장면 크기 조정 중')}</dd>
       </div>
       <div>
-        <dt>Geometry</dt>
-        <dd id="geometry-status">Candidate and confirmed overlays visible</dd>
+        <dt>${t('Geometry', '지오메트리')}</dt>
+        <dd id="geometry-status">${t('Candidate and confirmed overlays visible', '후보 및 확정 오버레이 표시 중')}</dd>
       </div>
       <div>
-        <dt>Scene</dt>
-        <dd id="spatial-status" role="status" aria-live="polite">Waiting for metric floor plan</dd>
+        <dt>${t('Scene', '장면')}</dt>
+        <dd id="spatial-status" role="status" aria-live="polite">${t('Waiting for metric floor plan', '미터 단위 평면도 대기 중')}</dd>
       </div>
       <div>
-        <dt>Inspector</dt>
-        <dd id="inspector-status" role="status" aria-live="polite">Selected room shell</dd>
+        <dt>${t('Inspector', '인스펙터')}</dt>
+        <dd id="inspector-status" role="status" aria-live="polite">${t('Selected room shell', '방 외곽 선택됨')}</dd>
       </div>
       <div>
-        <dt>Placement</dt>
-        <dd id="placement-summary" role="status" aria-live="polite">All objects inside room bounds</dd>
+        <dt>${t('Placement', '배치')}</dt>
+        <dd id="placement-summary" role="status" aria-live="polite">${t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음')}</dd>
       </div>
     </dl>
     <section class="panel-section" aria-labelledby="opencv-review-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">OpenCV review</p>
-          <h2 id="opencv-review-title">Candidate outline</h2>
+          <p class="eyebrow">${t('OpenCV review', 'OpenCV 검토')}</p>
+          <h2 id="opencv-review-title">${t('Candidate outline', '후보 윤곽')}</h2>
         </div>
-        <span class="state-pill warning">Needs review</span>
+        <span class="state-pill warning">${t('Needs review', '검토 필요')}</span>
       </div>
       <dl class="compact-metrics">
         <div>
-          <dt>Candidates</dt>
-          <dd id="candidate-count">1 set</dd>
+          <dt>${t('Candidates', '후보')}</dt>
+          <dd id="candidate-count">${t('1 set', '1개 세트')}</dd>
         </div>
         <div>
-          <dt>Confidence</dt>
+          <dt>${t('Confidence', '신뢰도')}</dt>
           <dd id="candidate-confidence">0.72</dd>
         </div>
       </dl>
-      <div class="geometry-controls" aria-label="Geometry correction controls">
-        <button id="accept-candidate" type="button">Accept candidate</button>
-        <button id="manual-outline" type="button">Manual rectangle</button>
-        <button id="add-corner" type="button">Add corner</button>
-        <button id="delete-corner" type="button">Delete corner</button>
-        <button id="reset-candidate" type="button">Reset</button>
+      <div class="geometry-controls" aria-label="${t('Geometry correction controls', '지오메트리 보정 컨트롤')}">
+        <button id="accept-candidate" type="button">${t('Accept candidate', '후보 적용')}</button>
+        <button id="manual-outline" type="button">${t('Manual rectangle', '수동 사각형')}</button>
+        <button id="add-corner" type="button">${t('Add corner', '꼭짓점 추가')}</button>
+        <button id="delete-corner" type="button">${t('Delete corner', '꼭짓점 삭제')}</button>
+        <button id="reset-candidate" type="button">${t('Reset', '초기화')}</button>
       </div>
     </section>
     <section class="panel-section" aria-labelledby="scale-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">Scale</p>
-          <h2 id="scale-title">Metric floor plan</h2>
+          <p class="eyebrow">${t('Scale', '스케일')}</p>
+          <h2 id="scale-title">${t('Metric floor plan', '미터 평면도')}</h2>
         </div>
-        <span class="state-pill measurement">Meters</span>
+        <span class="state-pill measurement">${t('Meters', '미터')}</span>
       </div>
-      <label class="field-label" for="known-wall-length">Known wall length</label>
+      <label class="field-label" for="known-wall-length">${t('Known wall length', '알려진 벽 길이')}</label>
       <div class="scale-input-row">
         <input
           id="known-wall-length"
@@ -127,64 +130,64 @@ app.innerHTML = `
         />
         <span aria-hidden="true">m</span>
       </div>
-      <p class="helper-text" id="scale-status">Use the longest trusted wall to anchor image pixels into meters.</p>
-      <button id="generate-floor-plan" type="button">Generate floor plan</button>
+      <p class="helper-text" id="scale-status">${t('Use the longest trusted wall to anchor image pixels into meters.', '가장 신뢰할 수 있는 긴 벽을 기준으로 이미지 픽셀을 미터로 보정하세요.')}</p>
+      <button id="generate-floor-plan" type="button">${t('Generate floor plan', '평면도 생성')}</button>
     </section>
     <section class="panel-section" aria-labelledby="furniture-catalog-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">Furniture</p>
-          <h2 id="furniture-catalog-title">Add preset object</h2>
+          <p class="eyebrow">${t('Furniture', '가구')}</p>
+          <h2 id="furniture-catalog-title">${t('Add preset object', '프리셋 객체 추가')}</h2>
         </div>
-        <span class="state-pill" id="furniture-count">0 objects</span>
+        <span class="state-pill" id="furniture-count">${t('0 objects', '객체 0개')}</span>
       </div>
-      <p class="helper-text" id="furniture-catalog-status">Choose a preset to place it inside the measured room.</p>
-      <div class="furniture-controls" aria-label="Furniture catalog">
-        <button type="button" data-furniture-category="chair">Add chair</button>
-        <button type="button" data-furniture-category="table">Add table</button>
-        <button type="button" data-furniture-category="sofa">Add sofa</button>
+      <p class="helper-text" id="furniture-catalog-status">${t('Choose a preset to place it inside the measured room.', '측정된 방 안에 배치할 프리셋을 선택하세요.')}</p>
+      <div class="furniture-controls" aria-label="${t('Furniture catalog', '가구 카탈로그')}">
+        <button type="button" data-furniture-category="chair">${t('Add chair', '의자 추가')}</button>
+        <button type="button" data-furniture-category="table">${t('Add table', '테이블 추가')}</button>
+        <button type="button" data-furniture-category="sofa">${t('Add sofa', '소파 추가')}</button>
       </div>
     </section>
     <section class="panel-section" aria-labelledby="selection-inspector-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">Inspector</p>
-          <h2 id="selection-inspector-title">Selected object</h2>
+          <p class="eyebrow">${t('Inspector', '인스펙터')}</p>
+          <h2 id="selection-inspector-title">${t('Selected object', '선택된 객체')}</h2>
         </div>
-        <span class="state-pill" id="selection-state">Room</span>
+        <span class="state-pill" id="selection-state">${t('Room', '방')}</span>
       </div>
-      <div class="furniture-edit-controls" aria-label="Selected furniture editing controls">
-        <button type="button" data-furniture-edit="move-up">Move up</button>
-        <button type="button" data-furniture-edit="move-down">Move down</button>
-        <button type="button" data-furniture-edit="move-left">Move left</button>
-        <button type="button" data-furniture-edit="move-right">Move right</button>
-        <button type="button" data-furniture-edit="rotate-left">Rotate -15</button>
-        <button type="button" data-furniture-edit="rotate-right">Rotate +15</button>
-        <button type="button" data-furniture-edit="narrower">Narrower</button>
-        <button type="button" data-furniture-edit="wider">Wider</button>
-        <button type="button" data-furniture-edit="shallower">Shallower</button>
-        <button type="button" data-furniture-edit="deeper">Deeper</button>
-        <button type="button" data-furniture-edit="toggle-lock">Lock object</button>
-        <button type="button" data-furniture-edit="delete">Delete</button>
+      <div class="furniture-edit-controls" aria-label="${t('Selected furniture editing controls', '선택 가구 편집 컨트롤')}">
+        <button type="button" data-furniture-edit="move-up">${t('Move up', '위로 이동')}</button>
+        <button type="button" data-furniture-edit="move-down">${t('Move down', '아래로 이동')}</button>
+        <button type="button" data-furniture-edit="move-left">${t('Move left', '왼쪽 이동')}</button>
+        <button type="button" data-furniture-edit="move-right">${t('Move right', '오른쪽 이동')}</button>
+        <button type="button" data-furniture-edit="rotate-left">${t('Rotate -15', '-15도 회전')}</button>
+        <button type="button" data-furniture-edit="rotate-right">${t('Rotate +15', '+15도 회전')}</button>
+        <button type="button" data-furniture-edit="narrower">${t('Narrower', '너비 줄이기')}</button>
+        <button type="button" data-furniture-edit="wider">${t('Wider', '너비 늘리기')}</button>
+        <button type="button" data-furniture-edit="shallower">${t('Shallower', '깊이 줄이기')}</button>
+        <button type="button" data-furniture-edit="deeper">${t('Deeper', '깊이 늘리기')}</button>
+        <button type="button" data-furniture-edit="toggle-lock">${t('Lock object', '객체 잠금')}</button>
+        <button type="button" data-furniture-edit="delete">${t('Delete', '삭제')}</button>
       </div>
     </section>
     <section class="panel-section" aria-labelledby="camera-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">View</p>
-          <h2 id="camera-title">3D camera</h2>
+          <p class="eyebrow">${t('View', '보기')}</p>
+          <h2 id="camera-title">${t('3D camera', '3D 카메라')}</h2>
         </div>
-        <span class="state-pill">Presets</span>
+        <span class="state-pill">${t('Presets', '프리셋')}</span>
       </div>
-      <div class="camera-controls" aria-label="3D camera controls">
-        <button type="button" data-camera-action="reset">Reset</button>
-        <button type="button" data-camera-action="fit">Fit</button>
-        <button type="button" data-camera-action="top">Top</button>
-        <button type="button" data-camera-action="front">Front</button>
-        <button type="button" data-camera-action="corner">Corner</button>
-        <button type="button" data-camera-action="eye">Eye-level</button>
+      <div class="camera-controls" aria-label="${t('3D camera controls', '3D 카메라 컨트롤')}">
+        <button type="button" data-camera-action="reset">${t('Reset', '초기화')}</button>
+        <button type="button" data-camera-action="fit">${t('Fit', '맞춤')}</button>
+        <button type="button" data-camera-action="top">${t('Top', '상단')}</button>
+        <button type="button" data-camera-action="front">${t('Front', '정면')}</button>
+        <button type="button" data-camera-action="corner">${t('Corner', '코너')}</button>
+        <button type="button" data-camera-action="eye">${t('Eye-level', '눈높이')}</button>
       </div>
-      <p class="camera-status" id="camera-status">Camera ready</p>
+      <p class="camera-status" id="camera-status">${t('Camera ready', '카메라 준비됨')}</p>
     </section>
   </aside>
 </section>
@@ -441,7 +444,10 @@ function postToParent(message: BridgeMessage): void {
 }
 
 function respondToFlutter(message: BridgeMessage): void {
-  bridgeStatusElement.textContent = `Received ${message.type}`
+  bridgeStatusElement.textContent = t(
+    `Received ${message.type}`,
+    `${message.type} 수신됨`,
+  )
   postToParent({
     type: `${message.type}.response`,
     version: BRIDGE_VERSION,
@@ -524,49 +530,61 @@ for (const button of furnitureEditButtons) {
 
 document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
-  updateConfirmedGeometry('Accepted OpenCV candidate.')
+  updateConfirmedGeometry(t('Accepted OpenCV candidate.', 'OpenCV 후보를 적용했습니다.'))
 })
 
 document.querySelector<HTMLButtonElement>('#manual-outline')?.addEventListener('click', () => {
   confirmedPoints = outlinePoints.slice(0, 4).map((point) => point.clone())
-  updateConfirmedGeometry('Started from manual rectangle.')
+  updateConfirmedGeometry(t('Started from manual rectangle.', '수동 사각형에서 시작했습니다.'))
 })
 
 document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('click', () => {
   const lastPoint = confirmedPoints[confirmedPoints.length - 1]
   const firstPoint = confirmedPoints[0]
   confirmedPoints.push(lastPoint.clone().lerp(firstPoint, 0.5))
-  updateConfirmedGeometry('Added a boundary corner.')
+  updateConfirmedGeometry(t('Added a boundary corner.', '경계 꼭짓점을 추가했습니다.'))
 })
 
 document.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('click', () => {
   if (confirmedPoints.length <= 3) {
-    geometryStatusElement.textContent = 'At least three corners are required.'
+    geometryStatusElement.textContent = t('At least three corners are required.', '최소 3개 꼭짓점이 필요합니다.')
     return
   }
   confirmedPoints.pop()
-  updateConfirmedGeometry('Deleted the last boundary corner.')
+  updateConfirmedGeometry(t('Deleted the last boundary corner.', '마지막 경계 꼭짓점을 삭제했습니다.'))
 })
 
 document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
-  updateConfirmedGeometry('Reset to OpenCV candidate.')
+  updateConfirmedGeometry(t('Reset to OpenCV candidate.', 'OpenCV 후보로 초기화했습니다.'))
 })
 
 document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListener('click', () => {
   if (confirmedPoints.length < 3) {
-    geometryStatusElement.textContent = 'Confirm at least three corners before generation.'
+    geometryStatusElement.textContent = t(
+      'Confirm at least three corners before generation.',
+      '생성 전에 최소 3개 꼭짓점을 확정하세요.',
+    )
     return
   }
   const knownLength = Number.parseFloat(knownWallLengthInputElement.value)
   if (!Number.isFinite(knownLength) || knownLength <= 0) {
-    scaleStatusElement.textContent = 'Enter a positive known wall length before generating a floor plan.'
-    geometryStatusElement.textContent = 'Invalid calibration length.'
+    scaleStatusElement.textContent = t(
+      'Enter a positive known wall length before generating a floor plan.',
+      '평면도를 생성하기 전에 양수 벽 길이를 입력하세요.',
+    )
+    geometryStatusElement.textContent = t('Invalid calibration length.', '잘못된 보정 길이입니다.')
     return
   }
   const depth = roomBounds(spatialModel).depthMeters
-  geometryStatusElement.textContent = 'Generated meter-space MVP floor plan.'
-  scaleStatusElement.textContent = `Calibrated with ${knownLength.toFixed(2)} m known wall length.`
+  geometryStatusElement.textContent = t(
+    'Generated meter-space MVP floor plan.',
+    '미터 공간 MVP 평면도를 생성했습니다.',
+  )
+  scaleStatusElement.textContent = t(
+    `Calibrated with ${knownLength.toFixed(2)} m known wall length.`,
+    `알려진 벽 길이 ${knownLength.toFixed(2)} m로 보정했습니다.`,
+  )
   spatialModel = {
     ...spatialModel,
     hasUnsavedChanges: true,
@@ -643,7 +661,9 @@ editorCanvas.addEventListener('pointerdown', (event) => {
     }
     cameraTransition = null
     cameraStatusElement.textContent =
-      activeCameraDrag.mode === 'pan' ? 'Panning 3D camera' : 'Orbiting 3D camera'
+      activeCameraDrag.mode === 'pan'
+        ? t('Panning 3D camera', '3D 카메라 패닝 중')
+        : t('Orbiting 3D camera', '3D 카메라 회전 중')
     editorCanvas.setPointerCapture(event.pointerId)
     event.preventDefault()
     return
@@ -683,7 +703,7 @@ editorCanvas.addEventListener('pointermove', (event) => {
   const target = new THREE.Vector3()
   if (raycaster.ray.intersectPlane(dragPlane, target)) {
     confirmedPoints[activeCornerIndex] = target
-    updateConfirmedGeometry('Dragging confirmed boundary corner.', false)
+    updateConfirmedGeometry(t('Dragging confirmed boundary corner.', '확정 경계 꼭짓점 드래그 중.'), false)
   }
 })
 
@@ -693,13 +713,13 @@ editorCanvas.addEventListener('pointerup', (event) => {
       editorCanvas.releasePointerCapture(event.pointerId)
     }
     activeCameraDrag = null
-    cameraStatusElement.textContent = 'Camera adjusted'
+    cameraStatusElement.textContent = t('Camera adjusted', '카메라 조정됨')
     emitCameraChanged()
     return
   }
 
   if (activeCornerIndex !== null) {
-    updateConfirmedGeometry('Updated confirmed boundary by dragging corner.')
+    updateConfirmedGeometry(t('Updated confirmed boundary by dragging corner.', '꼭짓점 드래그로 확정 경계를 업데이트했습니다.'))
     if (editorCanvas.hasPointerCapture(event.pointerId)) {
       editorCanvas.releasePointerCapture(event.pointerId)
     }
@@ -721,7 +741,7 @@ editorCanvas.addEventListener(
       return
     }
     zoomCamera(event.deltaY)
-    cameraStatusElement.textContent = 'Zoomed 3D camera'
+    cameraStatusElement.textContent = t('Zoomed 3D camera', '3D 카메라 확대/축소됨')
     emitCameraChanged()
     event.preventDefault()
   },
@@ -755,20 +775,23 @@ worker.onmessage = (event: MessageEvent<BridgeMessage>) => {
   runtimeState = event.data.payload
   opencvStatusElement.textContent =
     event.data.type === 'roomforge.opencv.runtimeLoaded'
-      ? 'Worker assets loaded'
-      : 'Worker asset loading failed'
+      ? t('Worker assets loaded', '워커 자산 로드됨')
+      : t('Worker asset loading failed', '워커 자산 로드 실패')
   postToParent(event.data)
   if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
-    candidateCountElement.textContent = '1 set'
+    candidateCountElement.textContent = t('1 set', '1개 세트')
     candidateConfidenceElement.textContent = '0.72'
     postToParent({
       type: 'roomforge.reconstruction.qualityWarning',
       version: BRIDGE_VERSION,
       payload: {
         status: 'review_required',
-        label: 'Needs review',
+        label: t('Needs review', '검토 필요'),
         reasonCode: 'low_confidence',
-        reasonMessage: 'Candidate geometry should be reviewed before save or export.',
+        reasonMessage: t(
+          'Candidate geometry should be reviewed before save or export.',
+          '저장 또는 내보내기 전에 후보 지오메트리를 검토해야 합니다.',
+        ),
         recoveryActions: ['manual_outline', 'corner_correction', 'reupload'],
       },
     })
@@ -938,14 +961,14 @@ function rebuildFurniture(): void {
 }
 
 function updateSpatialStatus(): void {
-  spatialStatusElement.textContent = spatialSummary(spatialModel)
-  sceneStatusElement.textContent = spatialSummary(spatialModel)
+  spatialStatusElement.textContent = localizedSpatialSummary(spatialModel)
+  sceneStatusElement.textContent = localizedSpatialSummary(spatialModel)
   inspectorStatusElement.textContent = inspectorSummary(spatialModel)
   measurementStatusElement.textContent = measurementSummary(spatialModel)
   const warning = placementWarning(spatialModel)
   placementStatusElement.hidden = warning === null
   placementStatusElement.textContent = warning ?? ''
-  placementSummaryElement.textContent = warning ?? 'All objects inside room bounds'
+  placementSummaryElement.textContent = warning ?? t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음')
   selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
   view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d'))
   view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d'))
@@ -954,26 +977,53 @@ function updateSpatialStatus(): void {
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const selected = selectedFurniture()
   furnitureCountElement.textContent = `${spatialModel.furniture.length} ${
-    spatialModel.furniture.length === 1 ? 'object' : 'objects'
+    usesKorean ? '개 객체' : spatialModel.furniture.length === 1 ? 'object' : 'objects'
   }`
   furnitureCatalogStatusElement.textContent =
     spatialModel.furniture.length === 0
-      ? 'Catalog presets are available. Add one to start layout planning.'
-      : 'Select an object in the viewport or add another preset.'
+      ? t(
+          'Catalog presets are available. Add one to start layout planning.',
+          '카탈로그 프리셋을 사용할 수 있습니다. 하나를 추가해 배치를 시작하세요.',
+        )
+      : t(
+          'Select an object in the viewport or add another preset.',
+          '뷰포트에서 객체를 선택하거나 다른 프리셋을 추가하세요.',
+        )
   selectionStateElement.textContent = selected
     ? selected.locked
-      ? 'Locked'
-      : 'Selected'
-    : 'Room'
+      ? t('Locked', '잠김')
+      : t('Selected', '선택됨')
+    : t('Room', '방')
   for (const button of furnitureEditButtons) {
     const action = button.dataset.furnitureEdit
     const locked = selected?.locked === true
     button.disabled =
       !furnitureSelected || (locked && action !== 'toggle-lock' && action !== 'delete')
     if (action === 'toggle-lock') {
-      button.textContent = locked ? 'Unlock object' : 'Lock object'
+      button.textContent = locked ? t('Unlock object', '객체 잠금 해제') : t('Lock object', '객체 잠금')
     }
   }
+}
+
+function localizedSpatialSummary(model: SpatialModel): string {
+  const bounds = roomBounds(model)
+  const selected =
+    model.selected?.objectType === 'furniture'
+      ? selectedFurniture()?.label ?? model.selected.objectId
+      : t('room shell', '방 외곽')
+  const saveState = model.hasUnsavedChanges ? t('Unsaved changes', '저장 안 됨') : t('Saved', '저장됨')
+  const furnitureCount = usesKorean
+    ? `가구 ${model.furniture.length}개`
+    : `${model.furniture.length} furniture`
+
+  return t(
+    `${model.viewMode.toUpperCase()} | ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+      2,
+    )} m | ${furnitureCount} | selected ${selected} | ${saveState}`,
+    `${model.viewMode.toUpperCase()} | ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+      2,
+    )} m | ${furnitureCount} | 선택 ${selected} | ${saveState}`,
+  )
 }
 
 function emitSceneState(type: string, requestId?: string): void {
@@ -1042,16 +1092,19 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
         item.objectId === selected.objectId ? { ...item, locked: !item.locked } : item,
       ),
     }
-    geometryStatusElement.textContent = `${selected.label} ${
-      selected.locked ? 'unlocked' : 'locked'
-    }.`
+    geometryStatusElement.textContent = selected.locked
+      ? t(`${selected.label} unlocked.`, `${localizedFurnitureLabel(selected)} 잠금 해제됨.`)
+      : t(`${selected.label} locked.`, `${localizedFurnitureLabel(selected)} 잠김.`)
     rebuildFurniture()
     updateSpatialStatus()
     emitSceneState('roomforge.scene.updated')
     return
   }
   if (selected.locked) {
-    geometryStatusElement.textContent = `${selected.label} is locked. Unlock it before editing.`
+    geometryStatusElement.textContent = t(
+      `${selected.label} is locked. Unlock it before editing.`,
+      `${localizedFurnitureLabel(selected)}은 잠겨 있습니다. 편집 전에 잠금을 해제하세요.`,
+    )
     updateSpatialStatus()
     return
   }
@@ -1062,7 +1115,7 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
       selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
       furniture: spatialModel.furniture.filter((item) => item.objectId !== selected.objectId),
     }
-    geometryStatusElement.textContent = `Deleted ${selected.label}.`
+    geometryStatusElement.textContent = t(`Deleted ${selected.label}.`, `${localizedFurnitureLabel(selected)} 삭제됨.`)
     rebuildFurniture()
     updateSpatialStatus()
     emitSceneState('roomforge.scene.updated')
@@ -1078,7 +1131,10 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
     ),
   }
   const elapsed = performance.now() - startedAt
-  geometryStatusElement.textContent = `Updated ${selected.label} in ${elapsed.toFixed(1)} ms.`
+  geometryStatusElement.textContent = t(
+    `Updated ${selected.label} in ${elapsed.toFixed(1)} ms.`,
+    `${localizedFurnitureLabel(selected)} 업데이트됨 (${elapsed.toFixed(1)} ms).`,
+  )
   rebuildFurniture()
   updateSpatialStatus()
   emitSceneState('roomforge.scene.updated')
@@ -1167,6 +1223,22 @@ function furnitureDefaults(category: FurnitureCategory): FurnitureObject {
   }
 }
 
+function localizedFurnitureLabel(item: FurnitureObject): string {
+  if (!usesKorean) {
+    return item.label
+  }
+  if (item.category === 'chair') {
+    return '의자'
+  }
+  if (item.category === 'table') {
+    return '테이블'
+  }
+  if (item.category === 'sofa') {
+    return '소파'
+  }
+  return item.label
+}
+
 function applyCameraAction(action: CameraAction): void {
   if (spatialModel.viewMode !== '3d') {
     spatialModel = { ...spatialModel, viewMode: '3d' }
@@ -1188,7 +1260,7 @@ function cameraSnapshotFor(action: CameraAction): CameraSnapshot {
       position: new THREE.Vector3(0, fitDistance * 1.35, 0.001),
       target: new THREE.Vector3(0, 0, 0),
       up: new THREE.Vector3(0, 0, -1),
-      label: 'Top camera preset',
+      label: t('Top camera preset', '상단 카메라 프리셋'),
     }
   }
 
@@ -1197,7 +1269,7 @@ function cameraSnapshotFor(action: CameraAction): CameraSnapshot {
       position: new THREE.Vector3(0, height * 0.55, maxDimension * 1.45),
       target,
       up: new THREE.Vector3(0, 1, 0),
-      label: 'Front camera preset',
+      label: t('Front camera preset', '정면 카메라 프리셋'),
     }
   }
 
@@ -1206,7 +1278,7 @@ function cameraSnapshotFor(action: CameraAction): CameraSnapshot {
       position: new THREE.Vector3(0, 1.6, maxDimension * 0.95),
       target: new THREE.Vector3(0, 1.35, 0),
       up: new THREE.Vector3(0, 1, 0),
-      label: 'Eye-level camera preset',
+      label: t('Eye-level camera preset', '눈높이 카메라 프리셋'),
     }
   }
 
@@ -1219,15 +1291,17 @@ function cameraSnapshotFor(action: CameraAction): CameraSnapshot {
     ),
     target,
     up: new THREE.Vector3(0, 1, 0),
-    label: action === 'fit' ? 'Fit-to-room camera preset' : 'Corner camera preset',
+    label: action === 'fit'
+      ? t('Fit-to-room camera preset', '방 맞춤 카메라 프리셋')
+      : t('Corner camera preset', '코너 카메라 프리셋'),
   }
 }
 
 function queueCameraSnapshot(snapshot: CameraSnapshot, status: string, animate: boolean): void {
   const reducedMotion = reducedMotionMedia.matches
   cameraStatusElement.textContent = reducedMotion
-    ? `${status}; reduced motion`
-    : `${status}; camera moving`
+    ? `${status}; ${t('reduced motion', '움직임 줄임')}`
+    : `${status}; ${t('camera moving', '카메라 이동 중')}`
   if (reducedMotion || !animate) {
     applyCameraSnapshot(snapshot)
     emitCameraChanged()
@@ -1341,7 +1415,18 @@ function vectorPayload(vector: THREE.Vector3): Record<string, number> {
 }
 
 function cameraLabelFor(action: CameraAction): string {
-  return action === 'fit' ? 'Fit-to-room' : `${action[0].toUpperCase()}${action.slice(1)} view`
+  if (action === 'fit') {
+    return t('Fit-to-room', '방에 맞춤')
+  }
+  const labels: Record<CameraAction, string> = {
+    reset: t('Reset view', '보기 초기화'),
+    fit: t('Fit-to-room', '방에 맞춤'),
+    top: t('Top view', '상단 보기'),
+    front: t('Front view', '정면 보기'),
+    corner: t('Corner view', '코너 보기'),
+    eye: t('Eye-level view', '눈높이 보기'),
+  }
+  return labels[action]
 }
 
 function isCameraAction(value: string | undefined): value is CameraAction {
@@ -1439,18 +1524,31 @@ function inspectorSummary(model: SpatialModel): string {
   if (model.selected?.objectType === 'furniture') {
     const item = model.furniture.find((candidate) => candidate.objectId === model.selected?.objectId)
     if (item) {
-      const locked = item.locked ? '; locked' : ''
-      return `${item.label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
-        2,
-      )} m x ${item.size.heightMeters.toFixed(2)} m; position ${item.position.x.toFixed(
-        2,
-      )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg${locked}`
+      const label = localizedFurnitureLabel(item)
+      const locked = item.locked ? t('; locked', '; 잠김') : ''
+      return t(
+        `${label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
+          2,
+        )} m x ${item.size.heightMeters.toFixed(2)} m; position ${item.position.x.toFixed(
+          2,
+        )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg${locked}`,
+        `${label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
+          2,
+        )} m x ${item.size.heightMeters.toFixed(2)} m; 위치 ${item.position.x.toFixed(
+          2,
+        )} m, ${item.position.y.toFixed(2)} m; 회전 ${item.rotationDegrees.toFixed(0)}도${locked}`,
+      )
     }
   }
   const selected = model.selected?.objectId ?? 'none'
-  return `${selected}; ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
-    2,
-  )} m x ${model.room.heightMeters.toFixed(2)} m`
+  return t(
+    `${selected}; ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+      2,
+    )} m x ${model.room.heightMeters.toFixed(2)} m`,
+    `${selected}; ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+      2,
+    )} m x ${model.room.heightMeters.toFixed(2)} m`,
+  )
 }
 
 function isFurnitureCategory(value: string | undefined): value is FurnitureCategory {
@@ -1461,11 +1559,11 @@ function measurementSummary(model: SpatialModel): string {
   const bounds = roomBounds(model)
   const selected = selectedFurniture()
   if (selected) {
-    return `${selected.label}: ${selected.size.widthMeters.toFixed(2)} m x ${selected.size.depthMeters.toFixed(
+    return `${localizedFurnitureLabel(selected)}: ${selected.size.widthMeters.toFixed(2)} m x ${selected.size.depthMeters.toFixed(
       2,
-    )} m; room ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m`
+    )} m; ${t('room', '방')} ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m`
   }
-  return `Room ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m x ${model.room.heightMeters.toFixed(
+  return `${t('Room', '방')} ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m x ${model.room.heightMeters.toFixed(
     2,
   )} m`
 }
@@ -1483,9 +1581,14 @@ function placementWarning(model: SpatialModel): string | null {
     )
   })
   return outside
-    ? `Warning: ${outside.label} is outside the ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
-        2,
-      )} m room bounds.`
+    ? t(
+        `Warning: ${outside.label} is outside the ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+          2,
+        )} m room bounds.`,
+        `경고: ${localizedFurnitureLabel(outside)}이 ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
+          2,
+        )} m 방 경계 밖에 있습니다.`,
+      )
     : null
 }
 

@@ -1037,8 +1037,11 @@ class FirebaseAdminDiagnosticsScreen extends StatefulWidget {
 
 class _FirebaseAdminDiagnosticsScreenState
     extends State<FirebaseAdminDiagnosticsScreen> {
+  final _adminSearchController = TextEditingController();
   FirebaseJobStatus _statusFilter = FirebaseJobStatus.failed;
   FirebaseReconstructionJob? _selectedJob;
+  String _adminSearchField = 'job_id';
+  String? _activeSearchLabel;
   late Stream<List<FirebaseReconstructionJob>> _jobsStream;
 
   @override
@@ -1054,8 +1057,48 @@ class _FirebaseAdminDiagnosticsScreenState
     setState(() {
       _statusFilter = status;
       _selectedJob = null;
+      _activeSearchLabel = null;
       _jobsStream = widget.adminRepository.watchJobsByStatus(status);
     });
+  }
+
+  void _setAdminSearchField(String? field) {
+    if (field == null) {
+      return;
+    }
+    setState(() => _adminSearchField = field);
+  }
+
+  void _searchAdminJobs() {
+    final value = _adminSearchController.text.trim();
+    if (value.isEmpty) {
+      return;
+    }
+    final query = switch (_adminSearchField) {
+      'owner_uid' => FirebaseAdminJobQuery(ownerUid: value),
+      'project_id' => FirebaseAdminJobQuery(projectId: value),
+      _ => FirebaseAdminJobQuery(jobId: value),
+    };
+    setState(() {
+      _selectedJob = null;
+      _activeSearchLabel = '${_adminSearchField.replaceAll('_', ' ')}: $value';
+      _jobsStream = widget.adminRepository.watchJobs(query);
+    });
+  }
+
+  void _clearAdminSearch() {
+    _adminSearchController.clear();
+    setState(() {
+      _selectedJob = null;
+      _activeSearchLabel = null;
+      _jobsStream = widget.adminRepository.watchJobsByStatus(_statusFilter);
+    });
+  }
+
+  @override
+  void dispose() {
+    _adminSearchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1125,6 +1168,106 @@ class _FirebaseAdminDiagnosticsScreenState
                           ),
                       ],
                       onChanged: _setStatusFilter,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  RoomForgePanel(
+                    padding: const EdgeInsets.all(14),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 720;
+                        final fieldPicker = DropdownButtonFormField<String>(
+                          value: _adminSearchField,
+                          decoration: const InputDecoration(
+                            labelText: 'Search field',
+                            prefixIcon: Icon(Icons.manage_search_outlined),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'job_id',
+                              child: Text('Job ID'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'project_id',
+                              child: Text('Project ID'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'owner_uid',
+                              child: Text('User ID'),
+                            ),
+                          ],
+                          onChanged: _setAdminSearchField,
+                        );
+                        final queryInput = TextField(
+                          controller: _adminSearchController,
+                          decoration: const InputDecoration(
+                            labelText: 'Exact admin lookup',
+                            hintText: 'Paste job, project, or user id',
+                          ),
+                          onSubmitted: (_) => _searchAdminJobs(),
+                        );
+                        final actions = Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: _searchAdminJobs,
+                              icon: const Icon(Icons.search),
+                              label: const Text('Search'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _clearAdminSearch,
+                              icon: const Icon(Icons.clear),
+                              label: const Text('Clear'),
+                            ),
+                          ],
+                        );
+
+                        if (compact) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              fieldPicker,
+                              const SizedBox(height: 10),
+                              queryInput,
+                              const SizedBox(height: 10),
+                              actions,
+                              if (_activeSearchLabel != null) ...[
+                                const SizedBox(height: 10),
+                                RoomForgeStatusPill(
+                                  icon: Icons.search,
+                                  label: _activeSearchLabel!,
+                                  color: _roomForgeMuted,
+                                ),
+                              ],
+                            ],
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(width: 190, child: fieldPicker),
+                                const SizedBox(width: 10),
+                                Expanded(child: queryInput),
+                                const SizedBox(width: 10),
+                                actions,
+                              ],
+                            ),
+                            if (_activeSearchLabel != null) ...[
+                              const SizedBox(height: 10),
+                              RoomForgeStatusPill(
+                                icon: Icons.search,
+                                label: _activeSearchLabel!,
+                                color: _roomForgeMuted,
+                              ),
+                            ],
+                          ],
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 16),

@@ -146,6 +146,14 @@ h1 {
   letter-spacing: 0;
 }
 
+h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
 .status-list {
   display: grid;
   gap: 16px;
@@ -173,10 +181,100 @@ dd {
   line-height: 1.45;
 }
 
+.panel-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px 0 0;
+  border-top: 1px solid #e5ebf3;
+}
+
+.panel-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #b7c4d4;
+  color: #172033;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.state-pill.warning {
+  border-color: rgba(217, 119, 6, 0.36);
+  background: rgba(217, 119, 6, 0.08);
+  color: #92400e;
+}
+
+.state-pill.measurement {
+  border-color: rgba(124, 58, 237, 0.34);
+  background: rgba(124, 58, 237, 0.08);
+  color: #5b21b6;
+}
+
+.compact-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.compact-metrics div {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid #d9e2ef;
+  background: #f7f8fb;
+}
+
 .geometry-controls {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.geometry-controls button:first-child,
+.geometry-controls button:last-child {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.scale-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.scale-input-row input {
+  box-sizing: border-box;
+  min-height: 44px;
+  width: 100%;
+  border: 1px solid #b7c4d4;
+  padding: 0 10px;
+  color: #172033;
+  font: inherit;
+}
+
+.helper-text {
+  margin: -4px 0 0;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .furniture-controls {

@@ -81,14 +81,55 @@ app.innerHTML = `
         <dd id="placement-summary" role="status" aria-live="polite">All objects inside room bounds</dd>
       </div>
     </dl>
-    <div class="geometry-controls" aria-label="Geometry correction controls">
-      <button id="accept-candidate" type="button">Accept candidate</button>
-      <button id="manual-outline" type="button">Manual rectangle</button>
-      <button id="add-corner" type="button">Add corner</button>
-      <button id="delete-corner" type="button">Delete corner</button>
-      <button id="reset-candidate" type="button">Reset</button>
+    <section class="panel-section" aria-labelledby="opencv-review-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">OpenCV review</p>
+          <h2 id="opencv-review-title">Candidate outline</h2>
+        </div>
+        <span class="state-pill warning">Needs review</span>
+      </div>
+      <dl class="compact-metrics">
+        <div>
+          <dt>Candidates</dt>
+          <dd id="candidate-count">1 set</dd>
+        </div>
+        <div>
+          <dt>Confidence</dt>
+          <dd id="candidate-confidence">0.72</dd>
+        </div>
+      </dl>
+      <div class="geometry-controls" aria-label="Geometry correction controls">
+        <button id="accept-candidate" type="button">Accept candidate</button>
+        <button id="manual-outline" type="button">Manual rectangle</button>
+        <button id="add-corner" type="button">Add corner</button>
+        <button id="delete-corner" type="button">Delete corner</button>
+        <button id="reset-candidate" type="button">Reset</button>
+      </div>
+    </section>
+    <section class="panel-section" aria-labelledby="scale-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">Scale</p>
+          <h2 id="scale-title">Metric floor plan</h2>
+        </div>
+        <span class="state-pill measurement">Meters</span>
+      </div>
+      <label class="field-label" for="known-wall-length">Known wall length</label>
+      <div class="scale-input-row">
+        <input
+          id="known-wall-length"
+          type="number"
+          min="0.1"
+          step="0.01"
+          value="4.20"
+          inputmode="decimal"
+        />
+        <span aria-hidden="true">m</span>
+      </div>
+      <p class="helper-text" id="scale-status">Use the longest trusted wall to anchor image pixels into meters.</p>
       <button id="generate-floor-plan" type="button">Generate floor plan</button>
-    </div>
+    </section>
     <div class="furniture-controls" aria-label="Furniture catalog">
       <button type="button" data-furniture-category="chair">Add chair</button>
       <button type="button" data-furniture-category="table">Add table</button>
@@ -132,6 +173,10 @@ const placementStatus = document.querySelector<HTMLElement>('#placement-status')
 const placementSummary = document.querySelector<HTMLElement>('#placement-summary')
 const sceneStatus = document.querySelector<HTMLElement>('#scene-status')
 const cameraStatus = document.querySelector<HTMLElement>('#camera-status')
+const candidateCount = document.querySelector<HTMLElement>('#candidate-count')
+const candidateConfidence = document.querySelector<HTMLElement>('#candidate-confidence')
+const knownWallLengthInput = document.querySelector<HTMLInputElement>('#known-wall-length')
+const scaleStatus = document.querySelector<HTMLElement>('#scale-status')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
 const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
 const cameraActionButtons = Array.from(
@@ -157,6 +202,10 @@ if (
   !placementSummary ||
   !sceneStatus ||
   !cameraStatus ||
+  !candidateCount ||
+  !candidateConfidence ||
+  !knownWallLengthInput ||
+  !scaleStatus ||
   !view2dButton ||
   !view3dButton ||
   cameraActionButtons.length === 0 ||
@@ -178,6 +227,10 @@ const placementStatusElement = placementStatus
 const placementSummaryElement = placementSummary
 const sceneStatusElement = sceneStatus
 const cameraStatusElement = cameraStatus
+const candidateCountElement = candidateCount
+const candidateConfidenceElement = candidateConfidence
+const knownWallLengthInputElement = knownWallLengthInput
+const scaleStatusElement = scaleStatus
 const view2dButtonElement = view2dButton
 const view3dButtonElement = view3dButton
 
@@ -466,7 +519,15 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     geometryStatusElement.textContent = 'Confirm at least three corners before generation.'
     return
   }
+  const knownLength = Number.parseFloat(knownWallLengthInputElement.value)
+  if (!Number.isFinite(knownLength) || knownLength <= 0) {
+    scaleStatusElement.textContent = 'Enter a positive known wall length before generating a floor plan.'
+    geometryStatusElement.textContent = 'Invalid calibration length.'
+    return
+  }
+  const depth = roomBounds(spatialModel).depthMeters
   geometryStatusElement.textContent = 'Generated meter-space MVP floor plan.'
+  scaleStatusElement.textContent = `Calibrated with ${knownLength.toFixed(2)} m known wall length.`
   spatialModel = {
     ...spatialModel,
     hasUnsavedChanges: true,
@@ -478,9 +539,9 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
           coordinateSpace: 'meters',
           points: [
             { x: 0, y: 0 },
-            { x: 4.2, y: 0 },
-            { x: 4.2, y: 3.6 },
-            { x: 0, y: 3.6 },
+            { x: knownLength, y: 0 },
+            { x: knownLength, y: depth },
+            { x: 0, y: depth },
           ],
         },
       },
@@ -492,9 +553,9 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     version: BRIDGE_VERSION,
     payload: {
       unit: 'meters',
-      scaleSummary: '4.20 m x 3.60 m rectangular MVP floor plan',
+      scaleSummary: `${knownLength.toFixed(2)} m x ${depth.toFixed(2)} m rectangular MVP floor plan`,
       referenceLine: { fromIndex: 0, toIndex: 1 },
-      referenceLengthValue: 4.2,
+      referenceLengthValue: knownLength,
       perspectiveAssumptions: {
         model: 'mvp_rectangular_projection',
         sourceCoordinateSpace: 'image_pixels',
@@ -505,9 +566,9 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
         coordinateSpace: 'meters',
         points: [
           { x: 0, y: 0 },
-          { x: 4.2, y: 0 },
-          { x: 4.2, y: 3.6 },
-          { x: 0, y: 3.6 },
+          { x: knownLength, y: 0 },
+          { x: knownLength, y: depth },
+          { x: 0, y: depth },
         ],
       },
     },
@@ -659,6 +720,8 @@ worker.onmessage = (event: MessageEvent<BridgeMessage>) => {
       : 'Worker asset loading failed'
   postToParent(event.data)
   if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
+    candidateCountElement.textContent = '1 set'
+    candidateConfidenceElement.textContent = '0.72'
     postToParent({
       type: 'roomforge.reconstruction.qualityWarning',
       version: BRIDGE_VERSION,

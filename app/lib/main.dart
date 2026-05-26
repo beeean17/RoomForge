@@ -3278,34 +3278,83 @@ class PhotoIntakeSection extends StatelessWidget {
     };
     final progressValue = progress?.clamp(0, 1).toDouble();
     final progressText = uploadProgressLabel(progressValue);
+    final isProblemState =
+        state.isFailure || state == SourceImageUploadStatus.lowQualityWarning;
+    final noticeSeverity = state.isFailure
+        ? NoticeSeverity.error
+        : NoticeSeverity.warning;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Photo intake', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        const Text(
-          'Use a sharp, bright room photo with visible floor-wall boundaries, minimal occlusion, low distortion, and JPEG, PNG, or WebP format.',
+        const RoomForgeSectionHeader(
+          icon: Icons.photo_camera_outlined,
+          title: 'Source image upload',
+          description:
+              'Use a sharp, bright JPEG, PNG, or WebP room photo with visible floor-wall boundaries.',
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         DecoratedBox(
           decoration: BoxDecoration(
-            border: Border.fromBorderSide(BorderSide(color: borderColor)),
+            color: state == SourceImageUploadStatus.ready
+                ? _roomForgePrimary.withValues(alpha: 0.05)
+                : _roomForgePanel,
+            border: Border.all(
+              color: borderColor,
+              width: state == SourceImageUploadStatus.ready ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Semantics(
-                  liveRegion: true,
-                  label: state == SourceImageUploadStatus.uploading
-                      ? progressText
-                      : state.label,
-                  child: Text(state.label),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(_uploadStateIcon(state), color: borderColor, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            liveRegion: true,
+                            label: state == SourceImageUploadStatus.uploading
+                                ? progressText
+                                : state.label,
+                            child: Text(
+                              state.label,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: _roomForgeInk,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _uploadGuidance(state),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: _roomForgeMuted,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    RoomForgeStatusPill(
+                      label: state == SourceImageUploadStatus.uploading
+                          ? progressText
+                          : state.label,
+                      color: borderColor,
+                      dense: true,
+                    ),
+                  ],
                 ),
                 if (state == SourceImageUploadStatus.uploading) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 14),
                   LinearProgressIndicator(
                     value: progressValue,
                     semanticsLabel: 'Source image upload progress',
@@ -3314,17 +3363,54 @@ class PhotoIntakeSection extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(progressText),
                 ],
-                if (message != null) ...[
-                  const SizedBox(height: 8),
-                  Text(message!),
-                ],
                 if (sourceImage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '${sourceImage!.originalFilename} - ${(sourceImage!.byteSize / 1024).toStringAsFixed(1)} KB',
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      RoomForgeStatusPill(
+                        icon: Icons.image_outlined,
+                        label: sourceImage!.originalFilename,
+                        color: _roomForgeSuccess,
+                      ),
+                      RoomForgeStatusPill(
+                        icon: Icons.data_object_outlined,
+                        label: _fileSizeLabel(sourceImage!.byteSize),
+                        color: _roomForgeSuccess,
+                      ),
+                      if (sourceImage!.widthPx != null &&
+                          sourceImage!.heightPx != null)
+                        RoomForgeStatusPill(
+                          icon: Icons.aspect_ratio_outlined,
+                          label:
+                              '${sourceImage!.widthPx} x ${sourceImage!.heightPx}px',
+                          color: _roomForgeSuccess,
+                        ),
+                    ],
                   ),
                 ],
-                const SizedBox(height: 12),
+                if (message != null) ...[
+                  const SizedBox(height: 14),
+                  isProblemState
+                      ? RoomForgeNotice(
+                          title: state.isFailure
+                              ? 'Upload needs attention'
+                              : 'Image quality warning',
+                          message: message!,
+                          severity: noticeSeverity,
+                          icon: state.isFailure
+                              ? Icons.error_outline
+                              : Icons.warning_amber_outlined,
+                        )
+                      : Text(
+                          message!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: _roomForgeMuted,
+                          ),
+                        ),
+                ],
+                const SizedBox(height: 14),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -3351,7 +3437,7 @@ class PhotoIntakeSection extends StatelessWidget {
                 if (state == SourceImageUploadStatus.validationError) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Choose another photo that matches the format and size requirements.',
+                    'Accepted formats: JPEG, PNG, WebP. Maximum size: 10 MB.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -3361,6 +3447,43 @@ class PhotoIntakeSection extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  IconData _uploadStateIcon(SourceImageUploadStatus state) {
+    return switch (state) {
+      SourceImageUploadStatus.ready => Icons.file_upload_outlined,
+      SourceImageUploadStatus.uploading => Icons.cloud_upload_outlined,
+      SourceImageUploadStatus.uploaded => Icons.cloud_done_outlined,
+      SourceImageUploadStatus.validationError => Icons.rule_folder_outlined,
+      SourceImageUploadStatus.lowQualityWarning => Icons.warning_amber_outlined,
+      SourceImageUploadStatus.permissionFailure => Icons.lock_outline,
+      SourceImageUploadStatus.metadataSaveFailed => Icons.sync_problem,
+      SourceImageUploadStatus.uploadFailed => Icons.error_outline,
+      SourceImageUploadStatus.empty => Icons.add_photo_alternate_outlined,
+    };
+  }
+
+  String _uploadGuidance(SourceImageUploadStatus state) {
+    return switch (state) {
+      SourceImageUploadStatus.ready =>
+        'Drop the room photo here, or choose a file from this browser.',
+      SourceImageUploadStatus.uploading =>
+        'Keep this tab open while the source image is saved.',
+      SourceImageUploadStatus.uploaded =>
+        'The uploaded photo is ready for reconstruction review.',
+      SourceImageUploadStatus.validationError =>
+        'Choose another file that matches the format and size requirements.',
+      SourceImageUploadStatus.lowQualityWarning =>
+        'The file may work, but reconstruction might need manual correction.',
+      SourceImageUploadStatus.permissionFailure =>
+        'Refresh access or retry after confirming this project belongs to your account.',
+      SourceImageUploadStatus.metadataSaveFailed =>
+        'Storage received the file, but the project metadata did not finish saving.',
+      SourceImageUploadStatus.uploadFailed =>
+        'Retry upload, or replace the file if the problem repeats.',
+      SourceImageUploadStatus.empty =>
+        'Drag a photo into the page or choose a file to start reconstruction.',
+    };
   }
 }
 
@@ -4610,6 +4733,13 @@ String _compactDateLabel(DateTime value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '$month/$day $hour:$minute';
+}
+
+String _fileSizeLabel(int bytes) {
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  return '${(bytes / 1024).toStringAsFixed(1)} KB';
 }
 
 class ProjectErrorView extends StatelessWidget {

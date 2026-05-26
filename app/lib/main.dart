@@ -3962,112 +3962,39 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       appBar: AppBar(title: Text('Planning editor: ${widget.project.name}')),
       body: Column(
         children: [
-          Material(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Wrap(
-                spacing: 16,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: '2d', label: Text('2D')),
-                      ButtonSegment(value: '3d', label: Text('3D')),
-                    ],
-                    selected: {_viewMode},
-                    onSelectionChanged: (selection) {
-                      final viewMode = selection.first;
-                      setState(() => _viewMode = viewMode);
-                      _postEditorMessage(
-                        type: 'roomforge.view.setMode',
-                        requestId:
-                            'view-mode-${DateTime.now().millisecondsSinceEpoch}',
-                        payload: {'viewMode': viewMode},
-                      );
-                    },
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: Text(_sceneStatus),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320),
-                    child: Text(_bridgeStatus),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320),
-                    child: Text(_runtimeStatus),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 240),
-                    child: Text(_saveStatus),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 240),
-                    child: Text(_loadStatus),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 260),
-                    child: Text(_draftStatus),
-                  ),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
-                    child: Text(_exportStatus),
-                  ),
-                  FilledButton(
-                    onPressed: _isSavingLayout ? null : _saveLayout,
-                    child: Text(_isSavingLayout ? 'Saving...' : 'Save layout'),
-                  ),
-                  OutlinedButton(
-                    onPressed: _isLoadingLayout ? null : () => _loadLayout(),
-                    child: Text(
-                      _isLoadingLayout ? 'Loading...' : 'Load layout',
-                    ),
-                  ),
-                  OutlinedButton(
-                    onPressed: _isExportingLayout ? null : _exportLayout,
-                    child: Text(
-                      _isExportingLayout ? 'Exporting...' : 'Export JSON',
-                    ),
-                  ),
-                  if (_recoverableDraft != null) ...[
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
-                      child: Text(
-                        layoutDraftRecoveryMessage(
-                          draft: _recoverableDraft!,
-                          latestCloudUpdatedAt: _activeCloudUpdatedAt,
-                        ),
-                      ),
-                    ),
-                    OutlinedButton(
-                      onPressed: _isHandlingDraft ? null : _restoreDraft,
-                      child: const Text('Restore draft'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _isHandlingDraft ? null : _discardDraft,
-                      child: const Text('Discard draft'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _isHandlingDraft
-                          ? null
-                          : _continueSavedVersion,
-                      child: const Text('Continue saved version'),
-                    ),
-                  ],
-                  OutlinedButton(
-                    onPressed: () => _postEditorMessage(
-                      type: 'roomforge.editor.ping',
-                      requestId:
-                          'manual-ping-${DateTime.now().millisecondsSinceEpoch}',
-                      payload: {'source': 'flutter-shell'},
-                    ),
-                    child: const Text('Ping editor'),
-                  ),
-                ],
-              ),
+          _EditorBridgeCommandBar(
+            viewMode: _viewMode,
+            sceneStatus: _sceneStatus,
+            bridgeStatus: _bridgeStatus,
+            runtimeStatus: _runtimeStatus,
+            saveStatus: _saveStatus,
+            loadStatus: _loadStatus,
+            draftStatus: _draftStatus,
+            exportStatus: _exportStatus,
+            recoverableDraft: _recoverableDraft,
+            activeCloudUpdatedAt: _activeCloudUpdatedAt,
+            isSavingLayout: _isSavingLayout,
+            isLoadingLayout: _isLoadingLayout,
+            isExportingLayout: _isExportingLayout,
+            isHandlingDraft: _isHandlingDraft,
+            onViewModeChanged: (viewMode) {
+              setState(() => _viewMode = viewMode);
+              _postEditorMessage(
+                type: 'roomforge.view.setMode',
+                requestId: 'view-mode-${DateTime.now().millisecondsSinceEpoch}',
+                payload: {'viewMode': viewMode},
+              );
+            },
+            onSaveLayout: _saveLayout,
+            onLoadLayout: () => _loadLayout(),
+            onExportLayout: _exportLayout,
+            onRestoreDraft: _restoreDraft,
+            onDiscardDraft: _discardDraft,
+            onContinueSavedVersion: _continueSavedVersion,
+            onPingEditor: () => _postEditorMessage(
+              type: 'roomforge.editor.ping',
+              requestId: 'manual-ping-${DateTime.now().millisecondsSinceEpoch}',
+              payload: {'source': 'flutter-shell'},
             ),
           ),
           Expanded(child: HtmlElementView(viewType: _viewType)),
@@ -4875,6 +4802,269 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     final queryParameters = Map<String, String>.from(uri.queryParameters)
       ..['project_id'] = project.id.toString();
     return uri.replace(queryParameters: queryParameters).toString();
+  }
+}
+
+class _EditorBridgeCommandBar extends StatelessWidget {
+  const _EditorBridgeCommandBar({
+    required this.viewMode,
+    required this.sceneStatus,
+    required this.bridgeStatus,
+    required this.runtimeStatus,
+    required this.saveStatus,
+    required this.loadStatus,
+    required this.draftStatus,
+    required this.exportStatus,
+    required this.isSavingLayout,
+    required this.isLoadingLayout,
+    required this.isExportingLayout,
+    required this.isHandlingDraft,
+    required this.onViewModeChanged,
+    required this.onSaveLayout,
+    required this.onLoadLayout,
+    required this.onExportLayout,
+    required this.onRestoreDraft,
+    required this.onDiscardDraft,
+    required this.onContinueSavedVersion,
+    required this.onPingEditor,
+    this.recoverableDraft,
+    this.activeCloudUpdatedAt,
+  });
+
+  final String viewMode;
+  final String sceneStatus;
+  final String bridgeStatus;
+  final String runtimeStatus;
+  final String saveStatus;
+  final String loadStatus;
+  final String draftStatus;
+  final String exportStatus;
+  final LayoutDraft? recoverableDraft;
+  final DateTime? activeCloudUpdatedAt;
+  final bool isSavingLayout;
+  final bool isLoadingLayout;
+  final bool isExportingLayout;
+  final bool isHandlingDraft;
+  final ValueChanged<String> onViewModeChanged;
+  final VoidCallback onSaveLayout;
+  final VoidCallback onLoadLayout;
+  final VoidCallback onExportLayout;
+  final VoidCallback onRestoreDraft;
+  final VoidCallback onDiscardDraft;
+  final VoidCallback onContinueSavedVersion;
+  final VoidCallback onPingEditor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: _roomForgePanel,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: _roomForgeBorder)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 860;
+              final controls = [
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: '2d', label: Text('2D')),
+                    ButtonSegment(value: '3d', label: Text('3D')),
+                  ],
+                  selected: {viewMode},
+                  onSelectionChanged: (selection) =>
+                      onViewModeChanged(selection.first),
+                ),
+                FilledButton.icon(
+                  onPressed: isSavingLayout ? null : onSaveLayout,
+                  icon: isSavingLayout
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSavingLayout ? 'Saving...' : 'Save layout'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: isLoadingLayout ? null : onLoadLayout,
+                  icon: const Icon(Icons.cloud_download_outlined),
+                  label: Text(isLoadingLayout ? 'Loading...' : 'Load layout'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: isExportingLayout ? null : onExportLayout,
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: Text(
+                    isExportingLayout ? 'Exporting...' : 'Export JSON',
+                  ),
+                ),
+                IconButton.outlined(
+                  tooltip: 'Ping editor bridge',
+                  onPressed: onPingEditor,
+                  icon: const Icon(Icons.sensors_outlined),
+                ),
+              ];
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(spacing: 8, runSpacing: 8, children: controls),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _EditorStatusPill(
+                        icon: Icons.grid_view_outlined,
+                        label: sceneStatus,
+                        color: _statusColor(sceneStatus),
+                        maxWidth: compact ? constraints.maxWidth : 320,
+                      ),
+                      _EditorStatusPill(
+                        icon: Icons.cable_outlined,
+                        label: bridgeStatus,
+                        color: _statusColor(bridgeStatus),
+                        maxWidth: compact ? constraints.maxWidth : 280,
+                      ),
+                      _EditorStatusPill(
+                        icon: Icons.memory_outlined,
+                        label: runtimeStatus,
+                        color: _statusColor(runtimeStatus),
+                        maxWidth: compact ? constraints.maxWidth : 280,
+                      ),
+                      _EditorStatusPill(
+                        icon: Icons.save_outlined,
+                        label: saveStatus,
+                        color: _statusColor(saveStatus),
+                        maxWidth: compact ? constraints.maxWidth : 220,
+                      ),
+                      _EditorStatusPill(
+                        icon: Icons.cloud_sync_outlined,
+                        label: loadStatus,
+                        color: _statusColor(loadStatus),
+                        maxWidth: compact ? constraints.maxWidth : 220,
+                      ),
+                      _EditorStatusPill(
+                        icon: Icons.edit_note_outlined,
+                        label: draftStatus,
+                        color: _statusColor(draftStatus),
+                        maxWidth: compact ? constraints.maxWidth : 260,
+                      ),
+                      _EditorStatusPill(
+                        icon: Icons.file_download_outlined,
+                        label: exportStatus,
+                        color: _statusColor(exportStatus),
+                        maxWidth: compact ? constraints.maxWidth : 260,
+                      ),
+                    ],
+                  ),
+                  if (recoverableDraft != null) ...[
+                    const SizedBox(height: 10),
+                    RoomForgeNotice(
+                      title: 'Unsaved draft recovery',
+                      message: layoutDraftRecoveryMessage(
+                        draft: recoverableDraft!,
+                        latestCloudUpdatedAt: activeCloudUpdatedAt,
+                      ),
+                      severity: NoticeSeverity.warning,
+                      icon: Icons.restore_page_outlined,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: isHandlingDraft ? null : onRestoreDraft,
+                          icon: const Icon(Icons.restore_outlined),
+                          label: const Text('Restore draft'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: isHandlingDraft ? null : onDiscardDraft,
+                          icon: const Icon(Icons.delete_sweep_outlined),
+                          label: const Text('Discard draft'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: isHandlingDraft
+                              ? null
+                              : onContinueSavedVersion,
+                          icon: const Icon(Icons.cloud_done_outlined),
+                          label: const Text('Continue saved version'),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (compact) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Canvas controls remain inside the editor frame.',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: _roomForgeMuted,
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _statusColor(String value) {
+    final lower = value.toLowerCase();
+    if (lower.contains('failed') ||
+        lower.contains('unavailable') ||
+        lower.contains('warning') ||
+        lower.contains('review')) {
+      return lower.contains('review') || lower.contains('warning')
+          ? _roomForgeWarning
+          : _roomForgeError;
+    }
+    if (lower.contains('saved') ||
+        lower.contains('ready') ||
+        lower.contains('loaded') ||
+        lower.contains('exported')) {
+      return _roomForgeSuccess;
+    }
+    if (lower.contains('saving') ||
+        lower.contains('loading') ||
+        lower.contains('waiting') ||
+        lower.contains('unsaved')) {
+      return _roomForgePrimary;
+    }
+    return _roomForgeMuted;
+  }
+}
+
+class _EditorStatusPill extends StatelessWidget {
+  const _EditorStatusPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.maxWidth,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: RoomForgeStatusPill(
+        icon: icon,
+        label: label,
+        color: color,
+        dense: true,
+      ),
+    );
   }
 }
 

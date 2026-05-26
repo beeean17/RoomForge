@@ -299,7 +299,18 @@ class _UserProfileSyncGateState extends State<UserProfileSyncGate> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
-            body: Center(child: Text('Syncing profile...')),
+            body: Center(
+              child: RoomForgePanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 14),
+                    Text('Syncing profile...'),
+                  ],
+                ),
+              ),
+            ),
           );
         }
 
@@ -5329,13 +5340,31 @@ class ProjectErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: RoomForgePanel(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              RoomForgeNotice(
+                title: 'Could not load this view',
+                message: message,
+                severity: NoticeSeverity.error,
+                icon: Icons.error_outline,
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

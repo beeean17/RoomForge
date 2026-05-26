@@ -30,6 +30,16 @@ import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/project_api.dart';
 import 'src/projects/source_image_upload_status.dart';
 
+const _roomForgeInk = Color(0xFF172033);
+const _roomForgeMuted = Color(0xFF5B667A);
+const _roomForgeBorder = Color(0xFFD9E2EF);
+const _roomForgePanel = Color(0xFFFFFFFF);
+const _roomForgeCanvas = Color(0xFFF7F8FB);
+const _roomForgePrimary = Color(0xFF2563EB);
+const _roomForgeSuccess = Color(0xFF16A34A);
+const _roomForgeWarning = Color(0xFFD97706);
+const _roomForgeError = Color(0xFFDC2626);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -91,8 +101,59 @@ class RoomForgeApp extends StatelessWidget {
     return MaterialApp(
       title: 'RoomForge',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _roomForgePrimary,
+          surface: _roomForgeCanvas,
+        ),
+        scaffoldBackgroundColor: _roomForgeCanvas,
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: _roomForgePanel,
+          foregroundColor: _roomForgeInk,
+          centerTitle: false,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+        ),
+        cardTheme: const CardThemeData(
+          color: _roomForgePanel,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+            side: BorderSide(color: _roomForgeBorder),
+          ),
+        ),
+        dividerTheme: const DividerThemeData(color: _roomForgeBorder, space: 1),
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+          filled: true,
+          fillColor: _roomForgePanel,
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            side: const BorderSide(color: _roomForgeBorder),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
       ),
       home: AuthGate(
         authRepository: authRepository,
@@ -299,53 +360,447 @@ class _SignInScreenState extends State<SignInScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('RoomForge')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Padding(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Sign in to RoomForge',
-                  style: theme.textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Use Google sign-in to access your room projects and saved layouts.',
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _isSigningIn ? null : _signIn,
-                  child: Text(
-                    _isSigningIn ? 'Signing in...' : 'Sign in with Google',
-                  ),
-                ),
-                if (widget.authSetupMessage != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.authSetupMessage!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  ),
-                ],
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    _errorMessage!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  ),
-                ],
-              ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1000),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 760;
+                  final intro = _SignInIntro(theme: theme);
+                  final panel = _SignInPanel(
+                    isSigningIn: _isSigningIn,
+                    authSetupMessage: widget.authSetupMessage,
+                    errorMessage: _errorMessage,
+                    onSignIn: _signIn,
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [intro, const SizedBox(height: 24), panel],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(flex: 5, child: intro),
+                      const SizedBox(width: 32),
+                      Expanded(flex: 4, child: panel),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SignInIntro extends StatelessWidget {
+  const _SignInIntro({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      header: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _RoomForgeWordmark(),
+          const SizedBox(height: 28),
+          Text(
+            'Turn room photos into measured planning layouts.',
+            style: theme.textTheme.headlineLarge?.copyWith(
+              color: _roomForgeInk,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Sign in to reopen projects, review reconstruction results, and save room layouts across sessions.',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: _roomForgeMuted,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 28),
+          const Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              RoomForgeStatusPill(
+                icon: Icons.photo_camera_outlined,
+                label: 'Photo intake',
+              ),
+              RoomForgeStatusPill(
+                icon: Icons.architecture_outlined,
+                label: 'Measured floor plan',
+              ),
+              RoomForgeStatusPill(
+                icon: Icons.chair_outlined,
+                label: 'Saved furniture layouts',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignInPanel extends StatelessWidget {
+  const _SignInPanel({
+    required this.isSigningIn,
+    required this.onSignIn,
+    this.authSetupMessage,
+    this.errorMessage,
+  });
+
+  final bool isSigningIn;
+  final VoidCallback onSignIn;
+  final String? authSetupMessage;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Sign in',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Use Google sign-in to access RoomForge workspace data.',
+            style: theme.textTheme.bodyMedium?.copyWith(color: _roomForgeMuted),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: isSigningIn ? null : onSignIn,
+            icon: isSigningIn
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.login),
+            label: Text(isSigningIn ? 'Signing in...' : 'Sign in with Google'),
+          ),
+          if (authSetupMessage != null) ...[
+            const SizedBox(height: 16),
+            RoomForgeNotice(
+              icon: Icons.settings_outlined,
+              title: 'Firebase web configuration missing',
+              message: authSetupMessage!,
+              severity: NoticeSeverity.error,
+            ),
+          ],
+          if (errorMessage != null) ...[
+            const SizedBox(height: 16),
+            RoomForgeNotice(
+              icon: Icons.error_outline,
+              title: 'Google sign-in unavailable',
+              message: errorMessage!,
+              severity: NoticeSeverity.error,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomForgeWordmark extends StatelessWidget {
+  const _RoomForgeWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _roomForgeInk,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.view_in_ar_outlined, color: _roomForgePanel),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'RoomForge',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: _roomForgeInk,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class RoomForgePanel extends StatelessWidget {
+  const RoomForgePanel({
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+    this.borderColor = _roomForgeBorder,
+    this.backgroundColor = _roomForgePanel,
+    super.key,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color borderColor;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class RoomForgeStatusPill extends StatelessWidget {
+  const RoomForgeStatusPill({
+    required this.label,
+    this.icon,
+    this.color = _roomForgePrimary,
+    this.dense = false,
+    super.key,
+  });
+
+  final String label;
+  final IconData? icon;
+  final Color color;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w700);
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 32),
+      padding: EdgeInsets.symmetric(
+        horizontal: dense ? 8 : 10,
+        vertical: dense ? 5 : 7,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+          ],
+          Flexible(child: Text(label, style: textStyle)),
+        ],
+      ),
+    );
+  }
+}
+
+class RoomForgeNotice extends StatelessWidget {
+  const RoomForgeNotice({
+    required this.title,
+    required this.message,
+    this.icon = Icons.info_outline,
+    this.severity = NoticeSeverity.info,
+    super.key,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+  final NoticeSeverity severity;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (severity) {
+      NoticeSeverity.success => _roomForgeSuccess,
+      NoticeSeverity.warning => _roomForgeWarning,
+      NoticeSeverity.error => _roomForgeError,
+      NoticeSeverity.info => _roomForgePrimary,
+    };
+    final theme = Theme.of(context);
+
+    return Semantics(
+      liveRegion: severity == NoticeSeverity.error,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          border: Border.all(color: color.withValues(alpha: 0.32)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: _roomForgeInk,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      message,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _roomForgeInk,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum NoticeSeverity { info, success, warning, error }
+
+class RoomForgeEmptyState extends StatelessWidget {
+  const RoomForgeEmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return RoomForgePanel(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 36, color: _roomForgeMuted),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _roomForgeMuted,
+                ),
+              ),
+              if (action != null) ...[const SizedBox(height: 16), action!],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RoomForgeMetricTile extends StatelessWidget {
+  const RoomForgeMetricTile({
+    required this.label,
+    required this.value,
+    this.icon,
+    this.color = _roomForgePrimary,
+    super.key,
+  });
+
+  final String label;
+  final String value;
+  final IconData? icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: _roomForgeMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: _roomForgeInk,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

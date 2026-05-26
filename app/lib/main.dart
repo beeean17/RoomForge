@@ -2026,6 +2026,8 @@ class ProjectWorkspaceBody extends StatefulWidget {
 class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   late Future<List<RoomProject>> _projectsFuture;
   RoomProject? _selectedProject;
+  String? _workspaceMessage;
+  NoticeSeverity _workspaceSeverity = NoticeSeverity.info;
 
   @override
   void initState() {
@@ -2048,11 +2050,28 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       return;
     }
 
-    await widget.projectApi.createProject(
-      name: result.name,
-      description: result.description,
-    );
-    _reload();
+    try {
+      final created = await widget.projectApi.createProject(
+        name: result.name,
+        description: result.description,
+      );
+      setState(() {
+        _selectedProject = created;
+        _workspaceMessage = 'Created "${created.name}".';
+        _workspaceSeverity = NoticeSeverity.success;
+      });
+      _reload();
+    } on ProjectApiException catch (error) {
+      setState(() {
+        _workspaceMessage = 'Create failed: ${error.message}';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    } catch (error) {
+      setState(() {
+        _workspaceMessage = 'Create failed: $error';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    }
   }
 
   Future<void> _openProject(RoomProject project) async {
@@ -2076,15 +2095,29 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       return;
     }
 
-    final updated = await widget.projectApi.updateProject(
-      projectId: project.id,
-      name: result.name,
-      description: result.description,
-    );
-    setState(() {
-      _selectedProject = updated;
-    });
-    _reload();
+    try {
+      final updated = await widget.projectApi.updateProject(
+        projectId: project.id,
+        name: result.name,
+        description: result.description,
+      );
+      setState(() {
+        _selectedProject = updated;
+        _workspaceMessage = 'Saved "${updated.name}".';
+        _workspaceSeverity = NoticeSeverity.success;
+      });
+      _reload();
+    } on ProjectApiException catch (error) {
+      setState(() {
+        _workspaceMessage = 'Save failed: ${error.message}';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    } catch (error) {
+      setState(() {
+        _workspaceMessage = 'Save failed: $error';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    }
   }
 
   Future<void> _deleteSelectedProject() async {
@@ -2126,6 +2159,8 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   Widget build(BuildContext context) {
     final header = _WorkspaceHeader(
       displayName: widget.displayName,
+      message: _workspaceMessage,
+      severity: _workspaceSeverity,
       onCreateProject: _createProject,
     );
     final projectList = _ProjectListPanel(
@@ -2195,46 +2230,68 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
 class _WorkspaceHeader extends StatelessWidget {
   const _WorkspaceHeader({
     required this.displayName,
+    required this.severity,
     required this.onCreateProject,
+    this.message,
   });
 
   final String displayName;
+  final NoticeSeverity severity;
   final VoidCallback onCreateProject;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Project workspace',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: _roomForgeInk,
-                  fontWeight: FontWeight.w800,
-                ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Project workspace',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: _roomForgeInk,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Signed in as $displayName',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: _roomForgeMuted,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Signed in as $displayName',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: _roomForgeMuted,
-                ),
-              ),
-            ],
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: onCreateProject,
+              icon: const Icon(Icons.add),
+              label: const Text('Create project'),
+            ),
+          ],
+        ),
+        if (message != null) ...[
+          const SizedBox(height: 12),
+          RoomForgeNotice(
+            title: severity == NoticeSeverity.error
+                ? 'Project change failed'
+                : 'Project updated',
+            message: message!,
+            severity: severity,
+            icon: severity == NoticeSeverity.error
+                ? Icons.error_outline
+                : Icons.check_circle_outline,
           ),
-        ),
-        const SizedBox(width: 12),
-        FilledButton.icon(
-          onPressed: onCreateProject,
-          icon: const Icon(Icons.add),
-          label: const Text('Create project'),
-        ),
+        ],
       ],
     );
   }
@@ -4438,34 +4495,73 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isCreate = widget.project == null;
+    final theme = Theme.of(context);
+
     return AlertDialog(
-      title: Text(
-        widget.project == null ? 'Create room project' : 'Edit project',
+      insetPadding: const EdgeInsets.all(20),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      title: Row(
+        children: [
+          Icon(
+            isCreate ? Icons.add_home_work_outlined : Icons.edit_outlined,
+            color: _roomForgePrimary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(isCreate ? 'Create room project' : 'Edit project'),
+          ),
+        ],
       ),
       content: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Project name'),
-              maxLength: 120,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Enter a project name.';
-                }
-                return null;
-              },
-            ),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(labelText: 'Description'),
-              maxLength: 1000,
-              minLines: 2,
-              maxLines: 4,
-            ),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                isCreate
+                    ? 'Name the room before uploading a source photo.'
+                    : 'Update the visible project metadata. Saved layouts remain attached to this project.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _roomForgeMuted,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Project name',
+                  helperText: 'Shown in the workspace and layout export.',
+                ),
+                maxLength: 120,
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter a project name.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  helperText: 'Optional notes such as room, client, or goal.',
+                  alignLabelWithHint: true,
+                ),
+                maxLength: 1000,
+                minLines: 3,
+                maxLines: 5,
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -4473,9 +4569,10 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        FilledButton.icon(
           onPressed: _submit,
-          child: Text(widget.project == null ? 'Create' : 'Save'),
+          icon: Icon(isCreate ? Icons.add : Icons.check),
+          label: Text(isCreate ? 'Create' : 'Save'),
         ),
       ],
     );

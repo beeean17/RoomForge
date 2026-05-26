@@ -806,6 +806,56 @@ class RoomForgeMetricTile extends StatelessWidget {
   }
 }
 
+class RoomForgeSectionHeader extends StatelessWidget {
+  const RoomForgeSectionHeader({
+    required this.title,
+    required this.description,
+    this.icon,
+    super.key,
+  });
+
+  final String title;
+  final String description;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, color: _roomForgePrimary, size: 22),
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: _roomForgeInk,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: _roomForgeMuted,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class ProjectWorkspaceScreen extends StatelessWidget {
   const ProjectWorkspaceScreen({
     required this.authRepository,
@@ -3080,15 +3130,6 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 ),
               ),
               const SizedBox(height: 20),
-              PhotoIntakeSection(
-                state: _uploadState,
-                message: _uploadMessage,
-                progress: _uploadProgress,
-                sourceImage: _sourceImage,
-                onSelectImage: _selectAndUploadImage,
-                onRetryUpload: _retryUpload,
-              ),
-              const SizedBox(height: 20),
               RoomDimensionsSection(
                 formKey: _dimensionFormKey,
                 widthController: _widthController,
@@ -3098,6 +3139,15 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 message: _dimensionMessage,
                 isSaving: _isSavingDimensions,
                 onSave: _saveDimensions,
+              ),
+              const SizedBox(height: 20),
+              PhotoIntakeSection(
+                state: _uploadState,
+                message: _uploadMessage,
+                progress: _uploadProgress,
+                sourceImage: _sourceImage,
+                onSelectImage: _selectAndUploadImage,
+                onRetryUpload: _retryUpload,
               ),
               const SizedBox(height: 20),
               ReconstructionJobSection(
@@ -3338,69 +3388,126 @@ class RoomDimensionsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Form(
       key: formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Room dimensions', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
+          const RoomForgeSectionHeader(
+            icon: Icons.straighten_outlined,
+            title: 'Room dimensions',
+            description:
+                'Enter the room footprint in meters. Height can use the MVP default when unknown.',
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 520;
+              final fields = [
+                TextFormField(
                   controller: widthController,
                   decoration: const InputDecoration(
                     labelText: 'Width',
                     suffixText: 'm',
+                    helperText: 'Wall to wall',
                   ),
                   keyboardType: TextInputType.number,
                   validator: _positiveDimensionValidator,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
+                TextFormField(
                   controller: depthController,
                   decoration: const InputDecoration(
                     labelText: 'Depth',
                     suffixText: 'm',
+                    helperText: 'Front to back',
                   ),
                   keyboardType: TextInputType.number,
                   validator: _positiveDimensionValidator,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: heightController,
-            decoration: const InputDecoration(
-              labelText: 'Height',
-              helperText: 'Leave blank to use the MVP default height.',
-              suffixText: 'm',
-            ),
-            keyboardType: TextInputType.number,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return null;
+                TextFormField(
+                  controller: heightController,
+                  decoration: const InputDecoration(
+                    labelText: 'Height',
+                    helperText: 'Blank uses default',
+                    suffixText: 'm',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return null;
+                    }
+                    return _positiveDimensionValidator(value);
+                  },
+                ),
+              ];
+
+              if (compact) {
+                return Column(
+                  children: [
+                    for (final field in fields) ...[
+                      field,
+                      if (field != fields.last) const SizedBox(height: 10),
+                    ],
+                  ],
+                );
               }
-              return _positiveDimensionValidator(value);
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final field in fields) ...[
+                    Expanded(child: field),
+                    if (field != fields.last) const SizedBox(width: 10),
+                  ],
+                ],
+              );
             },
           ),
-          if (message != null) ...[const SizedBox(height: 8), Text(message!)],
+          if (message != null) ...[
+            const SizedBox(height: 12),
+            RoomForgeNotice(
+              title: message!.toLowerCase().contains('failed')
+                  ? 'Dimension save issue'
+                  : 'Dimension state',
+              message: message!,
+              severity: message!.toLowerCase().contains('failed')
+                  ? NoticeSeverity.error
+                  : NoticeSeverity.info,
+            ),
+          ],
           if (dimensions != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Saved: ${dimensions!.widthValue.toStringAsFixed(2)} x ${dimensions!.depthValue.toStringAsFixed(2)} x ${dimensions!.heightValue.toStringAsFixed(2)} ${dimensions!.unit}',
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                RoomForgeStatusPill(
+                  icon: Icons.check_circle_outline,
+                  label:
+                      '${dimensions!.widthValue.toStringAsFixed(2)} x ${dimensions!.depthValue.toStringAsFixed(2)} m',
+                  color: _roomForgeSuccess,
+                ),
+                RoomForgeStatusPill(
+                  icon: Icons.height_outlined,
+                  label:
+                      'Height ${dimensions!.heightValue.toStringAsFixed(2)} ${dimensions!.unit}',
+                  color: dimensions!.usesDefaultHeight
+                      ? _roomForgeWarning
+                      : _roomForgeSuccess,
+                ),
+              ],
             ),
           ],
           const SizedBox(height: 12),
-          FilledButton(
+          FilledButton.icon(
             onPressed: isSaving ? null : onSave,
-            child: Text(isSaving ? 'Saving...' : 'Save dimensions'),
+            icon: isSaving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: Text(isSaving ? 'Saving...' : 'Save dimensions'),
           ),
         ],
       ),

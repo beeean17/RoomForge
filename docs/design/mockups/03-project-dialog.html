@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>03 — Project create / edit / delete</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">03 — Project create / edit / delete</h1>
+        <p class="mockup-subtitle">Create dialog, validation, save failure, delete confirmation.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P0 user core</span>
+    </header>
+
+    <div class="state-grid" style="grid-template-columns: 1fr 1fr; gap: var(--s-6);">
+
+      <!-- A: Create -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Create project — idle</h3><span class="state-label">A</span></div>
+        <div class="dialog-scrim">
+          <div class="dialog">
+            <div class="dialog-header">
+              <h2>New project</h2>
+              <p class="sub">Set a name now. You can add a photo and room dimensions in the next step.</p>
+            </div>
+            <div class="dialog-body">
+              <div class="field">
+                <label for="p-name">Project name</label>
+                <input id="p-name" class="input" placeholder="e.g. Studio bedroom" value="Studio bedroom" />
+              </div>
+              <div class="field">
+                <label for="p-desc">Description <span class="muted">(optional)</span></label>
+                <textarea id="p-desc" class="textarea" placeholder="Helpful notes for yourself — orientation, intended use, constraints."></textarea>
+              </div>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-primary">Create project</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B: Validation error -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Validation — name required</h3><span class="state-label">B</span></div>
+        <div class="dialog-scrim">
+          <div class="dialog">
+            <div class="dialog-header">
+              <h2>New project</h2>
+              <p class="sub">Set a name now. You can add a photo and room dimensions in the next step.</p>
+            </div>
+            <div class="dialog-body">
+              <div class="field">
+                <label for="p-name2">Project name</label>
+                <input id="p-name2" class="input invalid" placeholder="e.g. Studio bedroom" />
+                <span class="error">Project name cannot be empty.</span>
+              </div>
+              <div class="field">
+                <label for="p-desc2">Description <span class="muted">(optional)</span></label>
+                <textarea id="p-desc2" class="textarea"></textarea>
+              </div>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-primary" aria-disabled="true">Create project</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- C: Saving / Save failed -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Save failed — permission</h3><span class="state-label">C</span></div>
+        <div class="dialog-scrim">
+          <div class="dialog">
+            <div class="dialog-header">
+              <h2>Edit project</h2>
+              <p class="sub">Studio bedroom · last saved 2 min ago</p>
+            </div>
+            <div class="dialog-body">
+              <div class="banner error">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <h4 class="b-title">Could not save changes</h4>
+                  <p class="b-text">Your role does not allow editing this project. If you recently changed accounts, refresh your role and try again.</p>
+                  <div class="b-actions">
+                    <button class="btn btn-sm">Refresh role</button>
+                    <button class="btn btn-sm">Retry</button>
+                  </div>
+                </div>
+              </div>
+              <div class="field">
+                <label>Project name</label>
+                <input class="input" value="Studio bedroom — west" />
+              </div>
+              <div class="field">
+                <label>Description</label>
+                <textarea class="textarea">Repositioning the bed away from window glare.</textarea>
+              </div>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-primary">Save changes</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- D: Delete confirmation -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Delete confirmation</h3><span class="state-label">D</span></div>
+        <div class="dialog-scrim">
+          <div class="dialog" style="max-width: 440px;">
+            <div class="dialog-header">
+              <h2>Delete this project?</h2>
+              <p class="sub">This removes the project, its source image, layouts, and reconstruction artifacts. This cannot be undone.</p>
+            </div>
+            <div class="dialog-body">
+              <div class="card" style="background: var(--surface-inset); box-shadow:none;">
+                <div class="card-body col-gap-2">
+                  <div style="font-weight:600;">Studio bedroom</div>
+                  <div class="muted" style="font-size:12px;">3.8 × 4.2 × 2.6 m · 4 saved layouts · 2 reconstruction artifacts</div>
+                </div>
+              </div>
+              <div class="field">
+                <label>Type the project name to confirm</label>
+                <input class="input" placeholder="Studio bedroom" />
+              </div>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-danger-solid" aria-disabled="true">Delete project</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

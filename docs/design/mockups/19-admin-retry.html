@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>19 — Admin retry &amp; permission</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">19 — Admin retry &amp; permission states</h1>
+        <p class="mockup-subtitle">Confirm retry, retry unavailable, audited action created, denial without data leakage.</p>
+      </div>
+      <span class="chip admin"><span class="dot"></span>Admin surface</span>
+    </header>
+
+    <div class="state-grid" style="grid-template-columns: 1fr 1fr; gap: var(--s-6);">
+
+      <!-- A: Confirm retry -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Confirm retry</h3><span class="state-label">A</span></div>
+        <div class="dialog-scrim">
+          <div class="dialog" style="max-width: 480px;">
+            <div class="dialog-header">
+              <h2>Retry reconstruction job?</h2>
+              <p class="sub">A retry queues a new attempt with the same source photo. The owner sees status return to <em>processing</em>.</p>
+            </div>
+            <div class="dialog-body">
+              <div class="kv">
+                <div class="k">job_id</div><div class="v mono">rj_8a91d3e0c7a4ef</div>
+                <div class="k">project</div><div class="v">Studio bedroom</div>
+                <div class="k">owner</div><div class="v mono">u_82c1…1d</div>
+                <div class="k">attempt</div><div class="v mono">2 / 3</div>
+                <div class="k">cooldown</div><div class="v mono">none</div>
+              </div>
+              <div class="field">
+                <label>Reason for retry <span class="muted">(audited)</span></label>
+                <textarea class="textarea" placeholder="e.g. customer reported overlay misaligned after device update"></textarea>
+              </div>
+              <div class="banner warning">
+                <div class="b-icon">!</div>
+                <div class="b-body"><p class="b-text">This action is logged with your admin uid, timestamp, and reason text. Owners are notified that an admin retried their job.</p></div>
+              </div>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-primary">Retry job</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B: Retry unavailable -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Retry unavailable — attempts exhausted</h3><span class="state-label">B</span></div>
+        <div class="dialog-scrim">
+          <div class="dialog" style="max-width: 480px;">
+            <div class="dialog-header">
+              <h2>Retry is not available</h2>
+              <p class="sub">This job can't be retried automatically. The owner can replace the photo to start a fresh run.</p>
+            </div>
+            <div class="dialog-body">
+              <div class="banner error">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <h4 class="b-title">Attempt limit reached</h4>
+                  <p class="b-text">3 of 3 attempts used. Pipeline keeps retries bounded to protect downstream cost.</p>
+                </div>
+              </div>
+              <div class="kv">
+                <div class="k">attempts</div><div class="v mono">3 / 3</div>
+                <div class="k">last_failure</div><div class="v mono">timeout · 14:24:03</div>
+                <div class="k">unlock_at</div><div class="v mono">tomorrow 00:00 UTC</div>
+              </div>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-ghost">Close</button>
+              <button class="btn">Ask owner to replace photo</button>
+              <button class="btn btn-primary" aria-disabled="true">Retry job</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- C: Audited action created -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Audited action created — confirmation</h3><span class="state-label">C</span></div>
+        <div class="card" style="max-width: 520px;">
+          <div class="card-body col-gap-4">
+            <div class="banner success">
+              <div class="b-icon">✓</div>
+              <div class="b-body">
+                <h4 class="b-title">Retry queued · audit entry created</h4>
+                <p class="b-text">The new attempt is queued. The audit entry below is searchable from the audit log.</p>
+              </div>
+            </div>
+            <div class="card" style="background: var(--surface-inset); box-shadow:none;">
+              <div class="card-body col-gap-2">
+                <div class="kv">
+                  <div class="k">audit_id</div><div class="v mono">au_a3f1…b9</div>
+                  <div class="k">actor</div><div class="v mono">admin: sy00nb7907@gmail.com</div>
+                  <div class="k">action</div><div class="v mono">recon.retry</div>
+                  <div class="k">target_job</div><div class="v mono">rj_8a91…ef</div>
+                  <div class="k">reason</div><div class="v">customer reported misalignment after device update</div>
+                  <div class="k">created_at</div><div class="v mono">2026-05-26T14:33:11Z</div>
+                </div>
+              </div>
+            </div>
+            <div class="row-gap" style="justify-content:flex-end;">
+              <button class="btn">Open audit log</button>
+              <button class="btn btn-primary">Back to job</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- D: Permission denied state on a job -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Denied — no protected data leakage</h3><span class="state-label">D</span></div>
+        <div class="card" style="max-width: 520px;">
+          <div class="card-header"><h3>Reconstruction job</h3><span class="chip permission"><span class="dot"></span>Forbidden</span></div>
+          <div class="card-body col-gap-4">
+            <div class="banner error">
+              <div class="b-icon">🔒</div>
+              <div class="b-body">
+                <h4 class="b-title">You can't view this job</h4>
+                <p class="b-text">This job is owned by a tier you don't administer. No owner id, project name, artifact paths, or OpenCV details are loaded.</p>
+              </div>
+            </div>
+            <div class="kv">
+              <div class="k">job_id</div><div class="v mono">rj_8a91…ef</div>
+              <div class="k">project</div><div class="v muted">— hidden —</div>
+              <div class="k">owner</div><div class="v muted">— hidden —</div>
+              <div class="k">artifacts</div><div class="v muted">— hidden —</div>
+              <div class="k">opencv_metadata</div><div class="v muted">— hidden —</div>
+            </div>
+            <div class="scope-badge">no protected fields rendered before authorization resolves</div>
+            <div class="row-gap" style="justify-content:flex-end;">
+              <button class="btn">Request elevated role</button>
+              <a href="#" class="btn btn-primary">Back to jobs</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

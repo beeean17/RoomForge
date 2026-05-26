@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>12 — Furniture add &amp; inspector</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">12 — Furniture add &amp; inspector</h1>
+        <p class="mockup-subtitle">Catalog, empty catalog, move / rotate / resize / delete, locked, placement warning.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P0 user core</span>
+    </header>
+
+    <div class="state-grid">
+
+      <!-- A: Furniture catalog drawer -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Furniture catalog — adding new item</h3><span class="state-label">A</span></div>
+        <div class="card">
+          <div class="card-body" style="display:grid; grid-template-columns: 320px 1fr; gap: var(--s-5);">
+            <div class="col-gap-3">
+              <input class="input" placeholder="Search furniture" />
+              <div class="row-gap" style="flex-wrap:wrap;">
+                <span class="chip">All</span>
+                <span class="chip" style="background:var(--primary-soft);color:var(--primary);border-color:transparent;">Bedroom</span>
+                <span class="chip">Living</span>
+                <span class="chip">Office</span>
+                <span class="chip">Storage</span>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--s-3);">
+                <div class="card" style="padding:var(--s-3);text-align:center;cursor:pointer;">
+                  <div style="aspect-ratio:1;background:linear-gradient(135deg,#CCFBF1,#5EEAD4);border-radius:var(--r-2);"></div>
+                  <div style="font-weight:600;margin-top:var(--s-2);">Queen bed</div>
+                  <div class="muted mono" style="font-size:11px;">2.00 × 1.60 m</div>
+                </div>
+                <div class="card" style="padding:var(--s-3);text-align:center;cursor:pointer;outline:2px solid var(--primary);">
+                  <div style="aspect-ratio:1;background:linear-gradient(135deg,#BBF7D0,#86EFAC);border-radius:var(--r-2);"></div>
+                  <div style="font-weight:600;margin-top:var(--s-2);">Single bed</div>
+                  <div class="muted mono" style="font-size:11px;">2.00 × 0.90 m</div>
+                </div>
+                <div class="card" style="padding:var(--s-3);text-align:center;cursor:pointer;">
+                  <div style="aspect-ratio:1;background:linear-gradient(135deg,#FED7AA,#FB923C);border-radius:var(--r-2);"></div>
+                  <div style="font-weight:600;margin-top:var(--s-2);">Wardrobe</div>
+                  <div class="muted mono" style="font-size:11px;">1.20 × 0.60 m</div>
+                </div>
+                <div class="card" style="padding:var(--s-3);text-align:center;cursor:pointer;">
+                  <div style="aspect-ratio:1;background:linear-gradient(135deg,#E9D5FF,#C084FC);border-radius:var(--r-2);"></div>
+                  <div style="font-weight:600;margin-top:var(--s-2);">Desk</div>
+                  <div class="muted mono" style="font-size:11px;">1.40 × 0.60 m</div>
+                </div>
+                <div class="card" style="padding:var(--s-3);text-align:center;cursor:pointer;">
+                  <div style="aspect-ratio:1;background:linear-gradient(135deg,#FECACA,#FCA5A5);border-radius:var(--r-2);"></div>
+                  <div style="font-weight:600;margin-top:var(--s-2);">Armchair</div>
+                  <div class="muted mono" style="font-size:11px;">0.80 × 0.85 m</div>
+                </div>
+                <div class="card" style="padding:var(--s-3);text-align:center;cursor:pointer;">
+                  <div style="aspect-ratio:1;background:linear-gradient(135deg,#DBEAFE,#93C5FD);border-radius:var(--r-2);"></div>
+                  <div style="font-weight:600;margin-top:var(--s-2);">Nightstand</div>
+                  <div class="muted mono" style="font-size:11px;">0.45 × 0.40 m</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="canvas-stage" style="min-height: 460px;">
+              <svg viewBox="0 0 700 460" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">
+                <polygon points="80,400 620,400 620,60 80,60" fill="rgba(14,165,233,0.04)" stroke="#0EA5E9" stroke-width="2.5"/>
+                <!-- ghost placement -->
+                <rect x="200" y="120" width="180" height="80" fill="rgba(15,118,110,0.15)" stroke="#0F766E" stroke-dasharray="5 4" stroke-width="2"/>
+                <text x="230" y="170" style="font: 600 12px var(--mono);" fill="#0F766E">single bed · drop here</text>
+              </svg>
+              <div class="canvas-caption">drag to place · esc to cancel</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B: Empty catalog -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Empty catalog — no presets loaded</h3><span class="state-label">B</span></div>
+        <div class="card">
+          <div class="card-body">
+            <div class="empty">
+              <div class="e-icon">📦</div>
+              <h4 class="e-title">No furniture presets yet</h4>
+              <p class="e-text">RoomForge couldn't load the preset catalog. You can still add a custom piece by entering dimensions.</p>
+              <div class="row-gap" style="justify-content:center;">
+                <button class="btn btn-primary">Add custom piece</button>
+                <button class="btn">Retry loading catalog</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- C: Inspector — selected -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Inspector — selected furniture (move / rotate / resize / delete)</h3><span class="state-label">C</span></div>
+        <div class="card" style="max-width: 420px;">
+          <div class="card-header"><h3>Desk</h3><span class="chip"><span class="dot"></span>Selected</span></div>
+          <div class="card-body col-gap-4">
+            <div class="col-gap-2">
+              <div class="row-gap" style="gap:4px;">
+                <button class="btn btn-icon" title="Move">✥</button>
+                <button class="btn btn-icon active" title="Rotate">↻</button>
+                <button class="btn btn-icon" title="Resize">⤡</button>
+                <button class="btn btn-icon" title="Lock">🔒</button>
+                <button class="btn btn-icon" title="Duplicate">⎘</button>
+                <button class="btn btn-icon" title="Delete">🗑</button>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="s-title" style="font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">Position</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s-3);">
+              <div class="field"><label>X</label><div class="input-group"><input class="input with-suffix" value="2.40"/><span class="input-suffix">m</span></div></div>
+              <div class="field"><label>Y</label><div class="input-group"><input class="input with-suffix" value="3.20"/><span class="input-suffix">m</span></div></div>
+            </div>
+            <div class="field"><label>Rotation</label><div class="input-group"><input class="input with-suffix" value="90"/><span class="input-suffix">°</span></div></div>
+            <div class="s-title" style="font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-3);">Size</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s-3);">
+              <div class="field"><label>Width</label><div class="input-group"><input class="input with-suffix" value="1.40"/><span class="input-suffix">m</span></div></div>
+              <div class="field"><label>Depth</label><div class="input-group"><input class="input with-suffix" value="0.60"/><span class="input-suffix">m</span></div></div>
+              <div class="field"><label>Height</label><div class="input-group"><input class="input with-suffix" value="0.75"/><span class="input-suffix">m</span></div></div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-danger btn-sm">Delete</button>
+            <button class="btn btn-primary btn-sm">Apply</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- D: Locked state -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Locked piece</h3><span class="state-label">D</span></div>
+        <div class="card" style="max-width: 420px;">
+          <div class="card-header"><h3>Wardrobe</h3><span class="chip"><span class="dot"></span>🔒 Locked</span></div>
+          <div class="card-body col-gap-3">
+            <div class="banner neutral">
+              <div class="b-icon">🔒</div>
+              <div class="b-body">
+                <h4 class="b-title">This piece is locked</h4>
+                <p class="b-text">Move, rotate, and resize are disabled to protect a fixed placement. Unlock to edit.</p>
+              </div>
+            </div>
+            <div class="kv">
+              <div class="k">Position</div><div class="v mono">0.10, 0.20 m</div>
+              <div class="k">Rotation</div><div class="v mono">0°</div>
+              <div class="k">Size</div><div class="v mono">1.20 × 0.60 × 2.10 m</div>
+            </div>
+            <button class="btn btn-block">Unlock</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- E: Placement warning -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Placement warning — overlap / outside room</h3><span class="state-label">E</span></div>
+        <div class="card">
+          <div class="card-body" style="display:grid;grid-template-columns: 1fr 380px; gap: var(--s-5);">
+            <div class="canvas-stage" style="min-height: 320px;">
+              <svg viewBox="0 0 700 320" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">
+                <polygon points="80,260 620,260 620,40 80,40" fill="rgba(14,165,233,0.04)" stroke="#0EA5E9" stroke-width="2.5"/>
+                <rect x="200" y="100" width="220" height="120" fill="rgba(15,118,110,0.15)" stroke="#0F766E" stroke-width="2"/>
+                <rect x="360" y="160" width="200" height="60" fill="rgba(220,38,38,0.18)" stroke="#DC2626" stroke-width="2" stroke-dasharray="5 4"/>
+                <text x="380" y="195" style="font: 600 12px var(--mono);" fill="#DC2626">overlaps bed</text>
+              </svg>
+              <div class="canvas-caption" style="color:var(--error);">desk overlaps bed by 0.18 m²</div>
+            </div>
+            <div class="col-gap-4">
+              <div class="banner warning">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <h4 class="b-title">Furniture overlaps</h4>
+                  <p class="b-text">The desk overlaps the bed. Move it 0.20 m to the right, rotate, or accept the placement to continue.</p>
+                  <div class="b-actions">
+                    <button class="btn btn-sm btn-primary">Auto-fit nearby</button>
+                    <button class="btn btn-sm">Accept overlap</button>
+                  </div>
+                </div>
+              </div>
+              <div class="banner warning">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <h4 class="b-title">Edge of room</h4>
+                  <p class="b-text">Less than 0.05 m clearance from the back wall.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>09 — Scale &amp; calibration</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">09 — Scale &amp; calibration</h1>
+        <p class="mockup-subtitle">Known wall length, invalid calibration, recalculation needed after geometry changes.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P0 user core</span>
+    </header>
+
+    <div class="state-grid">
+
+      <!-- A: Known length, picking a wall -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Calibrate — anchor a known wall length</h3><span class="state-label">A</span></div>
+        <div class="app-shell" style="min-height: 640px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="crumbs"><a href="#">Studio bedroom</a><span class="sep">/</span><span class="current">Calibrate scale</span></div>
+            <div class="spacer"></div>
+            <span class="chip ready"><span class="dot"></span>Step 3 of 4</span>
+          </div>
+
+          <div class="app-body">
+            <main class="app-content no-pad" style="display:grid;grid-template-columns: 1fr 360px;">
+              <div style="padding: var(--s-5);">
+                <div class="banner info" style="margin-bottom:var(--s-4);">
+                  <div class="b-icon">i</div>
+                  <div class="b-body">
+                    <p class="b-text">Tap a wall and enter its real length in meters. RoomForge will scale the rest of the room from that one measurement.</p>
+                  </div>
+                </div>
+                <div class="canvas-stage" style="min-height: 460px;">
+                  <div style="position:absolute;inset:0;background:linear-gradient(135deg,#5B6675,#2D3340);"></div>
+                  <svg viewBox="0 0 900 460" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">
+                    <polygon class="geo-confirmed" points="120,400 780,420 720,80 200,90" />
+                    <!-- Highlighted reference wall (bottom edge) -->
+                    <line x1="120" y1="400" x2="780" y2="420" stroke="#2563EB" stroke-width="4"/>
+                    <circle cx="120" cy="400" r="7" fill="#2563EB" stroke="#fff" stroke-width="2"/>
+                    <circle cx="780" cy="420" r="7" fill="#2563EB" stroke="#fff" stroke-width="2"/>
+                    <!-- Measurement label -->
+                    <rect x="380" y="430" width="140" height="26" rx="6" fill="#2563EB"/>
+                    <text x="396" y="448" fill="#fff" style="font: 600 12px var(--mono);">known: 4.20 m</text>
+                  </svg>
+                  <div class="canvas-toolbar">
+                    <button class="btn-icon active" title="Pick wall">▱</button>
+                    <button class="btn-icon" title="Pan">✋</button>
+                    <button class="btn-icon" title="Reset">⟲</button>
+                  </div>
+                  <div class="canvas-caption">selected wall · floor edge (front)</div>
+                </div>
+              </div>
+
+              <aside class="inspector" style="width:auto;">
+                <div class="inspector-header"><h3>Reference measurement</h3><div class="sub">One known length is enough.</div></div>
+                <div class="inspector-section">
+                  <div class="s-title">Which wall did you measure?</div>
+                  <div class="col-gap-2">
+                    <label class="row-gap"><input type="radio" name="wall" checked/> Front floor edge</label>
+                    <label class="row-gap"><input type="radio" name="wall"/> Right wall</label>
+                    <label class="row-gap"><input type="radio" name="wall"/> Back floor edge</label>
+                    <label class="row-gap"><input type="radio" name="wall"/> Left wall</label>
+                  </div>
+                </div>
+                <div class="inspector-section">
+                  <div class="s-title">Known length</div>
+                  <div class="field">
+                    <div class="input-group"><input class="input with-suffix" value="4.20" /><span class="input-suffix">m</span></div>
+                    <span class="hint">Use a tape measure for best accuracy.</span>
+                  </div>
+                </div>
+                <div class="inspector-section">
+                  <div class="s-title">Derived dimensions</div>
+                  <div class="kv">
+                    <div class="k">Width</div><div class="v mono">4.20 m</div>
+                    <div class="k">Depth</div><div class="v mono">3.78 m</div>
+                    <div class="k">Wall ratio</div><div class="v mono">1 : 0.90</div>
+                  </div>
+                </div>
+              </aside>
+            </main>
+            <div class="status-strip">
+              <span class="chip ready"><span class="dot"></span>Ready to calibrate</span>
+              <div class="spacer"></div>
+              <button class="btn">Back</button>
+              <button class="btn btn-primary">Apply scale</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B: Invalid calibration -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Invalid calibration — length out of range</h3><span class="state-label">B</span></div>
+        <div class="card">
+          <div class="card-body" style="display:grid;grid-template-columns: 1fr 380px; gap: var(--s-5);">
+            <div class="canvas-stage" style="min-height: 280px;">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,#5B6675,#2D3340);"></div>
+              <svg viewBox="0 0 800 280" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">
+                <polygon class="geo-confirmed" points="120,220 680,230 620,80 180,90" />
+                <line x1="120" y1="220" x2="680" y2="230" stroke="#DC2626" stroke-width="4"/>
+              </svg>
+              <div class="canvas-caption" style="color:var(--error);">invalid scale — 0.04 m is shorter than the camera height</div>
+            </div>
+            <div class="col-gap-4">
+              <div class="field">
+                <label>Known length</label>
+                <div class="input-group"><input class="input invalid with-suffix" value="0.04"/><span class="input-suffix">m</span></div>
+                <span class="error">Length must be between 0.5 m and 30 m. Did you mean 4.00 m?</span>
+              </div>
+              <div class="banner warning">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <p class="b-text">RoomForge can't scale the room from this value. Re-measure the wall and enter a length larger than 0.5 m.</p>
+                </div>
+              </div>
+              <button class="btn btn-primary" aria-disabled="true">Apply scale</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- C: Recalculation needed -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Recalculation needed — outline changed after calibration</h3><span class="state-label">C</span></div>
+        <div class="card">
+          <div class="card-body" style="display:grid;grid-template-columns: 1fr 380px; gap: var(--s-5);">
+            <div class="canvas-stage" style="min-height: 280px;">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,#5B6675,#2D3340);"></div>
+              <svg viewBox="0 0 800 280" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">
+                <polygon class="geo-confirmed" points="100,230 680,240 600,70 220,60" />
+                <line x1="100" y1="230" x2="680" y2="240" stroke="#D97706" stroke-width="4" stroke-dasharray="6 4"/>
+              </svg>
+              <div class="canvas-caption" style="color:var(--warning);">reference wall length changed by 8% · scale stale</div>
+            </div>
+            <div class="col-gap-4">
+              <div class="banner warning">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <h4 class="b-title">Recalculation needed</h4>
+                  <p class="b-text">You changed the outline after calibrating. Confirm the measured wall is still 4.20 m, or pick a new reference wall and enter its length.</p>
+                  <div class="b-actions">
+                    <button class="btn btn-sm btn-primary">Recalibrate now</button>
+                    <button class="btn btn-sm">Keep stale scale</button>
+                  </div>
+                </div>
+              </div>
+              <div class="kv">
+                <div class="k">Last calibration</div><div class="v mono">4.20 m · front wall</div>
+                <div class="k">Reference length now</div><div class="v mono" style="color:var(--warning);">4.55 m (derived)</div>
+                <div class="k">Floor plan</div><div class="v"><span class="chip needs-review"><span class="dot"></span>Needs review</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

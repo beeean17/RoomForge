@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>04 — Room dimension input</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">04 — Room dimension input</h1>
+        <p class="mockup-subtitle">Width, depth, height with default height and meters unit. Used during project setup or when no photo is available.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P0 user core</span>
+    </header>
+
+    <div class="state-grid" style="grid-template-columns: 1fr 1fr; gap: var(--s-6);">
+
+      <!-- A: Defaults -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Idle — defaults pre-filled</h3><span class="state-label">A</span></div>
+        <div class="app-shell" style="min-height: 560px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="crumbs"><a href="#">Projects</a><span class="sep">/</span><a href="#">Studio bedroom</a><span class="sep">/</span><span class="current">Dimensions</span></div>
+            <div class="spacer"></div>
+            <span class="avatar">SY</span>
+          </div>
+          <div class="app-content" style="display:flex;align-items:flex-start;justify-content:center;">
+            <div class="card" style="width: 540px;">
+              <div class="card-header"><h3>Room dimensions</h3><span class="chip">Step 1 of 4</span></div>
+              <div class="card-body col-gap-4">
+                <p class="muted" style="margin:0;font-size:13px;">Enter the room's real width, depth, and height in meters. You can refine these later after calibrating from a photo.</p>
+
+                <div style="display:grid;grid-template-columns: 1fr 1fr;gap:var(--s-4);">
+                  <div class="field">
+                    <label>Width</label>
+                    <div class="input-group"><input class="input with-suffix" value="3.80" /><span class="input-suffix">m</span></div>
+                    <span class="hint">Along the wall facing the camera</span>
+                  </div>
+                  <div class="field">
+                    <label>Depth</label>
+                    <div class="input-group"><input class="input with-suffix" value="4.20" /><span class="input-suffix">m</span></div>
+                    <span class="hint">From near wall to far wall</span>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>Height</label>
+                  <div class="input-group"><input class="input with-suffix" value="2.60" /><span class="input-suffix">m</span></div>
+                  <span class="hint">Standard ceiling height is 2.60 m. Adjust if known.</span>
+                </div>
+
+                <div class="banner info">
+                  <div class="b-icon">i</div>
+                  <div class="b-body">
+                    <p class="b-text">If you upload a photo later, RoomForge will use these dimensions as the starting point for scale calibration.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="card-footer">
+                <button class="btn btn-ghost">Cancel</button>
+                <div class="row-gap">
+                  <button class="btn">Skip — I'll add a photo first</button>
+                  <button class="btn btn-primary">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B: Validation error -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Validation — out of range</h3><span class="state-label">B</span></div>
+        <div class="app-shell" style="min-height: 560px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="crumbs"><span class="current">Dimensions</span></div>
+            <div class="spacer"></div>
+            <span class="avatar">SY</span>
+          </div>
+          <div class="app-content" style="display:flex;align-items:flex-start;justify-content:center;">
+            <div class="card" style="width: 540px;">
+              <div class="card-header"><h3>Room dimensions</h3><span class="chip">Step 1 of 4</span></div>
+              <div class="card-body col-gap-4">
+                <div style="display:grid;grid-template-columns: 1fr 1fr;gap:var(--s-4);">
+                  <div class="field">
+                    <label>Width</label>
+                    <div class="input-group"><input class="input with-suffix invalid" value="0" /><span class="input-suffix">m</span></div>
+                    <span class="error">Width must be between 0.5 m and 30 m.</span>
+                  </div>
+                  <div class="field">
+                    <label>Depth</label>
+                    <div class="input-group"><input class="input with-suffix" value="4.20" /><span class="input-suffix">m</span></div>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Height</label>
+                  <div class="input-group"><input class="input with-suffix invalid" value="35" /><span class="input-suffix">m</span></div>
+                  <span class="error">Height looks unusual. Most rooms are between 2.0 m and 5.0 m.</span>
+                </div>
+              </div>
+              <div class="card-footer">
+                <button class="btn btn-ghost">Cancel</button>
+                <div class="row-gap"><button class="btn btn-primary" aria-disabled="true">Continue</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

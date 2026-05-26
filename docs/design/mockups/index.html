@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge — Screen Design Mockups</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <h1 class="mockup-title">RoomForge — Screen Design Mockups</h1>
+        <p class="mockup-subtitle">
+          HTML reference mockups for the Firebase refactor. Each file shows the
+          required design coverage and key states from the screen inventory.
+        </p>
+      </div>
+      <span class="chip"><span class="dot"></span>v0 design concept</span>
+    </header>
+
+    <section class="index-section">
+      <h2>P0 — User core flow</h2>
+      <div class="index-grid">
+        <a class="index-card" href="01-sign-in.html">
+          <span class="num">01</span>
+          <span class="name">Sign in &amp; return</span>
+          <span class="desc">Idle, signing in, sign-in failed, Firebase config missing.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="02-project-workspace.html">
+          <span class="num">02</span>
+          <span class="name">Project workspace</span>
+          <span class="desc">Project list, empty, loading, error, selected with detail panel.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="03-project-dialog.html">
+          <span class="num">03</span>
+          <span class="name">Project create / edit / delete</span>
+          <span class="desc">Create form, validation, save failure, delete confirmation.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="04-room-dimensions.html">
+          <span class="num">04</span>
+          <span class="name">Room dimension input</span>
+          <span class="desc">Width, depth, height with default height and meters unit.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="05-image-upload.html">
+          <span class="num">05</span>
+          <span class="name">Source image upload</span>
+          <span class="desc">Empty, dragging, uploading, uploaded, invalid type, too large, metadata save failed, permission denied.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="06-reconstruction-status.html">
+          <span class="num">06</span>
+          <span class="name">Reconstruction submit &amp; status</span>
+          <span class="desc">created, uploading, processing, Needs review, succeeded, failed, timeout, retrying.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="07-opencv-review.html">
+          <span class="num">07</span>
+          <span class="name">OpenCV candidate review</span>
+          <span class="desc">Candidate preview, selection, reset, manual outline, low confidence.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="08-geometry-correction.html">
+          <span class="num">08</span>
+          <span class="name">Geometry correction</span>
+          <span class="desc">Corner drag, invalid polygon, correction tools.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="09-scale-calibration.html">
+          <span class="num">09</span>
+          <span class="name">Scale &amp; calibration</span>
+          <span class="desc">Known wall length, invalid calibration, recalculation needed.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="10-floor-plan-review.html">
+          <span class="num">10</span>
+          <span class="name">Metric floor plan review</span>
+          <span class="desc">Meter-space floor plan, warnings, artifact references.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="11-editor-2d-3d.html">
+          <span class="num">11</span>
+          <span class="name">2D / 3D editor shell</span>
+          <span class="desc">View switch, camera reset, fit-to-room, selection preservation.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="12-furniture.html">
+          <span class="num">12</span>
+          <span class="name">Furniture add, select &amp; inspector</span>
+          <span class="desc">Catalog, empty catalog, move/rotate/resize/delete, locked, placement warning.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+        <a class="index-card" href="13-layout-save-export.html">
+          <span class="num">13</span>
+          <span class="name">Layout save / load / export</span>
+          <span class="desc">Unsaved, saving, saved, save failed, load failed, export warning, export failed.</span>
+          <span class="tags"><span class="chip">P0</span></span>
+        </a>
+      </div>
+    </section>
+
+    <section class="index-section">
+      <h2>P1 — Recovery and continuity</h2>
+      <div class="index-grid">
+        <a class="index-card" href="14-recovery.html">
+          <span class="num">14</span>
+          <span class="name">Draft recovery &amp; conflict</span>
+          <span class="desc">Restore / discard / continue saved, cloud vs local diff, explicit choice.</span>
+          <span class="tags"><span class="chip">P1</span></span>
+        </a>
+        <a class="index-card" href="15-sync-failed.html">
+          <span class="num">15</span>
+          <span class="name">Sync failed &amp; reupload recovery</span>
+          <span class="desc">Retry, keep draft, permission failure, reupload preserves prior input, project reopen.</span>
+          <span class="tags"><span class="chip">P1</span></span>
+        </a>
+      </div>
+    </section>
+
+    <section class="index-section">
+      <h2>P1 — Admin and support</h2>
+      <div class="index-grid">
+        <a class="index-card" href="16-admin-guard.html">
+          <span class="num">16</span>
+          <span class="name">Admin route guard</span>
+          <span class="desc">Checking role, non-admin denied, stale role, refresh role.</span>
+          <span class="tags"><span class="chip admin">Admin</span></span>
+        </a>
+        <a class="index-card" href="17-admin-dashboard.html">
+          <span class="num">17</span>
+          <span class="name">Admin dashboard &amp; search</span>
+          <span class="desc">Status filters, job list, search, empty, permission denied.</span>
+          <span class="tags"><span class="chip admin">Admin</span></span>
+        </a>
+        <a class="index-card" href="18-admin-job-detail.html">
+          <span class="num">18</span>
+          <span class="name">Admin job detail</span>
+          <span class="desc">Metadata, status timeline, artifacts, OpenCV result, layout references.</span>
+          <span class="tags"><span class="chip admin">Admin</span></span>
+        </a>
+        <a class="index-card" href="19-admin-retry.html">
+          <span class="num">19</span>
+          <span class="name">Admin retry &amp; permission states</span>
+          <span class="desc">Confirm retry, retry unavailable, audited action, no protected data leakage.</span>
+          <span class="tags"><span class="chip admin">Admin</span></span>
+        </a>
+      </div>
+    </section>
+
+    <section class="index-section">
+      <h2>P2 — Responsive and quality</h2>
+      <div class="index-grid">
+        <a class="index-card" href="20-responsive.html">
+          <span class="num">20</span>
+          <span class="name">Responsive layouts</span>
+          <span class="desc">Mobile upload/review, tablet collapsed inspector, desktop precision editor.</span>
+          <span class="tags"><span class="chip">P2</span></span>
+        </a>
+        <a class="index-card" href="21-templates.html">
+          <span class="num">21</span>
+          <span class="name">Empty / loading / error / a11y</span>
+          <span class="desc">Shared templates and accessibility states across the product.</span>
+          <span class="tags"><span class="chip">P2</span></span>
+        </a>
+      </div>
+    </section>
+
+    <p class="muted" style="font-size:12px;margin-top:var(--s-8)">
+      Reference: <span class="mono">docs/product/roomforge-initial-design-concept.md</span>,
+      <span class="mono">docs/refactor/firebase-screen-design-inventory.md</span>,
+      <span class="mono">docs/refactor/firebase-ux-design-specification.md</span>.
+    </p>
+  </div>
+</body>
+</html>

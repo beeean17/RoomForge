@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>20 — Responsive layouts</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">20 — Responsive layouts</h1>
+        <p class="mockup-subtitle">Mobile upload/review, tablet collapsed inspector, desktop precision editor.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P2 quality</span>
+    </header>
+
+    <div class="state-grid">
+
+      <!-- Mobile -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Mobile — upload, status, lightweight review</h3><span class="state-label">A</span><span class="state-block-note">375 × 812</span></div>
+        <div class="row-gap" style="align-items:flex-start;gap:var(--s-5);flex-wrap:wrap;">
+
+          <!-- Mobile frame: upload -->
+          <div style="width:375px;border:1px solid var(--outline);border-radius:24px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow-2);">
+            <div style="height:36px;background:#0F172A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);">9:41 · LTE</div>
+            <div style="padding: var(--s-3); border-bottom: 1px solid var(--outline);display:flex;align-items:center;gap:var(--s-2);">
+              <a class="btn btn-icon" href="#">←</a>
+              <div style="font-weight:600;">Studio bedroom</div>
+              <div style="margin-left:auto;"><span class="chip ready"><span class="dot"></span>Step 2</span></div>
+            </div>
+            <div style="padding: var(--s-4);" class="col-gap-4">
+              <div style="
+                border: 2px dashed var(--outline-strong);
+                border-radius: var(--r-3);
+                padding: var(--s-5);
+                text-align: center;
+                background: var(--surface-inset);">
+                <div style="font-size:28px;">📷</div>
+                <div style="font-weight:600;margin-top:4px;">Take or choose a photo</div>
+                <div class="muted" style="font-size:12px;">JPG / PNG · up to 20 MB</div>
+              </div>
+              <div class="row-gap" style="gap:var(--s-2);">
+                <button class="btn btn-primary btn-block">Take photo</button>
+                <button class="btn btn-block">Choose from library</button>
+              </div>
+              <div class="muted" style="font-size:12px;text-align:center;">Stand back, keep the floor visible.</div>
+            </div>
+            <div style="padding:var(--s-3);border-top:1px solid var(--outline);background:var(--surface-inset);font-size:12px;color:var(--text-3);text-align:center;">Mobile · primary tasks: upload, status, light review</div>
+          </div>
+
+          <!-- Mobile frame: status -->
+          <div style="width:375px;border:1px solid var(--outline);border-radius:24px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow-2);">
+            <div style="height:36px;background:#0F172A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);">9:42 · LTE</div>
+            <div style="padding: var(--s-3); border-bottom: 1px solid var(--outline);display:flex;align-items:center;gap:var(--s-2);">
+              <a class="btn btn-icon" href="#">←</a>
+              <div style="font-weight:600;">Reconstruction</div>
+              <div style="margin-left:auto;"><span class="chip needs-review"><span class="dot"></span>Needs review</span></div>
+            </div>
+            <div style="padding: var(--s-4);" class="col-gap-4">
+              <div class="canvas-stage" style="min-height:200px;">
+                <div style="position:absolute;inset:0;background:linear-gradient(135deg,#5B6675,#2D3340);"></div>
+                <svg viewBox="0 0 300 200" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">
+                  <polygon class="geo-confirmed" points="40,170 260,170 230,40 70,40"/>
+                </svg>
+                <div class="canvas-caption">candidate 1 · 0.81</div>
+              </div>
+              <div class="muted" style="font-size:13px;">We picked the most likely outline. Confirm or pick another candidate.</div>
+              <button class="btn btn-primary btn-block">Confirm outline</button>
+              <button class="btn btn-block">Choose another candidate</button>
+            </div>
+          </div>
+
+          <!-- Mobile frame: saved layout viewer -->
+          <div style="width:375px;border:1px solid var(--outline);border-radius:24px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow-2);">
+            <div style="height:36px;background:#0F172A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);">9:43 · LTE</div>
+            <div style="padding: var(--s-3); border-bottom: 1px solid var(--outline);display:flex;align-items:center;gap:var(--s-2);">
+              <a class="btn btn-icon" href="#">←</a>
+              <div style="font-weight:600;">Saved layout</div>
+              <div style="margin-left:auto;"><span class="chip saved"><span class="dot"></span>v6</span></div>
+            </div>
+            <div style="padding: var(--s-4);" class="col-gap-4">
+              <div class="canvas-stage" style="min-height:220px;">
+                <svg viewBox="0 0 320 220" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">
+                  <polygon points="40,180 280,180 280,40 40,40" fill="rgba(14,165,233,0.06)" stroke="#0EA5E9" stroke-width="2"/>
+                  <rect x="60" y="60" width="80" height="60" fill="rgba(15,118,110,0.18)" stroke="#0F766E"/>
+                  <rect x="180" y="130" width="80" height="30" fill="rgba(15,118,110,0.10)" stroke="#0F766E"/>
+                </svg>
+              </div>
+              <div class="kv">
+                <div class="k">Size</div><div class="v mono">4.20 × 3.80 m</div>
+                <div class="k">Furniture</div><div class="v">3 pieces</div>
+              </div>
+              <div class="banner info">
+                <div class="b-icon">i</div>
+                <div class="b-body"><p class="b-text">Precision editing works best on a larger screen.</p></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Tablet -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Tablet — collapsed inspector, larger touch targets</h3><span class="state-label">B</span><span class="state-block-note">1024 × 768</span></div>
+        <div style="width:1024px;max-width:100%;border:1px solid var(--outline);border-radius:var(--r-3);overflow:hidden;background:var(--surface);box-shadow:var(--shadow-2);">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="crumbs"><span class="current">Studio bedroom · Editor</span></div>
+            <div class="spacer"></div>
+            <button class="btn btn-sm">▤ Inspector</button>
+            <button class="btn btn-primary btn-sm">Save</button>
+          </div>
+          <div class="app-body" style="min-height:520px;">
+            <main class="app-content no-pad" style="display:grid; grid-template-columns: 64px 1fr;">
+              <!-- icon rail -->
+              <aside style="border-right:1px solid var(--outline);background:var(--surface);padding:var(--s-3);display:flex;flex-direction:column;gap:var(--s-2);align-items:center;">
+                <button class="btn btn-icon active" title="Select">▦</button>
+                <button class="btn btn-icon" title="Add furniture">＋</button>
+                <button class="btn btn-icon" title="Rotate">↻</button>
+                <button class="btn btn-icon" title="Resize">⤡</button>
+                <button class="btn btn-icon" title="Delete">🗑</button>
+                <div style="flex:1;"></div>
+                <button class="btn btn-icon" title="Fit to room">⛶</button>
+                <button class="btn btn-icon" title="Reset">⟲</button>
+              </aside>
+              <section style="padding: var(--s-4);">
+                <div class="canvas-stage" style="min-height: 460px;">
+                  <svg viewBox="0 0 800 460" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">
+                    <polygon points="100,400 700,400 700,80 100,80" fill="rgba(14,165,233,0.06)" stroke="#0EA5E9" stroke-width="2.5"/>
+                    <rect x="160" y="140" width="180" height="120" fill="rgba(15,118,110,0.18)" stroke="#0F766E" stroke-width="2"/>
+                    <rect x="480" y="320" width="160" height="60" fill="rgba(15,118,110,0.10)" stroke="#0F766E" stroke-width="1.5"/>
+                  </svg>
+                  <div class="view-switcher"><button class="active">2D</button><button>3D</button></div>
+                  <div class="canvas-caption">tap object to open inspector drawer</div>
+                </div>
+              </section>
+            </main>
+            <div class="status-strip">
+              <span class="chip unsaved"><span class="dot"></span>Unsaved draft</span>
+              <div class="spacer"></div>
+              <button class="btn">Inspector</button>
+              <button class="btn btn-primary">Save</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Desktop precision -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Desktop precision editor — full inspector visible</h3><span class="state-label">C</span><span class="state-block-note">1440+ wide</span></div>
+        <div class="app-shell" style="min-height: 540px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="crumbs"><span class="current">Studio bedroom · Editor</span></div>
+            <div class="spacer"></div>
+            <button class="btn btn-sm">Export</button>
+            <button class="btn btn-primary btn-sm">Save</button>
+          </div>
+          <div class="app-body">
+            <main class="app-content no-pad" style="display:grid; grid-template-columns: 220px 1fr 340px;">
+              <aside style="border-right:1px solid var(--outline);padding:var(--s-4);">
+                <div class="nav-section">Tools</div>
+                <a class="nav-item active" href="#">Select</a>
+                <a class="nav-item" href="#">Add furniture</a>
+                <a class="nav-item" href="#">Rotate</a>
+                <a class="nav-item" href="#">Resize</a>
+              </aside>
+              <section style="padding: var(--s-4);">
+                <div class="canvas-stage" style="min-height: 420px;">
+                  <svg viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">
+                    <polygon points="100,360 800,360 800,60 100,60" fill="rgba(14,165,233,0.06)" stroke="#0EA5E9" stroke-width="2.5"/>
+                    <rect x="160" y="120" width="220" height="140" fill="rgba(15,118,110,0.18)" stroke="#0F766E"/>
+                    <rect x="540" y="280" width="200" height="60" fill="rgba(15,118,110,0.12)" stroke="#0F766E"/>
+                  </svg>
+                  <div class="view-switcher"><button class="active">2D</button><button>3D</button></div>
+                </div>
+              </section>
+              <aside class="inspector" style="width:auto;">
+                <div class="inspector-header"><h3>Bed · queen</h3><div class="sub">Selected</div></div>
+                <div class="inspector-section">
+                  <div class="s-title">Position</div>
+                  <div class="kv"><div class="k">X</div><div class="v mono">0.80 m</div><div class="k">Y</div><div class="v mono">0.80 m</div><div class="k">Rot</div><div class="v mono">0°</div></div>
+                </div>
+                <div class="inspector-section">
+                  <div class="s-title">Size</div>
+                  <div class="kv"><div class="k">W</div><div class="v mono">2.00 m</div><div class="k">D</div><div class="v mono">1.60 m</div><div class="k">H</div><div class="v mono">0.55 m</div></div>
+                </div>
+              </aside>
+            </main>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>14 — Draft recovery &amp; conflict</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">14 — Draft recovery &amp; conflict</h1>
+        <p class="mockup-subtitle">Restore / discard / continue saved; cloud-vs-local diff with explicit choice. No destructive default.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P1 recovery</span>
+    </header>
+
+    <div class="state-grid">
+
+      <!-- A: Unsaved draft restore -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Unsaved draft on reopen</h3><span class="state-label">A</span></div>
+        <div class="dialog-scrim">
+          <div class="dialog" style="max-width: 540px;">
+            <div class="dialog-header">
+              <h2>Restore your unsaved work?</h2>
+              <p class="sub">RoomForge found a local draft for Studio bedroom that wasn't saved to the cloud.</p>
+            </div>
+            <div class="dialog-body">
+              <div style="display:grid;grid-template-columns: 1fr 1fr; gap: var(--s-3);">
+                <div class="card" style="padding:var(--s-4);box-shadow:none;background:var(--surface-inset);">
+                  <div class="row-gap" style="justify-content:space-between;">
+                    <div style="font-weight:600;">Saved layout</div>
+                    <span class="chip saved"><span class="dot"></span>v4</span>
+                  </div>
+                  <div class="muted mono" style="font-size:12px;margin-top:4px;">2026-05-26 · 14:08</div>
+                  <div class="muted" style="font-size:12px;margin-top:var(--s-2);">3 objects · 0 unsaved changes</div>
+                </div>
+                <div class="card" style="padding:var(--s-4);box-shadow:none;border-color:var(--primary);background:var(--primary-soft-2);">
+                  <div class="row-gap" style="justify-content:space-between;">
+                    <div style="font-weight:600;">Local draft</div>
+                    <span class="chip unsaved"><span class="dot"></span>Draft</span>
+                  </div>
+                  <div class="muted mono" style="font-size:12px;margin-top:4px;">2026-05-26 · 14:22</div>
+                  <div class="muted" style="font-size:12px;margin-top:var(--s-2);">3 objects · 5 changes ahead</div>
+                </div>
+              </div>
+              <div class="banner info">
+                <div class="b-icon">i</div>
+                <div class="b-body"><p class="b-text">Restoring keeps your local edits. Continuing the saved version moves your draft aside — you can still recover it from "Recovery" in settings.</p></div>
+              </div>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-danger">Discard draft</button>
+              <button class="btn">Continue saved version</button>
+              <button class="btn btn-primary">Restore draft</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B: Cloud vs local conflict -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Cloud / local conflict — both changed</h3><span class="state-label">B</span></div>
+        <div class="card">
+          <div class="card-header"><h3>This layout has diverged</h3><span class="chip sync-failed"><span class="dot"></span>Conflict</span></div>
+          <div class="card-body col-gap-4">
+            <p class="muted" style="margin:0;font-size:13px;">Another device (or a teammate) saved a newer version to the cloud while you had local changes. Choose how to continue.</p>
+
+            <div style="display:grid;grid-template-columns: 1fr 1fr; gap: var(--s-4);">
+              <div class="card" style="padding:var(--s-4);box-shadow:none;background:var(--surface-inset);">
+                <div class="row-between"><div style="font-weight:600;">Cloud version</div><span class="chip saved"><span class="dot"></span>v6 · newer</span></div>
+                <div class="muted mono" style="font-size:12px;margin-top:4px;">2026-05-26 · 14:30 (Chrome · iMac)</div>
+                <div class="canvas-stage" style="min-height:160px;margin-top:var(--s-3);">
+                  <svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">
+                    <polygon points="40,140 360,140 360,20 40,20" fill="rgba(14,165,233,0.06)" stroke="#0EA5E9" stroke-width="2"/>
+                    <rect x="60" y="40" width="100" height="60" fill="rgba(15,118,110,0.18)" stroke="#0F766E"/>
+                    <rect x="240" y="90" width="80" height="40" fill="rgba(15,118,110,0.12)" stroke="#0F766E"/>
+                  </svg>
+                </div>
+                <div class="muted" style="font-size:12px;margin-top:var(--s-2);">+ desk moved, − chair removed</div>
+              </div>
+              <div class="card" style="padding:var(--s-4);box-shadow:none;border-color:var(--primary);background:var(--primary-soft-2);">
+                <div class="row-between"><div style="font-weight:600;">Your local draft</div><span class="chip unsaved"><span class="dot"></span>3 changes ahead</span></div>
+                <div class="muted mono" style="font-size:12px;margin-top:4px;">2026-05-26 · 14:22 (this device)</div>
+                <div class="canvas-stage" style="min-height:160px;margin-top:var(--s-3);">
+                  <svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">
+                    <polygon points="40,140 360,140 360,20 40,20" fill="rgba(37,99,235,0.06)" stroke="#2563EB" stroke-width="2"/>
+                    <rect x="80" y="50" width="120" height="60" fill="rgba(15,118,110,0.18)" stroke="#0F766E"/>
+                    <rect x="240" y="80" width="80" height="40" fill="rgba(15,118,110,0.12)" stroke="#0F766E"/>
+                    <rect x="220" y="40" width="40" height="30" fill="rgba(15,118,110,0.12)" stroke="#0F766E"/>
+                  </svg>
+                </div>
+                <div class="muted" style="font-size:12px;margin-top:var(--s-2);">+ bed moved, + nightstand added</div>
+              </div>
+            </div>
+
+            <div class="banner warning">
+              <div class="b-icon">!</div>
+              <div class="b-body">
+                <h4 class="b-title">No merge happens automatically</h4>
+                <p class="b-text">Pick one version. The other is moved aside so you can return to it from Recovery.</p>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn">Open side-by-side</button>
+            <div class="row-gap">
+              <button class="btn">Use cloud version</button>
+              <button class="btn btn-primary">Use my local draft</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- C: Restore from history -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Recovery — earlier drafts list</h3><span class="state-label">C</span></div>
+        <div class="card">
+          <div class="card-header"><h3>Layout history</h3><span class="muted mono" style="font-size:12px;">Last 30 days · 8 entries</span></div>
+          <div class="card-body" style="padding:0;">
+            <table class="table">
+              <thead>
+                <tr><th>Version</th><th>Saved</th><th>Source</th><th>Changes</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">v6</td>
+                  <td>2026-05-26 14:30</td>
+                  <td>Chrome · iMac</td>
+                  <td>desk moved, chair removed</td>
+                  <td><span class="chip saved"><span class="dot"></span>Current</span></td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td class="mono">draft</td>
+                  <td>2026-05-26 14:22</td>
+                  <td>This device</td>
+                  <td>3 unsaved changes</td>
+                  <td><span class="chip unsaved"><span class="dot"></span>Local draft</span></td>
+                  <td><button class="btn btn-sm">Restore</button></td>
+                </tr>
+                <tr>
+                  <td class="mono">v5</td>
+                  <td>2026-05-26 14:12</td>
+                  <td>This device</td>
+                  <td>bed rotation 90°</td>
+                  <td><span class="chip"><span class="dot"></span>Older</span></td>
+                  <td><button class="btn btn-sm">Open</button></td>
+                </tr>
+                <tr>
+                  <td class="mono">v4</td>
+                  <td>2026-05-26 14:08</td>
+                  <td>This device</td>
+                  <td>furniture added</td>
+                  <td><span class="chip"><span class="dot"></span>Older</span></td>
+                  <td><button class="btn btn-sm">Open</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>01 — Sign in &amp; return</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">01 — Sign in &amp; return</h1>
+        <p class="mockup-subtitle">Google sign-in entry, returning user, signing in, sign-in failed, Firebase config missing.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P0 user core</span>
+    </header>
+
+    <div class="state-grid" style="grid-template-columns: 1fr 1fr; gap: var(--s-6);">
+
+      <!-- Idle / first time -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Idle — first-time visitor</h3><span class="state-label">A</span></div>
+        <div class="app-shell" style="min-height: 540px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="spacer"></div>
+            <a class="btn btn-ghost btn-sm" href="#">Help</a>
+          </div>
+          <div class="app-content" style="display:flex;align-items:center;justify-content:center;">
+            <div class="card" style="width:380px;">
+              <div class="card-body col-gap-4">
+                <div class="col-gap-2">
+                  <div style="font-size:20px;font-weight:600;">Plan your room from a photo</div>
+                  <div class="muted" style="font-size:13px;">Sign in with Google to upload a room photo, calibrate scale, and place furniture at real dimensions. Your projects are saved across devices.</div>
+                </div>
+                <button class="btn btn-primary btn-lg btn-block">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path fill="#fff" d="M21.6 12.227c0-.709-.064-1.39-.182-2.045H12v3.87h5.382a4.6 4.6 0 01-2 3.018v2.51h3.236c1.89-1.74 2.982-4.305 2.982-7.353z" opacity=".95"/></svg>
+                  Continue with Google
+                </button>
+                <div class="muted" style="font-size:11px;text-align:center;">By continuing you accept the terms and privacy notice.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Signing in -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Signing in</h3><span class="state-label">B</span></div>
+        <div class="app-shell" style="min-height: 540px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="spacer"></div>
+          </div>
+          <div class="app-content" style="display:flex;align-items:center;justify-content:center;">
+            <div class="card" style="width:380px;">
+              <div class="card-body col-gap-4">
+                <div class="col-gap-2">
+                  <div style="font-size:20px;font-weight:600;">Signing you in…</div>
+                  <div class="muted" style="font-size:13px;">Finishing Google sign-in and preparing your projects.</div>
+                </div>
+                <div class="progress"><span style="width:60%"></span></div>
+                <button class="btn btn-ghost btn-block" aria-disabled="true">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sign-in failed -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Sign-in failed</h3><span class="state-label">C</span></div>
+        <div class="app-shell" style="min-height: 540px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="spacer"></div>
+          </div>
+          <div class="app-content" style="display:flex;align-items:center;justify-content:center;">
+            <div class="card" style="width:420px;">
+              <div class="card-body col-gap-4">
+                <div class="banner error">
+                  <div class="b-icon">!</div>
+                  <div class="b-body">
+                    <h4 class="b-title">Could not sign you in</h4>
+                    <p class="b-text">Google sign-in was cancelled or your network is offline. Try again to continue to your projects.</p>
+                  </div>
+                </div>
+                <button class="btn btn-primary btn-lg btn-block">Try again</button>
+                <a class="btn btn-ghost btn-sm" href="#" style="align-self:center;">Use a different account</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Firebase config missing -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Firebase configuration missing</h3><span class="state-label">D</span><span class="state-block-note">developer-facing</span></div>
+        <div class="app-shell" style="min-height: 540px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="spacer"></div>
+          </div>
+          <div class="app-content" style="display:flex;align-items:center;justify-content:center;">
+            <div class="card" style="width:480px;">
+              <div class="card-body col-gap-4">
+                <div class="banner warning">
+                  <div class="b-icon">!</div>
+                  <div class="b-body">
+                    <h4 class="b-title">RoomForge cannot start</h4>
+                    <p class="b-text">Firebase configuration was not found at launch. Sign-in is unavailable until configuration is restored.</p>
+                  </div>
+                </div>
+                <div class="card" style="background: var(--surface-inset); box-shadow:none;">
+                  <div class="card-body mono" style="font-size:12px; color:var(--text-2);">
+                    missing: firebase-config.json<br/>
+                    expected: /assets/firebase-config.json<br/>
+                    contact: roomforge-support@example.com
+                  </div>
+                </div>
+                <div class="row-gap" style="justify-content:flex-end;">
+                  <button class="btn">Copy details</button>
+                  <button class="btn btn-primary">Reload app</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>08 — Geometry correction</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mockup">
+    <header class="mockup-header">
+      <div>
+        <a class="mockup-back" href="index.html">← All mockups</a>
+        <h1 class="mockup-title">08 — Geometry correction</h1>
+        <p class="mockup-subtitle">Corner drag, invalid polygon, correction tools.</p>
+      </div>
+      <span class="chip"><span class="dot"></span>P0 user core</span>
+    </header>
+
+    <div class="state-grid">
+
+      <!-- A: Dragging a corner -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Corner drag — preview of moved vertex</h3><span class="state-label">A</span></div>
+        <div class="app-shell" style="min-height: 640px;">
+          <div class="app-bar">
+            <div class="brand"><span class="brand-mark"></span>RoomForge</div>
+            <div class="crumbs"><a href="#">Studio bedroom</a><span class="sep">/</span><span class="current">Correct outline</span></div>
+            <div class="spacer"></div>
+            <span class="chip needs-review"><span class="dot"></span>Correcting</span>
+          </div>
+
+          <div class="app-body">
+            <main class="app-content no-pad" style="display:grid;grid-template-columns: 1fr 320px;">
+              <div style="padding: var(--s-5);">
+                <div class="canvas-stage" style="min-height: 520px;">
+                  <div style="position:absolute;inset:0;background:linear-gradient(135deg,#5B6675,#2D3340);"></div>
+                  <svg viewBox="0 0 900 520" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">
+                    <!-- Previous outline (ghost) -->
+                    <polygon points="140,440 760,460 700,140 220,150" fill="none" stroke="#94A3B8" stroke-width="1" stroke-dasharray="3 4" opacity="0.6"/>
+                    <!-- Current outline -->
+                    <polygon class="geo-confirmed" points="140,440 760,460 700,140 260,120" />
+                    <!-- Static handles -->
+                    <circle class="geo-handle" cx="140" cy="440" r="7"/>
+                    <circle class="geo-handle" cx="760" cy="460" r="7"/>
+                    <circle class="geo-handle" cx="700" cy="140" r="7"/>
+                    <!-- Active drag handle -->
+                    <g>
+                      <circle cx="260" cy="120" r="14" fill="rgba(14,165,233,0.18)" stroke="#0EA5E9"/>
+                      <circle cx="260" cy="120" r="7" fill="#0EA5E9" stroke="#fff" stroke-width="2"/>
+                    </g>
+                    <!-- Measurement readout near active corner -->
+                    <rect x="280" y="92" width="120" height="28" rx="6" fill="#18181B"/>
+                    <text x="290" y="111" fill="#fff" style="font: 600 12px var(--mono);">x 4.20 m · y 0.00 m</text>
+                  </svg>
+                  <div class="canvas-toolbar">
+                    <button class="btn-icon" title="Pan">✋</button>
+                    <button class="btn-icon active" title="Edit corners">◇</button>
+                    <button class="btn-icon" title="Add corner">＋</button>
+                    <button class="btn-icon" title="Remove corner">−</button>
+                    <button class="btn-icon" title="Snap to angles">∠</button>
+                    <button class="btn-icon" title="Reset to candidate">⟲</button>
+                  </div>
+                  <div class="canvas-caption">dragging corner 4 · hold ⇧ to snap to 90°</div>
+                </div>
+              </div>
+              <aside class="inspector" style="width:auto;">
+                <div class="inspector-header"><h3>Outline</h3><div class="sub">Confirmed geometry — drag corners to adjust.</div></div>
+                <div class="inspector-section">
+                  <div class="s-title">Tools</div>
+                  <div class="row-gap">
+                    <button class="btn btn-sm">Add corner</button>
+                    <button class="btn btn-sm">Remove corner</button>
+                  </div>
+                  <div class="row-gap">
+                    <button class="btn btn-sm">Snap 90°</button>
+                    <button class="btn btn-sm">Straighten edge</button>
+                  </div>
+                </div>
+                <div class="inspector-section">
+                  <div class="s-title">Corners (4)</div>
+                  <div class="kv">
+                    <div class="k">C1</div><div class="v mono">0.00, 0.00</div>
+                    <div class="k">C2</div><div class="v mono">4.20, 0.05</div>
+                    <div class="k">C3</div><div class="v mono">4.10, 3.80</div>
+                    <div class="k">C4</div><div class="v mono">0.00, 3.80</div>
+                  </div>
+                </div>
+                <div class="inspector-section">
+                  <div class="s-title">Confidence</div>
+                  <div class="row-gap"><span class="chip confirmed"><span class="dot"></span>Manually edited</span></div>
+                  <div class="muted" style="font-size:12px;">Once you confirm, scale calibration uses this outline.</div>
+                </div>
+              </aside>
+            </main>
+            <div class="status-strip">
+              <span class="chip unsaved"><span class="dot"></span>Unsaved changes</span>
+              <span class="muted mono" style="font-size:12px;">corner 4 moved · undo with ⌘Z</span>
+              <div class="spacer"></div>
+              <button class="btn">Reset to candidate</button>
+              <button class="btn btn-primary">Confirm outline</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- B: Invalid polygon -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Invalid polygon — self-intersecting</h3><span class="state-label">B</span></div>
+        <div class="card">
+          <div class="card-body" style="display:grid;grid-template-columns: 1fr 380px;gap:var(--s-5);">
+            <div class="canvas-stage" style="min-height: 320px;">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,#5B6675,#2D3340);"></div>
+              <svg viewBox="0 0 800 320" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">
+                <polygon points="120,260 660,250 200,90 600,80" fill="rgba(220,38,38,0.08)" stroke="#DC2626" stroke-width="2" stroke-dasharray="5 4"/>
+                <circle class="geo-handle" cx="120" cy="260" r="6" stroke="#DC2626"/>
+                <circle class="geo-handle" cx="660" cy="250" r="6" stroke="#DC2626"/>
+                <circle class="geo-handle" cx="200" cy="90" r="6" stroke="#DC2626"/>
+                <circle class="geo-handle" cx="600" cy="80" r="6" stroke="#DC2626"/>
+                <!-- intersection marker -->
+                <circle cx="400" cy="175" r="10" fill="#DC2626" opacity="0.2"/>
+                <text x="412" y="180" style="font: 600 11px var(--mono);" fill="#DC2626">edges cross</text>
+              </svg>
+              <div class="canvas-caption" style="color:var(--error);">invalid · edges cross between C2–C3 and C1–C4</div>
+            </div>
+            <div class="col-gap-4">
+              <div class="banner error">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <h4 class="b-title">This shape can't be a room</h4>
+                  <p class="b-text">Two walls cross each other. Move corner C3 outside the other edge, or undo your last change.</p>
+                  <div class="b-actions">
+                    <button class="btn btn-sm btn-primary">Undo last change</button>
+                    <button class="btn btn-sm">Reset corners</button>
+                  </div>
+                </div>
+              </div>
+              <div class="kv">
+                <div class="k">Corners</div><div class="v">4</div>
+                <div class="k">Self-intersects</div><div class="v" style="color:var(--error);">yes</div>
+                <div class="k">Continue</div><div class="v"><span class="chip failed"><span class="dot"></span>Blocked</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- C: Too few corners -->
+      <section class="state-block">
+        <div class="state-block-header"><h3>Invalid polygon — too few corners</h3><span class="state-label">C</span></div>
+        <div class="card">
+          <div class="card-body" style="display:grid;grid-template-columns: 1fr 380px;gap:var(--s-5);">
+            <div class="canvas-stage" style="min-height: 280px;">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,#5B6675,#2D3340);"></div>
+              <svg viewBox="0 0 800 280" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">
+                <polyline points="140,210 660,220 500,80" fill="none" stroke="#7C3AED" stroke-width="2" stroke-dasharray="5 4"/>
+                <circle class="geo-handle candidate" cx="140" cy="210" r="6"/>
+                <circle class="geo-handle candidate" cx="660" cy="220" r="6"/>
+                <circle class="geo-handle candidate" cx="500" cy="80" r="6"/>
+              </svg>
+              <div class="canvas-caption">3 corners placed · need at least 4</div>
+            </div>
+            <div class="col-gap-4">
+              <div class="banner warning">
+                <div class="b-icon">!</div>
+                <div class="b-body">
+                  <h4 class="b-title">Add at least one more corner</h4>
+                  <p class="b-text">A room outline needs four or more corners. Click on the floor edge to add the next one.</p>
+                </div>
+              </div>
+              <div class="row-gap">
+                <button class="btn btn-primary btn-sm">Add corner</button>
+                <button class="btn btn-sm">Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

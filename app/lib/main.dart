@@ -3665,41 +3665,193 @@ class ReconstructionJobSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final statusColor = job == null
+        ? _roomForgeMuted
+        : _reconstructionStatusColor(job!.status);
+    final hasProblem =
+        job?.status == 'review_required' ||
+        job?.status == 'failed' ||
+        job?.status == 'timeout';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Reconstruction job', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text(message ?? 'Submit after source image and dimensions are saved.'),
+        const RoomForgeSectionHeader(
+          icon: Icons.auto_fix_high_outlined,
+          title: 'Reconstruction status',
+          description:
+              'Submit the uploaded photo for OpenCV-assisted outline detection, then review the result before planning.',
+        ),
+        const SizedBox(height: 12),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.06),
+            border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  job == null
+                      ? Icons.pending_actions_outlined
+                      : _reconstructionStatusIcon(job!.status),
+                  color: statusColor,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        job?.statusLabel ?? 'Ready after setup',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: _roomForgeInk,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        message ??
+                            'Submit after source image and dimensions are saved.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _roomForgeMuted,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                RoomForgeStatusPill(
+                  label: job?.statusLabel ?? 'Not submitted',
+                  icon: job == null
+                      ? Icons.schedule_outlined
+                      : _reconstructionStatusIcon(job!.status),
+                  color: statusColor,
+                  dense: true,
+                ),
+              ],
+            ),
+          ),
+        ),
         if (job != null) ...[
-          const SizedBox(height: 8),
-          Text('Status: ${job!.statusLabel}'),
-          Text('Provider: ${job!.provider}'),
-          if (job!.status == 'review_required' || job!.status == 'failed') ...[
-            const SizedBox(height: 8),
-            Text(
-              job!.failureReasonMessage ??
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              RoomForgeStatusPill(
+                icon: Icons.memory_outlined,
+                label: 'Provider ${job!.provider}',
+                color: _roomForgeMuted,
+              ),
+              RoomForgeStatusPill(
+                icon: Icons.update_outlined,
+                label: 'Updated ${_compactDateLabel(job!.updatedAt)}',
+                color: _roomForgeMuted,
+              ),
+              if (job!.retryOfJobId != null)
+                RoomForgeStatusPill(
+                  icon: Icons.replay_outlined,
+                  label: 'Retry of ${job!.retryOfJobId}',
+                  color: _roomForgeWarning,
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _reconstructionStatusGuidance(job!.status),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: _roomForgeMuted,
+              height: 1.35,
+            ),
+          ),
+          if (hasProblem) ...[
+            const SizedBox(height: 12),
+            RoomForgeNotice(
+              title: job!.status == 'review_required'
+                  ? 'Needs review'
+                  : 'Reconstruction needs attention',
+              message:
+                  job!.failureReasonMessage ??
                   'Check blur, lighting, hidden boundaries, occlusion, distortion, unsupported image, OpenCV failure, invalid geometry, or calibration failure.',
-              style: TextStyle(color: theme.colorScheme.error),
+              severity: job!.status == 'review_required'
+                  ? NoticeSeverity.warning
+                  : NoticeSeverity.error,
+              icon: job!.status == 'review_required'
+                  ? Icons.rate_review_outlined
+                  : Icons.error_outline,
             ),
           ],
         ],
         const SizedBox(height: 12),
-        FilledButton(
+        FilledButton.icon(
           onPressed: isSubmitting ? null : onSubmit,
-          child: Text(isSubmitting ? 'Submitting...' : 'Submit reconstruction'),
+          icon: isSubmitting
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_arrow_outlined),
+          label: Text(isSubmitting ? 'Submitting...' : 'Submit reconstruction'),
         ),
         if (job != null &&
             (job!.terminal || job!.status == 'review_required')) ...[
           const SizedBox(height: 8),
-          OutlinedButton(
+          OutlinedButton.icon(
             onPressed: isSubmitting ? null : onRetry,
-            child: const Text('Retry reconstruction'),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry reconstruction'),
           ),
         ],
       ],
     );
+  }
+
+  Color _reconstructionStatusColor(String status) {
+    return switch (status) {
+      'succeeded' => _roomForgeSuccess,
+      'review_required' => _roomForgeWarning,
+      'failed' || 'timeout' || 'cancelled' => _roomForgeError,
+      'processing' || 'uploading' || 'retrying' => _roomForgePrimary,
+      _ => _roomForgeMuted,
+    };
+  }
+
+  IconData _reconstructionStatusIcon(String status) {
+    return switch (status) {
+      'succeeded' => Icons.check_circle_outline,
+      'review_required' => Icons.rate_review_outlined,
+      'failed' => Icons.error_outline,
+      'timeout' => Icons.timer_off_outlined,
+      'cancelled' => Icons.cancel_outlined,
+      'processing' => Icons.hourglass_top_outlined,
+      'uploading' => Icons.cloud_upload_outlined,
+      'retrying' => Icons.refresh,
+      _ => Icons.pending_actions_outlined,
+    };
+  }
+
+  String _reconstructionStatusGuidance(String status) {
+    return switch (status) {
+      'created' => 'The job record exists and is waiting for processing.',
+      'uploading' =>
+        'Source artifacts are still being prepared before OpenCV processing.',
+      'processing' => 'OpenCV is extracting candidate room geometry.',
+      'review_required' =>
+        'Open the editor, compare candidate and confirmed geometry, and correct the outline if needed.',
+      'succeeded' =>
+        'A metric floor plan can be reviewed and used in the planning editor.',
+      'failed' =>
+        'Retry with a clearer photo or inspect the failure reason before continuing.',
+      'timeout' => 'Retry is available after the previous job exceeded time.',
+      'cancelled' => 'Submit a new reconstruction when ready.',
+      'retrying' => 'A linked retry job is being prepared.',
+      _ => 'Review the latest reconstruction state before opening the editor.',
+    };
   }
 }
 

@@ -2148,11 +2148,25 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       return;
     }
 
-    await widget.projectApi.deleteProject(project.id);
-    setState(() {
-      _selectedProject = null;
-    });
-    _reload();
+    try {
+      await widget.projectApi.deleteProject(project.id);
+      setState(() {
+        _selectedProject = null;
+        _workspaceMessage = 'Deleted "${project.name}".';
+        _workspaceSeverity = NoticeSeverity.success;
+      });
+      _reload();
+    } on ProjectApiException catch (error) {
+      setState(() {
+        _workspaceMessage = 'Delete failed: ${error.message}';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    } catch (error) {
+      setState(() {
+        _workspaceMessage = 'Delete failed: $error';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    }
   }
 
   @override
@@ -2981,30 +2995,89 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   Widget build(BuildContext context) {
     final project = widget.project;
     if (project == null) {
-      return const DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
-        ),
-        child: Center(child: Text('Select a project to view details.')),
+      return const RoomForgeEmptyState(
+        icon: Icons.dashboard_customize_outlined,
+        title: 'Select a project',
+        message:
+            'Project details, upload state, room dimensions, reconstruction status, and editor entry appear here.',
       );
     }
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
+    final theme = Theme.of(context);
+    final description = project.description?.trim();
+
+    return RoomForgePanel(
+      padding: EdgeInsets.zero,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(project.name, style: Theme.of(context).textTheme.titleLarge),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          project.name,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: _roomForgeInk,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          description?.isNotEmpty == true
+                              ? description!
+                              : 'No description',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _roomForgeMuted,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const RoomForgeStatusPill(
+                    label: 'Selected',
+                    icon: Icons.check_circle_outline,
+                    dense: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  SizedBox(
+                    width: 160,
+                    child: RoomForgeMetricTile(
+                      icon: Icons.schedule_outlined,
+                      label: 'Updated',
+                      value: _compactDateLabel(project.updatedAt),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 160,
+                    child: RoomForgeMetricTile(
+                      icon: Icons.event_available_outlined,
+                      label: 'Created',
+                      value: _compactDateLabel(project.createdAt),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               Text(
-                project.description?.isNotEmpty == true
-                    ? project.description!
-                    : 'No description',
+                'Project ID: ${project.id}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: _roomForgeMuted,
+                ),
               ),
               const SizedBox(height: 20),
               PhotoIntakeSection(
@@ -3039,12 +3112,22 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 onPressed: _openReconstruction,
                 child: const Text('Open planning editor'),
               ),
-              const SizedBox(height: 8),
-              FilledButton(onPressed: widget.onEdit, child: const Text('Edit')),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: widget.onDelete,
-                child: const Text('Delete'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: widget.onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit project'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: widget.onDelete,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete'),
+                  ),
+                ],
               ),
             ],
           ),

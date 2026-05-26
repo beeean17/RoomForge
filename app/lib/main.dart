@@ -831,7 +831,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RoomForge Workspace'),
+        title: const Text('RoomForge'),
         actions: [
           AdminRouteGuardButton(
             session: session,
@@ -2124,100 +2124,314 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Signed in as ${widget.displayName}',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Text(
-                    'Projects',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: _createProject,
-                    child: const Text('Create project'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: Row(
+    final header = _WorkspaceHeader(
+      displayName: widget.displayName,
+      onCreateProject: _createProject,
+    );
+    final projectList = _ProjectListPanel(
+      projectsFuture: _projectsFuture,
+      selectedProjectId: _selectedProject?.id,
+      onOpenProject: _openProject,
+      onCreateProject: _createProject,
+      onRetry: _reload,
+    );
+    final detail = ProjectDetailPanel(
+      project: _selectedProject,
+      projectApi: widget.projectApi,
+      onEdit: _editSelectedProject,
+      onDelete: _deleteSelectedProject,
+    );
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 820;
+                if (compact) {
+                  return SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        header,
+                        const SizedBox(height: 16),
+                        SizedBox(height: 420, child: projectList),
+                        const SizedBox(height: 16),
+                        detail,
+                      ],
+                    ),
+                  );
+                }
+
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    header,
+                    const SizedBox(height: 16),
                     Expanded(
-                      flex: 3,
-                      child: FutureBuilder<List<RoomProject>>(
-                        future: _projectsFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          }
-                          if (snapshot.hasError) {
-                            return ProjectErrorView(
-                              message: snapshot.error.toString(),
-                              onRetry: _reload,
-                            );
-                          }
-
-                          final projects =
-                              snapshot.data ?? const <RoomProject>[];
-                          if (projects.isEmpty) {
-                            return const Center(
-                              child: Text(
-                                'No room projects yet. Create your first project.',
-                              ),
-                            );
-                          }
-
-                          return ListView.separated(
-                            itemCount: projects.length,
-                            separatorBuilder: (context, index) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final project = projects[index];
-                              final isSelected =
-                                  _selectedProject?.id == project.id;
-                              return ListTile(
-                                selected: isSelected,
-                                title: Text(project.name),
-                                subtitle: Text(
-                                  project.description?.isNotEmpty == true
-                                      ? project.description!
-                                      : 'No description',
-                                ),
-                                onTap: () => _openProject(project),
-                              );
-                            },
-                          );
-                        },
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 5, child: projectList),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 4, child: detail),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      flex: 2,
-                      child: ProjectDetailPanel(
-                        project: _selectedProject,
-                        projectApi: widget.projectApi,
-                        onEdit: _editSelectedProject,
-                        onDelete: _deleteSelectedProject,
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceHeader extends StatelessWidget {
+  const _WorkspaceHeader({
+    required this.displayName,
+    required this.onCreateProject,
+  });
+
+  final String displayName;
+  final VoidCallback onCreateProject;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Project workspace',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: _roomForgeInk,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Signed in as $displayName',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _roomForgeMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        FilledButton.icon(
+          onPressed: onCreateProject,
+          icon: const Icon(Icons.add),
+          label: const Text('Create project'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProjectListPanel extends StatelessWidget {
+  const _ProjectListPanel({
+    required this.projectsFuture,
+    required this.selectedProjectId,
+    required this.onOpenProject,
+    required this.onCreateProject,
+    required this.onRetry,
+  });
+
+  final Future<List<RoomProject>> projectsFuture;
+  final String? selectedProjectId;
+  final ValueChanged<RoomProject> onOpenProject;
+  final VoidCallback onCreateProject;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return RoomForgePanel(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Text(
+                  'Rooms',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                const RoomForgeStatusPill(
+                  label: 'Cloud saved',
+                  icon: Icons.cloud_done_outlined,
+                  dense: true,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: FutureBuilder<List<RoomProject>>(
+              future: projectsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const _ProjectListLoadingState();
+                }
+                if (snapshot.hasError) {
+                  return ProjectErrorView(
+                    message: snapshot.error.toString(),
+                    onRetry: onRetry,
+                  );
+                }
+
+                final projects = snapshot.data ?? const <RoomProject>[];
+                if (projects.isEmpty) {
+                  return RoomForgeEmptyState(
+                    icon: Icons.add_home_work_outlined,
+                    title: 'No room projects yet',
+                    message:
+                        'Start from a room photo, then add dimensions, reconstruction review, and layout saves.',
+                    action: FilledButton.icon(
+                      onPressed: onCreateProject,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create first project'),
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: projects.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final project = projects[index];
+                    final isSelected = selectedProjectId == project.id;
+                    return _ProjectListTile(
+                      project: project,
+                      selected: isSelected,
+                      onTap: () => onOpenProject(project),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectListLoadingState extends StatelessWidget {
+  const _ProjectListLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LinearProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Loading saved room projects...'),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectListTile extends StatelessWidget {
+  const _ProjectListTile({
+    required this.project,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final RoomProject project;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final description = project.description?.trim();
+
+    return Material(
+      color: selected
+          ? _roomForgePrimary.withValues(alpha: 0.08)
+          : _roomForgePanel,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: selected ? _roomForgePrimary : _roomForgeBorder,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.meeting_room_outlined,
+                color: selected ? _roomForgePrimary : _roomForgeMuted,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      project.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description?.isNotEmpty == true
+                          ? description!
+                          : 'No description',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _roomForgeMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Updated ${_compactDateLabel(project.updatedAt)}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: _roomForgeMuted,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                selected ? Icons.check_circle : Icons.chevron_right,
+                color: selected ? _roomForgePrimary : _roomForgeMuted,
               ),
             ],
           ),
@@ -4140,6 +4354,15 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       ..['project_id'] = project.id.toString();
     return uri.replace(queryParameters: queryParameters).toString();
   }
+}
+
+String _compactDateLabel(DateTime value) {
+  final local = value.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$month/$day $hour:$minute';
 }
 
 class ProjectErrorView extends StatelessWidget {

@@ -1064,88 +1064,136 @@ class _FirebaseAdminDiagnosticsScreenState
         widget.session.displayName ??
         widget.session.email ??
         widget.session.uid;
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Firebase Admin Diagnostics')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 960),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Signed in as $displayName',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<FirebaseJobStatus>(
-                  value: _statusFilter,
-                  decoration: const InputDecoration(
-                    labelText: 'Job status',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    for (final status in FirebaseJobStatus.values)
-                      DropdownMenuItem(
-                        value: status,
-                        child: Text(_adminStatusLabel(status.wireValue)),
-                      ),
-                  ],
-                  onChanged: _setStatusFilter,
-                ),
-                const SizedBox(height: 24),
-                StreamBuilder<List<FirebaseReconstructionJob>>(
-                  stream: _jobsStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const LinearProgressIndicator();
-                    }
-                    if (snapshot.hasError) {
-                      return Text(
-                        firebaseAdminSafeErrorMessage(snapshot.error!),
-                      );
-                    }
-                    final jobs = snapshot.data ?? const [];
-                    final jobList = _FirebaseAdminJobList(
-                      jobs: jobs,
-                      selectedJobId: _selectedJob?.jobId,
-                      onSelect: (job) {
-                        setState(() => _selectedJob = job);
-                      },
-                    );
-                    final detail = _selectedJob == null
-                        ? const _FirebaseAdminEmptyDetail()
-                        : _FirebaseAdminJobDetailPanel(
-                            job: _selectedJob!,
-                            adminRepository: widget.adminRepository,
-                            session: widget.session,
-                          );
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxWidth < 720) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              jobList,
-                              const SizedBox(height: 16),
-                              detail,
-                            ],
-                          );
-                        }
-                        return Row(
+      appBar: AppBar(title: const Text('Admin diagnostics')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1180),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(flex: 2, child: jobList),
-                            const SizedBox(width: 16),
-                            Expanded(flex: 3, child: detail),
+                            Text(
+                              'Firebase operations',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                color: _roomForgeInk,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Signed in as $displayName',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: _roomForgeMuted,
+                              ),
+                            ),
                           ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const RoomForgeStatusPill(
+                        icon: Icons.admin_panel_settings_outlined,
+                        label: 'Admin access',
+                        color: _roomForgeMuted,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  RoomForgePanel(
+                    padding: const EdgeInsets.all(14),
+                    child: DropdownButtonFormField<FirebaseJobStatus>(
+                      value: _statusFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Job status',
+                        prefixIcon: Icon(Icons.filter_alt_outlined),
+                      ),
+                      items: [
+                        for (final status in FirebaseJobStatus.values)
+                          DropdownMenuItem(
+                            value: status,
+                            child: Text(_adminStatusLabel(status.wireValue)),
+                          ),
+                      ],
+                      onChanged: _setStatusFilter,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  StreamBuilder<List<FirebaseReconstructionJob>>(
+                    stream: _jobsStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const RoomForgePanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              LinearProgressIndicator(),
+                              SizedBox(height: 12),
+                              Text('Loading protected job diagnostics...'),
+                            ],
+                          ),
                         );
-                      },
-                    );
-                  },
-                ),
-              ],
+                      }
+                      if (snapshot.hasError) {
+                        return RoomForgeNotice(
+                          title: 'Admin query failed',
+                          message: firebaseAdminSafeErrorMessage(
+                            snapshot.error!,
+                          ),
+                          severity: NoticeSeverity.error,
+                          icon: Icons.lock_outline,
+                        );
+                      }
+                      final jobs = snapshot.data ?? const [];
+                      final jobList = _FirebaseAdminJobList(
+                        jobs: jobs,
+                        selectedJobId: _selectedJob?.jobId,
+                        onSelect: (job) {
+                          setState(() => _selectedJob = job);
+                        },
+                      );
+                      final detail = _selectedJob == null
+                          ? const _FirebaseAdminEmptyDetail()
+                          : _FirebaseAdminJobDetailPanel(
+                              job: _selectedJob!,
+                              adminRepository: widget.adminRepository,
+                              session: widget.session,
+                            );
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth < 760) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                jobList,
+                                const SizedBox(height: 16),
+                                detail,
+                              ],
+                            );
+                          }
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 2, child: jobList),
+                              const SizedBox(width: 16),
+                              Expanded(flex: 3, child: detail),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1168,35 +1216,44 @@ class _FirebaseAdminJobList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (jobs.isEmpty) {
-      return const DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('No Firebase jobs match this status.'),
-        ),
+      return const RoomForgeEmptyState(
+        icon: Icons.search_off_outlined,
+        title: 'No matching Firebase jobs',
+        message:
+            'Change the status filter or wait for a reconstruction job to reach this state.',
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Jobs', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        for (final job in jobs)
-          Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
+    final theme = Theme.of(context);
+    return RoomForgePanel(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Jobs',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          for (final job in jobs)
+            ListTile(
               selected: job.jobId == selectedJobId,
               onTap: () => onSelect(job),
               title: Text('Job ${job.jobId}'),
-              subtitle: Text(
-                'Owner ${job.ownerUid} | Project ${job.projectId}',
+              subtitle: Text('Owner ${job.ownerUid}\nProject ${job.projectId}'),
+              isThreeLine: true,
+              trailing: RoomForgeStatusPill(
+                label: _adminStatusLabel(job.status.wireValue),
+                color: _adminStatusColor(job.status.wireValue),
+                dense: true,
               ),
-              trailing: Text(_adminStatusLabel(job.status.wireValue)),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1206,14 +1263,11 @@ class _FirebaseAdminEmptyDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('Select a job to inspect diagnostics.'),
-      ),
+    return const RoomForgeEmptyState(
+      icon: Icons.manage_search_outlined,
+      title: 'Select a job',
+      message:
+          'Job metadata, status history, artifacts, OpenCV results, layout references, and retry actions appear here.',
     );
   }
 }
@@ -1237,7 +1291,22 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
         _FirebaseAdminSection(
           title: 'Job detail',
           children: [
-            Text('Status: ${_adminStatusLabel(job.status.wireValue)}'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                RoomForgeStatusPill(
+                  label: _adminStatusLabel(job.status.wireValue),
+                  color: _adminStatusColor(job.status.wireValue),
+                ),
+                RoomForgeStatusPill(
+                  label: 'Retry ${job.retryCount}',
+                  icon: Icons.refresh,
+                  color: _roomForgeMuted,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Text('Owner: ${job.ownerUid}'),
             Text('Project: ${job.projectId}'),
             Text('Job: ${job.jobId}'),
@@ -1295,16 +1364,20 @@ class _FirebaseAdminSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
-      ),
+    final theme = Theme.of(context);
+    return RoomForgePanel(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: _roomForgeInk,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
             ...children,
           ],
@@ -2063,6 +2136,16 @@ String _adminStatusLabel(String status) {
     return 'Needs review';
   }
   return status;
+}
+
+Color _adminStatusColor(String status) {
+  return switch (status) {
+    'succeeded' => _roomForgeSuccess,
+    'review_required' => _roomForgeWarning,
+    'failed' || 'timeout' || 'cancelled' => _roomForgeError,
+    'processing' || 'uploading' || 'retrying' => _roomForgePrimary,
+    _ => _roomForgeMuted,
+  };
 }
 
 class ProjectWorkspaceBody extends StatefulWidget {

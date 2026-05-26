@@ -1007,9 +1007,15 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
+    return TextButton.icon(
       onPressed: _isChecking ? null : _openAdmin,
-      child: Text(_isChecking ? 'Checking admin role...' : 'Admin'),
+      icon: _isChecking
+          ? const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.admin_panel_settings_outlined),
+      label: Text(_isChecking ? 'Checking role...' : 'Admin'),
     );
   }
 }

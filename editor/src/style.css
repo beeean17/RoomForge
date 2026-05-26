@@ -279,7 +279,7 @@ dd {
 
 .furniture-controls {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -290,7 +290,13 @@ dd {
 }
 
 .furniture-edit-controls button[data-furniture-edit='delete'] {
-  grid-column: 1 / -1;
+  border-color: rgba(220, 38, 38, 0.42);
+  color: #991b1b;
+}
+
+.furniture-edit-controls button[data-furniture-edit='toggle-lock'],
+.furniture-edit-controls button[data-furniture-edit='delete'] {
+  grid-column: span 1;
 }
 
 .furniture-edit-controls button:disabled {
@@ -384,6 +390,10 @@ button:focus-visible {
     bottom: 12px;
     left: 12px;
     max-width: none;
+  }
+
+  .furniture-controls {
+    grid-template-columns: 1fr;
   }
 }
 

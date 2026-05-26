@@ -24,6 +24,7 @@ export type FurnitureObject = {
   }
   rotationDegrees: number
   color: string
+  locked?: boolean
 }
 
 export type SpatialSelection = {
@@ -221,6 +222,7 @@ function furnitureValue(value: unknown): FurnitureObject | null {
     },
     rotationDegrees: numberValue(record.rotationDegrees, 0),
     color: stringValue(record.color, '#64748b'),
+    locked: booleanValue(record.locked, false),
   }
 }
 

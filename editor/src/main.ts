@@ -130,33 +130,62 @@ app.innerHTML = `
       <p class="helper-text" id="scale-status">Use the longest trusted wall to anchor image pixels into meters.</p>
       <button id="generate-floor-plan" type="button">Generate floor plan</button>
     </section>
-    <div class="furniture-controls" aria-label="Furniture catalog">
-      <button type="button" data-furniture-category="chair">Add chair</button>
-      <button type="button" data-furniture-category="table">Add table</button>
-      <button type="button" data-furniture-category="sofa">Add sofa</button>
-    </div>
-    <div class="furniture-edit-controls" aria-label="Selected furniture editing controls">
-      <button type="button" data-furniture-edit="move-up">Move up</button>
-      <button type="button" data-furniture-edit="move-down">Move down</button>
-      <button type="button" data-furniture-edit="move-left">Move left</button>
-      <button type="button" data-furniture-edit="move-right">Move right</button>
-      <button type="button" data-furniture-edit="rotate-left">Rotate -15</button>
-      <button type="button" data-furniture-edit="rotate-right">Rotate +15</button>
-      <button type="button" data-furniture-edit="narrower">Narrower</button>
-      <button type="button" data-furniture-edit="wider">Wider</button>
-      <button type="button" data-furniture-edit="shallower">Shallower</button>
-      <button type="button" data-furniture-edit="deeper">Deeper</button>
-      <button type="button" data-furniture-edit="delete">Delete</button>
-    </div>
-    <div class="camera-controls" aria-label="3D camera controls">
-      <button type="button" data-camera-action="reset">Reset</button>
-      <button type="button" data-camera-action="fit">Fit</button>
-      <button type="button" data-camera-action="top">Top</button>
-      <button type="button" data-camera-action="front">Front</button>
-      <button type="button" data-camera-action="corner">Corner</button>
-      <button type="button" data-camera-action="eye">Eye-level</button>
-    </div>
-    <p class="camera-status" id="camera-status">Camera ready</p>
+    <section class="panel-section" aria-labelledby="furniture-catalog-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">Furniture</p>
+          <h2 id="furniture-catalog-title">Add preset object</h2>
+        </div>
+        <span class="state-pill" id="furniture-count">0 objects</span>
+      </div>
+      <p class="helper-text" id="furniture-catalog-status">Choose a preset to place it inside the measured room.</p>
+      <div class="furniture-controls" aria-label="Furniture catalog">
+        <button type="button" data-furniture-category="chair">Add chair</button>
+        <button type="button" data-furniture-category="table">Add table</button>
+        <button type="button" data-furniture-category="sofa">Add sofa</button>
+      </div>
+    </section>
+    <section class="panel-section" aria-labelledby="selection-inspector-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">Inspector</p>
+          <h2 id="selection-inspector-title">Selected object</h2>
+        </div>
+        <span class="state-pill" id="selection-state">Room</span>
+      </div>
+      <div class="furniture-edit-controls" aria-label="Selected furniture editing controls">
+        <button type="button" data-furniture-edit="move-up">Move up</button>
+        <button type="button" data-furniture-edit="move-down">Move down</button>
+        <button type="button" data-furniture-edit="move-left">Move left</button>
+        <button type="button" data-furniture-edit="move-right">Move right</button>
+        <button type="button" data-furniture-edit="rotate-left">Rotate -15</button>
+        <button type="button" data-furniture-edit="rotate-right">Rotate +15</button>
+        <button type="button" data-furniture-edit="narrower">Narrower</button>
+        <button type="button" data-furniture-edit="wider">Wider</button>
+        <button type="button" data-furniture-edit="shallower">Shallower</button>
+        <button type="button" data-furniture-edit="deeper">Deeper</button>
+        <button type="button" data-furniture-edit="toggle-lock">Lock object</button>
+        <button type="button" data-furniture-edit="delete">Delete</button>
+      </div>
+    </section>
+    <section class="panel-section" aria-labelledby="camera-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">View</p>
+          <h2 id="camera-title">3D camera</h2>
+        </div>
+        <span class="state-pill">Presets</span>
+      </div>
+      <div class="camera-controls" aria-label="3D camera controls">
+        <button type="button" data-camera-action="reset">Reset</button>
+        <button type="button" data-camera-action="fit">Fit</button>
+        <button type="button" data-camera-action="top">Top</button>
+        <button type="button" data-camera-action="front">Front</button>
+        <button type="button" data-camera-action="corner">Corner</button>
+        <button type="button" data-camera-action="eye">Eye-level</button>
+      </div>
+      <p class="camera-status" id="camera-status">Camera ready</p>
+    </section>
   </aside>
 </section>
 `
@@ -177,6 +206,9 @@ const candidateCount = document.querySelector<HTMLElement>('#candidate-count')
 const candidateConfidence = document.querySelector<HTMLElement>('#candidate-confidence')
 const knownWallLengthInput = document.querySelector<HTMLInputElement>('#known-wall-length')
 const scaleStatus = document.querySelector<HTMLElement>('#scale-status')
+const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
+const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-catalog-status')
+const selectionState = document.querySelector<HTMLElement>('#selection-state')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
 const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
 const cameraActionButtons = Array.from(
@@ -206,6 +238,9 @@ if (
   !candidateConfidence ||
   !knownWallLengthInput ||
   !scaleStatus ||
+  !furnitureCount ||
+  !furnitureCatalogStatus ||
+  !selectionState ||
   !view2dButton ||
   !view3dButton ||
   cameraActionButtons.length === 0 ||
@@ -231,6 +266,9 @@ const candidateCountElement = candidateCount
 const candidateConfidenceElement = candidateConfidence
 const knownWallLengthInputElement = knownWallLengthInput
 const scaleStatusElement = scaleStatus
+const furnitureCountElement = furnitureCount
+const furnitureCatalogStatusElement = furnitureCatalogStatus
+const selectionStateElement = selectionState
 const view2dButtonElement = view2dButton
 const view3dButtonElement = view3dButton
 
@@ -347,6 +385,7 @@ type FurnitureEditAction =
   | 'wider'
   | 'shallower'
   | 'deeper'
+  | 'toggle-lock'
   | 'delete'
 
 type CameraSnapshot = {
@@ -913,8 +952,27 @@ function updateSpatialStatus(): void {
   view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
   view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
+  const selected = selectedFurniture()
+  furnitureCountElement.textContent = `${spatialModel.furniture.length} ${
+    spatialModel.furniture.length === 1 ? 'object' : 'objects'
+  }`
+  furnitureCatalogStatusElement.textContent =
+    spatialModel.furniture.length === 0
+      ? 'Catalog presets are available. Add one to start layout planning.'
+      : 'Select an object in the viewport or add another preset.'
+  selectionStateElement.textContent = selected
+    ? selected.locked
+      ? 'Locked'
+      : 'Selected'
+    : 'Room'
   for (const button of furnitureEditButtons) {
-    button.disabled = !furnitureSelected
+    const action = button.dataset.furnitureEdit
+    const locked = selected?.locked === true
+    button.disabled =
+      !furnitureSelected || (locked && action !== 'toggle-lock' && action !== 'delete')
+    if (action === 'toggle-lock') {
+      button.textContent = locked ? 'Unlock object' : 'Lock object'
+    }
   }
 }
 
@@ -974,6 +1032,27 @@ function selectFurniture(objectId: unknown): void {
 function editSelectedFurniture(action: FurnitureEditAction): void {
   const selected = selectedFurniture()
   if (!selected) {
+    return
+  }
+  if (action === 'toggle-lock') {
+    spatialModel = {
+      ...spatialModel,
+      hasUnsavedChanges: true,
+      furniture: spatialModel.furniture.map((item) =>
+        item.objectId === selected.objectId ? { ...item, locked: !item.locked } : item,
+      ),
+    }
+    geometryStatusElement.textContent = `${selected.label} ${
+      selected.locked ? 'unlocked' : 'locked'
+    }.`
+    rebuildFurniture()
+    updateSpatialStatus()
+    emitSceneState('roomforge.scene.updated')
+    return
+  }
+  if (selected.locked) {
+    geometryStatusElement.textContent = `${selected.label} is locked. Unlock it before editing.`
+    updateSpatialStatus()
     return
   }
   if (action === 'delete') {
@@ -1084,6 +1163,7 @@ function furnitureDefaults(category: FurnitureCategory): FurnitureObject {
     },
     rotationDegrees: 0,
     color: base.color,
+    locked: false,
   }
 }
 
@@ -1359,11 +1439,12 @@ function inspectorSummary(model: SpatialModel): string {
   if (model.selected?.objectType === 'furniture') {
     const item = model.furniture.find((candidate) => candidate.objectId === model.selected?.objectId)
     if (item) {
+      const locked = item.locked ? '; locked' : ''
       return `${item.label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
         2,
       )} m x ${item.size.heightMeters.toFixed(2)} m; position ${item.position.x.toFixed(
         2,
-      )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg`
+      )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg${locked}`
     }
   }
   const selected = model.selected?.objectId ?? 'none'
@@ -1420,6 +1501,7 @@ function isFurnitureEditAction(value: string | undefined): value is FurnitureEdi
     value === 'wider' ||
     value === 'shallower' ||
     value === 'deeper' ||
+    value === 'toggle-lock' ||
     value === 'delete'
   )
 }

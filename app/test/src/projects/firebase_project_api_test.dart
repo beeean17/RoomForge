@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -441,6 +442,272 @@ void main() {
       expect(floorPlans.floorPlans, contains(saved.floorPlanId));
       expect(reloaded?.floorPlanId, saved.floorPlanId);
       expect(reloaded?.artifactRefs.single.contentType.wireValue, 'image/png');
+    },
+  );
+
+  test(
+    'FirebaseProjectApi uploads generated floor plan artifacts and persists refs',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final floorPlans = _FakeFloorPlanRepository();
+      final dimensions = _FakeRoomDimensionsRepository();
+      final uploader = _FakeSourceImageUploader();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: floorPlans,
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: uploader,
+      );
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+
+      final ref = await api.persistFloorPlanResult(
+        projectId: 'project-1',
+        jobId: 'job-1',
+        sourceImageId: 'source-1',
+        confirmedGeometryId: 'geometry-1',
+        referenceLine: const {'fromIndex': 0, 'toIndex': 1},
+        referenceLengthValue: 4.2,
+        imageGeometry: const {
+          'coordinateSpace': 'image_pixels',
+          'points': [
+            {'x': 0, 'y': 0},
+            {'x': 100, 'y': 0},
+            {'x': 100, 'y': 80},
+            {'x': 0, 'y': 80},
+          ],
+        },
+        metricGeometry: const {
+          'coordinateSpace': 'meters',
+          'points': [
+            {'x': 0, 'y': 0},
+            {'x': 4.2, 'y': 0},
+            {'x': 4.2, 'y': 3.6},
+            {'x': 0, 'y': 3.6},
+          ],
+        },
+        perspectiveAssumptions: const {'mode': 'orthographic_floor_projection'},
+        qualityStatus: 'review_required',
+      );
+
+      final saved = floorPlans.floorPlans[ref.id]!;
+      expect(saved.coordinateSpace, FirebaseCoordinateSpace.meters);
+      expect(saved.qualityStatus.displayLabel, 'Needs review');
+      expect(saved.artifactRefs, hasLength(2));
+      expect(
+        saved.artifactRefs.map((artifact) => artifact.artifactType),
+        containsAll(['calibration_json', 'floor_plan_debug_json']),
+      );
+      expect(uploader.uploads, hasLength(2));
+      for (final artifact in saved.artifactRefs) {
+        final upload = uploader.uploads.singleWhere(
+          (upload) => upload.metadata['artifact_id'] == artifact.artifactId,
+        );
+        expect(
+          artifact.storagePath,
+          startsWith(
+            'users/user-1/projects/project-1/artifacts/job-1/${artifact.artifactId}/',
+          ),
+        );
+        expect(upload.storagePath, artifact.storagePath);
+        expect(upload.contentType, 'application/json');
+        expect(upload.metadata, containsPair('owner_uid', 'user-1'));
+        expect(upload.metadata, containsPair('project_id', 'project-1'));
+        expect(upload.metadata, containsPair('job_id', 'job-1'));
+        expect(upload.metadata, containsPair('uploaded_by_uid', 'user-1'));
+        expect(artifact.byteSize, upload.bytes.length);
+        expect(
+          artifact.sha256Hex,
+          FirebaseSourceImageUpload.sha256Hex(upload.bytes),
+        );
+        expect(artifact.createdAt, isNotNull);
+      }
+      expect(
+        saved.calibration['reference_line'],
+        containsPair('from_index', 0),
+      );
+      expect(
+        saved.calibration['perspective_assumptions'],
+        containsPair('mode', 'orthographic_floor_projection'),
+      );
+      final calibrationUpload = uploader.uploads.singleWhere(
+        (upload) =>
+            upload.metadata['artifact_id']?.endsWith('_calibration') ?? false,
+      );
+      final calibrationPayload =
+          jsonDecode(utf8.decode(calibrationUpload.bytes))
+              as Map<String, dynamic>;
+      expect(calibrationPayload, containsPair('artifact_schema_version', 1));
+      expect(
+        calibrationPayload,
+        containsPair('artifact_type', 'calibration_json'),
+      );
+      expect(calibrationPayload, containsPair('coordinate_space', 'meters'));
+      expect(
+        calibrationPayload,
+        containsPair('quality_status', 'review_required'),
+      );
+      final calibration =
+          calibrationPayload['calibration'] as Map<String, dynamic>;
+      expect(calibration['reference_line'], containsPair('from_index', 0));
+      expect(
+        calibration['perspective_assumptions'],
+        containsPair('mode', 'orthographic_floor_projection'),
+      );
+      final dimensionsPayload =
+          calibrationPayload['room_dimensions'] as Map<String, dynamic>;
+      expect(dimensionsPayload, containsPair('unit', 'meters'));
+
+      final debugUpload = uploader.uploads.singleWhere(
+        (upload) => upload.metadata['artifact_id']?.endsWith('_debug') ?? false,
+      );
+      final debugPayload =
+          jsonDecode(utf8.decode(debugUpload.bytes)) as Map<String, dynamic>;
+      expect(
+        debugPayload,
+        containsPair('artifact_type', 'floor_plan_debug_json'),
+      );
+      expect(debugPayload, containsPair('coordinate_space', 'meters'));
+      expect(debugPayload, containsPair('point_count', 4));
+    },
+  );
+
+  test(
+    'FirebaseProjectApi does not save floor plan metadata when artifact upload fails',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final floorPlans = _FakeFloorPlanRepository();
+      final dimensions = _FakeRoomDimensionsRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: floorPlans,
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(shouldFail: true),
+      );
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+
+      await expectLater(
+        api.persistFloorPlanResult(
+          projectId: 'project-1',
+          jobId: 'job-1',
+          sourceImageId: 'source-1',
+          confirmedGeometryId: 'geometry-1',
+          referenceLine: const {'fromIndex': 0, 'toIndex': 1},
+          referenceLengthValue: 4.2,
+          imageGeometry: const {
+            'coordinateSpace': 'image_pixels',
+            'points': [
+              {'x': 0, 'y': 0},
+              {'x': 100, 'y': 0},
+              {'x': 100, 'y': 80},
+            ],
+          },
+          metricGeometry: const {
+            'coordinateSpace': 'meters',
+            'points': [
+              {'x': 0, 'y': 0},
+              {'x': 4.2, 'y': 0},
+              {'x': 4.2, 'y': 3.6},
+            ],
+          },
+          perspectiveAssumptions: const {},
+        ),
+        throwsA(
+          isA<ProjectApiException>().having(
+            (error) => error.code,
+            'code',
+            'artifact_upload_failed',
+          ),
+        ),
+      );
+      expect(floorPlans.floorPlans, isEmpty);
+    },
+  );
+
+  test(
+    'FirebaseProjectApi deletes uploaded artifacts when floor plan save fails',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final floorPlans = _FakeFloorPlanRepository(shouldFailSave: true);
+      final dimensions = _FakeRoomDimensionsRepository();
+      final uploader = _FakeSourceImageUploader();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: floorPlans,
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: uploader,
+      );
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+
+      await expectLater(
+        api.persistFloorPlanResult(
+          projectId: 'project-1',
+          jobId: 'job-1',
+          sourceImageId: 'source-1',
+          confirmedGeometryId: 'geometry-1',
+          referenceLine: const {'fromIndex': 0, 'toIndex': 1},
+          referenceLengthValue: 4.2,
+          imageGeometry: const {
+            'coordinateSpace': 'image_pixels',
+            'points': [
+              {'x': 0, 'y': 0},
+              {'x': 100, 'y': 0},
+              {'x': 100, 'y': 80},
+            ],
+          },
+          metricGeometry: const {
+            'coordinateSpace': 'meters',
+            'points': [
+              {'x': 0, 'y': 0},
+              {'x': 4.2, 'y': 0},
+              {'x': 4.2, 'y': 3.6},
+            ],
+          },
+          perspectiveAssumptions: const {},
+        ),
+        throwsA(isA<FirebaseContractException>()),
+      );
+      expect(uploader.uploads, hasLength(2));
+      expect(
+        uploader.deletedPaths,
+        unorderedEquals(uploader.uploads.map((upload) => upload.storagePath)),
+      );
+      expect(floorPlans.floorPlans, isEmpty);
     },
   );
 
@@ -1256,10 +1523,16 @@ class _FakeGeometryRepository implements FirebaseGeometryRepository {
 }
 
 class _FakeFloorPlanRepository implements FirebaseFloorPlanRepository {
+  _FakeFloorPlanRepository({this.shouldFailSave = false});
+
+  final bool shouldFailSave;
   final floorPlans = <String, FirebaseFloorPlan>{};
 
   @override
   Future<FirebaseFloorPlan> saveFloorPlan(FirebaseFloorPlan floorPlan) async {
+    if (shouldFailSave) {
+      throw const FirebaseContractException('floor plan save failed');
+    }
     floorPlan.validate();
     floorPlans[floorPlan.floorPlanId] = floorPlan;
     return floorPlan;
@@ -1325,6 +1598,8 @@ class _FakeSourceImageUploader implements FirebaseSourceImageUploader {
   _FakeSourceImageUploader({this.shouldFail = false});
 
   final bool shouldFail;
+  final uploads = <_FakeUpload>[];
+  final deletedPaths = <String>[];
   String? uploadedPath;
   Map<String, String>? uploadedMetadata;
 
@@ -1342,6 +1617,33 @@ class _FakeSourceImageUploader implements FirebaseSourceImageUploader {
     onProgress?.call(0.5);
     uploadedPath = storagePath;
     uploadedMetadata = metadata;
+    uploads.add(
+      _FakeUpload(
+        storagePath: storagePath,
+        bytes: bytes,
+        contentType: contentType,
+        metadata: metadata,
+      ),
+    );
     onProgress?.call(1);
   }
+
+  @override
+  Future<void> deleteObject(String storagePath) async {
+    deletedPaths.add(storagePath);
+  }
+}
+
+class _FakeUpload {
+  const _FakeUpload({
+    required this.storagePath,
+    required this.bytes,
+    required this.contentType,
+    required this.metadata,
+  });
+
+  final String storagePath;
+  final Uint8List bytes;
+  final String contentType;
+  final Map<String, String> metadata;
 }

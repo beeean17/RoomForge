@@ -46,6 +46,8 @@ abstract class FirebaseSourceImageUploader {
     required Map<String, String> metadata,
     void Function(double progress)? onProgress,
   });
+
+  Future<void> deleteObject(String storagePath);
 }
 
 class FirebaseStorageSourceImageUploader
@@ -92,6 +94,11 @@ class FirebaseStorageSourceImageUploader
       await subscription?.cancel();
     }
   }
+
+  @override
+  Future<void> deleteObject(String storagePath) {
+    return _storage.ref(storagePath).delete();
+  }
 }
 
 class DisabledFirebaseSourceImageUploader
@@ -106,6 +113,11 @@ class DisabledFirebaseSourceImageUploader
     required Map<String, String> metadata,
     void Function(double progress)? onProgress,
   }) {
+    throw UnsupportedError('Firebase source image upload is unavailable.');
+  }
+
+  @override
+  Future<void> deleteObject(String storagePath) {
     throw UnsupportedError('Firebase source image upload is unavailable.');
   }
 }

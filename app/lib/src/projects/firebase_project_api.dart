@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -681,6 +682,31 @@ class FirebaseProjectApi extends ProjectApi {
     }
     final now = DateTime.now().toUtc();
     final floorPlanId = 'floor-plan-$jobId-${now.microsecondsSinceEpoch}';
+    final referenceLinePayload = _snakeCaseJsonMap(referenceLine);
+    final imageGeometryPayload = _snakeCaseJsonMap(imageGeometry);
+    final metricGeometryPayload = _snakeCaseJsonMap(metricGeometry);
+    final perspectivePayload = _snakeCaseJsonMap(perspectiveAssumptions);
+    final quality = _qualityStatusFromWireValue(qualityStatus, null);
+    final calibration = {
+      'reference_line': referenceLinePayload,
+      'reference_length_value': referenceLengthValue,
+      'unit': unit,
+      'image_geometry': imageGeometryPayload,
+      'metric_geometry': metricGeometryPayload,
+      'perspective_assumptions': perspectivePayload,
+    };
+    final artifactRefs = await _uploadFloorPlanArtifacts(
+      projectId: projectId,
+      jobId: jobId,
+      floorPlanId: floorPlanId,
+      sourceImageId: sourceImageId,
+      confirmedGeometryId: confirmedGeometryId,
+      roomDimensions: dimensions,
+      calibration: calibration,
+      metricGeometry: metricGeometryPayload,
+      qualityStatus: quality,
+      generatedAt: now,
+    );
     final floorPlan = FirebaseFloorPlan(
       floorPlanId: floorPlanId,
       projectId: projectId,
@@ -692,21 +718,20 @@ class FirebaseProjectApi extends ProjectApi {
       coordinateSpace: FirebaseCoordinateSpace.meters,
       roomDimensions: dimensions,
       floorPolygon: _pointList(metricGeometry['points']),
-      calibration: {
-        'reference_line': _snakeCaseJsonMap(referenceLine),
-        'reference_length_value': referenceLengthValue,
-        'unit': unit,
-        'image_geometry': _snakeCaseJsonMap(imageGeometry),
-        'metric_geometry': _snakeCaseJsonMap(metricGeometry),
-        'perspective_assumptions': _snakeCaseJsonMap(perspectiveAssumptions),
-      },
-      qualityStatus: _qualityStatusFromWireValue(qualityStatus, null),
+      calibration: calibration,
+      qualityStatus: quality,
+      artifactRefs: artifactRefs,
       createdAt: now,
       updatedAt: now,
       schemaVersion: 1,
     );
-    final saved = await saveFloorPlan(floorPlan);
-    return FloorPlanRef(id: saved.floorPlanId);
+    try {
+      final saved = await saveFloorPlan(floorPlan);
+      return FloorPlanRef(id: saved.floorPlanId);
+    } catch (_) {
+      await _deleteUploadedArtifacts(artifactRefs);
+      rethrow;
+    }
   }
 
   Future<FirebaseFloorPlan?> getFloorPlan({
@@ -718,6 +743,131 @@ class FirebaseProjectApi extends ProjectApi {
       projectId: projectId,
       floorPlanId: floorPlanId,
     );
+  }
+
+  Future<List<FirebaseArtifactRef>> _uploadFloorPlanArtifacts({
+    required String projectId,
+    required String jobId,
+    required String floorPlanId,
+    required String sourceImageId,
+    required String confirmedGeometryId,
+    required FirebaseRoomDimensions roomDimensions,
+    required FirebaseJson calibration,
+    required FirebaseJson metricGeometry,
+    required FirebaseQualityStatus qualityStatus,
+    required DateTime generatedAt,
+  }) async {
+    final generatedAtIso = generatedAt.toUtc().toIso8601String();
+    final specs = [
+      _FloorPlanArtifactSpec(
+        artifactId: '${floorPlanId}_calibration',
+        filename: 'calibration.json',
+        artifactType: 'calibration_json',
+        description: 'Metric calibration output for the generated floor plan.',
+        payload: {
+          'artifact_schema_version': 1,
+          'artifact_type': 'calibration_json',
+          'project_id': projectId,
+          'owner_uid': _session.uid,
+          'job_id': jobId,
+          'source_image_id': sourceImageId,
+          'confirmed_geometry_id': confirmedGeometryId,
+          'floor_plan_id': floorPlanId,
+          'coordinate_space': FirebaseCoordinateSpace.meters.wireValue,
+          'quality_status': qualityStatus.wireValue,
+          'room_dimensions': roomDimensions.toFirestoreJson(
+            options: FirebaseSerializationOptions.exportJson,
+          ),
+          'calibration': calibration,
+          'generated_at': generatedAtIso,
+        },
+      ),
+      _FloorPlanArtifactSpec(
+        artifactId: '${floorPlanId}_debug',
+        filename: 'debug.json',
+        artifactType: 'floor_plan_debug_json',
+        description:
+            'Debug summary for floor plan generation and traceability.',
+        payload: {
+          'artifact_schema_version': 1,
+          'artifact_type': 'floor_plan_debug_json',
+          'project_id': projectId,
+          'owner_uid': _session.uid,
+          'job_id': jobId,
+          'source_image_id': sourceImageId,
+          'confirmed_geometry_id': confirmedGeometryId,
+          'floor_plan_id': floorPlanId,
+          'coordinate_space': FirebaseCoordinateSpace.meters.wireValue,
+          'quality_status': qualityStatus.wireValue,
+          'metric_geometry': metricGeometry,
+          'point_count': _pointList(metricGeometry['points']).length,
+          'generated_by': 'flutter_firebase_project_api',
+          'generated_at': generatedAtIso,
+        },
+      ),
+    ];
+
+    final refs = <FirebaseArtifactRef>[];
+    for (final spec in specs) {
+      final bytes = _jsonArtifactBytes(spec.payload);
+      final storagePath = _artifactStoragePath(
+        ownerUid: _session.uid,
+        projectId: projectId,
+        jobId: jobId,
+        artifactId: spec.artifactId,
+        filename: spec.filename,
+      );
+      final sha256Hex = FirebaseSourceImageUpload.sha256Hex(bytes);
+      try {
+        await _sourceImageUploader.uploadBytes(
+          storagePath: storagePath,
+          bytes: bytes,
+          contentType: FirebaseArtifactContentType.json.wireValue,
+          metadata: {
+            'owner_uid': _session.uid,
+            'project_id': projectId,
+            'job_id': jobId,
+            'artifact_id': spec.artifactId,
+            'uploaded_by_uid': _session.uid,
+            'sha256_hex': sha256Hex,
+          },
+        );
+      } on FirebaseException catch (error) {
+        throw _artifactUploadException(error);
+      } catch (error) {
+        throw ProjectApiException(
+          'Floor plan artifact upload failed: $error',
+          code: 'artifact_upload_failed',
+        );
+      }
+
+      refs.add(
+        FirebaseArtifactRef(
+          artifactId: spec.artifactId,
+          storagePath: storagePath,
+          artifactType: spec.artifactType,
+          contentType: FirebaseArtifactContentType.json,
+          byteSize: bytes.length,
+          sha256Hex: sha256Hex,
+          createdAt: generatedAt,
+          description: spec.description,
+        ),
+      );
+    }
+
+    return refs;
+  }
+
+  Future<void> _deleteUploadedArtifacts(
+    List<FirebaseArtifactRef> artifactRefs,
+  ) async {
+    for (final artifactRef in artifactRefs) {
+      try {
+        await _sourceImageUploader.deleteObject(artifactRef.storagePath);
+      } catch (_) {
+        // Preserve the floor-plan save failure; cleanup is best-effort.
+      }
+    }
   }
 
   @override
@@ -1344,7 +1494,50 @@ class FirebaseProjectApi extends ProjectApi {
     );
   }
 
+  ProjectApiException _artifactUploadException(FirebaseException error) {
+    if (_isPermissionError(error.code)) {
+      return const ProjectApiException(
+        'Permission blocked floor plan artifact upload. Check project access, then retry.',
+        code: 'permission_denied',
+      );
+    }
+    return ProjectApiException(
+      'Floor plan artifact upload failed: ${error.message ?? error.code}',
+      code: 'artifact_upload_failed',
+    );
+  }
+
   bool _isPermissionError(String code) {
     return code == 'permission-denied' || code == 'unauthorized';
   }
+}
+
+class _FloorPlanArtifactSpec {
+  const _FloorPlanArtifactSpec({
+    required this.artifactId,
+    required this.filename,
+    required this.artifactType,
+    required this.description,
+    required this.payload,
+  });
+
+  final String artifactId;
+  final String filename;
+  final String artifactType;
+  final String description;
+  final FirebaseJson payload;
+}
+
+Uint8List _jsonArtifactBytes(FirebaseJson payload) {
+  return Uint8List.fromList(utf8.encode(jsonEncode(payload)));
+}
+
+String _artifactStoragePath({
+  required String ownerUid,
+  required String projectId,
+  required String jobId,
+  required String artifactId,
+  required String filename,
+}) {
+  return 'users/$ownerUid/projects/$projectId/artifacts/$jobId/$artifactId/$filename';
 }

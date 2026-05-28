@@ -9,7 +9,7 @@ class OpenCvResultCreateRequest(BaseModel):
     coordinate_space: str = "image_pixels"
     candidate_geometry: dict[str, Any]
     confidence: float | None = Field(default=None, ge=0, le=1)
-    algorithm: str = Field(default="roomforge-browser-opencv-stub", max_length=100)
+    algorithm: str = Field(default="opencv-js-canny-hough-v1", max_length=100)
 
     @field_validator("coordinate_space")
     @classmethod

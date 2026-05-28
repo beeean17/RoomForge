@@ -10,5 +10,5 @@ if [[ ! -d "node_modules" ]]; then
   npm install
 fi
 
-echo "RoomForge editor: http://127.0.0.1:5173"
-npm run dev -- --host 127.0.0.1 --port 5173
+echo "RoomForge editor: http://127.0.0.1:9239"
+npm run dev -- --host 127.0.0.1 --port 9239

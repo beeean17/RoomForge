@@ -145,51 +145,102 @@ class FirebaseUserProfileRepository implements FirebaseUserRepository {
     final now = _clock().toUtc();
     final serverNow = FieldValue.serverTimestamp();
 
-    return _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(docRef);
-      final data = snapshot.data();
+    try {
+      return await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        final data = snapshot.data();
 
-      if (snapshot.exists) {
-        final payload = FirebaseUserProfileProjection.updateData(
-          session,
-          updatedAt: serverNow,
-          lastSeenAt: serverNow,
-        );
-        transaction.update(docRef, payload);
-      } else {
-        final payload = FirebaseUserProfileProjection.createData(
-          session,
-          createdAt: serverNow,
-          updatedAt: serverNow,
-          lastSeenAt: serverNow,
-        );
-        transaction.set(docRef, payload);
-      }
+        if (snapshot.exists) {
+          final payload = FirebaseUserProfileProjection.updateData(
+            session,
+            updatedAt: serverNow,
+            lastSeenAt: serverNow,
+          );
+          transaction.update(docRef, payload);
+        } else {
+          final payload = FirebaseUserProfileProjection.createData(
+            session,
+            createdAt: serverNow,
+            updatedAt: serverNow,
+            lastSeenAt: serverNow,
+          );
+          transaction.set(docRef, payload);
+        }
 
-      final profileData = data == null
-          ? FirebaseUserProfileProjection.createData(
-              session,
-              createdAt: now,
-              updatedAt: now,
-              lastSeenAt: now,
-            )
-          : {
-              ...Map<String, Object?>.from(data),
-              ...FirebaseUserProfileProjection.updateData(
+        final profileData = data == null
+            ? FirebaseUserProfileProjection.createData(
                 session,
+                createdAt: now,
                 updatedAt: now,
                 lastSeenAt: now,
-              ),
-            };
+              )
+            : {
+                ...Map<String, Object?>.from(data),
+                ...FirebaseUserProfileProjection.updateData(
+                  session,
+                  updatedAt: now,
+                  lastSeenAt: now,
+                ),
+              };
 
-      return FirebaseUserProfileProjection.fromFirestoreData(
-        profileData,
-        uid: session.uid,
-        fallbackCreatedAt: now,
-        fallbackUpdatedAt: now,
+        return FirebaseUserProfileProjection.fromFirestoreData(
+          profileData,
+          uid: session.uid,
+          fallbackCreatedAt: now,
+          fallbackUpdatedAt: now,
+        );
+      });
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        firebaseUserProfileSyncExceptionFromError(error),
+        stackTrace,
       );
-    });
+    }
   }
+}
+
+FirebaseUserProfileSyncException firebaseUserProfileSyncExceptionFromError(
+  Object error,
+) {
+  if (error is FirebaseException) {
+    if (error.code == 'not-found') {
+      return FirebaseUserProfileSyncException(
+        code: 'firestore_database_not_found',
+        message:
+            'Cloud Firestore database (default) was not found for this Firebase project. Create the database in Firebase Console or check ROOMFORGE_FIREBASE_PROJECT_ID.',
+        cause: error,
+      );
+    }
+    if (error.code == 'permission-denied') {
+      return FirebaseUserProfileSyncException(
+        code: 'permission_denied',
+        message:
+            'Firestore rules denied profile sync. Confirm the signed-in user can read and write users/{uid}.',
+        cause: error,
+      );
+    }
+    return FirebaseUserProfileSyncException(
+      code: error.code,
+      message: 'Firestore profile sync failed: ${error.message ?? error.code}.',
+      cause: error,
+    );
+  }
+
+  final rawMessage = error.toString();
+  if (rawMessage.contains('Dart exception thrown from converted Future')) {
+    return FirebaseUserProfileSyncException(
+      code: 'firestore_web_error',
+      message:
+          'Firestore profile sync failed in the browser. Verify that Cloud Firestore exists for the configured Firebase project and retry.',
+      cause: error,
+    );
+  }
+
+  return FirebaseUserProfileSyncException(
+    code: 'profile_sync_failed',
+    message: 'Firestore profile sync failed: $rawMessage.',
+    cause: error,
+  );
 }
 
 class DisabledFirebaseUserRepository implements FirebaseUserRepository {

@@ -531,6 +531,55 @@ class FirebaseProjectApi extends ProjectApi {
     return _geometryRepository.saveOpenCvResult(result);
   }
 
+  @override
+  Future<OpenCvResultRef> persistOpenCvResult({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required Map<String, Object?> candidateGeometry,
+    required double? confidence,
+    required String algorithm,
+    String coordinateSpace = 'image_pixels',
+    String? qualityStatus,
+    String? failureReasonCode,
+    String? failureReason,
+    String? openCvVersion,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final resultId = 'opencv-$jobId-${now.microsecondsSinceEpoch}';
+    final candidateGeometryPayload = _snakeCaseJsonMap(candidateGeometry);
+    final result = FirebaseOpenCvResult(
+      resultId: resultId,
+      projectId: projectId,
+      ownerUid: _session.uid,
+      jobId: jobId,
+      sourceImageId: sourceImageId,
+      coordinateSpace: FirebaseCoordinateSpace.fromWireValue(coordinateSpace),
+      algorithmId: algorithm,
+      openCvVersion: openCvVersion,
+      candidateEdges: _jsonList(candidateGeometryPayload['candidate_edges']),
+      candidateLines: _jsonList(candidateGeometryPayload['candidate_lines']),
+      candidateCorners: _pointList(
+        candidateGeometryPayload['candidate_corners'],
+      ),
+      boundaryHints: _jsonList(
+        candidateGeometryPayload['boundary_hints'] ??
+            candidateGeometryPayload['candidate_sets'],
+      ),
+      confidenceScore: confidence,
+      qualityStatus: _qualityStatusFromWireValue(qualityStatus, confidence),
+      failureReasonCode: failureReasonCode,
+      failureReason: failureReason,
+      processingStartedAt: now,
+      processingCompletedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+    final saved = await saveOpenCvResult(result);
+    return OpenCvResultRef(id: saved.resultId);
+  }
+
   Future<FirebaseConfirmedGeometry> saveConfirmedGeometry(
     FirebaseConfirmedGeometry geometry,
   ) async {
@@ -539,6 +588,41 @@ class FirebaseProjectApi extends ProjectApi {
       ownerUid: geometry.ownerUid,
     );
     return _geometryRepository.saveConfirmedGeometry(geometry);
+  }
+
+  @override
+  Future<ConfirmedGeometryRef> persistConfirmedGeometry({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required String? openCvResultId,
+    required List<Map<String, Object?>> points,
+    String coordinateSpace = 'image_pixels',
+    String geometryKind = 'room_boundary',
+    String? correctionMethod,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final geometryId = 'geometry-$jobId-${now.microsecondsSinceEpoch}';
+    final geometry = FirebaseConfirmedGeometry(
+      geometryId: geometryId,
+      projectId: projectId,
+      ownerUid: _session.uid,
+      jobId: jobId,
+      sourceImageId: sourceImageId,
+      openCvResultId: openCvResultId,
+      coordinateSpace: FirebaseCoordinateSpace.fromWireValue(coordinateSpace),
+      boundaryType: points.length == 4
+          ? FirebaseBoundaryType.rectangle
+          : FirebaseBoundaryType.simplePolygon,
+      boundaryPoints: _pointList(points),
+      correctionMethod: correctionMethod,
+      confirmedByUid: _session.uid,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+    final saved = await saveConfirmedGeometry(geometry);
+    return ConfirmedGeometryRef(id: saved.geometryId);
   }
 
   Future<FirebaseOpenCvResult?> getOpenCvResult({
@@ -569,6 +653,60 @@ class FirebaseProjectApi extends ProjectApi {
       ownerUid: floorPlan.ownerUid,
     );
     return _floorPlanRepository.saveFloorPlan(floorPlan);
+  }
+
+  @override
+  Future<FloorPlanRef> persistFloorPlanResult({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required String confirmedGeometryId,
+    required Map<String, Object?> referenceLine,
+    required double referenceLengthValue,
+    required Map<String, Object?> imageGeometry,
+    required Map<String, Object?> metricGeometry,
+    required Map<String, Object?> perspectiveAssumptions,
+    String unit = 'meters',
+    String? qualityStatus,
+  }) async {
+    final dimensions = await _roomDimensionsRepository.getCurrent(
+      ownerUid: _session.uid,
+      projectId: projectId,
+    );
+    if (dimensions == null) {
+      throw const ProjectApiException(
+        'Room dimensions are required before saving a floor plan.',
+        code: 'validation_error',
+      );
+    }
+    final now = DateTime.now().toUtc();
+    final floorPlanId = 'floor-plan-$jobId-${now.microsecondsSinceEpoch}';
+    final floorPlan = FirebaseFloorPlan(
+      floorPlanId: floorPlanId,
+      projectId: projectId,
+      ownerUid: _session.uid,
+      jobId: jobId,
+      sourceImageId: sourceImageId,
+      confirmedGeometryId: confirmedGeometryId,
+      roomDimensionsId: 'current',
+      coordinateSpace: FirebaseCoordinateSpace.meters,
+      roomDimensions: dimensions,
+      floorPolygon: _pointList(metricGeometry['points']),
+      calibration: {
+        'reference_line': _snakeCaseJsonMap(referenceLine),
+        'reference_length_value': referenceLengthValue,
+        'unit': unit,
+        'image_geometry': _snakeCaseJsonMap(imageGeometry),
+        'metric_geometry': _snakeCaseJsonMap(metricGeometry),
+        'perspective_assumptions': _snakeCaseJsonMap(perspectiveAssumptions),
+      },
+      qualityStatus: _qualityStatusFromWireValue(qualityStatus, null),
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+    final saved = await saveFloorPlan(floorPlan);
+    return FloorPlanRef(id: saved.floorPlanId);
   }
 
   Future<FirebaseFloorPlan?> getFloorPlan({
@@ -1098,6 +1236,79 @@ class FirebaseProjectApi extends ProjectApi {
       'Layout field $field must be a positive number.',
       code: 'invalid_layout_payload',
     );
+  }
+
+  List<FirebaseJson> _jsonList(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value
+        .whereType<Map>()
+        .map((entry) => Map<String, Object?>.from(entry))
+        .toList();
+  }
+
+  List<FirebasePoint2d> _pointList(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value
+        .whereType<Map>()
+        .map((entry) => Map<String, Object?>.from(entry))
+        .where((entry) => entry['x'] is num && entry['y'] is num)
+        .map(
+          (entry) => FirebasePoint2d(
+            x: (entry['x'] as num).toDouble(),
+            y: (entry['y'] as num).toDouble(),
+          ),
+        )
+        .toList();
+  }
+
+  Map<String, Object?> _snakeCaseJsonMap(Map<String, Object?> value) {
+    return {
+      for (final entry in value.entries)
+        _snakeCaseKey(entry.key): _snakeCaseJsonValue(entry.value),
+    };
+  }
+
+  Object? _snakeCaseJsonValue(Object? value) {
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          _snakeCaseKey(entry.key.toString()): _snakeCaseJsonValue(entry.value),
+      };
+    }
+    if (value is Iterable) {
+      return value.map(_snakeCaseJsonValue).toList();
+    }
+    return value;
+  }
+
+  String _snakeCaseKey(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'(?<=[a-z0-9])[A-Z]'),
+      (match) => '_${match.group(0)!.toLowerCase()}',
+    );
+  }
+
+  FirebaseQualityStatus _qualityStatusFromWireValue(
+    String? value,
+    double? confidence,
+  ) {
+    if (value != null) {
+      try {
+        return FirebaseQualityStatus.fromWireValue(value);
+      } on FirebaseContractException {
+        return FirebaseQualityStatus.reviewRequired;
+      }
+    }
+    if (confidence == null) {
+      return FirebaseQualityStatus.reviewRequired;
+    }
+    return confidence >= 0.68
+        ? FirebaseQualityStatus.success
+        : FirebaseQualityStatus.reviewRequired;
   }
 
   Map<String, Object?> _withoutNulls(Map<String, Object?> json) {

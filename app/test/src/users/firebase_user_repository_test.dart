@@ -1,6 +1,7 @@
 import 'package:app/src/auth/auth_repository.dart';
 import 'package:app/src/firebase/firebase_models.dart';
 import 'package:app/src/users/firebase_user_repository.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -68,6 +69,34 @@ void main() {
       expect(profile.role, FirebaseAdminRole.admin);
       expect(profile.roleUpdatedByUid, 'bootstrap-admin');
       expect(profile.roleUpdatedAt, _now);
+    });
+
+    test('maps Firestore not-found to database setup guidance', () {
+      final exception = firebaseUserProfileSyncExceptionFromError(
+        FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'not-found',
+          message: 'Requested entity was not found.',
+        ),
+      );
+
+      expect(exception.code, 'firestore_database_not_found');
+      expect(exception.message, contains('Cloud Firestore database'));
+      expect(exception.message, contains('ROOMFORGE_FIREBASE_PROJECT_ID'));
+      expect(exception.toString(), exception.message);
+    });
+
+    test('hides Flutter web converted Future noise in profile sync errors', () {
+      final exception = firebaseUserProfileSyncExceptionFromError(
+        Exception(
+          'Dart exception thrown from converted Future. Use the properties '
+          "'error' to fetch the boxed error.",
+        ),
+      );
+
+      expect(exception.code, 'firestore_web_error');
+      expect(exception.message, contains('Firestore profile sync failed'));
+      expect(exception.message, isNot(contains('converted Future')));
     });
   });
 }

@@ -8,7 +8,7 @@ locally through the browser.
 - Firebase Auth runs through the local Firebase Auth emulator.
 - FastAPI runs on `127.0.0.1:8010` by default.
 - FastAPI uses in-memory repositories when started with `scripts/server-local.sh`.
-- The editor runs on `127.0.0.1:5173`.
+- The editor runs on `127.0.0.1:9239`.
 - Flutter web connects to both the API and editor through dart defines from
   `app/.env`.
 

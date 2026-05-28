@@ -93,6 +93,37 @@ String _localizedFirebaseAuthErrorMessage(FirebaseAuthException error) {
   };
 }
 
+String _profileSyncFailureMessage(Object error) {
+  final prefix = rf('Profile sync failed', '프로필 동기화에 실패했습니다');
+  if (error is FirebaseUserProfileSyncException) {
+    return '$prefix: ${_localizedProfileSyncExceptionMessage(error)}';
+  }
+
+  final rawMessage = error.toString();
+  if (rawMessage.contains('Dart exception thrown from converted Future')) {
+    return '$prefix: ${rf('Firestore returned a browser error while syncing your profile. Verify that Cloud Firestore exists for the configured Firebase project, then retry.', '프로필 동기화 중 Firestore 브라우저 오류가 발생했습니다. 설정된 Firebase 프로젝트에 Cloud Firestore가 생성되어 있는지 확인한 뒤 다시 시도하세요.')}';
+  }
+
+  return '$prefix: $rawMessage';
+}
+
+String _localizedProfileSyncExceptionMessage(
+  FirebaseUserProfileSyncException error,
+) {
+  if (!_roomForgeUsesKorean) {
+    return error.message;
+  }
+  return switch (error.code) {
+    'firestore_database_not_found' =>
+      '설정된 Firebase 프로젝트에 Cloud Firestore 데이터베이스 `(default)`가 없습니다. Firebase Console에서 데이터베이스를 생성하거나 ROOMFORGE_FIREBASE_PROJECT_ID를 확인하세요.',
+    'permission_denied' =>
+      'Firestore 보안 규칙이 프로필 동기화를 거부했습니다. 로그인한 사용자가 users/{uid} 문서를 읽고 쓸 수 있는지 확인하세요.',
+    'firestore_web_error' =>
+      '브라우저에서 Firestore 프로필 동기화가 실패했습니다. 설정된 Firebase 프로젝트에 Cloud Firestore가 있는지 확인한 뒤 다시 시도하세요.',
+    _ => error.message,
+  };
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -369,8 +400,7 @@ class _UserProfileSyncGateState extends State<UserProfileSyncGate> {
 
         if (snapshot.hasError) {
           return ProjectErrorView(
-            message:
-                '${rf('Profile sync failed', '프로필 동기화에 실패했습니다')}: ${snapshot.error}',
+            message: _profileSyncFailureMessage(snapshot.error!),
             onRetry: _retry,
           );
         }
@@ -3089,6 +3119,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   final _heightController = TextEditingController();
 
   SourceImage? _sourceImage;
+  String? _sourceImageDataUrl;
   RoomDimensions? _dimensions;
   ReconstructionJob? _reconstructionJob;
   SourceImageUploadStatus _uploadState = SourceImageUploadStatus.empty;
@@ -3124,6 +3155,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.project?.id != widget.project?.id) {
       _sourceImage = null;
+      _sourceImageDataUrl = null;
       _dimensions = null;
       _reconstructionJob = null;
       _uploadState = SourceImageUploadStatus.empty;
@@ -3271,6 +3303,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         _uploadProgress = null;
         _lastUploadFile = null;
         _sourceImage = null;
+        _sourceImageDataUrl = null;
       });
       return;
     }
@@ -3292,6 +3325,8 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
 
     try {
       final bytes = await _readFileBytes(file);
+      final sourceImageDataUrl =
+          'data:$contentType;base64,${base64Encode(bytes)}';
       final imageSize = await _readImageSize(file);
       final sourceImage = await widget.projectApi.uploadSourceImage(
         projectId: project.id,
@@ -3313,6 +3348,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       );
       setState(() {
         _sourceImage = sourceImage;
+        _sourceImageDataUrl = sourceImageDataUrl;
         _uploadState = SourceImageUploadStatus.uploaded;
         _uploadMessage = imageSize == null
             ? rf(
@@ -3332,6 +3368,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         _uploadMessage = uploadRecoveryMessage(error);
         _uploadProgress = null;
         _sourceImage = null;
+        _sourceImageDataUrl = null;
         if (_uploadState == SourceImageUploadStatus.validationError) {
           _lastUploadFile = null;
         }
@@ -3342,6 +3379,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         _uploadMessage = '${rf('Upload failed', '업로드 실패')}: $error';
         _uploadProgress = null;
         _sourceImage = null;
+        _sourceImageDataUrl = null;
       });
     }
   }
@@ -3452,6 +3490,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
           initialDimensions: _dimensions,
           reconstructionJob: _reconstructionJob,
           sourceImage: _sourceImage,
+          sourceImageDataUrl: _sourceImageDataUrl,
         ),
       ),
     );
@@ -4519,6 +4558,7 @@ class EditorBridgeScreen extends StatefulWidget {
     this.initialDimensions,
     this.reconstructionJob,
     this.sourceImage,
+    this.sourceImageDataUrl,
     super.key,
   });
 
@@ -4527,6 +4567,7 @@ class EditorBridgeScreen extends StatefulWidget {
   final RoomDimensions? initialDimensions;
   final ReconstructionJob? reconstructionJob;
   final SourceImage? sourceImage;
+  final String? sourceImageDataUrl;
 
   @override
   State<EditorBridgeScreen> createState() => _EditorBridgeScreenState();
@@ -4547,19 +4588,27 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   String _loadStatus = rf('No layout loaded.', '불러온 레이아웃 없음.');
   String _draftStatus = rf('No local draft.', '로컬 드래프트 없음.');
   String _exportStatus = rf('Not exported.', '내보내지 않음.');
+  String _artifactStatus = rf('CV artifacts not saved yet.', 'CV 아티팩트 미저장.');
   String _viewMode = '2d';
   bool _isSavingLayout = false;
   bool _isLoadingLayout = false;
   bool _isExportingLayout = false;
+  bool _isPersistingArtifacts = false;
   bool _reviewSaveConfirmed = false;
   bool _reviewExportConfirmed = false;
   Map<String, Object?>? _latestScene;
+  String? _latestOpenCvResultId;
+  String? _latestConfirmedGeometryId;
+  String? _latestFloorPlanId;
+  String? _persistedJobStatus;
   String? _activeLayoutId;
   DateTime? _activeCloudUpdatedAt;
   bool _draftChangedDuringSave = false;
   bool _syncFailureVisible = false;
   var _draftGeneration = 0;
   Future<void> _pendingDraftWrite = Future<void>.value();
+  Future<void> _pendingArtifactWrite = Future<void>.value();
+  Future<void>? _pendingOpenCvResultWrite;
   LayoutDraft? _recoverableDraft;
   bool _isHandlingDraft = false;
 
@@ -4623,7 +4672,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
             viewMode: _viewMode,
             sceneStatus: _sceneStatus,
             bridgeStatus: _bridgeStatus,
-            runtimeStatus: _runtimeStatus,
+            runtimeStatus: _isPersistingArtifacts
+                ? '$_runtimeStatus ${rf('Saving CV artifacts...', 'CV 아티팩트 저장 중...')}'
+                : '$_runtimeStatus $_artifactStatus',
             saveStatus: _saveStatus,
             loadStatus: _loadStatus,
             draftStatus: _draftStatus,
@@ -4673,21 +4724,42 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     }
 
     Map<String, Object?>? draftScene;
+    Map<String, Object?>? openCvPayload;
+    Map<String, Object?>? confirmedGeometryPayload;
+    Map<String, Object?>? floorPlanPayload;
     setState(() {
       if (type == 'roomforge.editor.ready') {
         _bridgeStatus = rf('Editor ready.', '편집기 준비됨.');
       } else if (type.endsWith('.response')) {
         _bridgeStatus = '${rf('Bridge round trip', '브리지 왕복')}: $type';
       } else if (type == 'roomforge.opencv.runtimeLoaded') {
-        _runtimeStatus = rf(
-          'OpenCV worker assets loaded.',
-          'OpenCV 워커 자산 로드됨.',
-        );
+        _runtimeStatus = rf('OpenCV.js worker loaded.', 'OpenCV.js 워커 로드됨.');
       } else if (type == 'roomforge.opencv.runtimeFailed') {
         _runtimeStatus = rf(
           'OpenCV worker asset loading failed.',
           'OpenCV 워커 자산 로드 실패.',
         );
+      } else if (type == 'roomforge.opencv.candidatesExtracted') {
+        final payload = _recordValue(data['payload']);
+        openCvPayload = payload;
+        final confidence = _numberValueOrNull(payload['confidence']);
+        final qualityStatus = payload['qualityStatus']?.toString();
+        final qualityLabel = qualityStatus == 'failed'
+            ? rf('failed', '실패')
+            : qualityStatus == 'success'
+            ? rf('success', '성공')
+            : rf('needs review', '검토 필요');
+        _runtimeStatus =
+            '${rf('OpenCV candidates extracted', 'OpenCV 후보 추출됨')}: $qualityLabel'
+            '${confidence == null ? '' : ' (${confidence.toStringAsFixed(2)})'}';
+      } else if (type == 'roomforge.geometry.confirmedChanged') {
+        final payload = _recordValue(data['payload']);
+        confirmedGeometryPayload = payload;
+        _sceneStatus = rf('Confirmed geometry updated.', '확정 지오메트리 업데이트됨.');
+      } else if (type == 'roomforge.calibration.floorPlanGenerated') {
+        final payload = _recordValue(data['payload']);
+        floorPlanPayload = payload;
+        _sceneStatus = rf('Metric floor plan generated.', '미터 평면도 생성됨.');
       } else if (type == 'roomforge.scene.initialized' ||
           type == 'roomforge.view.changed' ||
           type == 'roomforge.selection.changed' ||
@@ -4722,10 +4794,298 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     if (draftScene != null) {
       _queuePersistDraft(draftScene!);
     }
+    if (openCvPayload != null) {
+      final payload = openCvPayload!;
+      final pending = _queuePersistArtifact(
+        () => _persistOpenCvPayload(payload),
+      );
+      _pendingOpenCvResultWrite = pending;
+    }
+    if (confirmedGeometryPayload != null) {
+      final payload = confirmedGeometryPayload!;
+      _queuePersistArtifact(() => _persistConfirmedGeometryPayload(payload));
+    }
+    if (floorPlanPayload != null) {
+      final payload = floorPlanPayload!;
+      _queuePersistArtifact(() => _persistFloorPlanPayload(payload));
+    }
   }
 
+  Future<void> _queuePersistArtifact(Future<void> Function() persist) {
+    final queued = _pendingArtifactWrite
+        .catchError((_) {})
+        .then((_) => persist());
+    _pendingArtifactWrite = queued;
+    unawaited(queued);
+    return queued;
+  }
+
+  Future<void> _persistOpenCvPayload(Map<String, Object?> payload) async {
+    final job = widget.reconstructionJob;
+    final sourceImage = widget.sourceImage;
+    if (job == null || sourceImage == null) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _artifactStatus = rf(
+          'CV result pending source image and job.',
+          '소스 이미지와 작업 생성 후 CV 결과 저장 가능.',
+        );
+      });
+      return;
+    }
+
+    final candidateGeometry = _recordValue(payload['candidateGeometry']);
+    setState(() {
+      _isPersistingArtifacts = true;
+      _artifactStatus = rf('Saving OpenCV result...', 'OpenCV 결과 저장 중...');
+    });
+
+    try {
+      final result = await widget.projectApi.persistOpenCvResult(
+        projectId: widget.project.id,
+        jobId: job.id,
+        sourceImageId: sourceImage.id,
+        candidateGeometry: candidateGeometry,
+        confidence: _numberValueOrNull(payload['confidence']),
+        algorithm:
+            payload['algorithm']?.toString() ?? 'opencv-js-canny-hough-v1',
+        coordinateSpace:
+            payload['coordinateSpace']?.toString() ?? 'image_pixels',
+        qualityStatus: payload['qualityStatus']?.toString(),
+        failureReasonCode: payload['reasonCode']?.toString(),
+        failureReason: payload['reasonMessage']?.toString(),
+        openCvVersion: payload['openCvVersion']?.toString(),
+      );
+      final qualityStatus = payload['qualityStatus']?.toString();
+      await _persistJobStatusForOpenCvResult(
+        qualityStatus: qualityStatus,
+        reasonCode: payload['reasonCode']?.toString(),
+        reasonMessage: payload['reasonMessage']?.toString(),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestOpenCvResultId = result.id;
+        _artifactStatus = rf('OpenCV result saved.', 'OpenCV 결과 저장됨.');
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _artifactStatus =
+            '${rf('OpenCV result save failed', 'OpenCV 결과 저장 실패')}: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isPersistingArtifacts = false);
+      }
+    }
+  }
+
+  Future<void> _persistConfirmedGeometryPayload(
+    Map<String, Object?> payload,
+  ) async {
+    final job = widget.reconstructionJob;
+    final sourceImage = widget.sourceImage;
+    final points = _pointMaps(payload['points']);
+    if (job == null || sourceImage == null || points.length < 3) {
+      return;
+    }
+    await _pendingOpenCvResultWrite?.catchError((_) {});
+
+    setState(() {
+      _isPersistingArtifacts = true;
+      _artifactStatus = rf('Saving confirmed geometry...', '확정 지오메트리 저장 중...');
+    });
+
+    try {
+      final geometry = await widget.projectApi.persistConfirmedGeometry(
+        projectId: widget.project.id,
+        jobId: job.id,
+        sourceImageId: sourceImage.id,
+        openCvResultId: _latestOpenCvResultId,
+        points: points,
+        coordinateSpace:
+            payload['coordinateSpace']?.toString() ?? 'image_pixels',
+        geometryKind: payload['geometryKind']?.toString() ?? 'room_boundary',
+        correctionMethod: 'manual_editor',
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestConfirmedGeometryId = geometry.id;
+        _artifactStatus = rf('Confirmed geometry saved.', '확정 지오메트리 저장됨.');
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _artifactStatus =
+            '${rf('Confirmed geometry save failed', '확정 지오메트리 저장 실패')}: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isPersistingArtifacts = false);
+      }
+    }
+  }
+
+  Future<void> _persistFloorPlanPayload(Map<String, Object?> payload) async {
+    final job = widget.reconstructionJob;
+    final sourceImage = widget.sourceImage;
+    if (job == null || sourceImage == null) {
+      return;
+    }
+
+    final imageGeometry = _recordValue(payload['imageGeometry']);
+    final metricGeometry = _recordValue(payload['metricGeometry']);
+    final metricPoints = _pointMaps(metricGeometry['points']);
+    final referenceLengthValue =
+        _numberValueOrNull(payload['referenceLengthValue']) ?? 0;
+    if (metricPoints.length < 3 || referenceLengthValue <= 0) {
+      return;
+    }
+    await _pendingOpenCvResultWrite?.catchError((_) {});
+
+    setState(() {
+      _isPersistingArtifacts = true;
+      _artifactStatus = rf('Saving floor plan...', '평면도 저장 중...');
+    });
+
+    try {
+      var confirmedGeometryId = _latestConfirmedGeometryId;
+      if (confirmedGeometryId == null) {
+        final imagePoints = _pointMaps(imageGeometry['points']);
+        if (imagePoints.length >= 3) {
+          final geometry = await widget.projectApi.persistConfirmedGeometry(
+            projectId: widget.project.id,
+            jobId: job.id,
+            sourceImageId: sourceImage.id,
+            openCvResultId: _latestOpenCvResultId,
+            points: imagePoints,
+            coordinateSpace:
+                imageGeometry['coordinateSpace']?.toString() ?? 'image_pixels',
+            geometryKind:
+                imageGeometry['geometryKind']?.toString() ?? 'room_boundary',
+            correctionMethod: 'manual_editor',
+          );
+          confirmedGeometryId = geometry.id;
+        }
+      }
+      if (confirmedGeometryId == null) {
+        return;
+      }
+
+      final floorPlan = await widget.projectApi.persistFloorPlanResult(
+        projectId: widget.project.id,
+        jobId: job.id,
+        sourceImageId: sourceImage.id,
+        confirmedGeometryId: confirmedGeometryId,
+        referenceLine: _recordValue(payload['referenceLine']),
+        referenceLengthValue: referenceLengthValue,
+        imageGeometry: imageGeometry,
+        metricGeometry: {...metricGeometry, 'points': metricPoints},
+        perspectiveAssumptions: _recordValue(payload['perspectiveAssumptions']),
+        unit: payload['unit']?.toString() ?? 'meters',
+        qualityStatus: 'success',
+      );
+      await _persistJobStatusIfNeeded(
+        status: 'succeeded',
+        reasonCode: 'floor_plan_generated',
+        reasonMessage:
+            'User generated a metric floor plan from confirmed geometry.',
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestConfirmedGeometryId = confirmedGeometryId;
+        _latestFloorPlanId = floorPlan.id;
+        _artifactStatus = rf('Floor plan saved.', '평면도 저장됨.');
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _artifactStatus =
+            '${rf('Floor plan save failed', '평면도 저장 실패')}: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isPersistingArtifacts = false);
+      }
+    }
+  }
+
+  Future<void> _persistJobStatusForOpenCvResult({
+    required String? qualityStatus,
+    required String? reasonCode,
+    required String? reasonMessage,
+  }) async {
+    final status = qualityStatus == 'failed' && reasonCode != 'no_source_image'
+        ? 'failed'
+        : 'review_required';
+    await _persistJobStatusIfNeeded(
+      status: status,
+      reasonCode: reasonCode ?? 'opencv_candidates_extracted',
+      reasonMessage:
+          reasonMessage ??
+          (status == 'failed'
+              ? 'OpenCV candidate extraction failed.'
+              : 'OpenCV extracted candidate geometry that requires review.'),
+      failureReasonCode: status == 'failed' ? reasonCode : null,
+      failureReasonMessage: status == 'failed' ? reasonMessage : null,
+    );
+  }
+
+  Future<void> _persistJobStatusIfNeeded({
+    required String status,
+    required String reasonCode,
+    required String reasonMessage,
+    String? failureReasonCode,
+    String? failureReasonMessage,
+  }) async {
+    final job = widget.reconstructionJob;
+    if (job == null) {
+      return;
+    }
+    final currentStatus = _persistedJobStatus ?? job.status;
+    if (currentStatus == status ||
+        currentStatus == 'succeeded' ||
+        currentStatus == 'failed' ||
+        currentStatus == 'timeout' ||
+        currentStatus == 'cancelled') {
+      return;
+    }
+    try {
+      final updated = await widget.projectApi.updateReconstructionJobStatus(
+        projectId: widget.project.id,
+        jobId: job.id,
+        status: status,
+        reasonCode: reasonCode,
+        reasonMessage: reasonMessage,
+        failureReasonCode: failureReasonCode,
+        failureReasonMessage: failureReasonMessage,
+      );
+      _persistedJobStatus = updated.status;
+    } catch (_) {
+      // Artifact persistence can still succeed if the job-status transition races
+      // another client or an already-terminal job.
+    }
+  }
+
+  String? get _effectiveReconstructionStatus =>
+      _persistedJobStatus ?? widget.reconstructionJob?.status;
+
   Future<void> _saveLayout() async {
-    if (layoutStatusNeedsReview(widget.reconstructionJob?.status) &&
+    if (layoutStatusNeedsReview(_effectiveReconstructionStatus) &&
         !_reviewSaveConfirmed) {
       setState(() {
         _reviewSaveConfirmed = true;
@@ -5147,10 +5507,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         sourceMetadataSnapshot: _sourceMetadataPayload(),
         editorScene: _editorScenePayload(scene),
         furnitureObjects: _furniturePayload(scene),
-        reconstructionStatus: widget.reconstructionJob?.status ?? 'created',
-        reviewRequired: layoutStatusNeedsReview(
-          widget.reconstructionJob?.status,
-        ),
+        reconstructionStatus: _effectiveReconstructionStatus ?? 'created',
+        reviewRequired: layoutStatusNeedsReview(_effectiveReconstructionStatus),
       );
       if (!mounted || generation != _draftGeneration) {
         return;
@@ -5247,6 +5605,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
 
     return {
       'floor_plan_id':
+          _latestFloorPlanId ??
           floorPlan['floorPlanId']?.toString() ??
           'project-${widget.project.id}-metric-floor-plan',
       'metric_geometry': {
@@ -5273,7 +5632,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       'retention_status': sourceImage?.retentionStatus,
       'uploaded_at': sourceImage?.uploadedAt.toUtc().toIso8601String(),
       'reconstruction_job_id': widget.reconstructionJob?.id,
-      'reconstruction_status': widget.reconstructionJob?.status,
+      'reconstruction_status': _effectiveReconstructionStatus,
+      'opencv_result_id': _latestOpenCvResultId,
+      'confirmed_geometry_id': _latestConfirmedGeometryId,
+      'floor_plan_id': _latestFloorPlanId,
     };
   }
 
@@ -5441,6 +5803,23 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     return value is num ? value.toDouble() : fallback;
   }
 
+  double? _numberValueOrNull(Object? value) {
+    return value is num ? value.toDouble() : null;
+  }
+
+  List<Map<String, Object?>> _pointMaps(Object? value) {
+    return _listValue(value)
+        .map(_recordValue)
+        .where((point) => point['x'] is num && point['y'] is num)
+        .map(
+          (point) => {
+            'x': (point['x'] as num).toDouble(),
+            'y': (point['y'] as num).toDouble(),
+          },
+        )
+        .toList();
+  }
+
   void _postEditorMessage({
     required String type,
     required String requestId,
@@ -5456,11 +5835,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
 
   Map<String, Object?> _sceneInitializePayload() {
     final dimensions = widget.initialDimensions;
+    final sourceImage = widget.sourceImage;
     final width = dimensions?.widthValue ?? 4.2;
     final depth = dimensions?.depthValue ?? 3.6;
     final height = dimensions?.heightValue ?? 2.7;
-    final reviewRequired =
-        widget.reconstructionJob?.status == 'review_required';
+    final reviewRequired = _effectiveReconstructionStatus == 'review_required';
 
     return {
       'scene': {
@@ -5486,6 +5865,15 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
           },
         },
       },
+      'sourceImage': sourceImage == null
+          ? null
+          : {
+              'sourceImageId': sourceImage.id,
+              'contentType': sourceImage.contentType,
+              'widthPx': sourceImage.widthPx,
+              'heightPx': sourceImage.heightPx,
+              'dataUrl': widget.sourceImageDataUrl,
+            },
       'reconstructionStatus': reviewRequired
           ? {'status': 'review_required', 'label': 'Needs review'}
           : null,

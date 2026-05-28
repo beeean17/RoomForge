@@ -29,7 +29,7 @@ class OpenCvResultCreate:
     coordinate_space: str
     candidate_geometry: dict[str, Any]
     confidence: float | None
-    algorithm: str = "roomforge-browser-opencv-stub"
+    algorithm: str = "opencv-js-canny-hough-v1"
 
 
 class OpenCvResultNotFound(Exception):

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     source_image_allowed_content_types: str = "image/jpeg,image/png,image/webp"
     room_default_height_meters: float = 2.4
     use_in_memory_repositories: bool = False
-    cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5000,http://127.0.0.1:5000"
+    cors_allow_origins: str = "http://localhost:9239,http://127.0.0.1:9239,http://localhost:5000,http://127.0.0.1:5000"
     cors_allow_origin_regex: str = r"^http://(localhost|127\.0\.0\.1):\d+$"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="ROOMFORGE_")

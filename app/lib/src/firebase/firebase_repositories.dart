@@ -7,6 +7,21 @@ abstract class FirebaseUserRepository {
   Future<FirebaseUserProfile> syncProfile(AuthSession session);
 }
 
+class FirebaseUserProfileSyncException implements Exception {
+  const FirebaseUserProfileSyncException({
+    required this.code,
+    required this.message,
+    this.cause,
+  });
+
+  final String code;
+  final String message;
+  final Object? cause;
+
+  @override
+  String toString() => message;
+}
+
 abstract class FirebaseProjectRepository {
   Stream<List<FirebaseRoomProject>> watchOwnedProjects(String ownerUid);
 

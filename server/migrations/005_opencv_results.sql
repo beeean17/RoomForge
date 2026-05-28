@@ -6,7 +6,7 @@ CREATE TABLE opencv_results (
   coordinate_space VARCHAR2(32) NOT NULL,
   candidate_geometry_json CLOB NOT NULL,
   confidence NUMBER(5, 4),
-  algorithm VARCHAR2(100) DEFAULT 'roomforge-browser-opencv-stub' NOT NULL,
+  algorithm VARCHAR2(100) DEFAULT 'opencv-js-canny-hough-v1' NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
   CONSTRAINT fk_opencv_results_project_id
     FOREIGN KEY (project_id) REFERENCES room_projects(id),

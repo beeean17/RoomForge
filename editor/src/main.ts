@@ -353,7 +353,7 @@ const candidateMaterial = new THREE.LineDashedMaterial({
   transparent: true,
   opacity: 0.48,
 })
-const candidatePoints = [
+let candidatePoints = [
   new THREE.Vector3(-1.85, 0.06, -1.34),
   new THREE.Vector3(1.86, 0.06, -1.42),
   new THREE.Vector3(1.72, 0.06, 1.34),
@@ -368,6 +368,15 @@ candidateLine.computeLineDistances()
 room.add(candidateLine)
 
 let runtimeState: Record<string, unknown> = { state: 'loading' }
+let runtimeReady = false
+let sourceImageForExtraction: SourceImageForExtraction | null = null
+let latestCandidateGeometry: Record<string, unknown> | null = null
+let latestCandidateQualityStatus = 'review_required'
+let latestCandidateReasonCode: string | null = 'low_confidence'
+let latestCandidateReasonMessage: string | null = t(
+  'Candidate geometry should be reviewed before save or export.',
+  '저장 또는 내보내기 전에 후보 지오메트리를 검토해야 합니다.',
+)
 let activeCornerIndex: number | null = null
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
@@ -390,6 +399,14 @@ type FurnitureEditAction =
   | 'deeper'
   | 'toggle-lock'
   | 'delete'
+
+type SourceImageForExtraction = {
+  dataUrl?: string
+  sourceImageId?: string
+  widthPx?: number
+  heightPx?: number
+  contentType?: string
+}
 
 type CameraSnapshot = {
   position: THREE.Vector3
@@ -471,9 +488,11 @@ function respondToFlutter(message: BridgeMessage): void {
 function handleBridgeCommand(message: BridgeMessage): void {
   if (message.type === 'roomforge.scene.initialize') {
     spatialModel = spatialModelFromBridgePayload(message.payload)
+    sourceImageForExtraction = sourceImageFromPayload(message.payload)
     applySpatialModel()
     respondToFlutter(message)
     emitSceneState('roomforge.scene.initialized', message.requestId)
+    requestCandidateExtraction()
     return
   }
 
@@ -585,6 +604,16 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     `Calibrated with ${knownLength.toFixed(2)} m known wall length.`,
     `알려진 벽 길이 ${knownLength.toFixed(2)} m로 보정했습니다.`,
   )
+  const imageGeometryBeforeCalibration = confirmedGeometryPayload()
+  const metricGeometry = {
+    coordinateSpace: 'meters' as const,
+    points: [
+      { x: 0, y: 0 },
+      { x: knownLength, y: 0 },
+      { x: knownLength, y: depth },
+      { x: 0, y: depth },
+    ],
+  }
   spatialModel = {
     ...spatialModel,
     hasUnsavedChanges: true,
@@ -592,15 +621,7 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
       ...spatialModel.room,
       floorPlan: {
         ...spatialModel.room.floorPlan,
-        metricGeometry: {
-          coordinateSpace: 'meters',
-          points: [
-            { x: 0, y: 0 },
-            { x: knownLength, y: 0 },
-            { x: knownLength, y: depth },
-            { x: 0, y: depth },
-          ],
-        },
+        metricGeometry,
       },
     },
   }
@@ -618,16 +639,8 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
         sourceCoordinateSpace: 'image_pixels',
         targetCoordinateSpace: 'meters',
       },
-      imageGeometry: confirmedGeometryPayload(),
-      metricGeometry: {
-        coordinateSpace: 'meters',
-        points: [
-          { x: 0, y: 0 },
-          { x: knownLength, y: 0 },
-          { x: knownLength, y: depth },
-          { x: 0, y: depth },
-        ],
-      },
+      imageGeometry: imageGeometryBeforeCalibration,
+      metricGeometry,
     },
   })
 })
@@ -768,50 +781,41 @@ editorCanvas.addEventListener('keydown', (event) => {
   }
 })
 
-const worker = new Worker(new URL('./opencvWorker.ts', import.meta.url), {
-  type: 'module',
-})
-worker.onmessage = (event: MessageEvent<BridgeMessage>) => {
-  runtimeState = event.data.payload
-  opencvStatusElement.textContent =
-    event.data.type === 'roomforge.opencv.runtimeLoaded'
-      ? t('Worker assets loaded', '워커 자산 로드됨')
-      : t('Worker asset loading failed', '워커 자산 로드 실패')
-  postToParent(event.data)
-  if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
-    candidateCountElement.textContent = t('1 set', '1개 세트')
-    candidateConfidenceElement.textContent = '0.72'
-    postToParent({
-      type: 'roomforge.reconstruction.qualityWarning',
-      version: BRIDGE_VERSION,
-      payload: {
-        status: 'review_required',
-        label: t('Needs review', '검토 필요'),
-        reasonCode: 'low_confidence',
-        reasonMessage: t(
-          'Candidate geometry should be reviewed before save or export.',
-          '저장 또는 내보내기 전에 후보 지오메트리를 검토해야 합니다.',
-        ),
-        recoveryActions: ['manual_outline', 'corner_correction', 'reupload'],
-      },
-    })
-    postToParent({
-      type: 'roomforge.opencv.candidatesExtracted',
-      version: BRIDGE_VERSION,
-      payload: {
-        coordinateSpace: 'image_pixels',
-        confidence: 0.72,
-        candidateGeometry: candidateGeometry(),
-      },
-    })
+let worker: Worker | null = null
+
+function ensureOpenCvWorker(): Worker {
+  if (worker !== null) {
+    return worker
   }
+
+  worker = new Worker(new URL('./opencvWorker.ts', import.meta.url), {
+    type: 'module',
+  })
+  worker.onmessage = (event: MessageEvent<BridgeMessage>) => {
+    runtimeState = event.data.payload
+    if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
+      runtimeReady = true
+      opencvStatusElement.textContent = t('OpenCV.js runtime loaded', 'OpenCV.js 런타임 로드됨')
+    } else if (event.data.type === 'roomforge.opencv.runtimeFailed') {
+      runtimeReady = false
+      opencvStatusElement.textContent = t('OpenCV.js runtime failed', 'OpenCV.js 런타임 실패')
+    }
+    postToParent(event.data)
+    if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
+      requestCandidateExtraction()
+    } else if (event.data.type === 'roomforge.opencv.candidatesExtracted') {
+      applyCandidateExtraction(event.data.payload)
+      postCandidateQualityWarning()
+    }
+  }
+  worker.postMessage({
+    type: 'roomforge.opencv.loadRuntime',
+    version: BRIDGE_VERSION,
+    requestId: 'opencv-runtime-bootstrap',
+    payload: {},
+  } satisfies BridgeMessage)
+  return worker
 }
-worker.postMessage({
-  type: 'roomforge.opencv.loadRuntime',
-  version: BRIDGE_VERSION,
-  requestId: 'opencv-runtime-bootstrap',
-  payload: {},
-} satisfies BridgeMessage)
 
 applySpatialModel()
 window.addEventListener('resize', resizeRenderer)
@@ -1453,11 +1457,133 @@ function scenePointToMetric(point: THREE.Vector3): { x: number; y: number } {
   }
 }
 
+function requestCandidateExtraction(): void {
+  if (!sourceImageForExtraction?.dataUrl) {
+    const payload = noSourceImagePayload()
+    applyCandidateExtraction(payload)
+    postToParent({
+      type: 'roomforge.opencv.candidatesExtracted',
+      version: BRIDGE_VERSION,
+      requestId: `opencv-candidate-extract-${Date.now()}`,
+      payload,
+    })
+    postCandidateQualityWarning()
+    return
+  }
+
+  const activeWorker = ensureOpenCvWorker()
+  if (!runtimeReady) {
+    opencvStatusElement.textContent = t('Loading OpenCV.js runtime', 'OpenCV.js 런타임 로드 중')
+    return
+  }
+
+  activeWorker.postMessage({
+    type: 'roomforge.opencv.extractCandidates',
+    version: BRIDGE_VERSION,
+    requestId: `opencv-candidate-extract-${Date.now()}`,
+    payload: {
+      sourceImage: sourceImageForExtraction ?? {},
+    },
+  } satisfies BridgeMessage)
+  opencvStatusElement.textContent = t('Extracting OpenCV candidates', 'OpenCV 후보 추출 중')
+}
+
+function noSourceImagePayload(): Record<string, unknown> {
+  return {
+    sourceImageId: sourceImageForExtraction?.sourceImageId,
+    coordinateSpace: 'image_pixels',
+    confidence: 0,
+    qualityStatus: 'failed',
+    reasonCode: 'no_source_image',
+    reasonMessage: 'Source image bytes are only available in the current browser session.',
+    algorithm: 'opencv-js-canny-hough-v1',
+    candidateGeometry: {
+      image: {
+        widthPx: sourceImageForExtraction?.widthPx,
+        heightPx: sourceImageForExtraction?.heightPx,
+      },
+      candidateEdges: [],
+      candidateLines: [],
+      candidateCorners: [],
+      boundaryHints: [],
+      candidateSets: [],
+      overlayStyle: {
+        candidate: 'dashed-low-opacity-purple',
+        confirmed: 'solid-blue-with-handles',
+      },
+    },
+  }
+}
+
+function applyCandidateExtraction(payload: Record<string, unknown>): void {
+  const geometry = recordFromUnknown(payload.candidateGeometry)
+  latestCandidateGeometry = geometry
+  latestCandidateQualityStatus = stringFromUnknown(payload.qualityStatus) ?? 'review_required'
+  latestCandidateReasonCode = stringFromUnknown(payload.reasonCode) ?? null
+  latestCandidateReasonMessage = stringFromUnknown(payload.reasonMessage) ?? null
+
+  const confidence = numberFromUnknown(payload.confidence, 0)
+  const boundaryPoints = candidateBoundaryPoints(geometry)
+  candidateCountElement.textContent =
+    boundaryPoints.length >= 3 ? t('1 set', '1개 세트') : t('0 sets', '0개 세트')
+  candidateConfidenceElement.textContent = confidence.toFixed(2)
+
+  if (boundaryPoints.length >= 3) {
+    updateCandidateLineFromImagePoints(boundaryPoints, geometry)
+    geometryStatusElement.textContent =
+      latestCandidateQualityStatus === 'success'
+        ? t('OpenCV candidate outline extracted.', 'OpenCV 후보 윤곽을 추출했습니다.')
+        : t('OpenCV candidate outline needs review.', 'OpenCV 후보 윤곽 검토가 필요합니다.')
+  } else {
+    geometryStatusElement.textContent = t(
+      'OpenCV could not form a candidate outline.',
+      'OpenCV가 후보 윤곽을 만들지 못했습니다.',
+    )
+  }
+
+  opencvStatusElement.textContent =
+    latestCandidateQualityStatus === 'failed'
+      ? t('Candidate extraction failed', '후보 추출 실패')
+      : latestCandidateQualityStatus === 'success'
+        ? t('Candidate extraction complete', '후보 추출 완료')
+        : t('Candidate extraction needs review', '후보 추출 검토 필요')
+}
+
+function postCandidateQualityWarning(): void {
+  if (latestCandidateQualityStatus === 'success') {
+    return
+  }
+  postToParent({
+    type: 'roomforge.reconstruction.qualityWarning',
+    version: BRIDGE_VERSION,
+    payload: {
+      status: latestCandidateQualityStatus,
+      label:
+        latestCandidateQualityStatus === 'failed'
+          ? t('Failed', '실패')
+          : t('Needs review', '검토 필요'),
+      reasonCode: latestCandidateReasonCode,
+      reasonMessage:
+        latestCandidateReasonMessage ??
+        t(
+          'Candidate geometry should be reviewed before save or export.',
+          '저장 또는 내보내기 전에 후보 지오메트리를 검토해야 합니다.',
+        ),
+      recoveryActions: ['manual_outline', 'corner_correction', 'reupload'],
+    },
+  })
+}
+
 function candidateGeometry(): Record<string, unknown> {
+  if (latestCandidateGeometry !== null) {
+    return latestCandidateGeometry
+  }
+  const widthPx = sourceImageForExtraction?.widthPx ?? 1600
+  const heightPx = sourceImageForExtraction?.heightPx ?? 1200
   return {
     image: {
-      widthPx: 1600,
-      heightPx: 1200,
+      widthPx,
+      heightPx,
     },
     candidateSets: [
       {
@@ -1465,10 +1591,10 @@ function candidateGeometry(): Record<string, unknown> {
         kind: 'room_boundary',
         coordinateSpace: 'image_pixels',
         points: [
-          { x: 120, y: 240 },
-          { x: 1420, y: 220 },
-          { x: 1480, y: 980 },
-          { x: 180, y: 1020 },
+          { x: widthPx * 0.075, y: heightPx * 0.2 },
+          { x: widthPx * 0.8875, y: heightPx * 0.183 },
+          { x: widthPx * 0.925, y: heightPx * 0.817 },
+          { x: widthPx * 0.1125, y: heightPx * 0.85 },
         ],
       },
     ],
@@ -1477,6 +1603,130 @@ function candidateGeometry(): Record<string, unknown> {
       confirmed: 'solid-blue-with-handles',
     },
   }
+}
+
+function sourceImageFromPayload(payload: Record<string, unknown>): SourceImageForExtraction | null {
+  const direct = recordFromUnknown(payload.sourceImage)
+  const scene = recordFromUnknown(payload.scene)
+  const fromScene = recordFromUnknown(scene.sourceImage)
+  const sourceImage = Object.keys(direct).length > 0 ? direct : fromScene
+  const dataUrl = stringFromUnknown(sourceImage.dataUrl)
+  const sourceImageId = stringFromUnknown(sourceImage.sourceImageId)
+  const widthPx = positiveNumberFromUnknown(sourceImage.widthPx)
+  const heightPx = positiveNumberFromUnknown(sourceImage.heightPx)
+  const contentType = stringFromUnknown(sourceImage.contentType)
+  if (!dataUrl && !sourceImageId && !widthPx && !heightPx && !contentType) {
+    return null
+  }
+  return {
+    dataUrl,
+    sourceImageId,
+    widthPx,
+    heightPx,
+    contentType,
+  }
+}
+
+function updateCandidateLineFromImagePoints(
+  imagePoints: Array<{ x: number; y: number }>,
+  geometry: Record<string, unknown>,
+): void {
+  const image = candidateImageMetadata(geometry)
+  const nextPoints = imagePoints.map((point) =>
+    imagePointToScene(point, image.widthPx, image.heightPx),
+  )
+  if (nextPoints.length < 3) {
+    return
+  }
+  const firstPoint = nextPoints[0]
+  const lastPoint = nextPoints[nextPoints.length - 1]
+  candidatePoints =
+    firstPoint.distanceTo(lastPoint) < 0.001 ? nextPoints : [...nextPoints, firstPoint.clone()]
+  candidateLine.geometry.dispose()
+  candidateLine.geometry = new THREE.BufferGeometry().setFromPoints(candidatePoints)
+  candidateLine.computeLineDistances()
+}
+
+function candidateBoundaryPoints(geometry: Record<string, unknown>): Array<{ x: number; y: number }> {
+  const candidateSets = listFromUnknown(geometry.candidateSets)
+  const firstSet = recordFromUnknown(candidateSets[0])
+  const candidateSetPoints = pointsFromUnknown(firstSet.points)
+  if (candidateSetPoints.length >= 3) {
+    return candidateSetPoints
+  }
+
+  const boundaryHints = listFromUnknown(geometry.boundaryHints)
+  const firstBoundary = recordFromUnknown(boundaryHints[0])
+  const boundaryPoints = pointsFromUnknown(firstBoundary.points)
+  if (boundaryPoints.length >= 3) {
+    return boundaryPoints
+  }
+
+  return pointsFromUnknown(geometry.candidateCorners)
+}
+
+function candidateImageMetadata(geometry: Record<string, unknown>): {
+  widthPx: number
+  heightPx: number
+} {
+  const image = recordFromUnknown(geometry.image)
+  return {
+    widthPx: positiveNumberFromUnknown(image.widthPx) ?? sourceImageForExtraction?.widthPx ?? 1600,
+    heightPx: positiveNumberFromUnknown(image.heightPx) ?? sourceImageForExtraction?.heightPx ?? 1200,
+  }
+}
+
+function imagePointToScene(point: { x: number; y: number }, widthPx: number, heightPx: number): THREE.Vector3 {
+  const bounds = roomBounds(spatialModel)
+  const metricX = clampNumber(point.x / Math.max(widthPx, 1), 0, 1) * bounds.widthMeters
+  const metricY = clampNumber(point.y / Math.max(heightPx, 1), 0, 1) * bounds.depthMeters
+  return metricPointToScene(metricX, metricY, 0.06)
+}
+
+function scenePointToImage(point: THREE.Vector3): { x: number; y: number } {
+  const geometry = candidateGeometry()
+  const image = candidateImageMetadata(geometry)
+  const bounds = roomBounds(spatialModel)
+  const metricPoint = scenePointToMetric(point)
+  return {
+    x: Math.round(clampNumber(metricPoint.x / Math.max(bounds.widthMeters, 0.001), 0, 1) * image.widthPx),
+    y: Math.round(clampNumber(metricPoint.y / Math.max(bounds.depthMeters, 0.001), 0, 1) * image.heightPx),
+  }
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+}
+
+function listFromUnknown(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function pointsFromUnknown(value: unknown): Array<{ x: number; y: number }> {
+  return listFromUnknown(value)
+    .map(recordFromUnknown)
+    .map((point) => {
+      const x = numberFromUnknown(point.x, Number.NaN)
+      const y = numberFromUnknown(point.y, Number.NaN)
+      return { x, y }
+    })
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+}
+
+function stringFromUnknown(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function numberFromUnknown(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function positiveNumberFromUnknown(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
 }
 
 function updateConfirmedGeometry(message: string, emit = true): void {
@@ -1512,10 +1762,7 @@ function confirmedGeometryPayload(): Record<string, unknown> {
   return {
     coordinateSpace: 'image_pixels',
     geometryKind: 'room_boundary',
-    points: confirmedPoints.map((point) => ({
-      x: Math.round((point.x + 2) * 400),
-      y: Math.round((point.z + 1.5) * 400),
-    })),
+    points: confirmedPoints.map(scenePointToImage),
   }
 }
 

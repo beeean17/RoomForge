@@ -221,6 +221,24 @@ class SavedLayout {
   }
 }
 
+class OpenCvResultRef {
+  const OpenCvResultRef({required this.id});
+
+  final String id;
+}
+
+class ConfirmedGeometryRef {
+  const ConfirmedGeometryRef({required this.id});
+
+  final String id;
+}
+
+class FloorPlanRef {
+  const FloorPlanRef({required this.id});
+
+  final String id;
+}
+
 abstract class ProjectApi {
   const ProjectApi({required this.authRepository});
 
@@ -285,6 +303,45 @@ abstract class ProjectApi {
   Future<ReconstructionJob> retryReconstructionJob({
     required String projectId,
     required String jobId,
+  });
+
+  Future<OpenCvResultRef> persistOpenCvResult({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required Map<String, Object?> candidateGeometry,
+    required double? confidence,
+    required String algorithm,
+    String coordinateSpace = 'image_pixels',
+    String? qualityStatus,
+    String? failureReasonCode,
+    String? failureReason,
+    String? openCvVersion,
+  });
+
+  Future<ConfirmedGeometryRef> persistConfirmedGeometry({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required String? openCvResultId,
+    required List<Map<String, Object?>> points,
+    String coordinateSpace = 'image_pixels',
+    String geometryKind = 'room_boundary',
+    String? correctionMethod,
+  });
+
+  Future<FloorPlanRef> persistFloorPlanResult({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required String confirmedGeometryId,
+    required Map<String, Object?> referenceLine,
+    required double referenceLengthValue,
+    required Map<String, Object?> imageGeometry,
+    required Map<String, Object?> metricGeometry,
+    required Map<String, Object?> perspectiveAssumptions,
+    String unit = 'meters',
+    String? qualityStatus,
   });
 
   Future<SavedLayout> saveLayout({
@@ -529,6 +586,113 @@ class LegacyProjectApi extends ProjectApi {
   }
 
   @override
+  Future<OpenCvResultRef> persistOpenCvResult({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required Map<String, Object?> candidateGeometry,
+    required double? confidence,
+    required String algorithm,
+    String coordinateSpace = 'image_pixels',
+    String? qualityStatus,
+    String? failureReasonCode,
+    String? failureReason,
+    String? openCvVersion,
+  }) async {
+    final candidateGeometryPayload = _snakeCaseJsonMap(candidateGeometry);
+    final enrichedCandidateGeometry = <String, Object?>{
+      ...candidateGeometryPayload,
+      'source_image_id': sourceImageId,
+    };
+    if (qualityStatus != null) {
+      enrichedCandidateGeometry['quality_status'] = qualityStatus;
+    }
+    if (failureReasonCode != null) {
+      enrichedCandidateGeometry['failure_reason_code'] = failureReasonCode;
+    }
+    if (failureReason != null) {
+      enrichedCandidateGeometry['failure_reason'] = failureReason;
+    }
+    if (openCvVersion != null) {
+      enrichedCandidateGeometry['opencv_version'] = openCvVersion;
+    }
+    final response = await _client.post(
+      _baseUri.resolve('/room-projects/$projectId/opencv-results'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'job_id': _jsonId(jobId),
+        'coordinate_space': coordinateSpace,
+        'candidate_geometry': enrichedCandidateGeometry,
+        'confidence': confidence,
+        'algorithm': algorithm,
+      }),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    final result = data['opencv_result'] as Map<String, Object?>;
+    return OpenCvResultRef(id: _stringId(result['id']));
+  }
+
+  @override
+  Future<ConfirmedGeometryRef> persistConfirmedGeometry({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required String? openCvResultId,
+    required List<Map<String, Object?>> points,
+    String coordinateSpace = 'image_pixels',
+    String geometryKind = 'room_boundary',
+    String? correctionMethod,
+  }) async {
+    final response = await _client.post(
+      _baseUri.resolve('/room-projects/$projectId/confirmed-geometries'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'opencv_result_id': openCvResultId == null
+            ? null
+            : _jsonId(openCvResultId),
+        'coordinate_space': coordinateSpace,
+        'geometry_kind': geometryKind,
+        'points': points,
+      }),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    final geometry = data['confirmed_geometry'] as Map<String, Object?>;
+    return ConfirmedGeometryRef(id: _stringId(geometry['id']));
+  }
+
+  @override
+  Future<FloorPlanRef> persistFloorPlanResult({
+    required String projectId,
+    required String jobId,
+    required String sourceImageId,
+    required String confirmedGeometryId,
+    required Map<String, Object?> referenceLine,
+    required double referenceLengthValue,
+    required Map<String, Object?> imageGeometry,
+    required Map<String, Object?> metricGeometry,
+    required Map<String, Object?> perspectiveAssumptions,
+    String unit = 'meters',
+    String? qualityStatus,
+  }) async {
+    final response = await _client.post(
+      _baseUri.resolve('/room-projects/$projectId/floor-plans'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'confirmed_geometry_id': _jsonId(confirmedGeometryId),
+        'reference_line': _snakeCaseJsonMap(referenceLine),
+        'reference_length_value': referenceLengthValue,
+        'unit': unit,
+      }),
+    );
+    final body = _decodeEnvelope(response);
+    final data = body['data'] as Map<String, Object?>;
+    final floorPlan = data['floor_plan'] as Map<String, Object?>;
+    return FloorPlanRef(id: _stringId(floorPlan['id']));
+  }
+
+  @override
   Future<SavedLayout> saveLayout({
     required String projectId,
     required Map<String, Object?> roomDimensions,
@@ -624,4 +788,31 @@ String _stringId(Object? value) {
 
 Object _jsonId(String value) {
   return int.tryParse(value) ?? value;
+}
+
+Map<String, Object?> _snakeCaseJsonMap(Map<String, Object?> value) {
+  return {
+    for (final entry in value.entries)
+      _snakeCaseKey(entry.key): _snakeCaseJsonValue(entry.value),
+  };
+}
+
+Object? _snakeCaseJsonValue(Object? value) {
+  if (value is Map) {
+    return {
+      for (final entry in value.entries)
+        _snakeCaseKey(entry.key.toString()): _snakeCaseJsonValue(entry.value),
+    };
+  }
+  if (value is Iterable) {
+    return value.map(_snakeCaseJsonValue).toList();
+  }
+  return value;
+}
+
+String _snakeCaseKey(String value) {
+  return value.replaceAllMapped(
+    RegExp(r'(?<=[a-z0-9])[A-Z]'),
+    (match) => '_${match.group(0)!.toLowerCase()}',
+  );
 }

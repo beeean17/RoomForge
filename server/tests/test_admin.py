@@ -319,6 +319,71 @@ def test_admin_jobs_allows_admin_to_filter_by_allowed_status() -> None:
     assert body["data"]["jobs"][0]["status_label"] == "Needs review"
 
 
+def test_admin_jobs_allows_filtering_by_every_persisted_status() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    repository = FakeReconstructionJobRepository()
+    existing_statuses = {job.status for job in repository.jobs}
+    for index, status in enumerate(
+        [
+            "created",
+            "uploading",
+            "processing",
+            "review_required",
+            "succeeded",
+            "failed",
+            "timeout",
+            "cancelled",
+            "retrying",
+        ],
+        start=100,
+    ):
+        if status in existing_statuses:
+            continue
+        repository.jobs.append(
+            ReconstructionJobRecord(
+                id=index,
+                project_id=1000 + index,
+                user_id=2000 + index,
+                source_image_id=3000 + index,
+                status=status,
+                provider="browser-opencv",
+                retry_of_job_id=None,
+                failure_reason_code=None,
+                failure_reason_message=None,
+                created_at=datetime(2026, 5, 22, tzinfo=UTC),
+                updated_at=datetime(2026, 5, 22, tzinfo=UTC),
+            )
+        )
+    app.state.reconstruction_job_repository = repository
+    client = TestClient(app)
+
+    for status in [
+        "created",
+        "uploading",
+        "processing",
+        "review_required",
+        "succeeded",
+        "failed",
+        "timeout",
+        "cancelled",
+        "retrying",
+    ]:
+        response = client.get(
+            f"/admin/jobs?status={status}",
+            headers={"Authorization": "Bearer valid-token"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["error"] is None
+        assert body["data"]["jobs"]
+        assert {job["status"] for job in body["data"]["jobs"]} == {status}
+
+
 def test_admin_jobs_rejects_normal_user_with_unauthorized_envelope() -> None:
     from fastapi.testclient import TestClient
 

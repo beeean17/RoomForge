@@ -302,8 +302,15 @@ def test_export_latest_layout_returns_json_export_payload() -> None:
     assert layout["room_dimensions"]["height_value"] == 2.7
     assert layout["floor_plan"]["coordinate_space"] == "meters"
     assert layout["source_metadata"]["source_image_id"] == 7
+    assert layout["source_metadata"]["reconstruction_job_id"] == 9
+    assert furniture["id"] == "furniture-chair-1"
     assert furniture["category"] == "chair"
+    assert furniture["position"] == {"x": 1.2, "y": 1.4}
+    assert furniture["size"]["width_meters"] == 0.55
+    assert furniture["size"]["depth_meters"] == 0.55
+    assert furniture["size"]["height_meters"] == 0.85
     assert furniture["rotation_degrees"] == 15
+    assert furniture["color"] == "#64748b"
 
 
 def test_export_layout_rejects_cross_user_access() -> None:

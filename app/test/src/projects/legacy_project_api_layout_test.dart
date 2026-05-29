@@ -222,6 +222,89 @@ void main() {
       expect(loadedFurniture['color'], '#64748b');
     },
   );
+
+  test(
+    'LegacyProjectApi exportLatestLayout returns layout JSON payload',
+    () async {
+      final api = LegacyProjectApi(
+        authRepository: const _TokenAuthRepository('token-1'),
+        baseUrl: 'https://api.example.test',
+        client: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(
+            request.url.toString(),
+            'https://api.example.test/room-projects/project-1/layouts/latest/export',
+          );
+          expect(request.headers['Authorization'], 'Bearer token-1');
+
+          return http.Response(
+            jsonEncode({
+              'data': {
+                'export': {
+                  'format': 'roomforge_layout_json',
+                  'version': 1,
+                  'layout': {
+                    'id': 11,
+                    'project_id': 1,
+                    'room_dimensions': {
+                      'unit': 'meters',
+                      'width_value': 4.2,
+                      'depth_value': 3.6,
+                      'height_value': 2.7,
+                    },
+                    'floor_plan': {'coordinate_space': 'meters'},
+                    'source_metadata': {
+                      'source_image_id': 7,
+                      'reconstruction_job_id': 9,
+                    },
+                    'furniture_objects': [
+                      {
+                        'id': 'furniture-chair-1',
+                        'category': 'chair',
+                        'position': {'x': 1.2, 'y': 1.4},
+                        'size': {
+                          'width_meters': 0.55,
+                          'depth_meters': 0.55,
+                          'height_meters': 0.85,
+                        },
+                        'rotation_degrees': 15.0,
+                        'color': '#64748b',
+                      },
+                    ],
+                    'editor_scene': {'scene_id': 'scene-1'},
+                    'created_at': '2026-05-29T00:00:00Z',
+                    'updated_at': '2026-05-29T00:00:01Z',
+                  },
+                },
+              },
+              'error': null,
+              'meta': {'request_id': 'req-1'},
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final export = await api.exportLatestLayout(projectId: 'project-1');
+      final layout = Map<String, Object?>.from(export['layout'] as Map);
+      final furniture = Map<String, Object?>.from(
+        (layout['furniture_objects'] as List).single as Map,
+      );
+
+      expect(export, containsPair('format', 'roomforge_layout_json'));
+      expect(export, containsPair('version', 1));
+      expect(layout['room_dimensions'], containsPair('height_value', 2.7));
+      expect(layout['floor_plan'], containsPair('coordinate_space', 'meters'));
+      expect(
+        layout['source_metadata'],
+        containsPair('reconstruction_job_id', 9),
+      );
+      expect(furniture, containsPair('id', 'furniture-chair-1'));
+      expect(furniture, containsPair('rotation_degrees', 15.0));
+      expect(furniture, containsPair('color', '#64748b'));
+    },
+  );
 }
 
 class _TokenAuthRepository implements AuthRepository {

@@ -19,6 +19,28 @@ void main() {
       );
     });
 
+    test(
+      'warns when exported layout top-level reconstruction needs review',
+      () {
+        expect(
+          layoutExportNeedsReviewWarning(const {
+            'review_required': false,
+            'reconstruction_status': 'review_required',
+            'source_metadata': {'reconstruction_status': 'succeeded'},
+          }),
+          isTrue,
+        );
+      },
+    );
+
+    test('export warning copy requires a second explicit export action', () {
+      expect(
+        layoutNeedsReviewExportWarning,
+        contains('Press Export JSON again'),
+      );
+      expect(layoutNeedsReviewExportWarning, contains('Needs review'));
+    });
+
     test('warns when exported layout source metadata needs review', () {
       expect(
         layoutExportNeedsReviewWarning(const {

@@ -1173,7 +1173,8 @@ class _FirebaseAdminDiagnosticsScreenState
   final _adminSearchController = TextEditingController();
   FirebaseJobStatus _statusFilter = FirebaseJobStatus.failed;
   FirebaseReconstructionJob? _selectedJob;
-  String _adminSearchField = 'job_id';
+  FirebaseAdminDiagnosticsSearchField _adminSearchField =
+      FirebaseAdminDiagnosticsSearchField.jobId;
   String? _activeSearchLabel;
   late Stream<List<FirebaseReconstructionJob>> _jobsStream;
 
@@ -1195,7 +1196,7 @@ class _FirebaseAdminDiagnosticsScreenState
     });
   }
 
-  void _setAdminSearchField(String? field) {
+  void _setAdminSearchField(FirebaseAdminDiagnosticsSearchField? field) {
     if (field == null) {
       return;
     }
@@ -1208,13 +1209,17 @@ class _FirebaseAdminDiagnosticsScreenState
       return;
     }
     final query = switch (_adminSearchField) {
-      'owner_uid' => FirebaseAdminJobQuery(ownerUid: value),
-      'project_id' => FirebaseAdminJobQuery(projectId: value),
+      FirebaseAdminDiagnosticsSearchField.ownerUid => FirebaseAdminJobQuery(
+        ownerUid: value,
+      ),
+      FirebaseAdminDiagnosticsSearchField.projectId => FirebaseAdminJobQuery(
+        projectId: value,
+      ),
       _ => FirebaseAdminJobQuery(jobId: value),
     };
     setState(() {
       _selectedJob = null;
-      _activeSearchLabel = '${_adminSearchField.replaceAll('_', ' ')}: $value';
+      _activeSearchLabel = '${_adminSearchField.label}: $value';
       _jobsStream = widget.adminRepository.watchJobs(query);
     });
   }
@@ -1287,20 +1292,25 @@ class _FirebaseAdminDiagnosticsScreenState
                   const SizedBox(height: 16),
                   RoomForgePanel(
                     padding: const EdgeInsets.all(14),
-                    child: DropdownButtonFormField<FirebaseJobStatus>(
-                      value: _statusFilter,
-                      decoration: InputDecoration(
-                        labelText: rf('Job status', '작업 상태'),
-                        prefixIcon: const Icon(Icons.filter_alt_outlined),
+                    child: Semantics(
+                      container: true,
+                      label: FirebaseAdminDiagnosticsUiText
+                          .statusFilterSemanticsLabel,
+                      child: DropdownButtonFormField<FirebaseJobStatus>(
+                        value: _statusFilter,
+                        decoration: InputDecoration(
+                          labelText: rf('Job status', '작업 상태'),
+                          prefixIcon: const Icon(Icons.filter_alt_outlined),
+                        ),
+                        items: [
+                          for (final status in FirebaseJobStatus.values)
+                            DropdownMenuItem(
+                              value: status,
+                              child: Text(_adminStatusLabel(status.wireValue)),
+                            ),
+                        ],
+                        onChanged: _setStatusFilter,
                       ),
-                      items: [
-                        for (final status in FirebaseJobStatus.values)
-                          DropdownMenuItem(
-                            value: status,
-                            child: Text(_adminStatusLabel(status.wireValue)),
-                          ),
-                      ],
-                      onChanged: _setStatusFilter,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1309,40 +1319,46 @@ class _FirebaseAdminDiagnosticsScreenState
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final compact = constraints.maxWidth < 720;
-                        final fieldPicker = DropdownButtonFormField<String>(
-                          value: _adminSearchField,
-                          decoration: InputDecoration(
-                            labelText: rf('Search field', '검색 필드'),
-                            prefixIcon: const Icon(
-                              Icons.manage_search_outlined,
+                        final fieldPicker =
+                            DropdownButtonFormField<
+                              FirebaseAdminDiagnosticsSearchField
+                            >(
+                              value: _adminSearchField,
+                              decoration: InputDecoration(
+                                labelText: rf('Search field', '검색 필드'),
+                                prefixIcon: const Icon(
+                                  Icons.manage_search_outlined,
+                                ),
+                              ),
+                              items: [
+                                for (final field
+                                    in FirebaseAdminDiagnosticsSearchField
+                                        .values)
+                                  DropdownMenuItem(
+                                    value: field,
+                                    child: Text(
+                                      _localizedAdminSearchFieldLabel(field),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: _setAdminSearchField,
+                            );
+                        final queryInput = Semantics(
+                          container: true,
+                          textField: true,
+                          label: FirebaseAdminDiagnosticsUiText
+                              .exactLookupSemanticsLabel,
+                          child: TextField(
+                            controller: _adminSearchController,
+                            decoration: InputDecoration(
+                              labelText: rf('Exact admin lookup', '정확한 관리자 조회'),
+                              hintText: rf(
+                                'Paste job, project, or user id',
+                                '작업, 프로젝트, 사용자 ID를 붙여넣기',
+                              ),
                             ),
+                            onSubmitted: (_) => _searchAdminJobs(),
                           ),
-                          items: [
-                            DropdownMenuItem(
-                              value: 'job_id',
-                              child: Text(rf('Job ID', '작업 ID')),
-                            ),
-                            DropdownMenuItem(
-                              value: 'project_id',
-                              child: Text(rf('Project ID', '프로젝트 ID')),
-                            ),
-                            DropdownMenuItem(
-                              value: 'owner_uid',
-                              child: Text(rf('User ID', '사용자 ID')),
-                            ),
-                          ],
-                          onChanged: _setAdminSearchField,
-                        );
-                        final queryInput = TextField(
-                          controller: _adminSearchController,
-                          decoration: InputDecoration(
-                            labelText: rf('Exact admin lookup', '정확한 관리자 조회'),
-                            hintText: rf(
-                              'Paste job, project, or user id',
-                              '작업, 프로젝트, 사용자 ID를 붙여넣기',
-                            ),
-                          ),
-                          onSubmitted: (_) => _searchAdminJobs(),
                         );
                         final actions = Wrap(
                           spacing: 8,
@@ -1421,7 +1437,8 @@ class _FirebaseAdminDiagnosticsScreenState
                               const SizedBox(height: 12),
                               Text(
                                 rf(
-                                  'Loading protected job diagnostics...',
+                                  FirebaseAdminDiagnosticsUiText
+                                      .protectedLoadingMessage,
                                   '보호된 작업 진단 정보를 불러오는 중...',
                                 ),
                               ),
@@ -1514,35 +1531,47 @@ class _FirebaseAdminJobList extends StatelessWidget {
     final theme = Theme.of(context);
     return RoomForgePanel(
       padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              rf('Jobs', '작업'),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+      child: Semantics(
+        container: true,
+        label: FirebaseAdminDiagnosticsUiText.jobListSemanticsLabel,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                rf('Jobs', '작업'),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
-          const Divider(height: 1),
-          for (final job in jobs)
-            ListTile(
-              selected: job.jobId == selectedJobId,
-              onTap: () => onSelect(job),
-              title: Text('${rf('Job', '작업')} ${job.jobId}'),
-              subtitle: Text(
-                '${rf('Owner', '소유자')} ${job.ownerUid}\n${rf('Project', '프로젝트')} ${job.projectId}',
+            const Divider(height: 1),
+            for (final job in jobs)
+              Semantics(
+                container: true,
+                button: true,
+                selected: job.jobId == selectedJobId,
+                label: FirebaseAdminDiagnosticsUiText.jobRowAccessibilityLabel(
+                  job,
+                ),
+                child: ListTile(
+                  selected: job.jobId == selectedJobId,
+                  onTap: () => onSelect(job),
+                  title: Text('${rf('Job', '작업')} ${job.jobId}'),
+                  subtitle: Text(
+                    '${rf('Owner', '소유자')} ${job.ownerUid}\n${rf('Project', '프로젝트')} ${job.projectId}',
+                  ),
+                  isThreeLine: true,
+                  trailing: RoomForgeStatusPill(
+                    label: _adminStatusLabel(job.status.wireValue),
+                    color: _adminStatusColor(job.status.wireValue),
+                    dense: true,
+                  ),
+                ),
               ),
-              isThreeLine: true,
-              trailing: RoomForgeStatusPill(
-                label: _adminStatusLabel(job.status.wireValue),
-                color: _adminStatusColor(job.status.wireValue),
-                dense: true,
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1577,96 +1606,122 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _FirebaseAdminSection(
-          title: rf('Job detail', '작업 상세'),
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                RoomForgeStatusPill(
-                  label: _adminStatusLabel(job.status.wireValue),
-                  color: _adminStatusColor(job.status.wireValue),
+    return Semantics(
+      container: true,
+      label: FirebaseAdminDiagnosticsUiText.jobDetailAccessibilitySummary(job),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _FirebaseAdminSection(
+            title: rf('Job detail', '작업 상세'),
+            semanticsLabel:
+                FirebaseAdminDiagnosticsUiText.jobDetailSemanticsLabel,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  RoomForgeStatusPill(
+                    label: _adminStatusLabel(job.status.wireValue),
+                    color: _adminStatusColor(job.status.wireValue),
+                  ),
+                  RoomForgeStatusPill(
+                    label: '${rf('Retry', '재시도')} ${job.retryCount}',
+                    icon: Icons.refresh,
+                    color: _roomForgeMuted,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text('${rf('Owner', '소유자')}: ${job.ownerUid}'),
+              Text('${rf('Project', '프로젝트')}: ${job.projectId}'),
+              Text('${rf('Job', '작업')}: ${job.jobId}'),
+              Text('${rf('Source image', '소스 이미지')}: ${job.sourceImageId}'),
+              Text('${rf('Provider', '제공자')}: ${job.providerType}'),
+              if (job.providerId != null)
+                Text('${rf('Provider ID', '제공자 ID')}: ${job.providerId}'),
+              if (job.algorithmId != null)
+                Text('${rf('Algorithm', '알고리즘')}: ${job.algorithmId}'),
+              if (job.openCvVersion != null)
+                Text('${rf('OpenCV', 'OpenCV')}: ${job.openCvVersion}'),
+              if (job.qualityStatus != null)
+                Text(
+                  '${rf('Quality', '품질')}: ${job.qualityStatus!.displayLabel}',
                 ),
-                RoomForgeStatusPill(
-                  label: '${rf('Retry', '재시도')} ${job.retryCount}',
-                  icon: Icons.refresh,
-                  color: _roomForgeMuted,
+              Text('${rf('Retry count', '재시도 횟수')}: ${job.retryCount}'),
+              if (job.latestTransitionId != null)
+                Text(
+                  '${rf('Latest transition', '최근 전환')}: ${job.latestTransitionId}',
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('${rf('Owner', '소유자')}: ${job.ownerUid}'),
-            Text('${rf('Project', '프로젝트')}: ${job.projectId}'),
-            Text('${rf('Job', '작업')}: ${job.jobId}'),
-            Text('${rf('Source image', '소스 이미지')}: ${job.sourceImageId}'),
-            Text('${rf('Provider', '제공자')}: ${job.providerType}'),
-            if (job.providerId != null)
-              Text('${rf('Provider ID', '제공자 ID')}: ${job.providerId}'),
-            if (job.algorithmId != null)
-              Text('${rf('Algorithm', '알고리즘')}: ${job.algorithmId}'),
-            if (job.openCvVersion != null)
-              Text('${rf('OpenCV', 'OpenCV')}: ${job.openCvVersion}'),
-            Text('${rf('Retry count', '재시도 횟수')}: ${job.retryCount}'),
-            if (job.retryOfJobId != null)
-              Text('${rf('Retry of', '원본 재시도 작업')}: ${job.retryOfJobId}'),
-            if (job.rootJobId != null)
-              Text('${rf('Root job', '루트 작업')}: ${job.rootJobId}'),
-            if (job.failureReasonCode != null)
-              Text('${rf('Failure', '실패 사유')}: ${job.failureReasonCode}'),
-            if (job.failureReason != null) Text(job.failureReason!),
-            Text(
-              '${rf('Latest result', '최근 결과')}: ${job.latestResultId ?? 'not_generated'}',
-            ),
-            Text(
-              '${rf('Latest geometry', '최근 지오메트리')}: ${job.latestConfirmedGeometryId ?? 'not_generated'}',
-            ),
-            Text(
-              '${rf('Latest floor plan', '최근 평면도')}: ${job.latestFloorPlanId ?? 'not_generated'}',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _FirebaseAdminRetryAction(
-          job: job,
-          adminRepository: adminRepository,
-          session: session,
-        ),
-        const SizedBox(height: 12),
-        _FirebaseAdminArtifactRefs(artifactRefs: job.artifactRefs),
-        const SizedBox(height: 12),
-        _FirebaseAdminTransitions(
-          stream: adminRepository.watchTransitionsForJob(jobId: job.jobId),
-        ),
-        const SizedBox(height: 12),
-        _FirebaseAdminResults(
-          stream: adminRepository.watchResultsForJob(jobId: job.jobId),
-        ),
-        const SizedBox(height: 12),
-        _FirebaseAdminLayouts(
-          jobId: job.jobId,
-          stream: adminRepository.watchLayoutsByOwner(ownerUid: job.ownerUid),
-        ),
-      ],
+              if (job.retryOfJobId != null)
+                Text('${rf('Retry of', '원본 재시도 작업')}: ${job.retryOfJobId}'),
+              if (job.rootJobId != null)
+                Text('${rf('Root job', '루트 작업')}: ${job.rootJobId}'),
+              if (job.failureReasonCode != null)
+                Text('${rf('Failure', '실패 사유')}: ${job.failureReasonCode}'),
+              if (job.failureReason != null) Text(job.failureReason!),
+              if (job.startedAt != null)
+                Text('${rf('Started at', '시작 시각')}: ${job.startedAt}'),
+              if (job.completedAt != null)
+                Text('${rf('Completed at', '완료 시각')}: ${job.completedAt}'),
+              if (job.timeoutAt != null)
+                Text('${rf('Timeout at', '시간 초과 시각')}: ${job.timeoutAt}'),
+              Text(
+                '${rf('Latest result', '최근 결과')}: ${job.latestResultId ?? 'not_generated'}',
+              ),
+              Text(
+                '${rf('Latest geometry', '최근 지오메트리')}: ${job.latestConfirmedGeometryId ?? 'not_generated'}',
+              ),
+              Text(
+                '${rf('Latest floor plan', '최근 평면도')}: ${job.latestFloorPlanId ?? 'not_generated'}',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _FirebaseAdminRetryAction(
+            job: job,
+            adminRepository: adminRepository,
+            session: session,
+          ),
+          const SizedBox(height: 12),
+          _FirebaseAdminArtifactRefs(artifactRefs: job.artifactRefs),
+          const SizedBox(height: 12),
+          _FirebaseAdminTransitions(
+            stream: adminRepository.watchTransitionsForJob(jobId: job.jobId),
+          ),
+          const SizedBox(height: 12),
+          _FirebaseAdminResults(
+            stream: adminRepository.watchResultsForJob(jobId: job.jobId),
+          ),
+          const SizedBox(height: 12),
+          _FirebaseAdminLayouts(
+            jobId: job.jobId,
+            stream: adminRepository.watchLayoutsForJob(jobId: job.jobId),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _FirebaseAdminSection extends StatelessWidget {
-  const _FirebaseAdminSection({required this.title, required this.children});
+  const _FirebaseAdminSection({
+    required this.title,
+    required this.children,
+    this.semanticsLabel,
+  });
 
   final String title;
   final List<Widget> children;
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return RoomForgePanel(
-      child: Padding(
-        padding: EdgeInsets.zero,
+      child: Semantics(
+        container: true,
+        label: semanticsLabel ?? title,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1693,9 +1748,41 @@ class _FirebaseAdminArtifactRefs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (artifactRefs.isEmpty) {
+    return _FirebaseAdminArtifactRefsPanel(artifactRefs: artifactRefs);
+  }
+}
+
+class _FirebaseAdminArtifactRefsPanel extends StatefulWidget {
+  const _FirebaseAdminArtifactRefsPanel({required this.artifactRefs});
+
+  final List<FirebaseArtifactRef> artifactRefs;
+
+  @override
+  State<_FirebaseAdminArtifactRefsPanel> createState() =>
+      _FirebaseAdminArtifactRefsPanelState();
+}
+
+class _FirebaseAdminArtifactRefsPanelState
+    extends State<_FirebaseAdminArtifactRefsPanel> {
+  final _artifactStateFutures =
+      <String, Future<FirebaseAdminArtifactReadState>>{};
+
+  @override
+  void didUpdateWidget(covariant _FirebaseAdminArtifactRefsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final activePaths = widget.artifactRefs
+        .map((ref) => ref.storagePath)
+        .toSet();
+    _artifactStateFutures.removeWhere((path, _) => !activePaths.contains(path));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.artifactRefs.isEmpty) {
       return _FirebaseAdminSection(
         title: rf('Artifact access', '아티팩트 접근'),
+        semanticsLabel:
+            FirebaseAdminDiagnosticsUiText.artifactAccessSemanticsLabel,
         children: [
           Text(
             rf(
@@ -1708,10 +1795,12 @@ class _FirebaseAdminArtifactRefs extends StatelessWidget {
     }
     return _FirebaseAdminSection(
       title: rf('Artifact access', '아티팩트 접근'),
+      semanticsLabel:
+          FirebaseAdminDiagnosticsUiText.artifactAccessSemanticsLabel,
       children: [
-        for (final ref in artifactRefs)
+        for (final ref in widget.artifactRefs)
           FutureBuilder<FirebaseAdminArtifactReadState>(
-            future: _readArtifactState(ref),
+            future: _artifactStateFuture(ref),
             builder: (context, snapshot) {
               final state =
                   snapshot.data ??
@@ -1729,6 +1818,15 @@ class _FirebaseAdminArtifactRefs extends StatelessWidget {
             },
           ),
       ],
+    );
+  }
+
+  Future<FirebaseAdminArtifactReadState> _artifactStateFuture(
+    FirebaseArtifactRef artifactRef,
+  ) {
+    return _artifactStateFutures.putIfAbsent(
+      artifactRef.storagePath,
+      () => _readArtifactState(artifactRef),
     );
   }
 
@@ -1882,6 +1980,8 @@ class _FirebaseAdminTransitions extends StatelessWidget {
         final transitions = snapshot.data ?? const [];
         return _FirebaseAdminSection(
           title: rf('Transition history', '상태 전환 이력'),
+          semanticsLabel:
+              FirebaseAdminDiagnosticsUiText.transitionHistorySemanticsLabel,
           children: transitions.isEmpty
               ? [Text(rf('No transitions found.', '상태 전환 이력이 없습니다.'))]
               : [
@@ -1927,6 +2027,8 @@ class _FirebaseAdminResults extends StatelessWidget {
         final results = snapshot.data ?? const [];
         return _FirebaseAdminSection(
           title: rf('OpenCV results', 'OpenCV 결과'),
+          semanticsLabel:
+              FirebaseAdminDiagnosticsUiText.opencvResultsSemanticsLabel,
           children: results.isEmpty
               ? [Text(rf('No OpenCV result found.', 'OpenCV 결과가 없습니다.'))]
               : [
@@ -1967,6 +2069,8 @@ class _FirebaseAdminLayouts extends StatelessWidget {
             .toList();
         return _FirebaseAdminSection(
           title: rf('Layout references', '레이아웃 참조'),
+          semanticsLabel:
+              FirebaseAdminDiagnosticsUiText.layoutReferencesSemanticsLabel,
           children: layouts.isEmpty
               ? [
                   Text(
@@ -2529,6 +2633,19 @@ String _adminArtifactStateLabel(String state) {
     'not_generated' => rf('not_generated', '생성되지 않음'),
     'checking' => rf('checking', '확인 중'),
     _ => state,
+  };
+}
+
+String _localizedAdminSearchFieldLabel(
+  FirebaseAdminDiagnosticsSearchField field,
+) {
+  return switch (field) {
+    FirebaseAdminDiagnosticsSearchField.jobId => rf('Job ID', '작업 ID'),
+    FirebaseAdminDiagnosticsSearchField.projectId => rf(
+      'Project ID',
+      '프로젝트 ID',
+    ),
+    FirebaseAdminDiagnosticsSearchField.ownerUid => rf('User ID', '사용자 ID'),
   };
 }
 

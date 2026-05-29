@@ -113,6 +113,20 @@
       ]
     },
     {
+      "collectionGroup": "layouts",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "reconstruction_job_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updated_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "admin_actions",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

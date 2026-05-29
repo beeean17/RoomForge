@@ -194,6 +194,16 @@ void main() {
       expect(layoutSpec.filters.single.field, 'owner_uid');
       expect(layoutSpec.orderBy.single.field, 'updated_at');
 
+      final layoutForJobSpec = FirebaseAdminQuerySpecs.layoutsForJob(
+        jobId: 'job-1',
+      );
+      expect(
+        layoutForJobSpec.collectionGroup,
+        FirebaseAdminCollectionGroup.layouts,
+      );
+      expect(layoutForJobSpec.filters.single.field, 'reconstruction_job_id');
+      expect(layoutForJobSpec.orderBy.single.field, 'updated_at');
+
       final actionsSpec = FirebaseAdminQuerySpecs.adminActionsForTarget(
         targetType: 'reconstruction_job',
         targetId: 'job-1',

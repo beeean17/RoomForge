@@ -217,6 +217,16 @@ class FirebaseAdminAccessRepository implements FirebaseAdminRepository {
   }
 
   @override
+  Stream<List<FirebaseSavedLayout>> watchLayoutsForJob({
+    required String jobId,
+  }) {
+    return _watchQuery(
+      FirebaseAdminQuerySpecs.layoutsForJob(jobId: jobId),
+      FirebaseModelSerializers.savedLayoutFromFirestore,
+    );
+  }
+
+  @override
   Stream<List<FirebaseAdminAction>> watchAdminActionsForTarget({
     required String targetType,
     required String targetId,
@@ -395,6 +405,15 @@ class DisabledFirebaseAdminRepository implements FirebaseAdminRepository {
   @override
   Stream<List<FirebaseSavedLayout>> watchLayoutsByOwner({
     required String ownerUid,
+  }) {
+    return Stream.error(
+      UnsupportedError('Firebase admin access is unavailable.'),
+    );
+  }
+
+  @override
+  Stream<List<FirebaseSavedLayout>> watchLayoutsForJob({
+    required String jobId,
   }) {
     return Stream.error(
       UnsupportedError('Firebase admin access is unavailable.'),

@@ -332,6 +332,25 @@ class FirebaseAdminQuerySpecs {
     );
   }
 
+  static FirebaseAdminQuerySpec layoutsForJob({
+    required String jobId,
+    int? limit = 50,
+  }) {
+    return FirebaseAdminQuerySpec(
+      collectionGroup: FirebaseAdminCollectionGroup.layouts,
+      filters: [
+        FirebaseAdminQueryFilter(
+          field: 'reconstruction_job_id',
+          isEqualTo: jobId,
+        ),
+      ],
+      orderBy: const [
+        FirebaseAdminQueryOrder(field: 'updated_at', descending: true),
+      ],
+      limit: limit,
+    );
+  }
+
   static FirebaseAdminQuerySpec adminActionsForTarget({
     required String targetType,
     required String targetId,
@@ -373,6 +392,8 @@ abstract class FirebaseAdminRepository {
   Stream<List<FirebaseSavedLayout>> watchLayoutsByOwner({
     required String ownerUid,
   });
+
+  Stream<List<FirebaseSavedLayout>> watchLayoutsForJob({required String jobId});
 
   Stream<List<FirebaseAdminAction>> watchAdminActionsForTarget({
     required String targetType,

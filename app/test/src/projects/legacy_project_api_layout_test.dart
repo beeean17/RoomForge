@@ -305,6 +305,185 @@ void main() {
       expect(furniture, containsPair('color', '#64748b'));
     },
   );
+
+  test(
+    'LegacyProjectApi preserves required fields across save load export',
+    () async {
+      Map<String, Object?>? persisted;
+      final expected = _layoutPayload();
+      final api = LegacyProjectApi(
+        authRepository: const _TokenAuthRepository('token-1'),
+        baseUrl: 'https://api.example.test',
+        client: MockClient((request) async {
+          expect(request.headers['Authorization'], 'Bearer token-1');
+
+          if (request.method == 'POST' &&
+              request.url.path == '/room-projects/project-1/layouts') {
+            persisted = Map<String, Object?>.from(
+              jsonDecode(request.body) as Map,
+            );
+            return http.Response(
+              jsonEncode({
+                'data': {'layout': _layoutResponse(persisted!)},
+                'error': null,
+                'meta': {'request_id': 'save-req'},
+              }),
+              201,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+
+          if (request.method == 'GET' &&
+              request.url.path == '/room-projects/project-1/layouts/latest') {
+            expect(persisted, isNotNull);
+            return http.Response(
+              jsonEncode({
+                'data': {'layout': _layoutResponse(persisted!)},
+                'error': null,
+                'meta': {'request_id': 'load-req'},
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+
+          if (request.method == 'GET' &&
+              request.url.path ==
+                  '/room-projects/project-1/layouts/latest/export') {
+            expect(persisted, isNotNull);
+            return http.Response(
+              jsonEncode({
+                'data': {
+                  'export': {
+                    'format': 'roomforge_layout_json',
+                    'version': 1,
+                    'layout': _exportLayoutResponse(persisted!),
+                  },
+                },
+                'error': null,
+                'meta': {'request_id': 'export-req'},
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+
+          return http.Response('{"error":{"code":"not_found"}}', 404);
+        }),
+      );
+
+      final saved = await api.saveLayout(
+        projectId: 'project-1',
+        roomDimensions: Map<String, Object?>.from(
+          expected['room_dimensions'] as Map,
+        ),
+        floorPlan: Map<String, Object?>.from(expected['floor_plan'] as Map),
+        sourceMetadata: Map<String, Object?>.from(
+          expected['source_metadata'] as Map,
+        ),
+        furnitureObjects: (expected['furniture_objects'] as List)
+            .map((item) => Map<String, Object?>.from(item as Map))
+            .toList(),
+        editorScene: Map<String, Object?>.from(expected['editor_scene'] as Map),
+      );
+      final loaded = await api.loadLatestLayout(projectId: 'project-1');
+      final exported = await api.exportLatestLayout(projectId: 'project-1');
+      final exportedLayout = Map<String, Object?>.from(
+        exported['layout'] as Map,
+      );
+
+      expect(_requiredFieldsFromSavedLayout(saved), expected);
+      expect(_requiredFieldsFromSavedLayout(loaded), expected);
+      expect(_requiredFieldsFromExport(exportedLayout), expected);
+    },
+  );
+}
+
+Map<String, Object?> _layoutPayload() {
+  return {
+    'room_dimensions': {
+      'unit': 'meters',
+      'width_value': 4.2,
+      'depth_value': 3.6,
+      'height_value': 2.7,
+    },
+    'floor_plan': {
+      'coordinate_space': 'meters',
+      'metric_geometry': {
+        'coordinate_space': 'meters',
+        'points': [
+          {'x': 0.0, 'y': 0.0},
+          {'x': 4.2, 'y': 0.0},
+          {'x': 4.2, 'y': 3.6},
+          {'x': 0.0, 'y': 3.6},
+        ],
+      },
+    },
+    'source_metadata': {'source_image_id': 7, 'reconstruction_job_id': 9},
+    'furniture_objects': [
+      {
+        'id': 'furniture-chair-1',
+        'category': 'chair',
+        'position': {'x': 1.2, 'y': 1.4},
+        'size': {
+          'width_meters': 0.55,
+          'depth_meters': 0.55,
+          'height_meters': 0.85,
+        },
+        'rotation_degrees': 15.0,
+        'color': '#64748b',
+      },
+    ],
+    'editor_scene': {
+      'scene_id': 'scene-1',
+      'view_mode': '3d',
+      'selected': {
+        'object_id': 'furniture-chair-1',
+        'object_type': 'furniture',
+      },
+    },
+  };
+}
+
+Map<String, Object?> _layoutResponse(Map<String, Object?> layoutPayload) {
+  return {
+    'id': 11,
+    'project_id': 1,
+    'user_id': 42,
+    ...layoutPayload,
+    'created_at': '2026-05-29T00:00:00Z',
+    'updated_at': '2026-05-29T00:00:01Z',
+  };
+}
+
+Map<String, Object?> _exportLayoutResponse(Map<String, Object?> layoutPayload) {
+  return {
+    'id': 11,
+    'project_id': 1,
+    ...layoutPayload,
+    'created_at': '2026-05-29T00:00:00Z',
+    'updated_at': '2026-05-29T00:00:01Z',
+  };
+}
+
+Map<String, Object?> _requiredFieldsFromSavedLayout(SavedLayout layout) {
+  return {
+    'room_dimensions': layout.roomDimensions,
+    'floor_plan': layout.floorPlan,
+    'source_metadata': layout.sourceMetadata,
+    'furniture_objects': layout.furnitureObjects,
+    'editor_scene': layout.editorScene,
+  };
+}
+
+Map<String, Object?> _requiredFieldsFromExport(Map<String, Object?> layout) {
+  return {
+    'room_dimensions': layout['room_dimensions'],
+    'floor_plan': layout['floor_plan'],
+    'source_metadata': layout['source_metadata'],
+    'furniture_objects': layout['furniture_objects'],
+    'editor_scene': layout['editor_scene'],
+  };
 }
 
 class _TokenAuthRepository implements AuthRepository {

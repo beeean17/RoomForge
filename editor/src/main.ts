@@ -16,11 +16,13 @@ import {
 } from './cameraControls'
 import {
   addFurnitureToModel,
+  editSelectedFurnitureInModel,
   furnitureDefaults,
   selectedFurniture as selectedFurnitureFromModel,
   selectedFurnitureSummary,
   selectionVisualTokens,
   selectFurnitureInModel,
+  type FurnitureEditAction,
 } from './furnitureModel'
 import {
   defaultSpatialModel,
@@ -400,19 +402,6 @@ const cameraTarget = new THREE.Vector3()
 const reducedMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
 
 type CameraDragMode = 'orbit' | 'pan'
-type FurnitureEditAction =
-  | 'move-up'
-  | 'move-down'
-  | 'move-left'
-  | 'move-right'
-  | 'rotate-left'
-  | 'rotate-right'
-  | 'narrower'
-  | 'wider'
-  | 'shallower'
-  | 'deeper'
-  | 'toggle-lock'
-  | 'delete'
 
 type SourceImageForExtraction = {
   dataUrl?: string
@@ -1089,27 +1078,13 @@ function selectFurniture(objectId: unknown): void {
 }
 
 function editSelectedFurniture(action: FurnitureEditAction): void {
-  const selected = selectedFurniture()
+  const startedAt = performance.now()
+  const result = editSelectedFurnitureInModel(spatialModel, action)
+  const selected = result.selected
   if (!selected) {
     return
   }
-  if (action === 'toggle-lock') {
-    spatialModel = {
-      ...spatialModel,
-      hasUnsavedChanges: true,
-      furniture: spatialModel.furniture.map((item) =>
-        item.objectId === selected.objectId ? { ...item, locked: !item.locked } : item,
-      ),
-    }
-    geometryStatusElement.textContent = selected.locked
-      ? t(`${selected.label} unlocked.`, `${localizedFurnitureLabel(selected)} 잠금 해제됨.`)
-      : t(`${selected.label} locked.`, `${localizedFurnitureLabel(selected)} 잠김.`)
-    rebuildFurniture()
-    updateSpatialStatus()
-    emitSceneState('roomforge.scene.updated')
-    return
-  }
-  if (selected.locked) {
+  if (result.blockedByLock) {
     geometryStatusElement.textContent = t(
       `${selected.label} is locked. Unlock it before editing.`,
       `${localizedFurnitureLabel(selected)}은 잠겨 있습니다. 편집 전에 잠금을 해제하세요.`,
@@ -1117,75 +1092,27 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
     updateSpatialStatus()
     return
   }
-  if (action === 'delete') {
-    spatialModel = {
-      ...spatialModel,
-      hasUnsavedChanges: true,
-      selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
-      furniture: spatialModel.furniture.filter((item) => item.objectId !== selected.objectId),
-    }
-    geometryStatusElement.textContent = t(`Deleted ${selected.label}.`, `${localizedFurnitureLabel(selected)} 삭제됨.`)
-    rebuildFurniture()
-    updateSpatialStatus()
-    emitSceneState('roomforge.scene.updated')
+  if (!result.changed) {
     return
   }
 
-  const startedAt = performance.now()
-  spatialModel = {
-    ...spatialModel,
-    hasUnsavedChanges: true,
-    furniture: spatialModel.furniture.map((item) =>
-      item.objectId === selected.objectId ? editedFurniture(item, action) : item,
-    ),
+  spatialModel = result.model
+  if (action === 'toggle-lock') {
+    geometryStatusElement.textContent = selected.locked
+      ? t(`${selected.label} unlocked.`, `${localizedFurnitureLabel(selected)} 잠금 해제됨.`)
+      : t(`${selected.label} locked.`, `${localizedFurnitureLabel(selected)} 잠김.`)
+  } else if (result.deleted) {
+    geometryStatusElement.textContent = t(`Deleted ${selected.label}.`, `${localizedFurnitureLabel(selected)} 삭제됨.`)
+  } else {
+    const elapsed = performance.now() - startedAt
+    geometryStatusElement.textContent = t(
+      `Updated ${selected.label} in ${elapsed.toFixed(1)} ms.`,
+      `${localizedFurnitureLabel(selected)} 업데이트됨 (${elapsed.toFixed(1)} ms).`,
+    )
   }
-  const elapsed = performance.now() - startedAt
-  geometryStatusElement.textContent = t(
-    `Updated ${selected.label} in ${elapsed.toFixed(1)} ms.`,
-    `${localizedFurnitureLabel(selected)} 업데이트됨 (${elapsed.toFixed(1)} ms).`,
-  )
   rebuildFurniture()
   updateSpatialStatus()
   emitSceneState('roomforge.scene.updated')
-}
-
-function editedFurniture(item: FurnitureObject, action: FurnitureEditAction): FurnitureObject {
-  const moveStep = 0.1
-  const sizeStep = 0.1
-  if (action === 'move-up') {
-    return { ...item, position: { ...item.position, y: Number((item.position.y - moveStep).toFixed(2)) } }
-  }
-  if (action === 'move-down') {
-    return { ...item, position: { ...item.position, y: Number((item.position.y + moveStep).toFixed(2)) } }
-  }
-  if (action === 'move-left') {
-    return { ...item, position: { ...item.position, x: Number((item.position.x - moveStep).toFixed(2)) } }
-  }
-  if (action === 'move-right') {
-    return { ...item, position: { ...item.position, x: Number((item.position.x + moveStep).toFixed(2)) } }
-  }
-  if (action === 'rotate-left' || action === 'rotate-right') {
-    const delta = action === 'rotate-left' ? -15 : 15
-    return { ...item, rotationDegrees: (item.rotationDegrees + delta + 360) % 360 }
-  }
-  if (action === 'narrower' || action === 'wider') {
-    const delta = action === 'narrower' ? -sizeStep : sizeStep
-    return {
-      ...item,
-      size: {
-        ...item.size,
-        widthMeters: Number(Math.max(0.2, item.size.widthMeters + delta).toFixed(2)),
-      },
-    }
-  }
-  const delta = action === 'shallower' ? -sizeStep : sizeStep
-  return {
-    ...item,
-    size: {
-      ...item.size,
-      depthMeters: Number(Math.max(0.2, item.size.depthMeters + delta).toFixed(2)),
-    },
-  }
 }
 
 function selectedFurniture(): FurnitureObject | null {

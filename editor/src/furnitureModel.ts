@@ -1,5 +1,27 @@
 import type { FurnitureCategory, FurnitureObject, SpatialModel } from './spatialModel'
 
+export type FurnitureEditAction =
+  | 'move-up'
+  | 'move-down'
+  | 'move-left'
+  | 'move-right'
+  | 'rotate-left'
+  | 'rotate-right'
+  | 'narrower'
+  | 'wider'
+  | 'shallower'
+  | 'deeper'
+  | 'toggle-lock'
+  | 'delete'
+
+export type FurnitureEditResult = {
+  model: SpatialModel
+  selected: FurnitureObject | null
+  changed: boolean
+  deleted: boolean
+  blockedByLock: boolean
+}
+
 export type FurnitureDefaultsOptions = {
   category: FurnitureCategory
   id: string
@@ -111,6 +133,97 @@ export function selectedFurnitureSummary(model: SpatialModel): string {
   )} m x ${item.size.heightMeters.toFixed(2)} m; position ${item.position.x.toFixed(
     2,
   )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg${locked}`
+}
+
+export function editFurnitureObject(
+  item: FurnitureObject,
+  action: FurnitureEditAction,
+): FurnitureObject {
+  const moveStep = 0.1
+  const sizeStep = 0.1
+  if (action === 'move-up') {
+    return { ...item, position: { ...item.position, y: Number((item.position.y - moveStep).toFixed(2)) } }
+  }
+  if (action === 'move-down') {
+    return { ...item, position: { ...item.position, y: Number((item.position.y + moveStep).toFixed(2)) } }
+  }
+  if (action === 'move-left') {
+    return { ...item, position: { ...item.position, x: Number((item.position.x - moveStep).toFixed(2)) } }
+  }
+  if (action === 'move-right') {
+    return { ...item, position: { ...item.position, x: Number((item.position.x + moveStep).toFixed(2)) } }
+  }
+  if (action === 'rotate-left' || action === 'rotate-right') {
+    const delta = action === 'rotate-left' ? -15 : 15
+    return { ...item, rotationDegrees: (item.rotationDegrees + delta + 360) % 360 }
+  }
+  if (action === 'narrower' || action === 'wider') {
+    const delta = action === 'narrower' ? -sizeStep : sizeStep
+    return {
+      ...item,
+      size: {
+        ...item.size,
+        widthMeters: Number(Math.max(0.2, item.size.widthMeters + delta).toFixed(2)),
+      },
+    }
+  }
+  if (action === 'shallower' || action === 'deeper') {
+    const delta = action === 'shallower' ? -sizeStep : sizeStep
+    return {
+      ...item,
+      size: {
+        ...item.size,
+        depthMeters: Number(Math.max(0.2, item.size.depthMeters + delta).toFixed(2)),
+      },
+    }
+  }
+  if (action === 'toggle-lock') {
+    return { ...item, locked: !item.locked }
+  }
+  return item
+}
+
+export function editSelectedFurnitureInModel(
+  model: SpatialModel,
+  action: FurnitureEditAction,
+): FurnitureEditResult {
+  const selected = selectedFurniture(model)
+  if (!selected) {
+    return { model, selected: null, changed: false, deleted: false, blockedByLock: false }
+  }
+
+  if (action === 'delete') {
+    return {
+      model: {
+        ...model,
+        hasUnsavedChanges: true,
+        selected: { objectId: model.room.objectId, objectType: 'room' },
+        furniture: model.furniture.filter((item) => item.objectId !== selected.objectId),
+      },
+      selected,
+      changed: true,
+      deleted: true,
+      blockedByLock: false,
+    }
+  }
+
+  if (selected.locked && action !== 'toggle-lock') {
+    return { model, selected, changed: false, deleted: false, blockedByLock: true }
+  }
+
+  return {
+    model: {
+      ...model,
+      hasUnsavedChanges: true,
+      furniture: model.furniture.map((item) =>
+        item.objectId === selected.objectId ? editFurnitureObject(item, action) : item,
+      ),
+    },
+    selected,
+    changed: true,
+    deleted: false,
+    blockedByLock: false,
+  }
 }
 
 export function selectionVisualTokens({

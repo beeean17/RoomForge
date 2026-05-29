@@ -20,6 +20,20 @@ Flutter tests for backend selection, project flow, admin access, and admin
 diagnostics; then runs legacy API isolation, editor boundary checks, and the
 Firebase emulator smoke rules test.
 
+If the one-shot emulator runner cannot start because the local emulator ports
+are already occupied, the smoke gate retries only the emulator-backed smoke
+layer against the existing local endpoints via:
+
+```bash
+npm run test:firebase-rules:smoke:direct
+```
+
+This direct fallback expects Auth, Firestore, and Storage emulators to already
+be running on the configured local ports. It checks Auth emulator readiness,
+then runs the Firestore and Storage unauthenticated-denial smoke. It does not
+mask real rules failures: fallback is attempted only for emulator startup or
+port binding failures.
+
 ## Core Commands
 
 ### Flutter App
@@ -65,6 +79,7 @@ Run rules tests from the repository root:
 
 ```bash
 npm run test:firebase-rules:smoke
+npm run test:firebase-rules:smoke:direct
 npm run test:firebase-rules:projects
 npm run test:firebase-rules:profile
 npm run test:firebase-rules:source-images
@@ -150,7 +165,7 @@ Manual flows are additive evidence and do not replace rules tests.
 | Node/npm unavailable | Run Flutter checks and direct `rg` boundary searches. | Editor or root-script stories cannot be complete until npm validation runs. |
 | `rg` unavailable | Use another recursive search tool and record the substitute command. | Acceptable when the searched paths and patterns are documented. |
 | Browser/manual UI unavailable | Run automated tests and record skipped MEF/L5 evidence. | Acceptable only when the story does not change UI behavior, accessibility, or integration flow. |
-| Firebase emulator port conflict | Stop the conflicting local emulator/process or choose a documented alternate port. | Rerun the relevant `npm run test:firebase-rules:*` command before completion. |
+| Firebase emulator port conflict | For the default smoke gate, let `npm run check:firebase-default-smoke` fall back to `npm run test:firebase-rules:smoke:direct`, or run the direct command yourself when emulators are already running. For full rules suites, stop the conflicting local emulator/process or choose a documented alternate port. | Rerun the relevant `npm run test:firebase-rules:*` command before completion. |
 
 ## Story Completion Evidence
 

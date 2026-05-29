@@ -12,7 +12,8 @@
     "test:firebase-rules:source-images": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-source-image-rules.mjs\"",
     "test:firebase-rules:admin": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-admin-rules.mjs\"",
     "test:firebase-rules:admin-storage": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-admin-storage-rules.mjs\"",
-    "test:firebase-rules:smoke": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-rules-smoke.mjs\""
+    "test:firebase-rules:smoke": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-rules-smoke.mjs\"",
+    "test:firebase-rules:smoke:direct": "bash scripts/firebase-rules-smoke-direct.sh"
   },
   "dependencies": {
     "firebase": "^12.13.0"

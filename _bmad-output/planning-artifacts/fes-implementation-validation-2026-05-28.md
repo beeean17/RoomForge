@@ -2,7 +2,7 @@
 title: "Firebase Epics and Stories Implementation Validation"
 status: "complete"
 created: "2026-05-28"
-updated: "2026-05-28"
+updated: "2026-05-29"
 workflowType: "fes-implementation-validation"
 sourceDocument: "docs/refactor/firebase-epics-and-stories.md"
 validationDate: "2026-05-28"
@@ -70,7 +70,7 @@ Recovery used:
 | FES-4.3 Surface Upload Progress, Failure, and Recovery States | Partial | Upload state model tests cover validation, permission, metadata-save failure, and accessible progress copy; app UI has progress and retry states. | Needs widget/manual accessibility pass for keyboard reachability and metadata-save-failed recovery panel behavior. |
 | FES-5.1 Persist Reconstruction Jobs and Transitions | Verified | Reconstruction repository/API tests; reconstruction rules script passed; allowed status vocabulary enforced. | None for automated scope. |
 | FES-5.2 Persist OpenCV Candidates and Confirmed Geometry Separately | Verified | Story 3.7 implementation; geometry rules script passed; serializer and bridge distinction tests passed. | None for automated scope. |
-| FES-5.3 Persist Metric Floor Plans and Artifact References | Partial | Floor plan repository/API tests; floor plan rules and admin storage rules passed; app persists metric floor plans in meters. | `persistFloorPlanResult` currently stores floor plans but does not persist generated artifact refs or upload overlay/debug/calibration artifacts from the OpenCV flow. |
+| FES-5.3 Persist Metric Floor Plans and Artifact References | Verified | Floor plan repository/API tests; floor plan rules and admin storage rules passed; app persists metric floor plans in meters with generated calibration/debug JSON artifact refs and best-effort artifact cleanup on save failure. | Browser/manual artifact inspection was not run, but automated contract and rules evidence now covers the persistence gap. |
 | FES-6.1 Save and Load Layouts from Firestore | Verified | Layout save/load tests; layout rules script passed; owner-only access checks passed. | None for automated scope. |
 | FES-6.2 Preserve Editor Bridge and Furniture State | Verified | Furniture bridge mapper tests; editor bridge mapper tests; editor Firebase boundary check passed. | None. |
 | FES-6.3 Export Latest Saved Layout JSON with Review Warning | Verified | Export warning tests; Firebase serializers export JSON with snake_case; Project API rejects export without saved cloud layout. | Manual export download flow was not run in browser. |
@@ -82,8 +82,8 @@ Recovery used:
 | FES-8.3 Add Audited Admin Retry with Append-Only Admin Actions | Verified | Admin retry repository tests passed; admin rules script passed for append-only actions and non-admin denial; app retry action is wired in diagnostics UI. | Manual admin retry flow was not run against emulators. |
 | FES-9.1 Select Firebase Repositories by Default | Verified | `backend_bindings_test.dart`; `docs/refactor/README.md`; default Firebase repository selection tests passed. | None. |
 | FES-9.2 Isolate Legacy ProjectApi and AdminApi Usage | Verified | `npm run check:legacy-api-isolation` passed; docs mark FastAPI/Oracle as legacy-only explicit `legacy_api`. | Legacy files remain by design. |
-| FES-9.3 Validate End-to-End Firebase Default Flow | Partial | Default smoke components passed through targeted tests, boundary checks, legacy isolation, and direct rules smoke. | Full MEF-1 through MEF-7 browser/emulator flow was not run; default smoke script needs port-conflict recovery documentation. |
-| FES-10.1 Finalize Firebase Validation Commands and Runbook | Docs verified | `docs/refactor/firebase-validation-runbook.md` maps commands, layers, test IDs, and fallback rules. | Add direct-run recovery path for already-running emulators. |
+| FES-9.3 Validate End-to-End Firebase Default Flow | Verified | `npm run check:firebase-default-smoke` passed in normal emulators-start mode and in already-running-emulator fallback mode; targeted Flutter tests, editor boundary, legacy isolation, and direct rules smoke all passed. | Browser provider UI and full visual editor inspection remain documented limitations, not hidden completion claims. |
+| FES-10.1 Finalize Firebase Validation Commands and Runbook | Docs verified | `docs/refactor/firebase-validation-runbook.md` maps commands, layers, test IDs, direct smoke recovery, and fallback rules. | None for docs scope. |
 | FES-10.2 Link Refactor Docs and Preserve Source-of-Truth Order | Docs verified | `docs/refactor/README.md` defines source-of-truth order and legacy docs boundaries. | None. |
 | FES-10.3 Prepare Implementation Readiness Review Inputs | Docs verified | `firebase-readiness-review-inputs.md` and `firebase-implementation-readiness-report.md` exist. | This report now adds post-implementation validation evidence. |
 
@@ -91,31 +91,23 @@ Recovery used:
 
 | Bucket | Count | Stories |
 | --- | ---: | --- |
-| Verified | 21 | FES-1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2, 5.1, 5.2, 6.1, 6.2, 6.3, 7.1, 8.1, 8.3, 9.1, 9.2 |
-| Partial | 6 | FES-4.3, 5.3, 7.2, 7.3, 8.2, 9.3 |
+| Verified | 23 | FES-1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 7.1, 8.1, 8.3, 9.1, 9.2, 9.3 |
+| Partial | 4 | FES-4.3, 7.2, 7.3, 8.2 |
 | Docs verified | 3 | FES-10.1, 10.2, 10.3 |
 
 ## Dev Story Promotion Candidates
 
 The next BMAD dev stories should come from the partial bucket, in this order:
 
-1. FES-5.3 artifact persistence completion.
-   - Goal: persist artifact refs and upload generated overlay/debug/calibration artifacts from the OpenCV/floor-plan flow.
-   - Acceptance focus: artifact refs include storage path, owner/project/job linkage, content type, byte size, and availability state; owner/admin artifact rules remain private.
-
-2. FES-9.3 executable Firebase default smoke hardening.
-   - Goal: make the default smoke gate reliable when emulators are already running, or document and script a direct-run recovery path.
-   - Acceptance focus: one command or documented fallback verifies default Firebase flow without FastAPI/Oracle.
-
-3. FES-7.2 and FES-7.3 draft recovery UI and remote-update guard validation.
+1. FES-7.2 and FES-7.3 draft recovery UI and remote-update guard validation.
    - Goal: add widget/manual coverage for restore/discard/continue/retry and prove remote layout updates cannot overwrite active dirty editor state.
    - Acceptance focus: keyboard-accessible controls, explicit conflict copy, and no silent overwrite.
 
-4. FES-8.2 admin diagnostics UI validation.
+2. FES-8.2 admin diagnostics UI validation.
    - Goal: verify admin filters, job detail, artifact state mapping, related layout/result panes, and permission-safe empty/error states.
    - Acceptance focus: non-admin leakage prevention and accessible admin table/detail controls.
 
-5. FES-4.3 upload recovery UX validation.
+3. FES-4.3 upload recovery UX validation.
    - Goal: add widget/manual coverage for upload progress, invalid image, permission failure, metadata-save failure, retry, and cleanup guidance.
    - Acceptance focus: accessible state text and recoverable action paths.
 
@@ -123,8 +115,8 @@ The next BMAD dev stories should come from the partial bucket, in this order:
 
 The Firebase FES backlog is no longer only planning-level in the repository:
 most stories have implementation evidence and automated validation. It is not
-honest to mark the entire FES backlog fully complete, because six stories still
-have manual, UI/accessibility, or artifact-persistence gaps.
+honest to mark the entire FES backlog fully complete, because four stories still
+have manual or UI/accessibility validation gaps.
 
 The natural next BMAD workflow is to create focused dev story files for the
 partial bucket rather than restarting from FES-1.1.

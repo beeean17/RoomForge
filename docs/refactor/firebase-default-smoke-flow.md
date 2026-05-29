@@ -25,6 +25,19 @@ The command executes:
 - Firebase emulator smoke checks for unauthenticated Firestore and Storage
   denial.
 
+When the local emulator ports are already occupied by a running emulator set,
+the command retries the rules-smoke layer directly against those endpoints:
+
+```bash
+npm run test:firebase-rules:smoke:direct
+```
+
+The direct path resolves the Firebase project id from `GCLOUD_PROJECT`,
+`FIREBASE_PROJECT_ID`, or `app/.firebaserc`, then targets the default local
+Auth, Firestore, and Storage emulator ports unless endpoint environment
+variables override them. It first verifies the Auth emulator is reachable, then
+reuses the Firestore and Storage unauthenticated-denial smoke checks.
+
 ## Covered Default Flow
 
 The Firebase project smoke test covers the signed-in default path in order:
@@ -67,6 +80,8 @@ The expected result is that:
 
 - The smoke gate validates repository-level flow and rules-emulator denial; it
   does not certify a production Firebase deployment.
+- Direct rules smoke requires already-running local emulators; if no emulator
+  is listening, it fails rather than starting new processes.
 - Browser provider UI for Google sign-in is not automated here; the signed-in
   path is represented by an authenticated `AuthSession`.
 - Full manual visual inspection of the Three.js editor is outside this story.

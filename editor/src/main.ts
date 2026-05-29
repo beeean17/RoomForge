@@ -25,6 +25,10 @@ import {
   type FurnitureEditAction,
 } from './furnitureModel'
 import {
+  measurementSummaryForModel,
+  placementWarningForModel,
+} from './measurementGuidance'
+import {
   defaultSpatialModel,
   roomBounds,
   spatialModelFromBridgePayload,
@@ -1648,40 +1652,20 @@ function isFurnitureCategory(value: string | undefined): value is FurnitureCateg
 }
 
 function measurementSummary(model: SpatialModel): string {
-  const bounds = roomBounds(model)
   const selected = selectedFurniture()
-  if (selected) {
-    return `${localizedFurnitureLabel(selected)}: ${selected.size.widthMeters.toFixed(2)} m x ${selected.size.depthMeters.toFixed(
-      2,
-    )} m; ${t('room', '방')} ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m`
-  }
-  return `${t('Room', '방')} ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(2)} m x ${model.room.heightMeters.toFixed(
-    2,
-  )} m`
+  return measurementSummaryForModel({
+    model,
+    selected,
+    selectedLabel: selected ? localizedFurnitureLabel(selected) : undefined,
+    roomLabel: t('Room', '방'),
+  }).replace('room', t('room', '방'))
 }
 
 function placementWarning(model: SpatialModel): string | null {
-  const bounds = roomBounds(model)
-  const outside = model.furniture.find((item) => {
-    const halfWidth = item.size.widthMeters / 2
-    const halfDepth = item.size.depthMeters / 2
-    return (
-      item.position.x - halfWidth < 0 ||
-      item.position.y - halfDepth < 0 ||
-      item.position.x + halfWidth > bounds.widthMeters ||
-      item.position.y + halfDepth > bounds.depthMeters
-    )
+  return placementWarningForModel({
+    model,
+    labelFor: localizedFurnitureLabel,
   })
-  return outside
-    ? t(
-        `Warning: ${outside.label} is outside the ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
-          2,
-        )} m room bounds.`,
-        `경고: ${localizedFurnitureLabel(outside)}이 ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
-          2,
-        )} m 방 경계 밖에 있습니다.`,
-      )
-    : null
 }
 
 function isFurnitureEditAction(value: string | undefined): value is FurnitureEditAction {

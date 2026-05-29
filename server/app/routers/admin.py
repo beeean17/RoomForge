@@ -29,6 +29,7 @@ from app.repositories.reconstruction_jobs import (
 from app.routers.reconstruction_jobs import (
     reconstruction_job_response_from,
     reconstruction_job_transition_response_from,
+    status_label_for,
 )
 from app.schemas.auth import SessionUser
 
@@ -101,19 +102,93 @@ def admin_search_records(request: Request, query: str) -> list[dict[str, object]
         dsn=settings.oracle_dsn,
     ) as connection:
         with connection.cursor() as cursor:
-            for table, kind in (
-                ("users", "user"),
-                ("room_projects", "project"),
-                ("layouts", "layout"),
-                ("reconstruction_jobs", "job"),
-            ):
-                cursor.execute(
-                    f"SELECT id FROM {table} WHERE id = :record_id",
-                    record_id=record_id,
+            cursor.execute(
+                """
+                SELECT id, email, display_name, firebase_uid, role
+                FROM users
+                WHERE id = :record_id
+                """,
+                record_id=record_id,
+            )
+            if row := cursor.fetchone():
+                label = row[2] or row[1] or row[3] or f"User {int(row[0])}"
+                records.append(
+                    {
+                        "type": "user",
+                        "id": int(row[0]),
+                        "label": label,
+                        "context": search_context(
+                            email=row[1], firebase_uid=row[3], role=row[4]
+                        ),
+                    }
                 )
-                if cursor.fetchone() is not None:
-                    records.append({"type": kind, "id": record_id})
+
+            cursor.execute(
+                """
+                SELECT id, name, user_id
+                FROM room_projects
+                WHERE id = :record_id
+                """,
+                record_id=record_id,
+            )
+            if row := cursor.fetchone():
+                records.append(
+                    {
+                        "type": "project",
+                        "id": int(row[0]),
+                        "label": row[1],
+                        "context": search_context(user_id=int(row[2])),
+                    }
+                )
+
+            cursor.execute(
+                """
+                SELECT id, project_id, user_id
+                FROM layouts
+                WHERE id = :record_id
+                """,
+                record_id=record_id,
+            )
+            if row := cursor.fetchone():
+                records.append(
+                    {
+                        "type": "layout",
+                        "id": int(row[0]),
+                        "label": f"Layout {int(row[0])}",
+                        "context": search_context(
+                            project_id=int(row[1]), user_id=int(row[2])
+                        ),
+                    }
+                )
+
+            cursor.execute(
+                """
+                SELECT id, status, project_id, user_id, provider, failure_reason_code
+                FROM reconstruction_jobs
+                WHERE id = :record_id
+                """,
+                record_id=record_id,
+            )
+            if row := cursor.fetchone():
+                records.append(
+                    {
+                        "type": "job",
+                        "id": int(row[0]),
+                        "label": f"{status_label_for(str(row[1]))} reconstruction job",
+                        "context": search_context(
+                            status=row[1],
+                            project_id=int(row[2]),
+                            user_id=int(row[3]),
+                            provider=row[4],
+                            failure_reason_code=row[5],
+                        ),
+                    }
+                )
     return records
+
+
+def search_context(**values: object) -> dict[str, object]:
+    return {key: value for key, value in values.items() if value is not None}
 
 
 @router.get("/session")

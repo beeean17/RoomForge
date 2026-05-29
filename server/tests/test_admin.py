@@ -230,10 +230,35 @@ class FakeAdminSearchRepository:
     def search(self, query: str) -> list[dict[str, object]]:
         if query == "42":
             return [
-                {"type": "user", "id": 42, "label": "user@example.com"},
-                {"type": "project", "id": 42, "label": "Kitchen"},
-                {"type": "layout", "id": 42, "label": "Saved layout"},
-                {"type": "job", "id": 42, "label": "failed"},
+                {
+                    "type": "user",
+                    "id": 42,
+                    "label": "user@example.com",
+                    "context": {"email": "user@example.com", "role": "user"},
+                },
+                {
+                    "type": "project",
+                    "id": 42,
+                    "label": "Kitchen",
+                    "context": {"user_id": 42},
+                },
+                {
+                    "type": "layout",
+                    "id": 42,
+                    "label": "Saved layout",
+                    "context": {"project_id": 42, "user_id": 42},
+                },
+                {
+                    "type": "job",
+                    "id": 42,
+                    "label": "Failed reconstruction job",
+                    "context": {
+                        "status": "failed",
+                        "project_id": 42,
+                        "user_id": 42,
+                        "provider": "browser-opencv",
+                    },
+                },
             ]
         return []
 
@@ -699,6 +724,12 @@ def test_admin_search_returns_scoped_operational_records() -> None:
         "layout",
         "job",
     ]
+    assert body["data"]["results"][0]["label"] == "user@example.com"
+    assert body["data"]["results"][0]["context"]["role"] == "user"
+    assert body["data"]["results"][1]["label"] == "Kitchen"
+    assert body["data"]["results"][1]["context"]["user_id"] == 42
+    assert body["data"]["results"][2]["context"] == {"project_id": 42, "user_id": 42}
+    assert body["data"]["results"][3]["context"]["status"] == "failed"
 
 
 def test_admin_search_rejects_normal_user() -> None:
@@ -715,7 +746,9 @@ def test_admin_search_rejects_normal_user() -> None:
     )
 
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "unauthorized"
+    body = response.json()
+    assert body["data"] is None
+    assert body["error"]["code"] == "unauthorized"
 
 
 def test_admin_search_returns_empty_results_for_no_match() -> None:

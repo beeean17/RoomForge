@@ -2147,9 +2147,26 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   void _search() {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
+      setState(() {
+        _searchFuture = Future.value(const <Map<String, Object?>>[]);
+      });
       return;
     }
     setState(() => _searchFuture = widget.adminApi.search(query));
+  }
+
+  void _openSearchResult(Map<String, Object?> result) {
+    final type = result['type']?.toString();
+    final rawId = result['id'];
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+    if (type != 'job' || id == null) {
+      return;
+    }
+    setState(() {
+      _jobDetailFuture = widget.adminApi.loadJobDetail(id);
+      _artifactFuture = widget.adminApi.loadJobArtifacts(id);
+      _diagnosisFuture = widget.adminApi.loadJobDiagnosis(id);
+    });
   }
 
   @override
@@ -2206,7 +2223,10 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (_searchFuture != null)
-                  _AdminSearchResultsView(future: _searchFuture!),
+                  _AdminSearchResultsView(
+                    future: _searchFuture!,
+                    onOpenResult: _openSearchResult,
+                  ),
                 const SizedBox(height: 24),
                 FutureBuilder<AdminJobList>(
                   future: _jobsFuture,
@@ -2317,9 +2337,13 @@ class _AdminJobListView extends StatelessWidget {
 }
 
 class _AdminSearchResultsView extends StatelessWidget {
-  const _AdminSearchResultsView({required this.future});
+  const _AdminSearchResultsView({
+    required this.future,
+    required this.onOpenResult,
+  });
 
   final Future<List<Map<String, Object?>>> future;
+  final ValueChanged<Map<String, Object?>> onOpenResult;
 
   @override
   Widget build(BuildContext context) {
@@ -2343,13 +2367,36 @@ class _AdminSearchResultsView extends StatelessWidget {
               ListTile(
                 dense: true,
                 title: Text('${result['type']} ${result['id']}'),
-                subtitle: Text(result['label']?.toString() ?? ''),
+                subtitle: Text(_adminSearchResultContextLabel(result)),
+                trailing: result['type'] == 'job'
+                    ? const Icon(Icons.open_in_new)
+                    : null,
+                onTap: result['type'] == 'job'
+                    ? () => onOpenResult(result)
+                    : null,
               ),
           ],
         );
       },
     );
   }
+}
+
+String _adminSearchResultContextLabel(Map<String, Object?> result) {
+  final label = result['label']?.toString() ?? '';
+  final context = result['context'] is Map
+      ? Map<String, Object?>.from(result['context'] as Map)
+      : const <String, Object?>{};
+  final contextLabel = context.entries
+      .map((entry) => '${entry.key}: ${entry.value}')
+      .join(' | ');
+  if (label.isEmpty) {
+    return contextLabel;
+  }
+  if (contextLabel.isEmpty) {
+    return label;
+  }
+  return '$label | $contextLabel';
 }
 
 class _AdminJobDetailView extends StatefulWidget {

@@ -415,6 +415,107 @@ void main() {
       ),
     );
   });
+
+  test('AdminApi search sends query and parses navigable context', () async {
+    late http.Request capturedRequest;
+    final api = AdminApi(
+      authRepository: const _TokenAuthRepository('admin-token'),
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        capturedRequest = request;
+        expect(request.method, 'GET');
+        expect(
+          request.url.toString(),
+          'https://api.example.test/admin/search?q=42',
+        );
+        expect(request.headers['Authorization'], 'Bearer admin-token');
+
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'query': '42',
+              'results': [
+                {
+                  'type': 'user',
+                  'id': 42,
+                  'label': 'user@example.com',
+                  'context': {'email': 'user@example.com', 'role': 'user'},
+                },
+                {
+                  'type': 'project',
+                  'id': 42,
+                  'label': 'Kitchen',
+                  'context': {'user_id': 42},
+                },
+                {
+                  'type': 'layout',
+                  'id': 42,
+                  'label': 'Layout 42',
+                  'context': {'project_id': 42, 'user_id': 42},
+                },
+                {
+                  'type': 'job',
+                  'id': 42,
+                  'label': 'Failed reconstruction job',
+                  'context': {
+                    'status': 'failed',
+                    'project_id': 42,
+                    'user_id': 42,
+                    'provider': 'browser-opencv',
+                  },
+                },
+              ],
+            },
+            'error': null,
+            'meta': {'request_id': 'req-search'},
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final results = await api.search('42');
+
+    expect(capturedRequest.headers['Content-Type'], 'application/json');
+    expect(results.map((result) => result['type']), [
+      'user',
+      'project',
+      'layout',
+      'job',
+    ]);
+    expect(results[0]['label'], 'user@example.com');
+    expect(results[0]['context'], {
+      'email': 'user@example.com',
+      'role': 'user',
+    });
+    expect(results[3]['context'], {
+      'status': 'failed',
+      'project_id': 42,
+      'user_id': 42,
+      'provider': 'browser-opencv',
+    });
+  });
+
+  test('AdminApi search preserves empty result state', () async {
+    final api = AdminApi(
+      authRepository: const _TokenAuthRepository('admin-token'),
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': {'query': 'missing', 'results': []},
+            'error': null,
+            'meta': {'request_id': 'req-empty-search'},
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    expect(await api.search('missing'), isEmpty);
+  });
 }
 
 class _TokenAuthRepository implements AuthRepository {

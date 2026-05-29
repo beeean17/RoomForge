@@ -2731,6 +2731,14 @@ class _AdminDiagnosisView extends StatelessWidget {
         final failureSource = data['failure_source'] is Map
             ? Map<String, Object?>.from(data['failure_source'] as Map)
             : const <String, Object?>{};
+        final recentFailure = providerState['recent_failure_state'] is Map
+            ? Map<String, Object?>.from(
+                providerState['recent_failure_state'] as Map,
+              )
+            : const <String, Object?>{};
+        final gpuLifecycle = providerState['gpu_lifecycle'] is Map
+            ? Map<String, Object?>.from(providerState['gpu_lifecycle'] as Map)
+            : const <String, Object?>{};
         return DecoratedBox(
           decoration: const BoxDecoration(
             border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
@@ -2751,6 +2759,21 @@ class _AdminDiagnosisView extends StatelessWidget {
                 Text(
                   '${rf('Provider status', '제공자 상태')}: ${providerState['status'] ?? rf('unknown', '알 수 없음')}',
                 ),
+                Text(
+                  '${rf('Active jobs', '활성 작업')}: ${providerState['active_job_count'] ?? rf('unknown', '알 수 없음')}',
+                ),
+                Text(
+                  '${rf('GPU lifecycle', 'GPU 수명주기')}: ${gpuLifecycle['state'] ?? rf('not enabled', '비활성')}',
+                ),
+                if (recentFailure.isNotEmpty) ...[
+                  Text(
+                    '${rf('Recent failure', '최근 실패')}: ${recentFailure['status']} #${recentFailure['job_id']}',
+                  ),
+                  if (recentFailure['failure_reason_code'] != null)
+                    Text(
+                      '${rf('Recent reason', '최근 사유')}: ${recentFailure['failure_reason_code']}',
+                    ),
+                ],
                 Text(
                   '${rf('Failure source', '실패 출처')}: ${failureSource['source'] ?? rf('unknown', '알 수 없음')}',
                 ),

@@ -421,7 +421,9 @@ def admin_job_diagnosis(
 ) -> dict[str, object]:
     try:
         authorize_admin_request(request, credentials)
-        job = reconstruction_job_repository_from(request).get_for_admin(job_id)
+        repository = reconstruction_job_repository_from(request)
+        job = repository.get_for_admin(job_id)
+        jobs = repository.list_for_admin()
     except AuthErrorResponse as exc:
         return exc.response
     except ReconstructionJobNotFound:
@@ -430,13 +432,7 @@ def admin_job_diagnosis(
     return {
         "data": {
             "job": reconstruction_job_response_from(job).model_dump(),
-            "provider_state": {
-                "provider": job.provider,
-                "status": job.status,
-                "retry_of_job_id": job.retry_of_job_id,
-                "failure_reason_code": job.failure_reason_code,
-                "failure_reason_message": job.failure_reason_message,
-            },
+            "provider_state": provider_state_for(job, jobs),
             "failure_source": failure_source_for(job.failure_reason_code),
         },
         "error": None,
@@ -444,11 +440,73 @@ def admin_job_diagnosis(
     }
 
 
+def provider_state_for(
+    job, jobs: list
+) -> dict[str, object]:
+    active_statuses = {"created", "uploading", "processing", "retrying"}
+    active_job_count = len(
+        [
+            candidate
+            for candidate in jobs
+            if candidate.provider == job.provider and candidate.status in active_statuses
+        ]
+    )
+    recent_failures = [
+        candidate
+        for candidate in jobs
+        if candidate.provider == job.provider and candidate.status in {"failed", "timeout"}
+    ]
+    recent_failure = max(
+        recent_failures,
+        key=lambda candidate: candidate.updated_at,
+        default=None,
+    )
+    return {
+        "provider": job.provider,
+        "status": job.status,
+        "active_job_count": active_job_count,
+        "recent_failure_state": None
+        if recent_failure is None
+        else {
+            "job_id": recent_failure.id,
+            "status": recent_failure.status,
+            "failure_reason_code": recent_failure.failure_reason_code,
+            "failure_reason_message": recent_failure.failure_reason_message,
+            "updated_at": recent_failure.updated_at,
+        },
+        "gpu_lifecycle": {
+            "enabled": settings.enable_external_cv_provider,
+            "state": "external_provider_enabled"
+            if settings.enable_external_cv_provider
+            else "not_enabled",
+        },
+        "retry_of_job_id": job.retry_of_job_id,
+        "failure_reason_code": job.failure_reason_code,
+        "failure_reason_message": job.failure_reason_message,
+    }
+
+
 def failure_source_for(reason_code: str | None) -> dict[str, object]:
     code = (reason_code or "").lower()
-    if any(token in code for token in ("input", "photo", "image")):
+    if not code:
+        source = "unknown"
+    elif any(token in code for token in ("input", "photo", "image")):
         source = "input_quality"
-    elif any(token in code for token in ("opencv", "candidate", "detection", "confidence")):
+    elif any(
+        token in code
+        for token in (
+            "opencv",
+            "candidate",
+            "detection",
+            "confidence",
+            "weak_edges",
+            "insufficient_lines",
+            "insufficient_corners",
+            "edge",
+            "line",
+            "corner",
+        )
+    ):
         source = "opencv_candidate_detection"
     elif any(token in code for token in ("calibration", "scale", "geometry")):
         source = "user_calibration"
@@ -468,6 +526,7 @@ def failure_source_for(reason_code: str | None) -> dict[str, object]:
             "api_handling",
             "database_state",
             "provider_processing",
+            "unknown",
         ],
     }
 

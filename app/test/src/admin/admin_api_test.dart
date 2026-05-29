@@ -516,6 +516,99 @@ void main() {
 
     expect(await api.search('missing'), isEmpty);
   });
+
+  test('AdminApi loadJobDiagnosis parses provider and failure state', () async {
+    late http.Request capturedRequest;
+    final api = AdminApi(
+      authRepository: const _TokenAuthRepository('admin-token'),
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        capturedRequest = request;
+        expect(request.method, 'GET');
+        expect(
+          request.url.toString(),
+          'https://api.example.test/admin/jobs/9/diagnosis',
+        );
+        expect(request.headers['Authorization'], 'Bearer admin-token');
+
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'job': {
+                'id': 9,
+                'project_id': 1,
+                'user_id': 42,
+                'source_image_id': 7,
+                'status': 'failed',
+                'status_label': 'Failed',
+                'terminal': true,
+                'provider': 'manual_assisted_opencv',
+                'retry_of_job_id': null,
+                'failure_reason_code': 'opencv_failed',
+                'failure_reason_message': 'OpenCV failed.',
+                'created_at': '2026-05-29T00:00:00Z',
+                'updated_at': '2026-05-29T00:00:05Z',
+              },
+              'provider_state': {
+                'provider': 'manual_assisted_opencv',
+                'status': 'failed',
+                'active_job_count': 2,
+                'recent_failure_state': {
+                  'job_id': 9,
+                  'status': 'failed',
+                  'failure_reason_code': 'opencv_failed',
+                  'failure_reason_message': 'OpenCV failed.',
+                  'updated_at': '2026-05-29T00:00:05Z',
+                },
+                'gpu_lifecycle': {'enabled': false, 'state': 'not_enabled'},
+                'failure_reason_code': 'opencv_failed',
+                'failure_reason_message': 'OpenCV failed.',
+              },
+              'failure_source': {
+                'source': 'opencv_candidate_detection',
+                'reason_code': 'opencv_failed',
+                'supported_sources': [
+                  'input_quality',
+                  'opencv_candidate_detection',
+                  'user_calibration',
+                  'api_handling',
+                  'database_state',
+                  'provider_processing',
+                  'unknown',
+                ],
+              },
+            },
+            'error': null,
+            'meta': {'request_id': 'req-diagnosis'},
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final diagnosis = await api.loadJobDiagnosis(9);
+
+    expect(capturedRequest.headers['Content-Type'], 'application/json');
+    final providerState = Map<String, Object?>.from(
+      diagnosis['provider_state'] as Map,
+    );
+    final recentFailure = Map<String, Object?>.from(
+      providerState['recent_failure_state'] as Map,
+    );
+    final gpuLifecycle = Map<String, Object?>.from(
+      providerState['gpu_lifecycle'] as Map,
+    );
+    final failureSource = Map<String, Object?>.from(
+      diagnosis['failure_source'] as Map,
+    );
+    expect(providerState['provider'], 'manual_assisted_opencv');
+    expect(providerState['active_job_count'], 2);
+    expect(recentFailure['failure_reason_code'], 'opencv_failed');
+    expect(gpuLifecycle, {'enabled': false, 'state': 'not_enabled'});
+    expect(failureSource['source'], 'opencv_candidate_detection');
+    expect(failureSource['supported_sources'], contains('provider_processing'));
+  });
 }
 
 class _TokenAuthRepository implements AuthRepository {

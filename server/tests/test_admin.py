@@ -786,8 +786,45 @@ def test_admin_job_diagnosis_distinguishes_failure_source() -> None:
     assert body["error"] is None
     assert body["data"]["provider_state"]["provider"] == "browser-opencv"
     assert body["data"]["provider_state"]["status"] == "failed"
+    assert body["data"]["provider_state"]["active_job_count"] == 1
+    assert body["data"]["provider_state"]["recent_failure_state"] == {
+        "job_id": 3,
+        "status": "failed",
+        "failure_reason_code": "opencv_failed",
+        "failure_reason_message": "OpenCV failed.",
+        "updated_at": "2026-05-22T00:00:00Z",
+    }
+    assert body["data"]["provider_state"]["gpu_lifecycle"] == {
+        "enabled": False,
+        "state": "not_enabled",
+    }
     assert body["data"]["failure_source"]["source"] == "opencv_candidate_detection"
     assert "database_state" in body["data"]["failure_source"]["supported_sources"]
+
+
+def test_admin_job_diagnosis_classifies_supported_failure_sources() -> None:
+    from app.routers.admin import failure_source_for
+
+    assert failure_source_for("bad_input_photo")["source"] == "input_quality"
+    assert failure_source_for("weak_edges")["source"] == (
+        "opencv_candidate_detection"
+    )
+    assert failure_source_for("insufficient_lines")["source"] == (
+        "opencv_candidate_detection"
+    )
+    assert failure_source_for("insufficient_corners")["source"] == (
+        "opencv_candidate_detection"
+    )
+    assert failure_source_for("low_confidence")["source"] == (
+        "opencv_candidate_detection"
+    )
+    assert failure_source_for("calibration_failed")["source"] == "user_calibration"
+    assert failure_source_for("api_validation")["source"] == "api_handling"
+    assert failure_source_for("oracle_db_unavailable")["source"] == "database_state"
+    assert failure_source_for("gpu_provider_failed")["source"] == (
+        "provider_processing"
+    )
+    assert failure_source_for(None)["source"] == "unknown"
 
 
 def test_admin_job_diagnosis_rejects_normal_user() -> None:

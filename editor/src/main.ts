@@ -8,6 +8,13 @@ import {
   type BridgeMessage,
 } from './bridge'
 import {
+  cameraSnapshotForRoom,
+  isCameraAction,
+  shouldAnimateCamera,
+  type CameraAction,
+  type CameraSnapshot,
+} from './cameraControls'
+import {
   defaultSpatialModel,
   roomBounds,
   spatialModelFromBridgePayload,
@@ -384,7 +391,6 @@ const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02)
 const cameraTarget = new THREE.Vector3()
 const reducedMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
 
-type CameraAction = 'reset' | 'fit' | 'top' | 'front' | 'corner' | 'eye'
 type CameraDragMode = 'orbit' | 'pan'
 type FurnitureEditAction =
   | 'move-up'
@@ -406,13 +412,6 @@ type SourceImageForExtraction = {
   widthPx?: number
   heightPx?: number
   contentType?: string
-}
-
-type CameraSnapshot = {
-  position: THREE.Vector3
-  target: THREE.Vector3
-  up: THREE.Vector3
-  label: string
 }
 
 type CameraTransition = {
@@ -1253,52 +1252,20 @@ function applyCameraAction(action: CameraAction): void {
 }
 
 function cameraSnapshotFor(action: CameraAction): CameraSnapshot {
-  const bounds = roomBounds(spatialModel)
-  const maxDimension = Math.max(bounds.widthMeters, bounds.depthMeters, 1)
-  const height = Math.max(spatialModel.room.heightMeters, 2.4)
-  const fitDistance = maxDimension / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
-  const target = new THREE.Vector3(0, height * 0.38, 0)
-
-  if (action === 'top') {
-    return {
-      position: new THREE.Vector3(0, fitDistance * 1.35, 0.001),
-      target: new THREE.Vector3(0, 0, 0),
-      up: new THREE.Vector3(0, 0, -1),
-      label: t('Top camera preset', '상단 카메라 프리셋'),
-    }
-  }
-
-  if (action === 'front') {
-    return {
-      position: new THREE.Vector3(0, height * 0.55, maxDimension * 1.45),
-      target,
-      up: new THREE.Vector3(0, 1, 0),
-      label: t('Front camera preset', '정면 카메라 프리셋'),
-    }
-  }
-
-  if (action === 'eye') {
-    return {
-      position: new THREE.Vector3(0, 1.6, maxDimension * 0.95),
-      target: new THREE.Vector3(0, 1.35, 0),
-      up: new THREE.Vector3(0, 1, 0),
-      label: t('Eye-level camera preset', '눈높이 카메라 프리셋'),
-    }
-  }
-
-  const multiplier = action === 'fit' ? 0.78 : 0.95
-  return {
-    position: new THREE.Vector3(
-      maxDimension * multiplier,
-      Math.max(height * 0.72, maxDimension * 0.55),
-      maxDimension * multiplier,
-    ),
-    target,
-    up: new THREE.Vector3(0, 1, 0),
-    label: action === 'fit'
-      ? t('Fit-to-room camera preset', '방 맞춤 카메라 프리셋')
-      : t('Corner camera preset', '코너 카메라 프리셋'),
-  }
+  return cameraSnapshotForRoom({
+    action,
+    bounds: roomBounds(spatialModel),
+    roomHeightMeters: spatialModel.room.heightMeters,
+    fovDegrees: camera.fov,
+    labels: {
+      reset: t('Reset camera preset', '카메라 프리셋 초기화'),
+      fit: t('Fit-to-room camera preset', '방 맞춤 카메라 프리셋'),
+      top: t('Top camera preset', '상단 카메라 프리셋'),
+      front: t('Front camera preset', '정면 카메라 프리셋'),
+      corner: t('Corner camera preset', '코너 카메라 프리셋'),
+      eye: t('Eye-level camera preset', '눈높이 카메라 프리셋'),
+    },
+  })
 }
 
 function queueCameraSnapshot(snapshot: CameraSnapshot, status: string, animate: boolean): void {
@@ -1306,7 +1273,7 @@ function queueCameraSnapshot(snapshot: CameraSnapshot, status: string, animate: 
   cameraStatusElement.textContent = reducedMotion
     ? `${status}; ${t('reduced motion', '움직임 줄임')}`
     : `${status}; ${t('camera moving', '카메라 이동 중')}`
-  if (reducedMotion || !animate) {
+  if (!shouldAnimateCamera({ reducedMotion, animate })) {
     applyCameraSnapshot(snapshot)
     emitCameraChanged()
     return
@@ -1431,17 +1398,6 @@ function cameraLabelFor(action: CameraAction): string {
     eye: t('Eye-level view', '눈높이 보기'),
   }
   return labels[action]
-}
-
-function isCameraAction(value: string | undefined): value is CameraAction {
-  return (
-    value === 'reset' ||
-    value === 'fit' ||
-    value === 'top' ||
-    value === 'front' ||
-    value === 'corner' ||
-    value === 'eye'
-  )
 }
 
 function metricPointToScene(x: number, y: number, height = 0): THREE.Vector3 {

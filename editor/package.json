@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "test": "npm run typecheck",
     "test:story-4.1": "node --experimental-strip-types scripts/verify-story-4.1-spatial-model.mjs",
+    "test:story-4.2": "node --experimental-strip-types scripts/verify-story-4.2-camera-controls.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

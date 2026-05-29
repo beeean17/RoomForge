@@ -95,6 +95,7 @@ export function spatialModelFromBridgePayload(payload: BridgePayload): SpatialMo
   const room = recordValue(scene.room ?? payload.room)
   const floorPlan = recordValue(room.floorPlan ?? payload.floorPlan)
   const metricGeometry = recordValue(floorPlan.metricGeometry ?? payload.metricGeometry)
+  const scale = recordValue(scene.scale ?? payload.scale)
   const rawFurniture = Array.isArray(scene.furniture ?? payload.furniture)
     ? ((scene.furniture ?? payload.furniture) as unknown[])
     : []
@@ -119,6 +120,12 @@ export function spatialModelFromBridgePayload(payload: BridgePayload): SpatialMo
       scene.hasUnsavedChanges ?? payload.hasUnsavedChanges,
       fallback.hasUnsavedChanges,
     ),
+    scale: {
+      metersPerSceneUnit: numberValue(
+        scale.metersPerSceneUnit,
+        fallback.scale.metersPerSceneUnit,
+      ),
+    },
     selected: selectionValue(scene.selected ?? payload.selected),
     room: {
       ...fallback.room,

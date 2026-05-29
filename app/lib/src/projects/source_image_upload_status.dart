@@ -1,5 +1,37 @@
 import 'project_api.dart';
 
+class SourceImageUploadActionId {
+  const SourceImageUploadActionId._();
+
+  static const choosePhoto = 'choose_photo';
+  static const retryUpload = 'retry_upload';
+}
+
+class SourceImageUploadAction {
+  const SourceImageUploadAction({
+    required this.id,
+    required this.label,
+    this.isPrimary = false,
+  });
+
+  final String id;
+  final String label;
+  final bool isPrimary;
+
+  SourceImageUploadAction copyWith({String? label}) {
+    return SourceImageUploadAction(
+      id: id,
+      label: label ?? this.label,
+      isPrimary: isPrimary,
+    );
+  }
+}
+
+const sourceImageChoosePhotoActionLabel = 'Choose photo';
+const sourceImageRetryUploadActionLabel = 'Retry upload';
+const sourceImageUploadProgressSemanticsLabel = 'Source image upload progress';
+const sourceImageUploadRecoverySemanticsLabel = 'Source image upload recovery';
+
 enum SourceImageUploadStatus {
   empty,
   ready,
@@ -47,6 +79,23 @@ extension SourceImageUploadStatusView on SourceImageUploadStatus {
   }
 }
 
+List<SourceImageUploadAction> sourceImageUploadActions(
+  SourceImageUploadStatus status,
+) {
+  return [
+    const SourceImageUploadAction(
+      id: SourceImageUploadActionId.choosePhoto,
+      label: sourceImageChoosePhotoActionLabel,
+    ),
+    if (status.canRetryUpload)
+      const SourceImageUploadAction(
+        id: SourceImageUploadActionId.retryUpload,
+        label: sourceImageRetryUploadActionLabel,
+        isPrimary: true,
+      ),
+  ];
+}
+
 SourceImageUploadStatus uploadStatusForProjectApiException(
   ProjectApiException error,
 ) {
@@ -72,6 +121,49 @@ String uploadRecoveryMessage(ProjectApiException error) {
     SourceImageUploadStatus.validationError => error.message,
     _ => error.message,
   };
+}
+
+String sourceImageUploadGuidance(SourceImageUploadStatus status) {
+  return switch (status) {
+    SourceImageUploadStatus.ready =>
+      'Choose a supported room photo before reconstruction.',
+    SourceImageUploadStatus.uploading =>
+      'Keep this tab open while the source image is saved.',
+    SourceImageUploadStatus.uploaded =>
+      'The uploaded photo is ready for reconstruction review.',
+    SourceImageUploadStatus.validationError =>
+      'Choose a JPEG, PNG, or WebP image up to 10 MB.',
+    SourceImageUploadStatus.lowQualityWarning =>
+      'Use a sharper, brighter image if reconstruction looks weak.',
+    SourceImageUploadStatus.permissionFailure =>
+      'Refresh access or retry after confirming this project belongs to your account.',
+    SourceImageUploadStatus.metadataSaveFailed =>
+      'Storage received the file, but the project metadata did not finish saving.',
+    SourceImageUploadStatus.uploadFailed =>
+      'Retry upload, or replace the file if the problem repeats.',
+    SourceImageUploadStatus.empty =>
+      'Choose a room photo to begin reconstruction.',
+  };
+}
+
+String sourceImageUploadAccessibilitySummary({
+  required SourceImageUploadStatus status,
+  String? message,
+  double? progress,
+}) {
+  final statusText = status == SourceImageUploadStatus.uploading
+      ? uploadProgressLabel(progress)
+      : status.label;
+  final actionText = sourceImageUploadActions(
+    status,
+  ).map((action) => action.label).join(', ');
+  return [
+    sourceImageUploadRecoverySemanticsLabel,
+    statusText,
+    sourceImageUploadGuidance(status),
+    if (message != null && message.isNotEmpty) message,
+    if (actionText.isNotEmpty) 'Actions: $actionText',
+  ].join('. ');
 }
 
 String uploadProgressLabel(double? progress) {

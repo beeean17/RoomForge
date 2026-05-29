@@ -29,6 +29,7 @@ import 'src/layouts/layout_furniture_bridge_mapper.dart';
 import 'src/layouts/layout_remote_update_guard.dart';
 import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/project_api.dart';
+import 'src/projects/source_image_upload_recovery_controls.dart';
 import 'src/projects/source_image_upload_status.dart';
 
 const _roomForgeInk = Color(0xFF172033);
@@ -2660,6 +2661,83 @@ String _localizedUploadProgressLabel(double? progress) {
   return '업로드 중 $percent%';
 }
 
+SourceImageUploadAction _localizedSourceImageUploadAction(
+  SourceImageUploadAction action,
+) {
+  final label = switch (action.label) {
+    sourceImageChoosePhotoActionLabel => rf('Choose photo', '사진 선택'),
+    sourceImageRetryUploadActionLabel => rf('Retry upload', '업로드 재시도'),
+    _ => action.label,
+  };
+  return action.copyWith(label: label);
+}
+
+String _localizedSourceImageUploadAccessibilitySummary({
+  required SourceImageUploadStatus status,
+  required String? message,
+  required double? progress,
+}) {
+  if (!_roomForgeUsesKorean) {
+    return sourceImageUploadAccessibilitySummary(
+      status: status,
+      message: message,
+      progress: progress,
+    );
+  }
+  final statusText = status == SourceImageUploadStatus.uploading
+      ? _localizedUploadProgressLabel(progress)
+      : _localizedSourceImageUploadStateLabel(status);
+  final actionText = sourceImageUploadActions(status)
+      .map(_localizedSourceImageUploadAction)
+      .map((action) => action.label)
+      .join(', ');
+  return [
+    rf(sourceImageUploadRecoverySemanticsLabel, '소스 이미지 업로드 복구'),
+    statusText,
+    _localizedSourceImageUploadGuidance(status),
+    if (message != null && message.isNotEmpty) message,
+    if (actionText.isNotEmpty) '${rf('Actions', '작업')}: $actionText',
+  ].join('. ');
+}
+
+String _localizedSourceImageUploadGuidance(SourceImageUploadStatus state) {
+  if (!_roomForgeUsesKorean) {
+    return sourceImageUploadGuidance(state);
+  }
+  return switch (state) {
+    SourceImageUploadStatus.ready => '재구성 전에 지원되는 방 사진을 선택하세요.',
+    SourceImageUploadStatus.uploading => '소스 이미지가 저장되는 동안 이 탭을 열어 두세요.',
+    SourceImageUploadStatus.uploaded => '업로드된 사진을 재구성 검토에 사용할 수 있습니다.',
+    SourceImageUploadStatus.validationError =>
+      'JPEG, PNG, WebP 형식과 10 MB 이하 파일을 선택하세요.',
+    SourceImageUploadStatus.lowQualityWarning =>
+      '재구성 결과가 약하면 더 선명하고 밝은 이미지를 사용하세요.',
+    SourceImageUploadStatus.permissionFailure =>
+      '프로젝트 접근 권한을 확인한 뒤 새로고침하거나 다시 시도하세요.',
+    SourceImageUploadStatus.metadataSaveFailed =>
+      '파일은 Storage에 도착했지만 프로젝트 메타데이터 저장이 완료되지 않았습니다.',
+    SourceImageUploadStatus.uploadFailed => '업로드를 다시 시도하거나 문제가 반복되면 파일을 교체하세요.',
+    SourceImageUploadStatus.empty => '재구성을 시작하려면 방 사진을 선택하세요.',
+  };
+}
+
+String _localizedSourceImageUploadStateLabel(SourceImageUploadStatus state) {
+  if (!_roomForgeUsesKorean) {
+    return state.label;
+  }
+  return switch (state) {
+    SourceImageUploadStatus.ready => '선택 준비됨',
+    SourceImageUploadStatus.uploading => '업로드 중',
+    SourceImageUploadStatus.uploaded => '업로드됨',
+    SourceImageUploadStatus.validationError => '검증 오류',
+    SourceImageUploadStatus.lowQualityWarning => '품질 경고',
+    SourceImageUploadStatus.permissionFailure => '권한 차단',
+    SourceImageUploadStatus.metadataSaveFailed => '메타데이터 저장 실패',
+    SourceImageUploadStatus.uploadFailed => '업로드 실패',
+    SourceImageUploadStatus.empty => '선택된 소스 이미지 없음',
+  };
+}
+
 String _localizedReconstructionStatusLabel(String status) {
   return _adminStatusLabel(status);
 }
@@ -4038,6 +4116,14 @@ class PhotoIntakeSection extends StatelessWidget {
     final noticeSeverity = state.isFailure
         ? NoticeSeverity.error
         : NoticeSeverity.warning;
+    final uploadActions = sourceImageUploadActions(
+      state,
+    ).map(_localizedSourceImageUploadAction).toList();
+    final uploadSemantics = _localizedSourceImageUploadAccessibilitySummary(
+      status: state,
+      message: message,
+      progress: progressValue,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4051,157 +4137,154 @@ class PhotoIntakeSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: state == SourceImageUploadStatus.ready
-                ? _roomForgePrimary.withValues(alpha: 0.05)
-                : _roomForgePanel,
-            border: Border.all(
-              color: borderColor,
-              width: state == SourceImageUploadStatus.ready ? 2 : 1,
+        Semantics(
+          container: true,
+          liveRegion: true,
+          label: uploadSemantics,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: state == SourceImageUploadStatus.ready
+                  ? _roomForgePrimary.withValues(alpha: 0.05)
+                  : _roomForgePanel,
+              border: Border.all(
+                color: borderColor,
+                width: state == SourceImageUploadStatus.ready ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
             ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(_uploadStateIcon(state), color: borderColor, size: 28),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Semantics(
-                            liveRegion: true,
-                            label: state == SourceImageUploadStatus.uploading
-                                ? progressText
-                                : _uploadStateLabel(state),
-                            child: Text(
-                              _uploadStateLabel(state),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: _roomForgeInk,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        _uploadStateIcon(state),
+                        color: borderColor,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Semantics(
+                              liveRegion: true,
+                              label: state == SourceImageUploadStatus.uploading
+                                  ? progressText
+                                  : _uploadStateLabel(state),
+                              child: Text(
+                                _uploadStateLabel(state),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: _roomForgeInk,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _uploadGuidance(state),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: _roomForgeMuted,
-                              height: 1.35,
+                            const SizedBox(height: 4),
+                            Text(
+                              _uploadGuidance(state),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: _roomForgeMuted,
+                                height: 1.35,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    RoomForgeStatusPill(
-                      label: state == SourceImageUploadStatus.uploading
-                          ? progressText
-                          : _uploadStateLabel(state),
-                      color: borderColor,
-                      dense: true,
-                    ),
-                  ],
-                ),
-                if (state == SourceImageUploadStatus.uploading) ...[
-                  const SizedBox(height: 14),
-                  LinearProgressIndicator(
-                    value: progressValue,
-                    semanticsLabel: 'Source image upload progress',
-                    semanticsValue: progressText,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(progressText),
-                ],
-                if (sourceImage != null) ...[
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      RoomForgeStatusPill(
-                        icon: Icons.image_outlined,
-                        label: sourceImage!.originalFilename,
-                        color: _roomForgeSuccess,
-                      ),
-                      RoomForgeStatusPill(
-                        icon: Icons.data_object_outlined,
-                        label: _fileSizeLabel(sourceImage!.byteSize),
-                        color: _roomForgeSuccess,
-                      ),
-                      if (sourceImage!.widthPx != null &&
-                          sourceImage!.heightPx != null)
-                        RoomForgeStatusPill(
-                          icon: Icons.aspect_ratio_outlined,
-                          label:
-                              '${sourceImage!.widthPx} x ${sourceImage!.heightPx}px',
-                          color: _roomForgeSuccess,
+                          ],
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      RoomForgeStatusPill(
+                        label: state == SourceImageUploadStatus.uploading
+                            ? progressText
+                            : _uploadStateLabel(state),
+                        color: borderColor,
+                        dense: true,
+                      ),
                     ],
                   ),
-                ],
-                if (message != null) ...[
-                  const SizedBox(height: 14),
-                  isProblemState
-                      ? RoomForgeNotice(
-                          title: state.isFailure
-                              ? rf('Upload needs attention', '업로드 확인 필요')
-                              : rf('Image quality warning', '이미지 품질 경고'),
-                          message: message!,
-                          severity: noticeSeverity,
-                          icon: state.isFailure
-                              ? Icons.error_outline
-                              : Icons.warning_amber_outlined,
-                        )
-                      : Text(
-                          message!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: _roomForgeMuted,
-                          ),
-                        ),
-                ],
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: state == SourceImageUploadStatus.uploading
-                          ? null
-                          : onSelectImage,
-                      icon: const Icon(Icons.photo_outlined),
-                      label: Text(
-                        state == SourceImageUploadStatus.uploading
-                            ? rf('Uploading...', '업로드 중...')
-                            : rf('Choose photo', '사진 선택'),
-                      ),
+                  if (state == SourceImageUploadStatus.uploading) ...[
+                    const SizedBox(height: 14),
+                    LinearProgressIndicator(
+                      value: progressValue,
+                      semanticsLabel: sourceImageUploadProgressSemanticsLabel,
+                      semanticsValue: progressText,
                     ),
-                    if (state.canRetryUpload)
-                      FilledButton.icon(
-                        onPressed: onRetryUpload,
-                        icon: const Icon(Icons.refresh),
-                        label: Text(rf('Retry upload', '업로드 재시도')),
-                      ),
+                    const SizedBox(height: 6),
+                    Text(progressText),
                   ],
-                ),
-                if (state == SourceImageUploadStatus.validationError) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    rf(
-                      'Accepted formats: JPEG, PNG, WebP. Maximum size: 10 MB.',
-                      '지원 형식: JPEG, PNG, WebP. 최대 크기: 10 MB.',
+                  if (sourceImage != null) ...[
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        RoomForgeStatusPill(
+                          icon: Icons.image_outlined,
+                          label: sourceImage!.originalFilename,
+                          color: _roomForgeSuccess,
+                        ),
+                        RoomForgeStatusPill(
+                          icon: Icons.data_object_outlined,
+                          label: _fileSizeLabel(sourceImage!.byteSize),
+                          color: _roomForgeSuccess,
+                        ),
+                        if (sourceImage!.widthPx != null &&
+                            sourceImage!.heightPx != null)
+                          RoomForgeStatusPill(
+                            icon: Icons.aspect_ratio_outlined,
+                            label:
+                                '${sourceImage!.widthPx} x ${sourceImage!.heightPx}px',
+                            color: _roomForgeSuccess,
+                          ),
+                      ],
                     ),
-                    style: theme.textTheme.bodySmall,
+                  ],
+                  if (message != null) ...[
+                    const SizedBox(height: 14),
+                    isProblemState
+                        ? RoomForgeNotice(
+                            title: state.isFailure
+                                ? rf('Upload needs attention', '업로드 확인 필요')
+                                : rf('Image quality warning', '이미지 품질 경고'),
+                            message: message!,
+                            severity: noticeSeverity,
+                            icon: state.isFailure
+                                ? Icons.error_outline
+                                : Icons.warning_amber_outlined,
+                          )
+                        : Text(
+                            message!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: _roomForgeMuted,
+                            ),
+                          ),
+                  ],
+                  const SizedBox(height: 14),
+                  SourceImageUploadRecoveryControls(
+                    status: state,
+                    actions: uploadActions,
+                    uploadingLabel: rf('Uploading...', '업로드 중...'),
+                    semanticsLabel: rf(
+                      'Source image upload actions',
+                      '소스 이미지 업로드 작업',
+                    ),
+                    onChoosePhoto: onSelectImage,
+                    onRetryUpload: onRetryUpload,
                   ),
+                  if (state == SourceImageUploadStatus.validationError) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      rf(
+                        'Accepted formats: JPEG, PNG, WebP. Maximum size: 10 MB.',
+                        '지원 형식: JPEG, PNG, WebP. 최대 크기: 10 MB.',
+                      ),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

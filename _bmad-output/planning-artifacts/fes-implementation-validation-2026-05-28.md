@@ -41,6 +41,10 @@ Commands run from the repository on 2026-05-28:
 | `flutter test test/src/admin/firebase_admin_diagnostics_test.dart test/src/admin/firebase_admin_access_repository_test.dart` in `app/` | Pass | FES-8.2 focused admin diagnostics validation passed. |
 | `flutter test` in `app/` after FES-8.2 | Pass | 88 tests passed. |
 | `flutter build web --release` in `app/` after FES-8.2 | Pass with warnings | JS web build succeeded; Wasm dry-run warned about existing `dart:html` usage in the web shell and IndexedDB draft store. |
+| `flutter test test/src/projects/source_image_upload_status_test.dart test/src/projects/source_image_upload_recovery_controls_test.dart` in `app/` | Pass | FES-4.3 focused upload recovery validation passed. |
+| `flutter test test/src/projects/firebase_project_api_test.dart` in `app/` | Pass | Source-image metadata save behavior and related Firebase Project API coverage passed. |
+| `flutter test` in `app/` after FES-4.3 | Pass | 93 tests passed. |
+| `flutter build web --release` in `app/` after FES-4.3 | Pass with warnings | JS web build succeeded; Wasm dry-run warned about existing `dart:html` usage in the web shell and IndexedDB draft store. |
 
 Recovery used:
 
@@ -73,7 +77,7 @@ Recovery used:
 | FES-3.3 Add Admin Route Guard Baseline | Verified | `AdminRouteGuardButton`, `FirebaseAdminRoleGuard`, admin repository tests, non-admin rules denial. | Manual route access with real accounts was not run. |
 | FES-4.1 Migrate Owned Project and Room Dimension Persistence | Verified | `FirebaseProjectApi` project/dimensions tests; project rules script passed; soft delete method exists. | None for automated scope. |
 | FES-4.2 Upload Source Images to Contracted Storage Paths | Verified | `firebase_source_image_upload.dart`; upload metadata tests; source image storage rules script passed. | Browser upload flow was not manually exercised. |
-| FES-4.3 Surface Upload Progress, Failure, and Recovery States | Partial | Upload state model tests cover validation, permission, metadata-save failure, and accessible progress copy; app UI has progress and retry states. | Needs widget/manual accessibility pass for keyboard reachability and metadata-save-failed recovery panel behavior. |
+| FES-4.3 Surface Upload Progress, Failure, and Recovery States | Verified | Upload state model tests cover validation, permission, metadata-save failure, progress copy, safe permission copy, metadata cleanup guidance, and accessible summaries; upload recovery controls have widget tests for choose, retry, disabled uploading state, semantics, and keyboard traversal/activation; app UI uses the shared recovery contract. | Direct widget coverage of `PhotoIntakeSection` is limited by the web-only `dart:html` app shell, but the extracted controls and shared state contract now cover the validation gap. |
 | FES-5.1 Persist Reconstruction Jobs and Transitions | Verified | Reconstruction repository/API tests; reconstruction rules script passed; allowed status vocabulary enforced. | None for automated scope. |
 | FES-5.2 Persist OpenCV Candidates and Confirmed Geometry Separately | Verified | Story 3.7 implementation; geometry rules script passed; serializer and bridge distinction tests passed. | None for automated scope. |
 | FES-5.3 Persist Metric Floor Plans and Artifact References | Verified | Floor plan repository/API tests; floor plan rules and admin storage rules passed; app persists metric floor plans in meters with generated calibration/debug JSON artifact refs and best-effort artifact cleanup on save failure. | Browser/manual artifact inspection was not run, but automated contract and rules evidence now covers the persistence gap. |
@@ -97,24 +101,26 @@ Recovery used:
 
 | Bucket | Count | Stories |
 | --- | ---: | --- |
-| Verified | 26 | FES-1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 7.1, 7.2, 7.3, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3 |
-| Partial | 1 | FES-4.3 |
+| Verified | 27 | FES-1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 7.1, 7.2, 7.3, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3 |
+| Partial | 0 | None |
 | Docs verified | 3 | FES-10.1, 10.2, 10.3 |
 
 ## Dev Story Promotion Candidates
 
-The next BMAD dev stories should come from the partial bucket, in this order:
+The partial bucket is empty. The next BMAD dev story should return to the
+default post-Firebase sequence in `AGENTS.md`, starting with Story 4.1 unless
+the user chooses another validation pass.
 
-1. FES-4.3 upload recovery UX validation.
-   - Goal: add widget/manual coverage for upload progress, invalid image, permission failure, metadata-save failure, retry, and cleanup guidance.
-   - Acceptance focus: accessible state text and recoverable action paths.
+1. Story 4.1 - Shared Spatial Model and 2D/3D View Shell.
+   - Goal: continue the product implementation queue now that Firebase FES validation gaps are closed.
+   - Acceptance focus: verify metric floor-plan handoff and establish the shared spatial editor shell.
 
 ## Decision
 
 The Firebase FES backlog is no longer only planning-level in the repository:
-most stories have implementation evidence and automated validation. It is not
-honest to mark the entire FES backlog fully complete, because one story still
-have manual or UI/accessibility validation gaps.
+all implementation-oriented stories now have implementation evidence and
+automated validation. Remaining browser/manual checks are documented
+limitations rather than hidden completion claims.
 
-The natural next BMAD workflow is to create focused dev story files for the
-partial bucket rather than restarting from FES-1.1.
+The natural next BMAD workflow is to resume the product implementation queue
+after the Firebase validation cleanup rather than restarting from FES-1.1.

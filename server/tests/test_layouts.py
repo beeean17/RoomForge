@@ -218,9 +218,12 @@ def test_save_layout_persists_room_floor_source_and_furniture_state() -> None:
     assert furniture["category"] == "chair"
     assert furniture["position"] == {"x": 1.2, "y": 1.4}
     assert furniture["size"]["width_meters"] == 0.55
+    assert furniture["size"]["depth_meters"] == 0.55
+    assert furniture["size"]["height_meters"] == 0.85
     assert furniture["rotation_degrees"] == 15
     assert furniture["color"] == "#64748b"
     assert repository.saved[0].user_id == 42
+    assert repository.saved[0].furniture_objects == layout_payload()["furniture_objects"]
 
 
 def test_save_layout_rejects_cross_user_project() -> None:

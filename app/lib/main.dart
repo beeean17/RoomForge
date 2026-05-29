@@ -2505,15 +2505,11 @@ class _AdminArtifactView extends StatelessWidget {
         if (data == null) {
           return const SizedBox.shrink();
         }
-        final candidate = data['candidate'] is Map
-            ? Map<String, Object?>.from(data['candidate'] as Map)
-            : const <String, Object?>{};
-        final confirmed = data['confirmed'] is List
-            ? (data['confirmed'] as List).length
-            : 0;
-        final calibration = data['calibration'] is List
-            ? (data['calibration'] as List).length
-            : 0;
+        final job = _adminArtifactMap(data['job']);
+        final sourceImage = _adminArtifactMap(data['source_image']);
+        final candidate = _adminArtifactMap(data['candidate']);
+        final confirmed = _adminArtifactMapList(data['confirmed']);
+        final calibration = _adminArtifactMapList(data['calibration']);
         return DecoratedBox(
           decoration: const BoxDecoration(
             border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
@@ -2529,6 +2525,27 @@ class _AdminArtifactView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
+                  rf('Original image access', '원본 이미지 접근'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
+                  '${rf('Source image', '소스 이미지')}: ${sourceImage['id'] ?? rf('unknown', '알 수 없음')}',
+                ),
+                Text(
+                  '${rf('Access', '접근')}: ${sourceImage['access'] ?? rf('unknown', '알 수 없음')}',
+                ),
+                if (job['failure_reason_code'] != null)
+                  Text(
+                    '${rf('Failure', '실패 사유')}: ${job['failure_reason_code']}',
+                  ),
+                if (job['failure_reason_message'] != null)
+                  Text('${job['failure_reason_message']}'),
+                const Divider(height: 24),
+                Text(
+                  rf('Candidate preview', '후보 미리보기'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
                   '${rf('Candidate geometry', '후보 지오메트리')}: ${candidate['coordinate_space']}',
                 ),
                 Text(
@@ -2537,8 +2554,50 @@ class _AdminArtifactView extends StatelessWidget {
                 Text(
                   '${rf('Algorithm', '알고리즘')}: ${candidate['algorithm'] ?? rf('unknown', '알 수 없음')}',
                 ),
-                Text('${rf('Confirmed geometries', '확정 지오메트리')}: $confirmed'),
-                Text('${rf('Calibration summaries', '보정 요약')}: $calibration'),
+                Text(
+                  '${rf('Geometry preview', '지오메트리 미리보기')}: ${_adminArtifactJsonPreview(candidate['geometry'])}',
+                ),
+                const Divider(height: 24),
+                Text(
+                  rf('User-confirmed geometry', '사용자 확정 지오메트리'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (confirmed.isEmpty)
+                  Text(rf('No user correction saved.', '저장된 사용자 보정 없음.'))
+                else
+                  for (final geometry in confirmed) ...[
+                    Text(
+                      '${rf('Confirmed', '확정')} #${geometry['id']}: ${geometry['geometry_kind']} | ${geometry['coordinate_space']}',
+                    ),
+                    Text(
+                      '${rf('Points', '포인트')}: ${_adminArtifactPointCount(geometry['points'])}',
+                    ),
+                    Text(
+                      '${rf('Geometry preview', '지오메트리 미리보기')}: ${_adminArtifactJsonPreview(geometry['points'])}',
+                    ),
+                  ],
+                const Divider(height: 24),
+                Text(
+                  rf('Calibration summary', '보정 요약'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (calibration.isEmpty)
+                  Text(rf('No calibration saved.', '저장된 보정 없음.'))
+                else
+                  for (final floorPlan in calibration) ...[
+                    Text(
+                      '${rf('Floor plan', '평면도')} #${floorPlan['floor_plan_id']}: ${floorPlan['width_value']} x ${floorPlan['depth_value']} ${floorPlan['unit']}',
+                    ),
+                    Text(
+                      '${rf('Deviation', '편차')}: W ${floorPlan['width_deviation_ratio']}, D ${floorPlan['depth_deviation_ratio']}, AR ${floorPlan['aspect_ratio_error']}',
+                    ),
+                    Text(
+                      '${rf('Image geometry', '이미지 지오메트리')}: ${_adminArtifactCoordinateSpace(floorPlan['image_geometry'])}',
+                    ),
+                    Text(
+                      '${rf('Metric geometry', '미터 지오메트리')}: ${_adminArtifactCoordinateSpace(floorPlan['metric_geometry'])}',
+                    ),
+                  ],
               ],
             ),
           ),
@@ -2546,6 +2605,48 @@ class _AdminArtifactView extends StatelessWidget {
       },
     );
   }
+}
+
+Map<String, Object?> _adminArtifactMap(Object? value) {
+  if (value is Map) {
+    return Map<String, Object?>.from(value);
+  }
+  return const <String, Object?>{};
+}
+
+List<Map<String, Object?>> _adminArtifactMapList(Object? value) {
+  if (value is! List) {
+    return const <Map<String, Object?>>[];
+  }
+  return [
+    for (final item in value)
+      if (item is Map) Map<String, Object?>.from(item),
+  ];
+}
+
+String _adminArtifactJsonPreview(Object? value) {
+  if (value == null) {
+    return rf('unknown', '알 수 없음');
+  }
+  final encoded = jsonEncode(value);
+  if (encoded.length <= 240) {
+    return encoded;
+  }
+  return '${encoded.substring(0, 240)}...';
+}
+
+String _adminArtifactPointCount(Object? value) {
+  if (value is List) {
+    return '${value.length}';
+  }
+  return rf('unknown', '알 수 없음');
+}
+
+String _adminArtifactCoordinateSpace(Object? value) {
+  if (value is Map && value['coordinate_space'] != null) {
+    return '${value['coordinate_space']}';
+  }
+  return rf('unknown', '알 수 없음');
 }
 
 class _AdminDiagnosisView extends StatelessWidget {

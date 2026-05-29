@@ -525,12 +525,22 @@ def test_admin_job_artifacts_separates_candidate_confirmed_and_calibration() -> 
     body = response.json()
     data = body["data"]
     assert body["error"] is None
+    assert data["job"]["id"] == 2
+    assert data["job"]["failure_reason_code"] == "low_confidence"
+    assert data["job"]["failure_reason_message"] == "Needs review."
     assert data["source_image"] == {"id": 31, "access": "restricted"}
     assert data["candidate"]["coordinate_space"] == "image_pixels"
     assert data["candidate"]["geometry"] == {"points": [{"x": 1, "y": 2}]}
     assert data["candidate"]["confidence"] == 0.72
+    assert data["candidate"]["algorithm"] == "browser-opencv"
+    assert "confirmed" not in data["candidate"]
     assert data["confirmed"][0]["points"] == [{"x": 3, "y": 4}]
     assert data["confirmed"][0]["coordinate_space"] == "image_pixels"
+    assert "candidate_geometry" not in data["confirmed"][0]
+    assert data["calibration"][0]["unit"] == "meters"
+    assert data["calibration"][0]["width_value"] == 4.2
+    assert data["calibration"][0]["depth_value"] == 3.6
+    assert data["calibration"][0]["image_geometry"]["coordinate_space"] == "image_pixels"
     assert data["calibration"][0]["metric_geometry"]["coordinate_space"] == "meters"
 
 

@@ -199,6 +199,122 @@ void main() {
       DateTime.utc(2026, 5, 29, 0, 0, 5),
     );
   });
+
+  test(
+    'AdminApi loadJobArtifacts keeps candidate and confirmed data separate',
+    () async {
+      late http.Request capturedRequest;
+      final api = AdminApi(
+        authRepository: const _TokenAuthRepository('admin-token'),
+        baseUrl: 'https://api.example.test',
+        client: MockClient((request) async {
+          capturedRequest = request;
+          expect(request.method, 'GET');
+          expect(
+            request.url.toString(),
+            'https://api.example.test/admin/jobs/9/artifacts',
+          );
+          expect(request.headers['Authorization'], 'Bearer admin-token');
+
+          return http.Response(
+            jsonEncode({
+              'data': {
+                'job': {
+                  'id': 9,
+                  'project_id': 1,
+                  'user_id': 42,
+                  'source_image_id': 7,
+                  'status': 'review_required',
+                  'status_label': 'Needs review',
+                  'terminal': false,
+                  'provider': 'manual_assisted_opencv',
+                  'retry_of_job_id': null,
+                  'failure_reason_code': 'low_confidence',
+                  'failure_reason_message': 'Review the candidate geometry.',
+                  'created_at': '2026-05-29T00:00:00Z',
+                  'updated_at': '2026-05-29T00:00:05Z',
+                },
+                'source_image': {'id': 7, 'access': 'restricted'},
+                'candidate': {
+                  'opencv_result_id': 11,
+                  'coordinate_space': 'image_pixels',
+                  'geometry': {
+                    'points': [
+                      {'x': 1, 'y': 2},
+                    ],
+                  },
+                  'confidence': 0.72,
+                  'algorithm': 'opencv-js-canny-hough-v1',
+                },
+                'confirmed': [
+                  {
+                    'id': 12,
+                    'coordinate_space': 'image_pixels',
+                    'geometry_kind': 'floor_polygon',
+                    'points': [
+                      {'x': 3, 'y': 4},
+                    ],
+                  },
+                ],
+                'calibration': [
+                  {
+                    'floor_plan_id': 13,
+                    'unit': 'meters',
+                    'width_value': 4.2,
+                    'depth_value': 3.6,
+                    'width_deviation_ratio': 0,
+                    'depth_deviation_ratio': 0,
+                    'aspect_ratio_error': 0,
+                    'image_geometry': {'coordinate_space': 'image_pixels'},
+                    'metric_geometry': {'coordinate_space': 'meters'},
+                  },
+                ],
+              },
+              'error': null,
+              'meta': {'request_id': 'req-artifacts'},
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final artifacts = await api.loadJobArtifacts(9);
+
+      expect(capturedRequest.headers['Content-Type'], 'application/json');
+      final sourceImage = Map<String, Object?>.from(
+        artifacts['source_image'] as Map,
+      );
+      final candidate = Map<String, Object?>.from(
+        artifacts['candidate'] as Map,
+      );
+      final confirmed = artifacts['confirmed'] as List<Object?>;
+      final calibration = artifacts['calibration'] as List<Object?>;
+      final job = Map<String, Object?>.from(artifacts['job'] as Map);
+      expect(sourceImage, {'id': 7, 'access': 'restricted'});
+      expect(candidate['coordinate_space'], 'image_pixels');
+      expect(candidate['confidence'], 0.72);
+      expect(candidate['algorithm'], 'opencv-js-canny-hough-v1');
+      expect(candidate.containsKey('confirmed'), isFalse);
+      expect(job['failure_reason_code'], 'low_confidence');
+      expect(confirmed, hasLength(1));
+      expect(
+        Map<String, Object?>.from(confirmed.single as Map)['coordinate_space'],
+        'image_pixels',
+      );
+      expect(
+        Map<String, Object?>.from(
+          confirmed.single as Map,
+        ).containsKey('candidate_geometry'),
+        isFalse,
+      );
+      expect(calibration, hasLength(1));
+      expect(
+        Map<String, Object?>.from(calibration.single as Map)['metric_geometry'],
+        {'coordinate_space': 'meters'},
+      );
+    },
+  );
 }
 
 class _TokenAuthRepository implements AuthRepository {

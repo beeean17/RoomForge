@@ -315,6 +315,106 @@ void main() {
       );
     },
   );
+
+  test('AdminApi retryJob creates linked retry detail', () async {
+    late http.Request capturedRequest;
+    final api = AdminApi(
+      authRepository: const _TokenAuthRepository('admin-token'),
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        capturedRequest = request;
+        expect(request.method, 'POST');
+        expect(
+          request.url.toString(),
+          'https://api.example.test/admin/jobs/9/retry',
+        );
+        expect(request.headers['Authorization'], 'Bearer admin-token');
+
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'job': {
+                'id': 10,
+                'project_id': 1,
+                'user_id': 42,
+                'source_image_id': 7,
+                'status': 'retrying',
+                'status_label': 'Retrying',
+                'terminal': false,
+                'provider': 'manual_assisted_opencv',
+                'retry_of_job_id': 9,
+                'failure_reason_code': null,
+                'failure_reason_message': null,
+                'created_at': '2026-05-29T00:01:00Z',
+                'updated_at': '2026-05-29T00:01:00Z',
+              },
+              'retry_count': 0,
+              'retry_of_job_id': 9,
+              'transitions': [
+                {
+                  'id': 31,
+                  'job_id': 10,
+                  'status': 'retrying',
+                  'actor': 'admin',
+                  'reason_code': 'admin_retry_requested',
+                  'reason_message': 'Admin requested reconstruction retry.',
+                  'created_at': '2026-05-29T00:01:00Z',
+                },
+              ],
+            },
+            'error': null,
+            'meta': {'request_id': 'req-retry'},
+          }),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final detail = await api.retryJob(9);
+
+    expect(capturedRequest.headers['Content-Type'], 'application/json');
+    expect(detail.job.id, 10);
+    expect(detail.job.status, 'retrying');
+    expect(detail.job.retryOfJobId, 9);
+    expect(detail.transitions.single.actor, 'admin');
+    expect(detail.transitions.single.reasonCode, 'admin_retry_requested');
+  });
+
+  test('AdminApi retryJob surfaces retry unavailable explanation', () async {
+    final api = AdminApi(
+      authRepository: const _TokenAuthRepository('admin-token'),
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': null,
+            'error': {
+              'code': 'retry_unavailable',
+              'message':
+                  'Retry is only available for failed or timed-out jobs.',
+            },
+            'meta': {'request_id': 'req-retry-denied'},
+          }),
+          409,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    await expectLater(
+      api.retryJob(9),
+      throwsA(
+        isA<AdminApiException>()
+            .having((error) => error.code, 'code', 'retry_unavailable')
+            .having(
+              (error) => error.message,
+              'message',
+              contains('failed or timed-out'),
+            ),
+      ),
+    );
+  });
 }
 
 class _TokenAuthRepository implements AuthRepository {

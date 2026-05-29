@@ -567,6 +567,16 @@ def test_admin_retry_failed_job_creates_linked_retry_attempt() -> None:
 
     app = create_app()
     repository = FakeReconstructionJobRepository()
+    original_failure_transition = ReconstructionJobTransitionRecord(
+        id=10,
+        job_id=3,
+        status="failed",
+        actor="worker",
+        reason_code="opencv_failed",
+        reason_message="OpenCV failed.",
+        created_at=datetime(2026, 5, 22, tzinfo=UTC),
+    )
+    repository.transitions[3] = [original_failure_transition]
     app.state.token_verifier = FakeTokenVerifier()
     app.state.user_repository = FakeUserRepository(role="admin")
     app.state.reconstruction_job_repository = repository
@@ -587,6 +597,45 @@ def test_admin_retry_failed_job_creates_linked_retry_attempt() -> None:
     assert transition["actor"] == "admin"
     assert transition["reason_code"] == "admin_retry_requested"
     assert repository.get_for_admin(3).status == "failed"
+    assert repository.count_retries_for_admin(3) == 1
+    assert repository.list_transitions_for_admin(3) == [original_failure_transition]
+
+
+def test_admin_retry_timeout_job_creates_linked_retry_attempt() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    repository = FakeReconstructionJobRepository()
+    repository.jobs.append(
+        ReconstructionJobRecord(
+            id=5,
+            project_id=13,
+            user_id=23,
+            source_image_id=33,
+            status="timeout",
+            provider="browser-opencv",
+            retry_of_job_id=None,
+            failure_reason_code="timeout",
+            failure_reason_message="OpenCV processing timed out.",
+            created_at=datetime(2026, 5, 22, tzinfo=UTC),
+            updated_at=datetime(2026, 5, 22, tzinfo=UTC),
+        )
+    )
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    app.state.reconstruction_job_repository = repository
+
+    response = TestClient(app).post(
+        "/admin/jobs/5/retry",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["error"] is None
+    assert body["data"]["job"]["status"] == "retrying"
+    assert body["data"]["job"]["retry_of_job_id"] == 5
+    assert repository.get_for_admin(5).status == "timeout"
 
 
 def test_admin_retry_explains_unavailable_for_non_failed_job() -> None:
@@ -606,6 +655,25 @@ def test_admin_retry_explains_unavailable_for_non_failed_job() -> None:
     body = response.json()
     assert body["data"] is None
     assert body["error"]["code"] == "retry_unavailable"
+
+
+def test_admin_retry_rejects_normal_user() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="user")
+    app.state.reconstruction_job_repository = FakeReconstructionJobRepository()
+
+    response = TestClient(app).post(
+        "/admin/jobs/3/retry",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 403
+    body = response.json()
+    assert body["data"] is None
+    assert body["error"]["code"] == "unauthorized"
 
 
 def test_admin_search_returns_scoped_operational_records() -> None:

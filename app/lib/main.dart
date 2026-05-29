@@ -2408,6 +2408,8 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
           return const SizedBox.shrink();
         }
         final job = detail.job;
+        final retrySupported =
+            job.status == 'failed' || job.status == 'timeout';
         return DecoratedBox(
           decoration: const BoxDecoration(
             border: Border.fromBorderSide(BorderSide(color: Color(0xFFE2E8F0))),
@@ -2444,11 +2446,16 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
                   Text(job.failureReasonMessage!),
                 const SizedBox(height: 8),
                 FilledButton(
-                  onPressed: job.status == 'failed' || job.status == 'timeout'
-                      ? () => _retry(job)
-                      : null,
+                  onPressed: retrySupported ? () => _retry(job) : null,
                   child: Text(rf('Retry job', '작업 재시도')),
                 ),
+                if (!retrySupported)
+                  Text(
+                    rf(
+                      'Retry unavailable: only failed or timed-out jobs can be retried.',
+                      '재시도 불가: 실패 또는 시간 초과 작업만 재시도할 수 있습니다.',
+                    ),
+                  ),
                 if (_retryMessage != null) Text(_retryMessage!),
                 const SizedBox(height: 12),
                 Text(

@@ -15,6 +15,14 @@ import {
   type CameraSnapshot,
 } from './cameraControls'
 import {
+  addFurnitureToModel,
+  furnitureDefaults,
+  selectedFurniture as selectedFurnitureFromModel,
+  selectedFurnitureSummary,
+  selectionVisualTokens,
+  selectFurnitureInModel,
+} from './furnitureModel'
+import {
   defaultSpatialModel,
   roomBounds,
   spatialModelFromBridgePayload,
@@ -951,12 +959,13 @@ function rebuildFurniture(): void {
     furnitureMeshes.set(item.objectId, mesh)
 
     if (isSelected) {
+      const tokens = selectionVisualTokens({ selected: true })
       const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), furnitureSelectionMaterial)
       outline.position.copy(position)
       outline.rotation.copy(mesh.rotation)
-      outline.scale.setScalar(1.05)
+      outline.scale.setScalar(tokens.scale)
       outline.userData.objectId = item.objectId
-      outline.userData.objectType = 'furniture-selection'
+      outline.userData.objectType = tokens.marker
       furnitureGroup.add(outline)
       furnitureOutlineObjects.push(outline)
     }
@@ -1053,13 +1062,13 @@ function spatialModelPayload(): Record<string, unknown> {
 }
 
 function addFurniture(category: FurnitureCategory): void {
-  const item = furnitureDefaults(category)
-  spatialModel = {
-    ...spatialModel,
-    hasUnsavedChanges: true,
-    selected: { objectId: item.objectId, objectType: 'furniture' },
-    furniture: [...spatialModel.furniture, item],
-  }
+  furnitureIdCounter += 1
+  const item = furnitureDefaults({
+    category,
+    id: `furniture-${category}-${Date.now()}-${furnitureIdCounter}`,
+    model: spatialModel,
+  })
+  spatialModel = addFurnitureToModel(spatialModel, item)
   rebuildFurniture()
   updateSpatialStatus()
   emitSceneState('roomforge.selection.changed')
@@ -1069,14 +1078,11 @@ function selectFurniture(objectId: unknown): void {
   if (typeof objectId !== 'string') {
     return
   }
-  const item = spatialModel.furniture.find((candidate) => candidate.objectId === objectId)
-  if (!item) {
+  const nextModel = selectFurnitureInModel(spatialModel, objectId)
+  if (nextModel === spatialModel) {
     return
   }
-  spatialModel = {
-    ...spatialModel,
-    selected: { objectId: item.objectId, objectType: 'furniture' },
-  }
+  spatialModel = nextModel
   rebuildFurniture()
   updateSpatialStatus()
   emitSceneState('roomforge.selection.changed')
@@ -1183,47 +1189,7 @@ function editedFurniture(item: FurnitureObject, action: FurnitureEditAction): Fu
 }
 
 function selectedFurniture(): FurnitureObject | null {
-  if (spatialModel.selected?.objectType !== 'furniture') {
-    return null
-  }
-  return (
-    spatialModel.furniture.find((item) => item.objectId === spatialModel.selected?.objectId) ?? null
-  )
-}
-
-function furnitureDefaults(category: FurnitureCategory): FurnitureObject {
-  furnitureIdCounter += 1
-  const bounds = roomBounds(spatialModel)
-  const base = {
-    chair: {
-      label: 'Chair',
-      size: { widthMeters: 0.55, depthMeters: 0.55, heightMeters: 0.85 },
-      color: '#64748b',
-    },
-    table: {
-      label: 'Table',
-      size: { widthMeters: 1.2, depthMeters: 0.75, heightMeters: 0.74 },
-      color: '#7f8f6f',
-    },
-    sofa: {
-      label: 'Sofa',
-      size: { widthMeters: 1.8, depthMeters: 0.85, heightMeters: 0.82 },
-      color: '#8b6f61',
-    },
-  }[category]
-  return {
-    objectId: `furniture-${category}-${Date.now()}-${furnitureIdCounter}`,
-    category,
-    label: base.label,
-    size: base.size,
-    position: {
-      x: Number((bounds.centerX + bounds.widthMeters * 0.18).toFixed(2)),
-      y: Number((bounds.centerY + bounds.depthMeters * 0.18).toFixed(2)),
-    },
-    rotationDegrees: 0,
-    color: base.color,
-    locked: false,
-  }
+  return selectedFurnitureFromModel(spatialModel)
 }
 
 function localizedFurnitureLabel(item: FurnitureObject): string {
@@ -1730,11 +1696,7 @@ function inspectorSummary(model: SpatialModel): string {
       const label = localizedFurnitureLabel(item)
       const locked = item.locked ? t('; locked', '; 잠김') : ''
       return t(
-        `${label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
-          2,
-        )} m x ${item.size.heightMeters.toFixed(2)} m; position ${item.position.x.toFixed(
-          2,
-        )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg${locked}`,
+        selectedFurnitureSummary(model),
         `${label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
           2,
         )} m x ${item.size.heightMeters.toFixed(2)} m; 위치 ${item.position.x.toFixed(

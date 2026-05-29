@@ -2429,7 +2429,15 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
                   '${rf('Project', '프로젝트')}: ${job.projectId} | ${rf('User', '사용자')}: ${job.userId}',
                 ),
                 Text('${rf('Provider', '제공자')}: ${job.provider}'),
+                Text(
+                  '${rf('Created', '생성 시각')}: ${_adminTimestampLabel(job.createdAt)}',
+                ),
+                Text(
+                  '${rf('Updated', '수정 시각')}: ${_adminTimestampLabel(job.updatedAt)}',
+                ),
                 Text('${rf('Retry count', '재시도 횟수')}: ${detail.retryCount}'),
+                if (job.retryOfJobId != null)
+                  Text('${rf('Retry of job', '원본 작업')}: ${job.retryOfJobId}'),
                 if (job.failureReasonCode != null)
                   Text('${rf('Failure', '실패 사유')}: ${job.failureReasonCode}'),
                 if (job.failureReasonMessage != null)
@@ -2455,6 +2463,10 @@ class _AdminJobDetailViewState extends State<_AdminJobDetailView> {
                     ),
                     subtitle: Text(
                       [
+                        '${rf('At', '시각')}: ${_adminTimestampLabel(transition.createdAt)}',
+                        '${rf('Job', '작업')}: ${transition.jobId}',
+                        if (job.retryOfJobId != null)
+                          '${rf('Retry of job', '원본 작업')}: ${job.retryOfJobId}',
                         if (transition.reasonCode != null)
                           transition.reasonCode!,
                         if (transition.reasonMessage != null)
@@ -2613,6 +2625,10 @@ String _adminStatusLabel(String status) {
     'retrying' => rf('retrying', '재시도 중'),
     _ => status,
   };
+}
+
+String _adminTimestampLabel(DateTime timestamp) {
+  return timestamp.toUtc().toIso8601String();
 }
 
 Color _adminStatusColor(String status) {

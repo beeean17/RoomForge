@@ -121,6 +121,84 @@ void main() {
       );
     },
   );
+
+  test('AdminApi loadJobDetail parses header and event trail', () async {
+    late http.Request capturedRequest;
+    final api = AdminApi(
+      authRepository: const _TokenAuthRepository('admin-token'),
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        capturedRequest = request;
+        expect(request.method, 'GET');
+        expect(request.url.toString(), 'https://api.example.test/admin/jobs/9');
+        expect(request.headers['Authorization'], 'Bearer admin-token');
+
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'job': {
+                'id': 9,
+                'project_id': 1,
+                'user_id': 42,
+                'source_image_id': 7,
+                'status': 'failed',
+                'status_label': 'Failed',
+                'terminal': true,
+                'provider': 'manual_assisted_opencv',
+                'retry_of_job_id': 3,
+                'failure_reason_code': 'opencv_failed',
+                'failure_reason_message': 'OpenCV candidate extraction failed.',
+                'created_at': '2026-05-29T00:00:00Z',
+                'updated_at': '2026-05-29T00:00:05Z',
+              },
+              'retry_count': 2,
+              'transitions': [
+                {
+                  'id': 21,
+                  'job_id': 9,
+                  'status': 'failed',
+                  'actor': 'worker',
+                  'reason_code': 'opencv_failed',
+                  'reason_message': 'OpenCV candidate extraction failed.',
+                  'created_at': '2026-05-29T00:00:05Z',
+                },
+              ],
+            },
+            'error': null,
+            'meta': {'request_id': 'req-detail'},
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final detail = await api.loadJobDetail(9);
+
+    expect(capturedRequest.headers['Content-Type'], 'application/json');
+    expect(detail.job.id, 9);
+    expect(detail.job.projectId, 1);
+    expect(detail.job.status, 'failed');
+    expect(detail.job.provider, 'manual_assisted_opencv');
+    expect(detail.job.retryOfJobId, 3);
+    expect(detail.job.failureReasonCode, 'opencv_failed');
+    expect(detail.job.createdAt.toUtc(), DateTime.utc(2026, 5, 29));
+    expect(detail.job.updatedAt.toUtc(), DateTime.utc(2026, 5, 29, 0, 0, 5));
+    expect(detail.retryCount, 2);
+    expect(detail.transitions, hasLength(1));
+    expect(detail.transitions.single.jobId, 9);
+    expect(detail.transitions.single.status, 'failed');
+    expect(detail.transitions.single.actor, 'worker');
+    expect(detail.transitions.single.reasonCode, 'opencv_failed');
+    expect(
+      detail.transitions.single.reasonMessage,
+      'OpenCV candidate extraction failed.',
+    );
+    expect(
+      detail.transitions.single.createdAt.toUtc(),
+      DateTime.utc(2026, 5, 29, 0, 0, 5),
+    );
+  });
 }
 
 class _TokenAuthRepository implements AuthRepository {

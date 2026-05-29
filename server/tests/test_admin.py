@@ -442,14 +442,52 @@ def test_admin_job_detail_returns_header_retry_count_and_event_trail() -> None:
     assert body["error"] is None
     assert body["meta"]["request_id"]
     assert job["id"] == 2
+    assert job["project_id"] == 11
+    assert job["user_id"] == 21
+    assert job["source_image_id"] == 31
     assert job["status"] == "review_required"
     assert job["status_label"] == "Needs review"
     assert job["provider"] == "browser-opencv"
+    assert job["created_at"]
+    assert job["updated_at"]
+    assert job["failure_reason_code"] == "low_confidence"
+    assert job["failure_reason_message"] == "Needs review."
     assert body["data"]["retry_count"] == 0
+    assert transitions[0]["job_id"] == 2
     assert transitions[0]["status"] == "created"
     assert transitions[0]["actor"] == "api"
+    assert transitions[0]["created_at"]
     assert transitions[1]["reason_code"] == "low_confidence"
     assert transitions[1]["reason_message"] == "Needs review."
+    assert transitions[1]["created_at"]
+
+
+def test_admin_job_detail_returns_retry_linkage_when_available() -> None:
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+    repository = FakeReconstructionJobRepository()
+    retry = repository.retry_for_admin(3)
+    app.state.token_verifier = FakeTokenVerifier()
+    app.state.user_repository = FakeUserRepository(role="admin")
+    app.state.reconstruction_job_repository = repository
+
+    response = TestClient(app).get(
+        f"/admin/jobs/{retry.id}",
+        headers={"Authorization": "Bearer valid-token"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    job = body["data"]["job"]
+    transitions = body["data"]["transitions"]
+    assert body["error"] is None
+    assert job["status"] == "retrying"
+    assert job["retry_of_job_id"] == 3
+    assert body["data"]["retry_count"] == 0
+    assert transitions[0]["job_id"] == retry.id
+    assert transitions[0]["actor"] == "admin"
+    assert transitions[0]["reason_code"] == "admin_retry_requested"
 
 
 def test_admin_job_detail_rejects_normal_user() -> None:

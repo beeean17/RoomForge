@@ -32,6 +32,43 @@ void main() {
       expect(chair, isNot(contains('position_m')));
     });
 
+    test('restores saved layout scene for 2D and 3D editor views', () {
+      for (final viewMode in ['2d', '3d']) {
+        final payload = mapper.sceneToBridgePayload(
+          _layout(viewMode: viewMode),
+        );
+        final scene = payload['scene'] as FirebaseJson;
+        final selected = scene['selected'] as FirebaseJson;
+        final room = scene['room'] as FirebaseJson;
+        final floorPlan = room['floorPlan'] as FirebaseJson;
+        final metricGeometry = floorPlan['metricGeometry'] as FirebaseJson;
+        final points = metricGeometry['points'] as List<Object?>;
+        final furniture = scene['furniture'] as List<Object?>;
+        final chair = Map<String, Object?>.from(furniture.single as Map);
+        final chairSize = Map<String, Object?>.from(chair['size'] as Map);
+        final chairPosition = Map<String, Object?>.from(
+          chair['position'] as Map,
+        );
+
+        expect(scene, containsPair('viewMode', viewMode));
+        expect(scene, containsPair('hasUnsavedChanges', false));
+        expect(selected, containsPair('objectId', 'chair-1'));
+        expect(selected, containsPair('objectType', 'furniture'));
+        expect(room, containsPair('heightMeters', 2.7));
+        expect(floorPlan, containsPair('floorPlanId', 'floor-plan-1'));
+        expect(metricGeometry, containsPair('coordinateSpace', 'meters'));
+        expect(points, hasLength(4));
+        expect(chair, containsPair('objectId', 'chair-1'));
+        expect(chairSize, containsPair('widthMeters', 0.6));
+        expect(chairSize, containsPair('depthMeters', 0.6));
+        expect(chairSize, containsPair('heightMeters', 0.8));
+        expect(chairPosition, containsPair('x', 1.0));
+        expect(chairPosition, containsPair('y', 1.0));
+        expect(chair, containsPair('rotationDegrees', 15.0));
+        expect(chair, containsPair('color', '#64748b'));
+      }
+    });
+
     test('maps editor bridge scene back to snake_case persisted state', () {
       final persisted = mapper.bridgeSceneToEditorScene(const {
         'sceneId': 'scene-1',
@@ -203,7 +240,7 @@ FirebaseFloorPlan _floorPlan() {
   );
 }
 
-FirebaseSavedLayout _layout() {
+FirebaseSavedLayout _layout({String viewMode = '2d'}) {
   return FirebaseSavedLayout(
     layoutId: 'layout-1',
     projectId: 'project-1',
@@ -217,10 +254,10 @@ FirebaseSavedLayout _layout() {
     roomDimensions: _roomDimensions(),
     sourceMetadata: const {'source_image_id': 'source-image-1'},
     floorPlan: _floorPlan(),
-    editorScene: const {
+    editorScene: {
       'scene_id': 'scene-1',
-      'view_mode': '2d',
-      'selected': {'object_id': 'room-shell', 'object_type': 'room'},
+      'view_mode': viewMode,
+      'selected': {'object_id': 'chair-1', 'object_type': 'furniture'},
     },
     furnitureObjects: const [
       FirebaseFurnitureObject(

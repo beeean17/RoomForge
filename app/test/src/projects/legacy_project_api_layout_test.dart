@@ -125,6 +125,103 @@ void main() {
       expect(savedFurniture['color'], '#64748b');
     },
   );
+
+  test(
+    'LegacyProjectApi loadLatestLayout fetches saved room and furniture state',
+    () async {
+      late http.Request capturedRequest;
+      final api = LegacyProjectApi(
+        authRepository: const _TokenAuthRepository('token-1'),
+        baseUrl: 'https://api.example.test',
+        client: MockClient((request) async {
+          capturedRequest = request;
+          expect(request.method, 'GET');
+          expect(
+            request.url.toString(),
+            'https://api.example.test/room-projects/project-1/layouts/latest',
+          );
+          expect(request.headers['Authorization'], 'Bearer token-1');
+
+          return http.Response(
+            jsonEncode({
+              'data': {
+                'layout': {
+                  'id': 11,
+                  'project_id': 1,
+                  'user_id': 42,
+                  'room_dimensions': {
+                    'unit': 'meters',
+                    'width_value': 4.2,
+                    'depth_value': 3.6,
+                    'height_value': 2.7,
+                  },
+                  'floor_plan': {
+                    'coordinate_space': 'meters',
+                    'metric_geometry': {
+                      'coordinate_space': 'meters',
+                      'points': [
+                        {'x': 0, 'y': 0},
+                        {'x': 4.2, 'y': 0},
+                        {'x': 4.2, 'y': 3.6},
+                        {'x': 0, 'y': 3.6},
+                      ],
+                    },
+                  },
+                  'source_metadata': {
+                    'source_image_id': 7,
+                    'reconstruction_job_id': 9,
+                  },
+                  'furniture_objects': [
+                    {
+                      'id': 'furniture-chair-1',
+                      'category': 'chair',
+                      'position': {'x': 1.2, 'y': 1.4},
+                      'size': {
+                        'width_meters': 0.55,
+                        'depth_meters': 0.55,
+                        'height_meters': 0.85,
+                      },
+                      'rotation_degrees': 15.0,
+                      'color': '#64748b',
+                    },
+                  ],
+                  'editor_scene': {
+                    'scene_id': 'scene-1',
+                    'view_mode': '3d',
+                    'selected': {
+                      'object_id': 'furniture-chair-1',
+                      'object_type': 'furniture',
+                    },
+                  },
+                  'created_at': '2026-05-29T00:00:00Z',
+                  'updated_at': '2026-05-29T00:00:01Z',
+                },
+              },
+              'error': null,
+              'meta': {'request_id': 'req-1'},
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final loaded = await api.loadLatestLayout(projectId: 'project-1');
+      final loadedFurniture = Map<String, Object?>.from(
+        loaded.furnitureObjects.single as Map,
+      );
+
+      expect(capturedRequest.headers['Content-Type'], 'application/json');
+      expect(loaded.id, '11');
+      expect(loaded.roomDimensions['width_value'], 4.2);
+      expect(loaded.floorPlan['coordinate_space'], 'meters');
+      expect(loaded.sourceMetadata['source_image_id'], 7);
+      expect(loaded.editorScene['view_mode'], '3d');
+      expect(loadedFurniture['id'], 'furniture-chair-1');
+      expect(loadedFurniture['rotation_degrees'], 15.0);
+      expect(loadedFurniture['color'], '#64748b');
+    },
+  );
 }
 
 class _TokenAuthRepository implements AuthRepository {

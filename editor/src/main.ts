@@ -52,8 +52,8 @@ app.innerHTML = `
 <section class="editor-shell">
   <div class="viewport" aria-label="${t('RoomForge editor viewport', 'RoomForge 편집기 뷰포트')}">
     <div class="viewport-toolbar" aria-label="${t('Planning view controls', '배치 보기 컨트롤')}">
-      <button id="view-2d" type="button" aria-pressed="true">2D</button>
-      <button id="view-3d" type="button" aria-pressed="false">3D</button>
+      <button id="view-2d" type="button" aria-label="${t('Show 2D planning view', '2D 배치 보기 표시')}" aria-pressed="true">2D</button>
+      <button id="view-3d" type="button" aria-label="${t('Show 3D inspection view', '3D 검사 보기 표시')}" aria-pressed="false">3D</button>
     </div>
     <div class="viewport-measurements" id="measurement-status" role="status" aria-live="polite">
       ${t('Room 4.20 m x 3.60 m', '방 4.20 m x 3.60 m')}
@@ -63,7 +63,7 @@ app.innerHTML = `
     </div>
     <canvas
       class="editor-canvas"
-      aria-describedby="scene-status inspector-status placement-summary"
+      aria-describedby="measurement-status scene-status inspector-status placement-summary"
       aria-label="${t('Three.js reconstruction viewport', 'Three.js 재구성 뷰포트')}"
       role="application"
       tabindex="0"
@@ -148,6 +148,7 @@ app.innerHTML = `
           step="0.01"
           value="4.20"
           inputmode="decimal"
+          aria-describedby="scale-status"
         />
         <span aria-hidden="true">m</span>
       </div>

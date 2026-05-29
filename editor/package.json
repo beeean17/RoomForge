@@ -13,6 +13,7 @@
     "test:story-4.3": "node --experimental-strip-types scripts/verify-story-4.3-furniture-selection.mjs",
     "test:story-4.4": "node --experimental-strip-types scripts/verify-story-4.4-furniture-editing.mjs",
     "test:story-4.5": "node --experimental-strip-types scripts/verify-story-4.5-measurement-guidance.mjs",
+    "test:story-4.6": "node scripts/verify-story-4.6-responsive-accessibility.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

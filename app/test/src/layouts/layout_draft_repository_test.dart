@@ -105,6 +105,40 @@ void main() {
       },
     );
 
+    test('persists sync failure metadata across project reopen', () async {
+      final repository = LayoutDraftRepository(
+        store: _MemoryLayoutDraftStore(),
+      );
+
+      await repository.saveDraft(
+        ownerUid: 'user-1',
+        projectId: 'project-1',
+        layoutId: 'layout-1',
+        baseCloudLayoutId: 'layout-1',
+        baseCloudUpdatedAt: DateTime.utc(2026, 5, 24, 12),
+        roomDimensionsSnapshot: const {'unit': 'meters'},
+        floorPlanSnapshot: const {'floor_plan_id': 'floor-plan-1'},
+        sourceMetadataSnapshot: const {'source_image_id': 'source-1'},
+        editorScene: const {'scene_id': 'scene-1'},
+        furnitureObjects: const [],
+        reconstructionStatus: 'succeeded',
+        reviewRequired: false,
+        syncState: LayoutDraftSyncState.syncFailed,
+        lastErrorCode: 'permission_denied',
+        lastErrorMessage: 'Rules rejected the write.',
+      );
+      final reopenedDraft = await repository.getDraft(
+        ownerUid: 'user-1',
+        projectId: 'project-1',
+      );
+
+      expect(reopenedDraft?.syncState, LayoutDraftSyncState.syncFailed);
+      expect(reopenedDraft?.label, 'Sync failed');
+      expect(reopenedDraft?.lastErrorCode, 'permission_denied');
+      expect(reopenedDraft?.lastErrorMessage, 'Rules rejected the write.');
+      expect(reopenedDraft?.isRecoverable, isTrue);
+    });
+
     test(
       'current mirror exposes conflict when latest cloud layout id changes',
       () async {

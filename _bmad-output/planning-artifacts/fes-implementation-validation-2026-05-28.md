@@ -35,6 +35,9 @@ Commands run from the repository on 2026-05-28:
 | `flutter test` in `app/` | Pass | 76 tests passed. |
 | `npm run typecheck` in `editor/` | Pass | TypeScript check passed. |
 | `npm run build` in `editor/` | Pass with warnings | Vite reported OpenCV.js browser externalization and large chunk warnings; build exited 0. |
+| `flutter test test/src/layouts/layout_draft_recovery_test.dart test/src/layouts/layout_draft_recovery_controls_test.dart test/src/layouts/layout_remote_update_guard_test.dart test/src/layouts/layout_draft_repository_test.dart` in `app/` | Pass | FES-7.2/FES-7.3 focused validation passed. |
+| `flutter test` in `app/` after FES-7.2/FES-7.3 | Pass | 86 tests passed. |
+| `flutter build web --release` in `app/` after FES-7.2/FES-7.3 | Pass with warnings | JS web build succeeded; Wasm dry-run warned about existing `dart:html` usage in the web shell and IndexedDB draft store. |
 
 Recovery used:
 
@@ -75,8 +78,8 @@ Recovery used:
 | FES-6.2 Preserve Editor Bridge and Furniture State | Verified | Furniture bridge mapper tests; editor bridge mapper tests; editor Firebase boundary check passed. | None. |
 | FES-6.3 Export Latest Saved Layout JSON with Review Warning | Verified | Export warning tests; Firebase serializers export JSON with snake_case; Project API rejects export without saved cloud layout. | Manual export download flow was not run in browser. |
 | FES-7.1 Implement IndexedDB Draft and Project Cache Stores | Verified | `IndexedDbLayoutDraftStore`, `LayoutDraftRepository`, and draft/cache tests passed. | Browser refresh recovery was not manually exercised. |
-| FES-7.2 Add Draft Recovery and Conflict Resolver UX | Partial | Draft conflict/recovery tests passed; app UI exposes restore, discard, continue saved layout, and confirmation flows. | Needs widget/manual accessibility validation for recovery controls and destructive discard confirmation. |
-| FES-7.3 Prevent Firestore Streams from Silently Overwriting Active Drafts | Partial | `layout_remote_update_guard_test.dart` passed; app holds explicit cloud layout apply when recoverable draft exists; sync labels exist. | No active layout Firestore stream application path was validated; current evidence covers guarded explicit load, not real-time stream overwrite behavior. |
+| FES-7.2 Add Draft Recovery and Conflict Resolver UX | Verified | Draft recovery actions are typed and tested for restore, discard, conflict continue, retry, destructive confirmation, and text-readable accessibility summary; app project-open detection now checks latest cloud layout metadata before labeling a draft; app UI renders localized restore/discard/continue/retry controls through a widget-tested recovery action bar. | None for automated scope. |
+| FES-7.3 Prevent Firestore Streams from Silently Overwriting Active Drafts | Verified | `layout_remote_update_guard_test.dart` covers no silent remote overwrite while a recoverable draft exists, explicit forced cloud apply, saved-draft application, held-update copy, withheld remote payloads, and sync failed/retry labels; app load path now uses the guarded remote layout decision before applying cloud state, and sync-failed draft state persists across reopen. | Real-time collaborative merge remains out of scope; current implementation is conservative and requires explicit user choice. |
 | FES-8.1 Implement Admin Repository, Indexes, and Rules-Backed Query Access | Verified | `FirebaseAdminAccessRepository`; collection group index definitions; admin rules script passed; missing-index diagnostics tests passed. | None for automated scope. |
 | FES-8.2 Build Admin Diagnostics for Jobs, Artifacts, Layouts, and Permissions | Partial | Admin diagnostics screen exists; artifact state mapper tests passed; admin storage rules passed; admin streams cover jobs, transitions, results, and layouts. | Needs manual/admin UI pass for filters, detail panel, artifact state display, and accessibility. |
 | FES-8.3 Add Audited Admin Retry with Append-Only Admin Actions | Verified | Admin retry repository tests passed; admin rules script passed for append-only actions and non-admin denial; app retry action is wired in diagnostics UI. | Manual admin retry flow was not run against emulators. |
@@ -91,23 +94,19 @@ Recovery used:
 
 | Bucket | Count | Stories |
 | --- | ---: | --- |
-| Verified | 23 | FES-1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 7.1, 8.1, 8.3, 9.1, 9.2, 9.3 |
-| Partial | 4 | FES-4.3, 7.2, 7.3, 8.2 |
+| Verified | 25 | FES-1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 7.1, 7.2, 7.3, 8.1, 8.3, 9.1, 9.2, 9.3 |
+| Partial | 2 | FES-4.3, 8.2 |
 | Docs verified | 3 | FES-10.1, 10.2, 10.3 |
 
 ## Dev Story Promotion Candidates
 
 The next BMAD dev stories should come from the partial bucket, in this order:
 
-1. FES-7.2 and FES-7.3 draft recovery UI and remote-update guard validation.
-   - Goal: add widget/manual coverage for restore/discard/continue/retry and prove remote layout updates cannot overwrite active dirty editor state.
-   - Acceptance focus: keyboard-accessible controls, explicit conflict copy, and no silent overwrite.
-
-2. FES-8.2 admin diagnostics UI validation.
+1. FES-8.2 admin diagnostics UI validation.
    - Goal: verify admin filters, job detail, artifact state mapping, related layout/result panes, and permission-safe empty/error states.
    - Acceptance focus: non-admin leakage prevention and accessible admin table/detail controls.
 
-3. FES-4.3 upload recovery UX validation.
+2. FES-4.3 upload recovery UX validation.
    - Goal: add widget/manual coverage for upload progress, invalid image, permission failure, metadata-save failure, retry, and cleanup guidance.
    - Acceptance focus: accessible state text and recoverable action paths.
 
@@ -115,7 +114,7 @@ The next BMAD dev stories should come from the partial bucket, in this order:
 
 The Firebase FES backlog is no longer only planning-level in the repository:
 most stories have implementation evidence and automated validation. It is not
-honest to mark the entire FES backlog fully complete, because four stories still
+honest to mark the entire FES backlog fully complete, because two stories still
 have manual or UI/accessibility validation gaps.
 
 The natural next BMAD workflow is to create focused dev story files for the

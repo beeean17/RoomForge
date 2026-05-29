@@ -73,9 +73,14 @@ class LayoutDraft {
   final DateTime updatedAt;
   final DateTime? lastAccessedAt;
 
-  String get label => syncState == LayoutDraftSyncState.unsavedDraft
-      ? 'Unsaved draft'
-      : syncState;
+  String get label => switch (syncState) {
+    LayoutDraftSyncState.unsavedDraft => 'Unsaved draft',
+    LayoutDraftSyncState.saving => 'Saving',
+    LayoutDraftSyncState.syncFailed => 'Sync failed',
+    LayoutDraftSyncState.conflict => 'Conflict',
+    LayoutDraftSyncState.saved => 'Saved',
+    _ => syncState,
+  };
 
   bool get isCloudSourceOfTruth => false;
 

@@ -22,6 +22,7 @@ import 'src/firebase/firebase_app_bootstrap.dart';
 import 'src/layouts/indexed_db_layout_draft_store.dart';
 import 'src/layouts/layout_draft_models.dart';
 import 'src/layouts/layout_draft_recovery.dart';
+import 'src/layouts/layout_draft_recovery_controls.dart';
 import 'src/layouts/layout_draft_repository.dart';
 import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
@@ -2549,10 +2550,33 @@ String _localizedReconstructionStatusLabel(String status) {
 String _localizedDraftLabel(String label) {
   return switch (label) {
     'Unsaved draft' => rf('Unsaved draft', '저장되지 않은 드래프트'),
+    'Saving' => rf('Saving', '저장 중'),
     'Sync failed' => rf('Sync failed', '동기화 실패'),
+    'Conflict' => rf('Conflict', '충돌'),
     'Saved' => rf('Saved', '저장됨'),
     _ => label,
   };
+}
+
+String _localizedDraftRecoveryActionLabel(String label) {
+  return switch (label) {
+    draftRecoveryRestoreActionLabel => rf('Restore draft', '드래프트 복원'),
+    draftRecoveryDiscardActionLabel => rf('Discard draft', '드래프트 버리기'),
+    draftRecoveryContinueSavedActionLabel => rf(
+      'Continue saved version',
+      '저장된 버전 계속 사용',
+    ),
+    draftRecoveryRetrySaveActionLabel => rf('Retry save', '저장 재시도'),
+    _ => label,
+  };
+}
+
+LayoutDraftRecoveryAction _localizedDraftRecoveryAction(
+  LayoutDraftRecoveryAction action,
+) {
+  return action.copyWith(
+    label: _localizedDraftRecoveryActionLabel(action.label),
+  );
 }
 
 String _localizedLayoutDraftRecoveryMessage({
@@ -2568,6 +2592,32 @@ String _localizedLayoutDraftRecoveryMessage({
   return layoutDraftHasCloudConflict(draft, latestCloudUpdatedAt)
       ? '클라우드에 저장된 레이아웃이 이 드래프트 이후 변경되었습니다.'
       : '저장되지 않은 로컬 드래프트가 있습니다.';
+}
+
+String _localizedLayoutDraftRecoveryAccessibilitySummary({
+  required LayoutDraft draft,
+  required DateTime? latestCloudUpdatedAt,
+  bool includeContinueSavedVersion = false,
+  bool includeRetry = false,
+}) {
+  if (!_roomForgeUsesKorean) {
+    return layoutDraftRecoveryAccessibilitySummary(
+      draft: draft,
+      latestCloudUpdatedAt: latestCloudUpdatedAt,
+      includeContinueSavedVersion: includeContinueSavedVersion,
+      includeRetry: includeRetry,
+    );
+  }
+  final actionLabels =
+      layoutDraftRecoveryActions(
+            draft: draft,
+            latestCloudUpdatedAt: latestCloudUpdatedAt,
+            includeContinueSavedVersion: includeContinueSavedVersion,
+            includeRetry: includeRetry,
+          )
+          .map((action) => _localizedDraftRecoveryActionLabel(action.label))
+          .join(', ');
+  return '${_localizedLayoutDraftRecoveryMessage(draft: draft, latestCloudUpdatedAt: latestCloudUpdatedAt)} ${_localizedDraftLabel(draft.label)}. ${rf('Actions', '작업')}: $actionLabels.';
 }
 
 String _localizedEditorObjectLabel(String? label) {
@@ -4649,7 +4699,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     });
 
     _messageSubscription = html.window.onMessage.listen(_handleEditorMessage);
-    unawaited(_detectRecoverableDraft());
+    unawaited(_detectRecoverableDraftWithLatestCloud());
   }
 
   @override
@@ -4685,6 +4735,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
             isLoadingLayout: _isLoadingLayout,
             isExportingLayout: _isExportingLayout,
             isHandlingDraft: _isHandlingDraft,
+            isSyncFailureVisible: _syncFailureVisible,
             onViewModeChanged: (viewMode) {
               setState(() => _viewMode = viewMode);
               _postEditorMessage(
@@ -5132,7 +5183,12 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       });
     } on ProjectApiException catch (error) {
       _latestScene = _sceneForSave();
-      _queuePersistDraft(_latestScene!);
+      _queuePersistDraft(
+        _latestScene!,
+        syncState: LayoutDraftSyncState.syncFailed,
+        lastErrorCode: error.code,
+        lastErrorMessage: error.message,
+      );
       if (!mounted) {
         return;
       }
@@ -5145,7 +5201,11 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       });
     } catch (error) {
       _latestScene = _sceneForSave();
-      _queuePersistDraft(_latestScene!);
+      _queuePersistDraft(
+        _latestScene!,
+        syncState: LayoutDraftSyncState.syncFailed,
+        lastErrorMessage: error.toString(),
+      );
       if (!mounted) {
         return;
       }
@@ -5180,35 +5240,41 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         projectId: widget.project.id,
       );
       final activeDraft = await _recoverableDraftForCloudApply(layout);
-      if (shouldHoldRemoteLayoutForDraft(
+      final remoteLayout = guardedRemoteLayout(
+        layout: layout,
         draft: activeDraft,
         forceApplyCloud: forceApplyCloud,
-      )) {
+        latestCloudUpdatedAt: layout.updatedAt,
+      );
+      final remoteDecision = remoteLayout.decision;
+      if (!remoteDecision.applyRemoteLayout) {
         if (!mounted) {
           return;
         }
         setState(() {
           _recoverableDraft = activeDraft;
+          _activeCloudUpdatedAt = layout.updatedAt;
           _draftStatus = rf(
-            layoutRemoteUpdateHeldMessage,
+            remoteDecision.message ?? layoutRemoteUpdateHeldMessage,
             '로컬 드래프트가 있어 클라우드 레이아웃 적용을 보류했습니다.',
           );
           _loadStatus = rf(
-            layoutRemoteUpdateHeldMessage,
+            remoteDecision.message ?? layoutRemoteUpdateHeldMessage,
             '로컬 드래프트가 있어 클라우드 레이아웃 적용을 보류했습니다.',
           );
         });
         return;
       }
-      final scene = _sceneFromSavedLayout(layout);
+      final appliedLayout = remoteLayout.layout ?? layout;
+      final scene = _sceneFromSavedLayout(appliedLayout);
       final viewMode = scene['viewMode']?.toString();
       if (!mounted) {
         return;
       }
       setState(() {
         _latestScene = scene;
-        _activeLayoutId = layout.id;
-        _activeCloudUpdatedAt = layout.updatedAt;
+        _activeLayoutId = appliedLayout.id;
+        _activeCloudUpdatedAt = appliedLayout.updatedAt;
         _recoverableDraft = null;
         _syncFailureVisible = false;
         final nextViewMode = viewMode == '2d' || viewMode == '3d'
@@ -5221,11 +5287,16 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         _loadStatus = rf('Loaded layout', '레이아웃 불러옴');
       });
       if (!forceApplyCloud) {
-        unawaited(_detectRecoverableDraft(layoutId: layout.id));
+        unawaited(
+          _detectRecoverableDraft(
+            layoutId: appliedLayout.id,
+            latestCloudUpdatedAt: appliedLayout.updatedAt,
+          ),
+        );
       }
       _postEditorMessage(
         type: 'roomforge.scene.initialize',
-        requestId: 'load-layout-${layout.id}',
+        requestId: 'load-layout-${appliedLayout.id}',
         payload: {'scene': scene},
       );
     } on ProjectApiException catch (error) {
@@ -5323,7 +5394,38 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     }
   }
 
-  Future<void> _detectRecoverableDraft({String? layoutId}) async {
+  Future<void> _detectRecoverableDraftWithLatestCloud() async {
+    SavedLayout? latestLayout;
+    try {
+      latestLayout = await widget.projectApi.loadLatestLayout(
+        projectId: widget.project.id,
+      );
+    } on ProjectApiException catch (error) {
+      if (error.code != 'not_found' && mounted) {
+        setState(
+          () => _loadStatus =
+              '${rf('Latest layout check failed', '최근 레이아웃 확인 실패')}: ${error.message}',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _loadStatus =
+              '${rf('Latest layout check failed', '최근 레이아웃 확인 실패')}: $error',
+        );
+      }
+    }
+
+    await _detectRecoverableDraft(
+      layoutId: latestLayout?.id,
+      latestCloudUpdatedAt: latestLayout?.updatedAt,
+    );
+  }
+
+  Future<void> _detectRecoverableDraft({
+    String? layoutId,
+    DateTime? latestCloudUpdatedAt,
+  }) async {
     try {
       var draft = await _draftRepository.getDraft(
         ownerUid: widget.project.userId,
@@ -5340,12 +5442,16 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         return;
       }
       setState(() {
+        if (latestCloudUpdatedAt != null) {
+          _activeCloudUpdatedAt = latestCloudUpdatedAt;
+        }
         _recoverableDraft = draft?.isRecoverable == true ? draft : null;
         _draftStatus = draft == null || !draft.isRecoverable
             ? rf('No local draft.', '로컬 드래프트 없음.')
             : _localizedLayoutDraftRecoveryMessage(
                 draft: draft,
-                latestCloudUpdatedAt: _activeCloudUpdatedAt,
+                latestCloudUpdatedAt:
+                    latestCloudUpdatedAt ?? _activeCloudUpdatedAt,
               );
       });
     } catch (_) {
@@ -5416,9 +5522,9 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(rf('Discard draft?', '드래프트를 버릴까요?')),
+          title: Text(rf(draftRecoveryDiscardConfirmationTitle, '드래프트를 버릴까요?')),
           content: Text(
-            rf('This removes the local draft only.', '로컬 드래프트만 삭제합니다.'),
+            rf(draftRecoveryDiscardConfirmationMessage, '로컬 드래프트만 삭제합니다.'),
           ),
           actions: [
             TextButton(
@@ -5473,15 +5579,28 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     unawaited(_loadLayout(forceApplyCloud: true));
   }
 
-  void _queuePersistDraft(Map<String, Object?> scene) {
-    if (_isSavingLayout) {
+  void _queuePersistDraft(
+    Map<String, Object?> scene, {
+    String syncState = LayoutDraftSyncState.unsavedDraft,
+    String? lastErrorCode,
+    String? lastErrorMessage,
+  }) {
+    if (_isSavingLayout && syncState == LayoutDraftSyncState.unsavedDraft) {
       _draftChangedDuringSave = true;
       return;
     }
     final generation = _draftGeneration;
     _pendingDraftWrite = _pendingDraftWrite
         .catchError((_) {})
-        .then((_) => _persistDraft(scene, generation));
+        .then(
+          (_) => _persistDraft(
+            scene,
+            generation,
+            syncState: syncState,
+            lastErrorCode: lastErrorCode,
+            lastErrorMessage: lastErrorMessage,
+          ),
+        );
     unawaited(_pendingDraftWrite);
   }
 
@@ -5491,7 +5610,13 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     } catch (_) {}
   }
 
-  Future<void> _persistDraft(Map<String, Object?> scene, int generation) async {
+  Future<void> _persistDraft(
+    Map<String, Object?> scene,
+    int generation, {
+    required String syncState,
+    String? lastErrorCode,
+    String? lastErrorMessage,
+  }) async {
     if (generation != _draftGeneration) {
       return;
     }
@@ -5509,8 +5634,15 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         furnitureObjects: _furniturePayload(scene),
         reconstructionStatus: _effectiveReconstructionStatus ?? 'created',
         reviewRequired: layoutStatusNeedsReview(_effectiveReconstructionStatus),
+        syncState: syncState,
+        lastErrorCode: lastErrorCode,
+        lastErrorMessage: lastErrorMessage,
       );
       if (!mounted || generation != _draftGeneration) {
+        return;
+      }
+      if (syncState == LayoutDraftSyncState.syncFailed) {
+        setState(() => _recoverableDraft = draft);
         return;
       }
       if (!_syncFailureVisible) {
@@ -5905,6 +6037,7 @@ class _EditorBridgeCommandBar extends StatelessWidget {
     required this.isLoadingLayout,
     required this.isExportingLayout,
     required this.isHandlingDraft,
+    required this.isSyncFailureVisible,
     required this.onViewModeChanged,
     required this.onSaveLayout,
     required this.onLoadLayout,
@@ -5931,6 +6064,7 @@ class _EditorBridgeCommandBar extends StatelessWidget {
   final bool isLoadingLayout;
   final bool isExportingLayout;
   final bool isHandlingDraft;
+  final bool isSyncFailureVisible;
   final ValueChanged<String> onViewModeChanged;
   final VoidCallback onSaveLayout;
   final VoidCallback onLoadLayout;
@@ -5943,6 +6077,21 @@ class _EditorBridgeCommandBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final recoveryDraft = recoverableDraft;
+    final includeContinueSavedVersion =
+        recoveryDraft != null &&
+        layoutDraftHasCloudConflict(recoveryDraft, activeCloudUpdatedAt);
+    final recoveryActions = recoveryDraft == null
+        ? const <LayoutDraftRecoveryAction>[]
+        : layoutDraftRecoveryActions(
+            draft: recoveryDraft,
+            latestCloudUpdatedAt: activeCloudUpdatedAt,
+            includeContinueSavedVersion: includeContinueSavedVersion,
+            includeRetry: isSyncFailureVisible,
+          ).map(_localizedDraftRecoveryAction).toList();
+    final saveActionLabel = isSyncFailureVisible
+        ? _localizedDraftRecoveryActionLabel(draftRecoveryRetrySaveActionLabel)
+        : rf('Save layout', '레이아웃 저장');
 
     return Material(
       color: _roomForgePanel,
@@ -5976,7 +6125,7 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                   label: Text(
                     isSavingLayout
                         ? rf('Saving...', '저장 중...')
-                        : rf('Save layout', '레이아웃 저장'),
+                        : saveActionLabel,
                   ),
                 ),
                 OutlinedButton.icon(
@@ -6059,40 +6208,42 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                   ),
                   if (recoverableDraft != null) ...[
                     const SizedBox(height: 10),
-                    RoomForgeNotice(
-                      title: rf('Unsaved draft recovery', '저장되지 않은 드래프트 복구'),
-                      message: _localizedLayoutDraftRecoveryMessage(
+                    Semantics(
+                      container: true,
+                      liveRegion: true,
+                      label: _localizedLayoutDraftRecoveryAccessibilitySummary(
                         draft: recoverableDraft!,
                         latestCloudUpdatedAt: activeCloudUpdatedAt,
+                        includeContinueSavedVersion:
+                            includeContinueSavedVersion,
+                        includeRetry: isSyncFailureVisible,
                       ),
-                      severity: NoticeSeverity.warning,
-                      icon: Icons.restore_page_outlined,
+                      child: RoomForgeNotice(
+                        title: rf('Unsaved draft recovery', '저장되지 않은 드래프트 복구'),
+                        message: _localizedLayoutDraftRecoveryMessage(
+                          draft: recoverableDraft!,
+                          latestCloudUpdatedAt: activeCloudUpdatedAt,
+                        ),
+                        severity: NoticeSeverity.warning,
+                        icon: Icons.restore_page_outlined,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: isHandlingDraft ? null : onRestoreDraft,
-                          icon: const Icon(Icons.restore_outlined),
-                          label: Text(rf('Restore draft', '드래프트 복원')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: isHandlingDraft ? null : onDiscardDraft,
-                          icon: const Icon(Icons.delete_sweep_outlined),
-                          label: Text(rf('Discard draft', '드래프트 버리기')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: isHandlingDraft
-                              ? null
-                              : onContinueSavedVersion,
-                          icon: const Icon(Icons.cloud_done_outlined),
-                          label: Text(
-                            rf('Continue saved version', '저장된 버전 계속 사용'),
+                    LayoutDraftRecoveryControls(
+                      actions: recoveryActions,
+                      isHandlingDraft: isHandlingDraft,
+                      semanticsLabel:
+                          _localizedLayoutDraftRecoveryAccessibilitySummary(
+                            draft: recoverableDraft!,
+                            latestCloudUpdatedAt: activeCloudUpdatedAt,
+                            includeContinueSavedVersion:
+                                includeContinueSavedVersion,
+                            includeRetry: isSyncFailureVisible,
                           ),
-                        ),
-                      ],
+                      onRestoreDraft: onRestoreDraft,
+                      onDiscardDraft: onDiscardDraft,
+                      onContinueSavedVersion: onContinueSavedVersion,
+                      onRetrySave: onSaveLayout,
                     ),
                   ],
                   if (compact) ...[
@@ -6122,15 +6273,19 @@ class _EditorBridgeCommandBar extends StatelessWidget {
         lower.contains('unavailable') ||
         lower.contains('warning') ||
         lower.contains('review') ||
+        lower.contains('conflict') ||
         lower.contains('실패') ||
         lower.contains('사용할 수 없') ||
         lower.contains('불가') ||
         lower.contains('경고') ||
-        lower.contains('검토')) {
+        lower.contains('검토') ||
+        lower.contains('충돌')) {
       return lower.contains('review') ||
               lower.contains('warning') ||
+              lower.contains('conflict') ||
               lower.contains('경고') ||
-              lower.contains('검토')
+              lower.contains('검토') ||
+              lower.contains('충돌')
           ? _roomForgeWarning
           : _roomForgeError;
     }
@@ -6149,11 +6304,13 @@ class _EditorBridgeCommandBar extends StatelessWidget {
         lower.contains('loading') ||
         lower.contains('waiting') ||
         lower.contains('unsaved') ||
+        lower.contains('retry') ||
         lower.contains('저장 중') ||
         lower.contains('불러오는 중') ||
         lower.contains('내보내는 중') ||
         lower.contains('대기') ||
-        lower.contains('저장되지')) {
+        lower.contains('저장되지') ||
+        lower.contains('재시도')) {
       return _roomForgePrimary;
     }
     return _roomForgeMuted;

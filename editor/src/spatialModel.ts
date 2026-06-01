@@ -71,6 +71,7 @@ export type CandidateSceneObject = {
   reviewLabel?: string
   suggestedAssetId?: string
   suggestedPosition?: MeterPoint3d
+  suggestedWallId?: string
   suggestedSize?: MeterPoint3d
   suggestedRotationDegrees?: number
   notes?: string
@@ -364,6 +365,7 @@ function candidateSceneObjectValue(value: unknown): CandidateSceneObject | null 
     reviewLabel: optionalStringValue(record.reviewLabel),
     suggestedAssetId: optionalStringValue(record.suggestedAssetId),
     suggestedPosition: point3dValue(record.suggestedPosition),
+    suggestedWallId: optionalStringValue(record.suggestedWallId),
     suggestedSize: point3dValue(record.suggestedSize),
     suggestedRotationDegrees: optionalNumberValue(record.suggestedRotationDegrees),
     notes: optionalStringValue(record.notes),

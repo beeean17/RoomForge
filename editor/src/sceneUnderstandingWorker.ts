@@ -4,10 +4,16 @@ import {
   type CaptureImageReference,
   type CaptureSessionForSceneUnderstanding,
 } from './captureSession.ts'
+import { applyMetricPlacementToCandidates } from './scenePlacement.ts'
 import {
   furnitureSizePriorForCategory,
   structuralFixtureSizePriorForCategory,
 } from './sizePriors.ts'
+import {
+  spatialModelFromBridgePayload,
+  type CandidateSceneObject,
+  type SpatialModel,
+} from './spatialModel.ts'
 
 const providerType = 'browser_cv_mock'
 const algorithmId = 'mock-scene-understanding-v1'
@@ -95,6 +101,7 @@ export function sceneUnderstandingResponseMessage(
         session,
         detectorOutputsFromPayload(payload, session),
         runtime,
+        spatialModelForPlacement(payload),
       ),
     },
   }
@@ -160,6 +167,7 @@ export function detectorResult(
   session: CaptureSessionForSceneUnderstanding,
   detections: DetectorOutput[],
   runtime: DetectorRuntime,
+  model: SpatialModel = spatialModelFromBridgePayload({}),
 ): Record<string, unknown> {
   const primaryImage = session.images[0]
   const fixtureImage =
@@ -176,6 +184,13 @@ export function detectorResult(
     .filter((item) => item.kind === 'fixture')
     .map((item) => item.value)
   const fallbackWindowPrior = structuralFixtureSizePriorForCategory('window')
+  const placedCandidateModel = applyMetricPlacementToCandidates({
+    model: {
+      ...model,
+      candidateObjects: candidateObjects as CandidateSceneObject[],
+    },
+    images: session.images,
+  })
 
   return {
     resultId: `scene-understanding-${Date.now()}`,
@@ -191,7 +206,7 @@ export function detectorResult(
       imageCount: session.images.length,
       availableRoles: session.availableRoles,
     },
-    candidateObjects,
+    candidateObjects: placedCandidateModel.candidateObjects,
     placedObjects: [],
     confirmedObjects: [],
     structuralFixtures: structuralFixtures.length > 0 ? structuralFixtures : [
@@ -209,6 +224,13 @@ export function detectorResult(
       },
     ],
   }
+}
+
+function spatialModelForPlacement(payload: BridgePayload): SpatialModel {
+  const spatialModel = recordValue(payload.spatialModel)
+  return Object.keys(spatialModel).length > 0
+    ? spatialModelFromBridgePayload({ scene: spatialModel })
+    : spatialModelFromBridgePayload(payload)
 }
 
 function emptyResult(

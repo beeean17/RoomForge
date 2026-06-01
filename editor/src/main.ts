@@ -49,6 +49,7 @@ import {
   measurementSummaryForModel,
   placementWarningForModel,
 } from './measurementGuidance'
+import { applyMetricPlacementToCandidates } from './scenePlacement'
 import {
   defaultSpatialModel,
   roomBounds,
@@ -560,9 +561,9 @@ function respondToFlutter(message: BridgeMessage): void {
 
 function handleBridgeCommand(message: BridgeMessage): void {
   if (message.type === 'roomforge.scene.initialize') {
-    spatialModel = spatialModelFromBridgePayload(message.payload)
     sourceImageForExtraction = sourceImageFromPayload(message.payload)
     captureSessionForSceneUnderstanding = captureSessionFromBridgePayload(message.payload)
+    spatialModel = recalculateCandidatePlacements(spatialModelFromBridgePayload(message.payload))
     updateCaptureSessionStatus()
     applySpatialModel()
     respondToFlutter(message)
@@ -736,6 +737,7 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
       },
     },
   }
+  spatialModel = recalculateCandidatePlacements(spatialModel)
   applySpatialModel()
   postToParent({
     type: 'roomforge.calibration.floorPlanGenerated',
@@ -983,18 +985,25 @@ function applySceneUnderstandingResult(payload: Record<string, unknown>): void {
     scene: spatialModelPayload(),
     sceneUnderstandingResult: result,
   })
-  spatialModel = {
+  spatialModel = recalculateCandidatePlacements({
     ...spatialModel,
     hasUnsavedChanges: true,
     candidateObjects: nextModel.candidateObjects,
     placedObjects: nextModel.placedObjects,
     confirmedObjects: nextModel.confirmedObjects,
     structuralFixtures: nextModel.structuralFixtures,
-  }
+  })
   rebuildStructuralFixtures()
   rebuildFurniture()
   updateSpatialStatus()
   emitSceneState('roomforge.sceneUnderstanding.applied')
+}
+
+function recalculateCandidatePlacements(model: SpatialModel): SpatialModel {
+  return applyMetricPlacementToCandidates({
+    model,
+    images: captureSessionForSceneUnderstanding?.images ?? [],
+  })
 }
 
 applySpatialModel()
@@ -1375,7 +1384,7 @@ function updateCandidateCategory(candidateId: string, category: string): void {
   if (nextModel === spatialModel) {
     return
   }
-  spatialModel = nextModel
+  spatialModel = recalculateCandidatePlacements(nextModel)
   geometryStatusElement.textContent = t(
     `Candidate category changed to ${category}; suggested size and asset were recalculated.`,
     `후보 카테고리를 ${category}(으)로 변경했습니다. 추천 크기와 에셋을 다시 계산했습니다.`,
@@ -2104,6 +2113,7 @@ function updateConfirmedGeometry(message: string, emit = true): void {
       },
     },
   }
+  spatialModel = recalculateCandidatePlacements(spatialModel)
 
   syncConfirmedGeometryMeshes()
   rebuildWalls()

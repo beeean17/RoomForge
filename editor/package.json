@@ -23,6 +23,7 @@
     "test:cv-4.1": "node --experimental-strip-types scripts/verify-cv-4.1-scene-understanding-worker.mjs",
     "test:cv-4.2": "node --experimental-strip-types scripts/verify-cv-4.2-detector-runtime.mjs",
     "test:cv-5.1": "node --experimental-strip-types scripts/verify-cv-5.1-size-priors.mjs",
+    "test:cv-5.2": "node --experimental-strip-types scripts/verify-cv-5.2-wall-role-placement.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

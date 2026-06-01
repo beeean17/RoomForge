@@ -18,6 +18,9 @@ void main() {
           'projects/{project_id}/opencv_results/{result_id}',
           'projects/{project_id}/confirmed_geometries/{geometry_id}',
           'projects/{project_id}/floor_plans/{floor_plan_id}',
+          'projects/{project_id}/capture_sessions/{capture_session_id}',
+          'projects/{project_id}/capture_sessions/{capture_session_id}/images/{capture_image_id}',
+          'projects/{project_id}/scene_understanding_results/{result_id}',
           'projects/{project_id}/layouts/{layout_id}',
           'projects/{project_id}/admin_actions/{action_id}',
         }),
@@ -48,6 +51,10 @@ void main() {
     test('display review_required as Needs review', () {
       expect(FirebaseJobStatus.reviewRequired.wireValue, 'review_required');
       expect(FirebaseJobStatus.reviewRequired.displayLabel, 'Needs review');
+      expect(
+        FirebaseCandidateReviewState.reviewRequired.displayLabel,
+        'Needs review',
+      );
     });
 
     test('reject meters for OpenCV candidate results', () {
@@ -118,6 +125,37 @@ void main() {
         ).validate(),
         throwsA(isA<FirebaseContractException>()),
       );
+    });
+
+    test('validate capture image dimensions and candidate confidence', () {
+      expect(
+        () => _captureImage(widthPx: 0).validate(),
+        throwsA(isA<FirebaseContractException>()),
+      );
+
+      expect(
+        () => _candidate(confidenceScore: 1.2).validate(),
+        throwsA(isA<FirebaseContractException>()),
+      );
+    });
+
+    test('keep candidate scene objects in image pixels', () {
+      expect(
+        () => _candidate(
+          coordinateSpace: FirebaseCoordinateSpace.meters,
+        ).validate(),
+        throwsA(isA<FirebaseContractException>()),
+      );
+    });
+
+    test('validate scene understanding result object groups separately', () {
+      final result = _sceneUnderstandingResult();
+
+      expect(result.candidateObjects.single.candidateId, 'candidate-bed-1');
+      expect(result.placedObjects.single.objectId, 'placed-bed-1');
+      expect(result.confirmedObjects.single.objectId, 'confirmed-bed-1');
+      expect(result.structuralFixtures.single.fixtureId, 'window-1');
+      expect(result.validate, returnsNormally);
     });
   });
 }
@@ -241,5 +279,117 @@ FirebaseSavedLayout _layout({
     updatedAt: _now,
     schemaVersion: 1,
     exportVersion: 1,
+  );
+}
+
+FirebaseCaptureSession _captureSession() {
+  return FirebaseCaptureSession(
+    captureSessionId: 'capture-session-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    roomDimensionsId: 'current',
+    captureMethod: FirebaseCaptureMethod.androidGuidedPhoto,
+    depthEnabled: false,
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
+FirebaseCaptureImage _captureImage({int widthPx = 1600}) {
+  return FirebaseCaptureImage(
+    captureImageId: 'capture-image-1',
+    captureSessionId: _captureSession().captureSessionId,
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    sourceImageId: 'source-image-1',
+    role: FirebaseCaptureImageRole.frontWall,
+    storagePath:
+        'users/user-1/projects/project-1/source-images/source-image-1/front.jpg',
+    contentType: FirebaseImageContentType.jpeg,
+    widthPx: widthPx,
+    heightPx: 1200,
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
+FirebaseCandidateSceneObject _candidate({
+  FirebaseCoordinateSpace coordinateSpace = FirebaseCoordinateSpace.imagePixels,
+  double confidenceScore = 0.82,
+}) {
+  return FirebaseCandidateSceneObject(
+    candidateId: 'candidate-bed-1',
+    objectType: FirebaseSceneObjectType.furniture,
+    category: 'bed',
+    sourceImageId: 'source-image-1',
+    captureImageId: 'capture-image-1',
+    sourceImageRole: FirebaseCaptureImageRole.frontWall,
+    coordinateSpace: coordinateSpace,
+    boundingBox: const FirebaseBoundingBox(
+      x: 120,
+      y: 340,
+      width: 520,
+      height: 300,
+    ),
+    confidenceScore: confidenceScore,
+    reviewState: FirebaseCandidateReviewState.suggested,
+    suggestedAssetId: 'bed.double',
+    suggestedPositionM: const FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+    suggestedSizeM: const FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+    suggestedRotationDeg: 90,
+  );
+}
+
+FirebaseSceneUnderstandingResult _sceneUnderstandingResult() {
+  return FirebaseSceneUnderstandingResult(
+    resultId: 'scene-result-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    captureSessionId: 'capture-session-1',
+    providerType: 'browser_cv',
+    algorithmId: 'mock-scene-understanding-v1',
+    confidenceScore: 0.74,
+    qualityStatus: FirebaseQualityStatus.reviewRequired,
+    coverage: const {'front_wall': 'complete'},
+    candidateObjects: [_candidate()],
+    placedObjects: const [
+      FirebasePlacedSceneObject(
+        objectId: 'placed-bed-1',
+        candidateId: 'candidate-bed-1',
+        objectType: FirebaseSceneObjectType.furniture,
+        category: 'bed',
+        positionM: FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+        sizeM: FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+        rotationDeg: 90,
+      ),
+    ],
+    confirmedObjects: [
+      FirebaseConfirmedSceneObject(
+        objectId: 'confirmed-bed-1',
+        candidateId: 'candidate-bed-1',
+        objectType: FirebaseSceneObjectType.furniture,
+        category: 'bed',
+        positionM: const FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+        sizeM: const FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+        rotationDeg: 90,
+        confirmedByUid: 'user-1',
+        confirmedAt: _now,
+      ),
+    ],
+    structuralFixtures: const [
+      FirebaseStructuralFixture(
+        fixtureId: 'window-1',
+        category: FirebaseStructuralFixtureCategory.window,
+        wallId: 'front-wall',
+        positionM: FirebasePoint3d(x: 2.1, y: 1.1, z: 0),
+        sizeM: FirebasePoint3d(x: 1.2, y: 1.0, z: 0.1),
+        rotationDeg: 0,
+      ),
+    ],
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
   );
 }

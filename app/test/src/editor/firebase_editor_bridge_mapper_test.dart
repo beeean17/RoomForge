@@ -143,6 +143,43 @@ void main() {
       expect(confirmed, isNot(contains('candidateGeometry')));
     });
 
+    test('maps scene understanding result to camelCase candidate bridge', () {
+      final payload = mapper.sceneUnderstandingResultToBridgePayload(
+        _sceneUnderstandingResult(),
+      );
+
+      FirebaseSerializerValidators.requireCamelCasePayload(
+        payload,
+        'scene_understanding_bridge',
+      );
+      final result = payload['sceneUnderstandingResult'] as FirebaseJson;
+      final coverage = result['coverage'] as FirebaseJson;
+      final candidates = result['candidateObjects'] as List<Object?>;
+      final placedObjects = result['placedObjects'] as List<Object?>;
+      final confirmedObjects = result['confirmedObjects'] as List<Object?>;
+      final fixtures = result['structuralFixtures'] as List<Object?>;
+      final candidate = Map<String, Object?>.from(candidates.single as Map);
+      final confirmed = Map<String, Object?>.from(
+        confirmedObjects.single as Map,
+      );
+      final fixture = Map<String, Object?>.from(fixtures.single as Map);
+
+      expect(result, containsPair('resultId', 'scene-result-1'));
+      expect(result, containsPair('captureSessionId', 'session-1'));
+      expect(coverage, containsPair('frontWall', 'complete'));
+      expect(candidate, containsPair('candidateId', 'candidate-bed-1'));
+      expect(candidate, containsPair('coordinateSpace', 'image_pixels'));
+      expect(candidate, containsPair('reviewLabel', 'Needs review'));
+      expect(candidate, contains('boundingBox'));
+      expect(candidate, isNot(contains('candidate_id')));
+      expect(placedObjects, hasLength(1));
+      expect(confirmed, containsPair('objectId', 'confirmed-bed-1'));
+      expect(confirmed, containsPair('candidateId', 'candidate-bed-1'));
+      expect(confirmed, contains('confirmedByUid'));
+      expect(fixture, containsPair('fixtureId', 'window-1'));
+      expect(fixture, containsPair('category', 'window'));
+    });
+
     test('rejects snake_case bridge input before persistence mapping', () {
       expect(
         () => mapper.bridgeSceneToEditorScene(const {
@@ -276,5 +313,78 @@ FirebaseSavedLayout _layout({String viewMode = '2d'}) {
     updatedAt: _now,
     schemaVersion: 1,
     exportVersion: 1,
+  );
+}
+
+FirebaseCandidateSceneObject _candidate() {
+  return const FirebaseCandidateSceneObject(
+    candidateId: 'candidate-bed-1',
+    objectType: FirebaseSceneObjectType.furniture,
+    category: 'bed',
+    sourceImageId: 'source-image-1',
+    captureImageId: 'capture-image-1',
+    sourceImageRole: FirebaseCaptureImageRole.frontWall,
+    coordinateSpace: FirebaseCoordinateSpace.imagePixels,
+    boundingBox: FirebaseBoundingBox(x: 120, y: 340, width: 520, height: 300),
+    confidenceScore: 0.82,
+    reviewState: FirebaseCandidateReviewState.reviewRequired,
+    suggestedAssetId: 'bed.double',
+    suggestedPositionM: FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+    suggestedSizeM: FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+    suggestedRotationDeg: 90,
+  );
+}
+
+FirebaseSceneUnderstandingResult _sceneUnderstandingResult() {
+  return FirebaseSceneUnderstandingResult(
+    resultId: 'scene-result-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    captureSessionId: 'session-1',
+    providerType: 'browser_cv',
+    algorithmId: 'mock-scene-understanding-v1',
+    confidenceScore: 0.74,
+    qualityStatus: FirebaseQualityStatus.reviewRequired,
+    coverage: const {'front_wall': 'complete'},
+    candidateObjects: [_candidate()],
+    placedObjects: const [
+      FirebasePlacedSceneObject(
+        objectId: 'placed-bed-1',
+        candidateId: 'candidate-bed-1',
+        objectType: FirebaseSceneObjectType.furniture,
+        category: 'bed',
+        assetId: 'bed.double',
+        positionM: FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+        sizeM: FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+        rotationDeg: 90,
+      ),
+    ],
+    confirmedObjects: [
+      FirebaseConfirmedSceneObject(
+        objectId: 'confirmed-bed-1',
+        candidateId: 'candidate-bed-1',
+        objectType: FirebaseSceneObjectType.furniture,
+        category: 'bed',
+        assetId: 'bed.double',
+        positionM: const FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+        sizeM: const FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+        rotationDeg: 90,
+        confirmedByUid: 'user-1',
+        confirmedAt: _now,
+      ),
+    ],
+    structuralFixtures: const [
+      FirebaseStructuralFixture(
+        fixtureId: 'window-1',
+        category: FirebaseStructuralFixtureCategory.window,
+        wallId: 'front-wall',
+        positionM: FirebasePoint3d(x: 2.1, y: 1.1, z: 0),
+        sizeM: FirebasePoint3d(x: 1.2, y: 1.0, z: 0.1),
+        rotationDeg: 0,
+      ),
+    ],
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
   );
 }

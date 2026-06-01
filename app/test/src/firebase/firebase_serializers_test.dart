@@ -127,6 +127,70 @@ void main() {
 
       expect(layout.toFirestoreJson, throwsA(isA<FirebaseContractException>()));
     });
+
+    test('serialize capture session and image contracts as snake_case', () {
+      final sessionPayload = _captureSession().toFirestoreJson();
+      final imagePayload = _captureImage().toFirestoreJson();
+
+      FirebaseSerializerValidators.requireSnakeCasePayload(
+        sessionPayload,
+        'capture_session',
+      );
+      FirebaseSerializerValidators.requireSnakeCasePayload(
+        imagePayload,
+        'capture_image',
+      );
+      expect(sessionPayload, containsPair('capture_session_id', 'session-1'));
+      expect(
+        sessionPayload,
+        containsPair('capture_method', 'android_guided_photo'),
+      );
+      expect(imagePayload, containsPair('role', 'front_wall'));
+      expect(imagePayload, containsPair('source_image_id', 'source-image-1'));
+      expect(imagePayload, isNot(contains('sourceImageId')));
+    });
+
+    test('serialize and parse scene understanding results distinctly', () {
+      final payload = _sceneUnderstandingResult().toFirestoreJson();
+
+      FirebaseSerializerValidators.requireSnakeCasePayload(
+        payload,
+        'scene_understanding_results',
+      );
+      expect(payload, containsPair('result_id', 'scene-result-1'));
+      expect(payload, contains('candidate_objects'));
+      expect(payload, contains('placed_objects'));
+      expect(payload, contains('confirmed_objects'));
+      expect(payload, contains('structural_fixtures'));
+
+      final candidateObjects = payload['candidate_objects'] as List<Object?>;
+      final confirmedObjects = payload['confirmed_objects'] as List<Object?>;
+      final candidate = Map<String, Object?>.from(
+        candidateObjects.single as Map,
+      );
+      final confirmed = Map<String, Object?>.from(
+        confirmedObjects.single as Map,
+      );
+
+      expect(candidate, containsPair('candidate_id', 'candidate-bed-1'));
+      expect(candidate, contains('bounding_box'));
+      expect(candidate, contains('review_state'));
+      expect(candidate, isNot(contains('confirmed_by_uid')));
+      expect(confirmed, containsPair('object_id', 'confirmed-bed-1'));
+      expect(confirmed, contains('confirmed_by_uid'));
+      expect(confirmed, isNot(contains('bounding_box')));
+
+      final parsed =
+          FirebaseModelSerializers.sceneUnderstandingResultFromFirestore(
+            payload,
+          );
+      expect(parsed.candidateObjects.single.candidateId, 'candidate-bed-1');
+      expect(parsed.confirmedObjects.single.objectId, 'confirmed-bed-1');
+      expect(
+        parsed.structuralFixtures.single.category,
+        FirebaseStructuralFixtureCategory.window,
+      );
+    });
   });
 }
 
@@ -244,5 +308,112 @@ FirebaseSavedLayout _layout({FirebaseJson? editorScene}) {
     updatedAt: _now,
     schemaVersion: 1,
     exportVersion: 1,
+  );
+}
+
+FirebaseCaptureSession _captureSession() {
+  return FirebaseCaptureSession(
+    captureSessionId: 'session-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    roomDimensionsId: 'current',
+    captureMethod: FirebaseCaptureMethod.androidGuidedPhoto,
+    depthEnabled: false,
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
+FirebaseCaptureImage _captureImage() {
+  return FirebaseCaptureImage(
+    captureImageId: 'capture-image-1',
+    captureSessionId: 'session-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    sourceImageId: 'source-image-1',
+    role: FirebaseCaptureImageRole.frontWall,
+    storagePath:
+        'users/user-1/projects/project-1/source-images/source-image-1/front.jpg',
+    contentType: FirebaseImageContentType.jpeg,
+    widthPx: 1600,
+    heightPx: 1200,
+    captureOrder: 1,
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
+FirebaseCandidateSceneObject _candidate() {
+  return const FirebaseCandidateSceneObject(
+    candidateId: 'candidate-bed-1',
+    objectType: FirebaseSceneObjectType.furniture,
+    category: 'bed',
+    sourceImageId: 'source-image-1',
+    captureImageId: 'capture-image-1',
+    sourceImageRole: FirebaseCaptureImageRole.frontWall,
+    coordinateSpace: FirebaseCoordinateSpace.imagePixels,
+    boundingBox: FirebaseBoundingBox(x: 120, y: 340, width: 520, height: 300),
+    confidenceScore: 0.82,
+    reviewState: FirebaseCandidateReviewState.reviewRequired,
+    suggestedAssetId: 'bed.double',
+    suggestedPositionM: FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+    suggestedSizeM: FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+    suggestedRotationDeg: 90,
+  );
+}
+
+FirebaseSceneUnderstandingResult _sceneUnderstandingResult() {
+  return FirebaseSceneUnderstandingResult(
+    resultId: 'scene-result-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    captureSessionId: 'session-1',
+    providerType: 'browser_cv',
+    algorithmId: 'mock-scene-understanding-v1',
+    confidenceScore: 0.74,
+    qualityStatus: FirebaseQualityStatus.reviewRequired,
+    coverage: const {'front_wall': 'complete'},
+    candidateObjects: [_candidate()],
+    placedObjects: const [
+      FirebasePlacedSceneObject(
+        objectId: 'placed-bed-1',
+        candidateId: 'candidate-bed-1',
+        objectType: FirebaseSceneObjectType.furniture,
+        category: 'bed',
+        assetId: 'bed.double',
+        positionM: FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+        sizeM: FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+        rotationDeg: 90,
+      ),
+    ],
+    confirmedObjects: [
+      FirebaseConfirmedSceneObject(
+        objectId: 'confirmed-bed-1',
+        candidateId: 'candidate-bed-1',
+        objectType: FirebaseSceneObjectType.furniture,
+        category: 'bed',
+        assetId: 'bed.double',
+        positionM: const FirebasePoint3d(x: 1.2, y: 0, z: 2.4),
+        sizeM: const FirebasePoint3d(x: 1.5, y: 0.55, z: 2.0),
+        rotationDeg: 90,
+        confirmedByUid: 'user-1',
+        confirmedAt: _now,
+      ),
+    ],
+    structuralFixtures: const [
+      FirebaseStructuralFixture(
+        fixtureId: 'window-1',
+        category: FirebaseStructuralFixtureCategory.window,
+        wallId: 'front-wall',
+        positionM: FirebasePoint3d(x: 2.1, y: 1.1, z: 0),
+        sizeM: FirebasePoint3d(x: 1.2, y: 1.0, z: 0.1),
+        rotationDeg: 0,
+      ),
+    ],
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
   );
 }

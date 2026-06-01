@@ -297,6 +297,89 @@ class FirebaseModelSerializers {
     return model;
   }
 
+  static FirebaseCaptureSession captureSessionFromFirestore(FirebaseJson json) {
+    return FirebaseCaptureSession(
+      captureSessionId: _requiredString(json, 'capture_session_id'),
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      roomDimensionsId: _requiredString(json, 'room_dimensions_id'),
+      captureMethod: FirebaseCaptureMethod.fromWireValue(
+        json['capture_method'],
+      ),
+      depthEnabled: _requiredBool(json, 'depth_enabled'),
+      startedAt: _optionalDate(json, 'started_at'),
+      completedAt: _optionalDate(json, 'completed_at'),
+      notes: _optionalString(json, 'notes'),
+      createdAt: _requiredDate(json, 'created_at'),
+      updatedAt: _requiredDate(json, 'updated_at'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+    );
+  }
+
+  static FirebaseCaptureImage captureImageFromFirestore(FirebaseJson json) {
+    final model = FirebaseCaptureImage(
+      captureImageId: _requiredString(json, 'capture_image_id'),
+      captureSessionId: _requiredString(json, 'capture_session_id'),
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      sourceImageId: _requiredString(json, 'source_image_id'),
+      role: FirebaseCaptureImageRole.fromWireValue(json['role']),
+      storagePath: _requiredString(json, 'storage_path'),
+      contentType: FirebaseImageContentType.fromWireValue(json['content_type']),
+      widthPx: _requiredInt(json, 'width_px'),
+      heightPx: _requiredInt(json, 'height_px'),
+      captureOrder: json['capture_order'] == null
+          ? null
+          : _requiredInt(json, 'capture_order'),
+      depthArtifactRefs: _artifactRefList(json, 'depth_artifact_refs'),
+      cameraPose: json['camera_pose'] == null
+          ? null
+          : _requiredJson(json, 'camera_pose'),
+      guidanceState: _optionalString(json, 'guidance_state'),
+      createdAt: _requiredDate(json, 'created_at'),
+      updatedAt: _requiredDate(json, 'updated_at'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+    );
+    model.validate();
+    return model;
+  }
+
+  static FirebaseSceneUnderstandingResult sceneUnderstandingResultFromFirestore(
+    FirebaseJson json,
+  ) {
+    final model = FirebaseSceneUnderstandingResult(
+      resultId: _requiredString(json, 'result_id'),
+      projectId: _requiredString(json, 'project_id'),
+      ownerUid: _requiredString(json, 'owner_uid'),
+      captureSessionId: _requiredString(json, 'capture_session_id'),
+      jobId: _optionalString(json, 'job_id'),
+      providerType: _requiredString(json, 'provider_type'),
+      algorithmId: _requiredString(json, 'algorithm_id'),
+      modelId: _optionalString(json, 'model_id'),
+      confidenceScore: _optionalDouble(json, 'confidence_score'),
+      qualityStatus: FirebaseQualityStatus.fromWireValue(
+        json['quality_status'],
+      ),
+      failureReasonCode: _optionalString(json, 'failure_reason_code'),
+      failureReason: _optionalString(json, 'failure_reason'),
+      coverage: json['coverage'] == null
+          ? const {}
+          : _requiredJson(json, 'coverage'),
+      candidateObjects: _candidateSceneObjectList(json, 'candidate_objects'),
+      placedObjects: _placedSceneObjectList(json, 'placed_objects'),
+      confirmedObjects: _confirmedSceneObjectList(json, 'confirmed_objects'),
+      structuralFixtures: _structuralFixtureList(json, 'structural_fixtures'),
+      artifactRefs: _artifactRefList(json, 'artifact_refs'),
+      processingStartedAt: _optionalDate(json, 'processing_started_at'),
+      processingCompletedAt: _optionalDate(json, 'processing_completed_at'),
+      createdAt: _requiredDate(json, 'created_at'),
+      updatedAt: _requiredDate(json, 'updated_at'),
+      schemaVersion: _requiredInt(json, 'schema_version'),
+    );
+    model.validate();
+    return model;
+  }
+
   static FirebaseSavedLayout savedLayoutFromFirestore(FirebaseJson json) {
     final coordinateSpace =
         FirebaseContractValidators.requireRawCoordinateSpace(
@@ -630,6 +713,195 @@ extension FirebaseFloorPlanSerializers on FirebaseFloorPlan {
   }
 }
 
+extension FirebaseCaptureSessionSerializers on FirebaseCaptureSession {
+  FirebaseJson toFirestoreJson({FirebaseSerializationOptions? options}) {
+    final resolved = options ?? FirebaseSerializationOptions.firestore;
+    return _snakeCasePayload({
+      'capture_session_id': captureSessionId,
+      'project_id': projectId,
+      'owner_uid': ownerUid,
+      'room_dimensions_id': roomDimensionsId,
+      'capture_method': captureMethod.wireValue,
+      'depth_enabled': depthEnabled,
+      'started_at': _timestamp(startedAt, resolved),
+      'completed_at': _timestamp(completedAt, resolved),
+      'notes': notes,
+      'created_at': resolved.timestampEncoder(createdAt),
+      'updated_at': resolved.timestampEncoder(updatedAt),
+      'schema_version': schemaVersion,
+    }, 'capture_sessions');
+  }
+}
+
+extension FirebaseCaptureImageSerializers on FirebaseCaptureImage {
+  FirebaseJson toFirestoreJson({FirebaseSerializationOptions? options}) {
+    validate();
+    final resolved = options ?? FirebaseSerializationOptions.firestore;
+    return _snakeCasePayload({
+      'capture_image_id': captureImageId,
+      'capture_session_id': captureSessionId,
+      'project_id': projectId,
+      'owner_uid': ownerUid,
+      'source_image_id': sourceImageId,
+      'role': role.wireValue,
+      'storage_path': storagePath,
+      'content_type': contentType.wireValue,
+      'width_px': widthPx,
+      'height_px': heightPx,
+      'capture_order': captureOrder,
+      'depth_artifact_refs': depthArtifactRefs
+          .map((ref) => ref.toFirestoreJson(options: resolved))
+          .toList(),
+      'camera_pose': _nestedValue(cameraPose, resolved),
+      'guidance_state': guidanceState,
+      'created_at': resolved.timestampEncoder(createdAt),
+      'updated_at': resolved.timestampEncoder(updatedAt),
+      'schema_version': schemaVersion,
+    }, 'capture_images');
+  }
+}
+
+extension FirebaseBoundingBoxSerializers on FirebaseBoundingBox {
+  FirebaseJson toFirestoreJson() {
+    validate();
+    return _snakeCasePayload({
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
+    }, 'bounding_box');
+  }
+}
+
+extension FirebaseCandidateSceneObjectSerializers
+    on FirebaseCandidateSceneObject {
+  FirebaseJson toFirestoreJson({FirebaseSerializationOptions? options}) {
+    validate();
+    final resolved = options ?? FirebaseSerializationOptions.firestore;
+    return _snakeCasePayload({
+      'candidate_id': candidateId,
+      'object_type': objectType.wireValue,
+      'category': category,
+      'label': label,
+      'source_image_id': sourceImageId,
+      'capture_image_id': captureImageId,
+      'source_image_role': sourceImageRole.wireValue,
+      'coordinate_space': coordinateSpace.wireValue,
+      'bounding_box': boundingBox.toFirestoreJson(),
+      'confidence_score': confidenceScore,
+      'review_state': reviewState.wireValue,
+      'suggested_asset_id': suggestedAssetId,
+      'suggested_position_m': suggestedPositionM?.toFirestoreJson(),
+      'suggested_size_m': suggestedSizeM?.toFirestoreJson(),
+      'suggested_rotation_deg': suggestedRotationDeg,
+      'mask_artifact_ref': maskArtifactRef?.toFirestoreJson(options: resolved),
+      'notes': notes,
+    }, 'candidate_scene_objects');
+  }
+}
+
+extension FirebasePlacedSceneObjectSerializers on FirebasePlacedSceneObject {
+  FirebaseJson toFirestoreJson() {
+    validate();
+    return _snakeCasePayload({
+      'object_id': objectId,
+      'candidate_id': candidateId,
+      'object_type': objectType.wireValue,
+      'category': category,
+      'asset_id': assetId,
+      'label': label,
+      'position_m': positionM.toFirestoreJson(),
+      'size_m': sizeM.toFirestoreJson(),
+      'rotation_deg': rotationDeg,
+      'confidence_score': confidenceScore,
+      'locked': locked,
+    }, 'placed_scene_objects');
+  }
+}
+
+extension FirebaseConfirmedSceneObjectSerializers
+    on FirebaseConfirmedSceneObject {
+  FirebaseJson toFirestoreJson({FirebaseSerializationOptions? options}) {
+    validate();
+    final resolved = options ?? FirebaseSerializationOptions.firestore;
+    return _snakeCasePayload({
+      'object_id': objectId,
+      'candidate_id': candidateId,
+      'object_type': objectType.wireValue,
+      'category': category,
+      'asset_id': assetId,
+      'label': label,
+      'position_m': positionM.toFirestoreJson(),
+      'size_m': sizeM.toFirestoreJson(),
+      'rotation_deg': rotationDeg,
+      'confirmed_by_uid': confirmedByUid,
+      'confirmed_at': resolved.timestampEncoder(confirmedAt),
+      'locked': locked,
+    }, 'confirmed_scene_objects');
+  }
+}
+
+extension FirebaseStructuralFixtureSerializers on FirebaseStructuralFixture {
+  FirebaseJson toFirestoreJson() {
+    validate();
+    return _snakeCasePayload({
+      'fixture_id': fixtureId,
+      'candidate_id': candidateId,
+      'category': category.wireValue,
+      'wall_id': wallId,
+      'label': label,
+      'position_m': positionM.toFirestoreJson(),
+      'size_m': sizeM.toFirestoreJson(),
+      'rotation_deg': rotationDeg,
+      'confidence_score': confidenceScore,
+      'locked': locked,
+    }, 'structural_fixtures');
+  }
+}
+
+extension FirebaseSceneUnderstandingResultSerializers
+    on FirebaseSceneUnderstandingResult {
+  FirebaseJson toFirestoreJson({FirebaseSerializationOptions? options}) {
+    validate();
+    final resolved = options ?? FirebaseSerializationOptions.firestore;
+    return _snakeCasePayload({
+      'result_id': resultId,
+      'project_id': projectId,
+      'owner_uid': ownerUid,
+      'capture_session_id': captureSessionId,
+      'job_id': jobId,
+      'provider_type': providerType,
+      'algorithm_id': algorithmId,
+      'model_id': modelId,
+      'confidence_score': confidenceScore,
+      'quality_status': qualityStatus.wireValue,
+      'failure_reason_code': failureReasonCode,
+      'failure_reason': failureReason,
+      'coverage': _nestedValue(coverage, resolved),
+      'candidate_objects': candidateObjects
+          .map((object) => object.toFirestoreJson(options: resolved))
+          .toList(),
+      'placed_objects': placedObjects
+          .map((object) => object.toFirestoreJson())
+          .toList(),
+      'confirmed_objects': confirmedObjects
+          .map((object) => object.toFirestoreJson(options: resolved))
+          .toList(),
+      'structural_fixtures': structuralFixtures
+          .map((fixture) => fixture.toFirestoreJson())
+          .toList(),
+      'artifact_refs': artifactRefs
+          .map((ref) => ref.toFirestoreJson(options: resolved))
+          .toList(),
+      'processing_started_at': _timestamp(processingStartedAt, resolved),
+      'processing_completed_at': _timestamp(processingCompletedAt, resolved),
+      'created_at': resolved.timestampEncoder(createdAt),
+      'updated_at': resolved.timestampEncoder(updatedAt),
+      'schema_version': schemaVersion,
+    }, 'scene_understanding_results');
+  }
+}
+
 extension FirebaseSavedLayoutSerializers on FirebaseSavedLayout {
   FirebaseJson toFirestoreJson({FirebaseSerializationOptions? options}) {
     validate();
@@ -859,6 +1131,18 @@ FirebasePoint3d _point3dFromJson(Object? value, String context) {
   );
 }
 
+FirebaseBoundingBox _boundingBoxFromJson(Object? value, String context) {
+  final json = _jsonFromObject(value, context);
+  final model = FirebaseBoundingBox(
+    x: _requiredDouble(json, 'x'),
+    y: _requiredDouble(json, 'y'),
+    width: _requiredDouble(json, 'width'),
+    height: _requiredDouble(json, 'height'),
+  );
+  model.validate();
+  return model;
+}
+
 FirebaseArtifactRef _artifactRefFromJson(Object? value, String context) {
   final json = _jsonFromObject(value, context);
   return FirebaseArtifactRef(
@@ -894,6 +1178,116 @@ FirebaseFurnitureObject _furnitureObjectFromJson(
     rotationDeg: _requiredDouble(json, 'rotation_deg'),
     color: _optionalString(json, 'color'),
     label: _optionalString(json, 'label'),
+    locked: json['locked'] == null ? null : _requiredBool(json, 'locked'),
+  );
+}
+
+FirebaseCandidateSceneObject _candidateSceneObjectFromJson(
+  Object? value,
+  String context,
+) {
+  final json = _jsonFromObject(value, context);
+  return FirebaseCandidateSceneObject(
+    candidateId: _requiredString(json, 'candidate_id'),
+    objectType: FirebaseSceneObjectType.fromWireValue(json['object_type']),
+    category: _requiredString(json, 'category'),
+    label: _optionalString(json, 'label'),
+    sourceImageId: _requiredString(json, 'source_image_id'),
+    captureImageId: _requiredString(json, 'capture_image_id'),
+    sourceImageRole: FirebaseCaptureImageRole.fromWireValue(
+      json['source_image_role'],
+    ),
+    coordinateSpace: FirebaseCoordinateSpace.fromWireValue(
+      json['coordinate_space'],
+    ),
+    boundingBox: _boundingBoxFromJson(
+      json['bounding_box'],
+      '$context.bounding_box',
+    ),
+    confidenceScore: _requiredDouble(json, 'confidence_score'),
+    reviewState: FirebaseCandidateReviewState.fromWireValue(
+      json['review_state'],
+    ),
+    suggestedAssetId: _optionalString(json, 'suggested_asset_id'),
+    suggestedPositionM: json['suggested_position_m'] == null
+        ? null
+        : _point3dFromJson(
+            json['suggested_position_m'],
+            '$context.suggested_position_m',
+          ),
+    suggestedSizeM: json['suggested_size_m'] == null
+        ? null
+        : _point3dFromJson(
+            json['suggested_size_m'],
+            '$context.suggested_size_m',
+          ),
+    suggestedRotationDeg: _optionalDouble(json, 'suggested_rotation_deg'),
+    maskArtifactRef: json['mask_artifact_ref'] == null
+        ? null
+        : _artifactRefFromJson(
+            json['mask_artifact_ref'],
+            '$context.mask_artifact_ref',
+          ),
+    notes: _optionalString(json, 'notes'),
+  );
+}
+
+FirebasePlacedSceneObject _placedSceneObjectFromJson(
+  Object? value,
+  String context,
+) {
+  final json = _jsonFromObject(value, context);
+  return FirebasePlacedSceneObject(
+    objectId: _requiredString(json, 'object_id'),
+    candidateId: _optionalString(json, 'candidate_id'),
+    objectType: FirebaseSceneObjectType.fromWireValue(json['object_type']),
+    category: _requiredString(json, 'category'),
+    assetId: _optionalString(json, 'asset_id'),
+    label: _optionalString(json, 'label'),
+    positionM: _point3dFromJson(json['position_m'], '$context.position_m'),
+    sizeM: _point3dFromJson(json['size_m'], '$context.size_m'),
+    rotationDeg: _requiredDouble(json, 'rotation_deg'),
+    confidenceScore: _optionalDouble(json, 'confidence_score'),
+    locked: json['locked'] == null ? null : _requiredBool(json, 'locked'),
+  );
+}
+
+FirebaseConfirmedSceneObject _confirmedSceneObjectFromJson(
+  Object? value,
+  String context,
+) {
+  final json = _jsonFromObject(value, context);
+  return FirebaseConfirmedSceneObject(
+    objectId: _requiredString(json, 'object_id'),
+    candidateId: _optionalString(json, 'candidate_id'),
+    objectType: FirebaseSceneObjectType.fromWireValue(json['object_type']),
+    category: _requiredString(json, 'category'),
+    assetId: _optionalString(json, 'asset_id'),
+    label: _optionalString(json, 'label'),
+    positionM: _point3dFromJson(json['position_m'], '$context.position_m'),
+    sizeM: _point3dFromJson(json['size_m'], '$context.size_m'),
+    rotationDeg: _requiredDouble(json, 'rotation_deg'),
+    confirmedByUid: _requiredString(json, 'confirmed_by_uid'),
+    confirmedAt: _requiredDate(json, 'confirmed_at'),
+    locked: json['locked'] == null ? null : _requiredBool(json, 'locked'),
+  );
+}
+
+FirebaseStructuralFixture _structuralFixtureFromJson(
+  Object? value,
+  String context,
+) {
+  final json = _jsonFromObject(value, context);
+  return FirebaseStructuralFixture(
+    fixtureId: _requiredString(json, 'fixture_id'),
+    candidateId: _optionalString(json, 'candidate_id'),
+    category: FirebaseStructuralFixtureCategory.fromWireValue(json['category']),
+    wallId: _requiredString(json, 'wall_id'),
+    label: _optionalString(json, 'label'),
+    positionM: _point3dFromJson(json['position_m'], '$context.position_m'),
+    sizeM: _point3dFromJson(json['size_m'], '$context.size_m'),
+    rotationDeg: _requiredDouble(json, 'rotation_deg'),
+    confidenceScore: _optionalDouble(json, 'confidence_score'),
     locked: json['locked'] == null ? null : _requiredBool(json, 'locked'),
   );
 }
@@ -981,5 +1375,73 @@ List<FirebaseFurnitureObject> _furnitureObjectList(
   return [
     for (var index = 0; index < value.length; index += 1)
       _furnitureObjectFromJson(value[index], '$key[$index]'),
+  ];
+}
+
+List<FirebaseCandidateSceneObject> _candidateSceneObjectList(
+  FirebaseJson json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return const [];
+  }
+  if (value is! List) {
+    throw FirebaseContractException('$key must be a list.');
+  }
+  return [
+    for (var index = 0; index < value.length; index += 1)
+      _candidateSceneObjectFromJson(value[index], '$key[$index]'),
+  ];
+}
+
+List<FirebasePlacedSceneObject> _placedSceneObjectList(
+  FirebaseJson json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return const [];
+  }
+  if (value is! List) {
+    throw FirebaseContractException('$key must be a list.');
+  }
+  return [
+    for (var index = 0; index < value.length; index += 1)
+      _placedSceneObjectFromJson(value[index], '$key[$index]'),
+  ];
+}
+
+List<FirebaseConfirmedSceneObject> _confirmedSceneObjectList(
+  FirebaseJson json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return const [];
+  }
+  if (value is! List) {
+    throw FirebaseContractException('$key must be a list.');
+  }
+  return [
+    for (var index = 0; index < value.length; index += 1)
+      _confirmedSceneObjectFromJson(value[index], '$key[$index]'),
+  ];
+}
+
+List<FirebaseStructuralFixture> _structuralFixtureList(
+  FirebaseJson json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return const [];
+  }
+  if (value is! List) {
+    throw FirebaseContractException('$key must be a list.');
+  }
+  return [
+    for (var index = 0; index < value.length; index += 1)
+      _structuralFixtureFromJson(value[index], '$key[$index]'),
   ];
 }

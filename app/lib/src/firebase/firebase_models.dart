@@ -40,6 +40,18 @@ enum FirebaseCollectionContract {
     'projects/{project_id}/floor_plans/{floor_plan_id}',
     'FirebaseFloorPlan',
   ),
+  captureSession(
+    'projects/{project_id}/capture_sessions/{capture_session_id}',
+    'FirebaseCaptureSession',
+  ),
+  captureImage(
+    'projects/{project_id}/capture_sessions/{capture_session_id}/images/{capture_image_id}',
+    'FirebaseCaptureImage',
+  ),
+  sceneUnderstandingResult(
+    'projects/{project_id}/scene_understanding_results/{result_id}',
+    'FirebaseSceneUnderstandingResult',
+  ),
   savedLayout(
     'projects/{project_id}/layouts/{layout_id}',
     'FirebaseSavedLayout',
@@ -252,6 +264,47 @@ enum FirebaseBoundaryType {
   }
 }
 
+enum FirebaseCaptureMethod {
+  androidGuidedPhoto('android_guided_photo'),
+  androidArcoreDepth('android_arcore_depth'),
+  desktopUpload('desktop_upload');
+
+  const FirebaseCaptureMethod(this.wireValue);
+
+  final String wireValue;
+
+  static FirebaseCaptureMethod fromWireValue(Object? value) {
+    return _enumFromWireValue(
+      value,
+      FirebaseCaptureMethod.values,
+      (method) => method.wireValue,
+      'capture_method',
+    );
+  }
+}
+
+enum FirebaseCaptureImageRole {
+  overview('overview'),
+  frontWall('front_wall'),
+  rightWall('right_wall'),
+  backWall('back_wall'),
+  leftWall('left_wall'),
+  extra('extra');
+
+  const FirebaseCaptureImageRole(this.wireValue);
+
+  final String wireValue;
+
+  static FirebaseCaptureImageRole fromWireValue(Object? value) {
+    return _enumFromWireValue(
+      value,
+      FirebaseCaptureImageRole.values,
+      (role) => role.wireValue,
+      'capture_image_role',
+    );
+  }
+}
+
 enum FirebaseFurnitureCategory {
   bed('bed'),
   desk('desk'),
@@ -259,6 +312,8 @@ enum FirebaseFurnitureCategory {
   wardrobe('wardrobe'),
   sofa('sofa'),
   table('table'),
+  shelf('shelf'),
+  cabinet('cabinet'),
   custom('custom');
 
   const FirebaseFurnitureCategory(this.wireValue);
@@ -271,6 +326,72 @@ enum FirebaseFurnitureCategory {
       FirebaseFurnitureCategory.values,
       (category) => category.wireValue,
       'furniture_category',
+    );
+  }
+}
+
+enum FirebaseSceneObjectType {
+  furniture('furniture'),
+  structuralFixture('structural_fixture');
+
+  const FirebaseSceneObjectType(this.wireValue);
+
+  final String wireValue;
+
+  static FirebaseSceneObjectType fromWireValue(Object? value) {
+    return _enumFromWireValue(
+      value,
+      FirebaseSceneObjectType.values,
+      (type) => type.wireValue,
+      'scene_object_type',
+    );
+  }
+}
+
+enum FirebaseCandidateReviewState {
+  suggested('suggested'),
+  placed('placed'),
+  rejected('rejected'),
+  confirmed('confirmed'),
+  reviewRequired('review_required');
+
+  const FirebaseCandidateReviewState(this.wireValue);
+
+  final String wireValue;
+
+  String get displayLabel {
+    return this == FirebaseCandidateReviewState.reviewRequired
+        ? 'Needs review'
+        : wireValue;
+  }
+
+  static FirebaseCandidateReviewState fromWireValue(Object? value) {
+    return _enumFromWireValue(
+      value,
+      FirebaseCandidateReviewState.values,
+      (state) => state.wireValue,
+      'candidate_review_state',
+    );
+  }
+}
+
+enum FirebaseStructuralFixtureCategory {
+  door('door'),
+  window('window'),
+  builtIn('built_in'),
+  closet('closet'),
+  custom('custom');
+
+  const FirebaseStructuralFixtureCategory(this.wireValue);
+
+  final String wireValue;
+
+  static FirebaseStructuralFixtureCategory fromWireValue(Object? value) {
+    return _enumFromWireValue(
+      value,
+      FirebaseStructuralFixtureCategory.values,
+      (category) => category.wireValue,
+      'structural_fixture_category',
     );
   }
 }
@@ -351,6 +472,28 @@ class FirebasePoint3d {
   final double x;
   final double y;
   final double z;
+}
+
+class FirebaseBoundingBox {
+  const FirebaseBoundingBox({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+
+  void validate() {
+    if (width <= 0 || height <= 0) {
+      throw const FirebaseContractException(
+        'bounding_box width and height must be positive.',
+      );
+    }
+  }
 }
 
 class FirebaseArtifactRef {
@@ -814,6 +957,345 @@ class FirebaseFloorPlan {
         ownerUid: ownerUid,
         projectId: projectId,
         jobId: jobId,
+      );
+    }
+  }
+}
+
+class FirebaseCaptureSession {
+  const FirebaseCaptureSession({
+    required this.captureSessionId,
+    required this.projectId,
+    required this.ownerUid,
+    required this.roomDimensionsId,
+    required this.captureMethod,
+    required this.depthEnabled,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.schemaVersion,
+    this.startedAt,
+    this.completedAt,
+    this.notes,
+  });
+
+  final String captureSessionId;
+  final String projectId;
+  final String ownerUid;
+  final String roomDimensionsId;
+  final FirebaseCaptureMethod captureMethod;
+  final bool depthEnabled;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int schemaVersion;
+}
+
+class FirebaseCaptureImage {
+  const FirebaseCaptureImage({
+    required this.captureImageId,
+    required this.captureSessionId,
+    required this.projectId,
+    required this.ownerUid,
+    required this.sourceImageId,
+    required this.role,
+    required this.storagePath,
+    required this.contentType,
+    required this.widthPx,
+    required this.heightPx,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.schemaVersion,
+    this.captureOrder,
+    this.depthArtifactRefs = const [],
+    this.cameraPose,
+    this.guidanceState,
+  });
+
+  final String captureImageId;
+  final String captureSessionId;
+  final String projectId;
+  final String ownerUid;
+  final String sourceImageId;
+  final FirebaseCaptureImageRole role;
+  final String storagePath;
+  final FirebaseImageContentType contentType;
+  final int widthPx;
+  final int heightPx;
+  final int? captureOrder;
+  final List<FirebaseArtifactRef> depthArtifactRefs;
+  final FirebaseJson? cameraPose;
+  final String? guidanceState;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int schemaVersion;
+
+  void validate() {
+    if (widthPx <= 0 || heightPx <= 0) {
+      throw const FirebaseContractException(
+        'capture_images width_px and height_px must be positive.',
+      );
+    }
+    for (final artifactRef in depthArtifactRefs) {
+      artifactRef.validate(
+        ownerUid: ownerUid,
+        projectId: projectId,
+        jobId: captureSessionId,
+      );
+    }
+  }
+}
+
+class FirebaseCandidateSceneObject {
+  const FirebaseCandidateSceneObject({
+    required this.candidateId,
+    required this.objectType,
+    required this.category,
+    required this.sourceImageId,
+    required this.captureImageId,
+    required this.sourceImageRole,
+    required this.coordinateSpace,
+    required this.boundingBox,
+    required this.confidenceScore,
+    required this.reviewState,
+    this.label,
+    this.suggestedAssetId,
+    this.suggestedPositionM,
+    this.suggestedSizeM,
+    this.suggestedRotationDeg,
+    this.maskArtifactRef,
+    this.notes,
+  });
+
+  final String candidateId;
+  final FirebaseSceneObjectType objectType;
+  final String category;
+  final String? label;
+  final String sourceImageId;
+  final String captureImageId;
+  final FirebaseCaptureImageRole sourceImageRole;
+  final FirebaseCoordinateSpace coordinateSpace;
+  final FirebaseBoundingBox boundingBox;
+  final double confidenceScore;
+  final FirebaseCandidateReviewState reviewState;
+  final String? suggestedAssetId;
+  final FirebasePoint3d? suggestedPositionM;
+  final FirebasePoint3d? suggestedSizeM;
+  final double? suggestedRotationDeg;
+  final FirebaseArtifactRef? maskArtifactRef;
+  final String? notes;
+
+  void validate() {
+    FirebaseContractValidators.requireCoordinateSpace(
+      coordinateSpace,
+      FirebaseCoordinateSpace.imagePixels,
+      'candidate_scene_objects',
+    );
+    boundingBox.validate();
+    if (confidenceScore < 0 || confidenceScore > 1) {
+      throw const FirebaseContractException(
+        'candidate_scene_objects confidence_score must be between 0 and 1.',
+      );
+    }
+  }
+}
+
+class FirebasePlacedSceneObject {
+  const FirebasePlacedSceneObject({
+    required this.objectId,
+    required this.objectType,
+    required this.category,
+    required this.positionM,
+    required this.sizeM,
+    required this.rotationDeg,
+    this.candidateId,
+    this.assetId,
+    this.label,
+    this.confidenceScore,
+    this.locked,
+  });
+
+  final String objectId;
+  final String? candidateId;
+  final FirebaseSceneObjectType objectType;
+  final String category;
+  final String? assetId;
+  final String? label;
+  final FirebasePoint3d positionM;
+  final FirebasePoint3d sizeM;
+  final double rotationDeg;
+  final double? confidenceScore;
+  final bool? locked;
+
+  void validate() {
+    if (sizeM.x <= 0 || sizeM.y <= 0 || sizeM.z <= 0) {
+      throw const FirebaseContractException(
+        'placed_scene_objects size_m values must be positive.',
+      );
+    }
+    if (confidenceScore != null &&
+        (confidenceScore! < 0 || confidenceScore! > 1)) {
+      throw const FirebaseContractException(
+        'placed_scene_objects confidence_score must be between 0 and 1.',
+      );
+    }
+  }
+}
+
+class FirebaseConfirmedSceneObject {
+  const FirebaseConfirmedSceneObject({
+    required this.objectId,
+    required this.objectType,
+    required this.category,
+    required this.positionM,
+    required this.sizeM,
+    required this.rotationDeg,
+    required this.confirmedByUid,
+    required this.confirmedAt,
+    this.candidateId,
+    this.assetId,
+    this.label,
+    this.locked,
+  });
+
+  final String objectId;
+  final String? candidateId;
+  final FirebaseSceneObjectType objectType;
+  final String category;
+  final String? assetId;
+  final String? label;
+  final FirebasePoint3d positionM;
+  final FirebasePoint3d sizeM;
+  final double rotationDeg;
+  final String confirmedByUid;
+  final DateTime confirmedAt;
+  final bool? locked;
+
+  void validate() {
+    if (sizeM.x <= 0 || sizeM.y <= 0 || sizeM.z <= 0) {
+      throw const FirebaseContractException(
+        'confirmed_scene_objects size_m values must be positive.',
+      );
+    }
+  }
+}
+
+class FirebaseStructuralFixture {
+  const FirebaseStructuralFixture({
+    required this.fixtureId,
+    required this.category,
+    required this.wallId,
+    required this.positionM,
+    required this.sizeM,
+    required this.rotationDeg,
+    this.candidateId,
+    this.label,
+    this.confidenceScore,
+    this.locked,
+  });
+
+  final String fixtureId;
+  final String? candidateId;
+  final FirebaseStructuralFixtureCategory category;
+  final String wallId;
+  final String? label;
+  final FirebasePoint3d positionM;
+  final FirebasePoint3d sizeM;
+  final double rotationDeg;
+  final double? confidenceScore;
+  final bool? locked;
+
+  void validate() {
+    if (sizeM.x <= 0 || sizeM.y <= 0 || sizeM.z <= 0) {
+      throw const FirebaseContractException(
+        'structural_fixtures size_m values must be positive.',
+      );
+    }
+    if (confidenceScore != null &&
+        (confidenceScore! < 0 || confidenceScore! > 1)) {
+      throw const FirebaseContractException(
+        'structural_fixtures confidence_score must be between 0 and 1.',
+      );
+    }
+  }
+}
+
+class FirebaseSceneUnderstandingResult {
+  const FirebaseSceneUnderstandingResult({
+    required this.resultId,
+    required this.projectId,
+    required this.ownerUid,
+    required this.captureSessionId,
+    required this.providerType,
+    required this.algorithmId,
+    required this.qualityStatus,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.schemaVersion,
+    this.jobId,
+    this.modelId,
+    this.confidenceScore,
+    this.failureReasonCode,
+    this.failureReason,
+    this.coverage = const {},
+    this.candidateObjects = const [],
+    this.placedObjects = const [],
+    this.confirmedObjects = const [],
+    this.structuralFixtures = const [],
+    this.artifactRefs = const [],
+    this.processingStartedAt,
+    this.processingCompletedAt,
+  });
+
+  final String resultId;
+  final String projectId;
+  final String ownerUid;
+  final String captureSessionId;
+  final String? jobId;
+  final String providerType;
+  final String algorithmId;
+  final String? modelId;
+  final double? confidenceScore;
+  final FirebaseQualityStatus qualityStatus;
+  final String? failureReasonCode;
+  final String? failureReason;
+  final FirebaseJson coverage;
+  final List<FirebaseCandidateSceneObject> candidateObjects;
+  final List<FirebasePlacedSceneObject> placedObjects;
+  final List<FirebaseConfirmedSceneObject> confirmedObjects;
+  final List<FirebaseStructuralFixture> structuralFixtures;
+  final List<FirebaseArtifactRef> artifactRefs;
+  final DateTime? processingStartedAt;
+  final DateTime? processingCompletedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int schemaVersion;
+
+  void validate() {
+    if (confidenceScore != null &&
+        (confidenceScore! < 0 || confidenceScore! > 1)) {
+      throw const FirebaseContractException(
+        'scene_understanding_results confidence_score must be between 0 and 1.',
+      );
+    }
+    for (final candidate in candidateObjects) {
+      candidate.validate();
+    }
+    for (final object in placedObjects) {
+      object.validate();
+    }
+    for (final object in confirmedObjects) {
+      object.validate();
+    }
+    for (final fixture in structuralFixtures) {
+      fixture.validate();
+    }
+    for (final artifactRef in artifactRefs) {
+      artifactRef.validate(
+        ownerUid: ownerUid,
+        projectId: projectId,
+        jobId: captureSessionId,
       );
     }
   }

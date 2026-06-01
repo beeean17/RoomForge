@@ -113,6 +113,45 @@ class FirebaseEditorBridgeMapper {
     return payload;
   }
 
+  FirebaseJson sceneUnderstandingResultToBridgePayload(
+    FirebaseSceneUnderstandingResult result,
+  ) {
+    result.validate();
+    final payload = <String, Object?>{
+      'sceneUnderstandingResult': {
+        'resultId': result.resultId,
+        'projectId': result.projectId,
+        'captureSessionId': result.captureSessionId,
+        'jobId': result.jobId,
+        'providerType': result.providerType,
+        'algorithmId': result.algorithmId,
+        'modelId': result.modelId,
+        'confidenceScore': result.confidenceScore,
+        'qualityStatus': result.qualityStatus.wireValue,
+        'failureReasonCode': result.failureReasonCode,
+        'failureReason': result.failureReason,
+        'coverage': _camelCaseNested(result.coverage),
+        'candidateObjects': result.candidateObjects
+            .map(candidateSceneObjectToBridgePayload)
+            .toList(),
+        'placedObjects': result.placedObjects
+            .map(placedSceneObjectToBridgePayload)
+            .toList(),
+        'confirmedObjects': result.confirmedObjects
+            .map(confirmedSceneObjectToBridgePayload)
+            .toList(),
+        'structuralFixtures': result.structuralFixtures
+            .map(structuralFixtureToBridgePayload)
+            .toList(),
+      },
+    };
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      payload,
+      'scene_understanding_bridge',
+    );
+    return _withoutNulls(payload);
+  }
+
   FirebaseJson bridgeSceneToEditorScene(FirebaseJson bridgeScene) {
     FirebaseSerializerValidators.requireCamelCasePayload(
       bridgeScene,
@@ -185,6 +224,113 @@ class FirebaseEditorBridgeMapper {
     return _withoutNulls(payload);
   }
 
+  FirebaseJson candidateSceneObjectToBridgePayload(
+    FirebaseCandidateSceneObject object,
+  ) {
+    object.validate();
+    final payload = <String, Object?>{
+      'candidateId': object.candidateId,
+      'objectType': object.objectType.wireValue,
+      'category': object.category,
+      'label': object.label,
+      'sourceImageId': object.sourceImageId,
+      'captureImageId': object.captureImageId,
+      'sourceImageRole': object.sourceImageRole.wireValue,
+      'coordinateSpace': object.coordinateSpace.wireValue,
+      'boundingBox': {
+        'x': object.boundingBox.x,
+        'y': object.boundingBox.y,
+        'width': object.boundingBox.width,
+        'height': object.boundingBox.height,
+      },
+      'confidenceScore': object.confidenceScore,
+      'reviewState': object.reviewState.wireValue,
+      'reviewLabel': object.reviewState.displayLabel,
+      'suggestedAssetId': object.suggestedAssetId,
+      'suggestedPosition': _point3dToBridgePayload(object.suggestedPositionM),
+      'suggestedSize': _point3dToBridgePayload(object.suggestedSizeM),
+      'suggestedRotationDegrees': object.suggestedRotationDeg,
+      'notes': object.notes,
+    };
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      payload,
+      'candidate_scene_object_bridge',
+    );
+    return _withoutNulls(payload);
+  }
+
+  FirebaseJson placedSceneObjectToBridgePayload(
+    FirebasePlacedSceneObject object,
+  ) {
+    object.validate();
+    final payload = <String, Object?>{
+      'objectId': object.objectId,
+      'candidateId': object.candidateId,
+      'objectType': object.objectType.wireValue,
+      'category': object.category,
+      'assetId': object.assetId,
+      'label': object.label,
+      'position': _point3dToBridgePayload(object.positionM),
+      'size': _point3dToBridgePayload(object.sizeM),
+      'rotationDegrees': object.rotationDeg,
+      'confidenceScore': object.confidenceScore,
+      'locked': object.locked,
+    };
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      payload,
+      'placed_scene_object_bridge',
+    );
+    return _withoutNulls(payload);
+  }
+
+  FirebaseJson confirmedSceneObjectToBridgePayload(
+    FirebaseConfirmedSceneObject object,
+  ) {
+    object.validate();
+    final payload = <String, Object?>{
+      'objectId': object.objectId,
+      'candidateId': object.candidateId,
+      'objectType': object.objectType.wireValue,
+      'category': object.category,
+      'assetId': object.assetId,
+      'label': object.label,
+      'position': _point3dToBridgePayload(object.positionM),
+      'size': _point3dToBridgePayload(object.sizeM),
+      'rotationDegrees': object.rotationDeg,
+      'confirmedByUid': object.confirmedByUid,
+      'confirmedAt': object.confirmedAt.toUtc().toIso8601String(),
+      'locked': object.locked,
+    };
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      payload,
+      'confirmed_scene_object_bridge',
+    );
+    return _withoutNulls(payload);
+  }
+
+  FirebaseJson structuralFixtureToBridgePayload(
+    FirebaseStructuralFixture fixture,
+  ) {
+    fixture.validate();
+    final payload = <String, Object?>{
+      'fixtureId': fixture.fixtureId,
+      'candidateId': fixture.candidateId,
+      'category': fixture.category.wireValue,
+      'wallId': fixture.wallId,
+      'label': fixture.label,
+      'position': _point3dToBridgePayload(fixture.positionM),
+      'size': _point3dToBridgePayload(fixture.sizeM),
+      'rotationDegrees': fixture.rotationDeg,
+      'confidenceScore': fixture.confidenceScore,
+      'locked': fixture.locked,
+    };
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      payload,
+      'structural_fixture_bridge',
+    );
+    return _withoutNulls(payload);
+  }
+
   FirebaseJson point2dToBridgePayload(FirebasePoint2d point) {
     return {'x': point.x, 'y': point.y};
   }
@@ -224,8 +370,47 @@ class FirebaseEditorBridgeMapper {
       FirebaseFurnitureCategory.wardrobe => 'Wardrobe',
       FirebaseFurnitureCategory.sofa => 'Sofa',
       FirebaseFurnitureCategory.table => 'Table',
+      FirebaseFurnitureCategory.shelf => 'Shelf',
+      FirebaseFurnitureCategory.cabinet => 'Cabinet',
       FirebaseFurnitureCategory.custom => 'Custom',
     };
+  }
+
+  FirebaseJson? _point3dToBridgePayload(FirebasePoint3d? point) {
+    if (point == null) {
+      return null;
+    }
+    return {'x': point.x, 'y': point.y, 'z': point.z};
+  }
+
+  Object? _camelCaseNested(Object? value) {
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          _snakeToCamel(entry.key.toString()): _camelCaseNested(entry.value),
+      };
+    }
+    if (value is Iterable) {
+      return value.map(_camelCaseNested).toList();
+    }
+    return value;
+  }
+
+  String _snakeToCamel(String value) {
+    final parts = value.split('_');
+    if (parts.isEmpty) {
+      return value;
+    }
+    return [
+      parts.first,
+      ...parts
+          .skip(1)
+          .map(
+            (part) => part.isEmpty
+                ? part
+                : '${part[0].toUpperCase()}${part.substring(1)}',
+          ),
+    ].join();
   }
 
   FirebaseJson _snakeCasePayload(FirebaseJson payload) {

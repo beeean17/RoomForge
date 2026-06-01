@@ -5,8 +5,11 @@ RoomForge CV evaluation uses a small JSON manifest so detection, category, place
 ## Files
 
 - Checked-in example: `editor/fixtures/cv-evaluation/manifest.example.json`
+- Checked-in example result: `editor/fixtures/cv-evaluation/results.example.json`
 - Validator: `editor/scripts/validate-cv-evaluation-manifest.mjs`
+- Metrics harness: `editor/scripts/cv-metrics-harness.mjs`
 - Default validation: `cd editor && npm run test:cv-7.1`
+- Metrics validation: `cd editor && npm run test:cv-7.2`
 - Local private media directory: `editor/fixtures/cv-evaluation/local/`
 
 The `local/` directory and common room media extensions under `editor/fixtures/cv-evaluation/` are gitignored. Commit manifests and docs, not private room photos.
@@ -50,3 +53,16 @@ For each expected object:
 6. Check `git status` before committing. Private images should remain ignored.
 
 The manifest does not require image files to exist during validation. This keeps repository checks reproducible while allowing each developer to run private local photo sets.
+
+## Running Metrics
+
+Use an output JSON shaped like `results.example.json`, then run:
+
+```bash
+cd editor
+npm run metrics:cv -- --manifest fixtures/cv-evaluation/manifest.example.json --results fixtures/cv-evaluation/results.example.json --out ../_bmad-output/implementation-artifacts/cv-metrics-local.json
+```
+
+The metrics report includes detection recall, category accuracy, false positive count, placement error, size error, processing time, and expected user correction count when those fields exist. If a metric has no ground truth, the report marks it `unavailable` with a reason instead of failing.
+
+Reports are evaluation artifacts. Commit synthetic or shareable reports when useful, and keep private media local.

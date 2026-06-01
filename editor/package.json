@@ -28,6 +28,8 @@
     "test:cv-5.4": "node --experimental-strip-types scripts/verify-cv-5.4-coverage-guidance.mjs",
     "test:cv-6.3": "node --experimental-strip-types scripts/verify-cv-6.3-depth-placement.mjs",
     "test:cv-7.1": "node scripts/validate-cv-evaluation-manifest.mjs",
+    "test:cv-7.2": "node scripts/verify-cv-7.2-metrics-harness.mjs",
+    "metrics:cv": "node scripts/cv-metrics-harness.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

@@ -20,6 +20,12 @@ import {
   type CaptureSessionForSceneUnderstanding,
 } from './captureSession'
 import {
+  candidateCategoryOptions,
+  candidateTrayItems,
+  rejectCandidateInModel,
+  updateCandidateCategoryInModel,
+} from './candidateTray'
+import {
   addFurnitureToModel,
   editSelectedFurnitureInModel,
   furnitureDefaults,
@@ -140,6 +146,17 @@ app.innerHTML = `
         <button id="reset-candidate" type="button">${t('Reset', '초기화')}</button>
       </div>
     </section>
+    <section class="panel-section" aria-labelledby="candidate-tray-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">${t('Scene candidates', '장면 후보')}</p>
+          <h2 id="candidate-tray-title">${t('Candidate tray', '후보 트레이')}</h2>
+        </div>
+        <span class="state-pill" id="candidate-tray-count">${t('0 candidates', '후보 0개')}</span>
+      </div>
+      <p class="helper-text" id="candidate-tray-status" role="status" aria-live="polite">${t('No CV candidates loaded.', '불러온 CV 후보가 없습니다.')}</p>
+      <div class="candidate-tray-list" id="candidate-tray-list" role="list" aria-label="${t('CV candidates', 'CV 후보')}"></div>
+    </section>
     <section class="panel-section" aria-labelledby="scale-title">
       <div class="panel-section-header">
         <div>
@@ -239,6 +256,9 @@ const sceneStatus = document.querySelector<HTMLElement>('#scene-status')
 const cameraStatus = document.querySelector<HTMLElement>('#camera-status')
 const candidateCount = document.querySelector<HTMLElement>('#candidate-count')
 const candidateConfidence = document.querySelector<HTMLElement>('#candidate-confidence')
+const candidateTrayCount = document.querySelector<HTMLElement>('#candidate-tray-count')
+const candidateTrayStatus = document.querySelector<HTMLElement>('#candidate-tray-status')
+const candidateTrayList = document.querySelector<HTMLElement>('#candidate-tray-list')
 const knownWallLengthInput = document.querySelector<HTMLInputElement>('#known-wall-length')
 const scaleStatus = document.querySelector<HTMLElement>('#scale-status')
 const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
@@ -272,6 +292,9 @@ if (
   !cameraStatus ||
   !candidateCount ||
   !candidateConfidence ||
+  !candidateTrayCount ||
+  !candidateTrayStatus ||
+  !candidateTrayList ||
   !knownWallLengthInput ||
   !scaleStatus ||
   !furnitureCount ||
@@ -301,6 +324,9 @@ const sceneStatusElement = sceneStatus
 const cameraStatusElement = cameraStatus
 const candidateCountElement = candidateCount
 const candidateConfidenceElement = candidateConfidence
+const candidateTrayCountElement = candidateTrayCount
+const candidateTrayStatusElement = candidateTrayStatus
+const candidateTrayListElement = candidateTrayList
 const knownWallLengthInputElement = knownWallLengthInput
 const scaleStatusElement = scaleStatus
 const furnitureCountElement = furnitureCount
@@ -563,6 +589,25 @@ for (const button of furnitureEditButtons) {
     }
   })
 }
+
+candidateTrayListElement.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const button = target?.closest<HTMLButtonElement>('[data-candidate-action="reject"]')
+  const candidateId = button?.dataset.candidateId
+  if (candidateId) {
+    rejectCandidate(candidateId)
+  }
+})
+
+candidateTrayListElement.addEventListener('change', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const select = target?.closest<HTMLSelectElement>('select[data-candidate-category]')
+  const candidateId = select?.dataset.candidateId
+  const category = select?.value
+  if (candidateId && category) {
+    updateCandidateCategory(candidateId, category)
+  }
+})
 
 document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
@@ -1009,6 +1054,7 @@ function updateSpatialStatus(): void {
   sceneStatusElement.textContent = localizedSpatialSummary(spatialModel)
   inspectorStatusElement.textContent = inspectorSummary(spatialModel)
   measurementStatusElement.textContent = measurementSummary(spatialModel)
+  updateCandidateTray()
   const warning = placementWarning(spatialModel)
   placementStatusElement.hidden = warning === null
   placementStatusElement.textContent = warning ?? ''
@@ -1047,6 +1093,128 @@ function updateSpatialStatus(): void {
       button.textContent = locked ? t('Unlock object', '객체 잠금 해제') : t('Lock object', '객체 잠금')
     }
   }
+}
+
+function updateCandidateTray(): void {
+  const items = candidateTrayItems(spatialModel)
+  const activeCount = items.filter((item) => !item.rejected).length
+  candidateTrayCountElement.textContent = usesKorean
+    ? `후보 ${items.length}개`
+    : `${items.length} ${items.length === 1 ? 'candidate' : 'candidates'}`
+  if (items.length === 0) {
+    candidateTrayStatusElement.textContent = t(
+      'No CV candidates loaded.',
+      '불러온 CV 후보가 없습니다.',
+    )
+    candidateTrayListElement.innerHTML = ''
+    return
+  }
+  const needsReviewCount = items.filter((item) => item.lowConfidence && !item.rejected).length
+  candidateTrayStatusElement.textContent = t(
+    `${activeCount} active candidates; ${needsReviewCount} need review.`,
+    `활성 후보 ${activeCount}개; 검토 필요 ${needsReviewCount}개.`,
+  )
+  candidateTrayListElement.innerHTML = items.map(candidateTrayItemMarkup).join('')
+}
+
+function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[number]): string {
+  const stateClass = item.rejected || item.lowConfidence ? ' warning' : ''
+  const disabled = item.rejected ? ' disabled' : ''
+  const rejectText = item.rejected ? t('Rejected', '거절됨') : t('Reject', '거절')
+  return `
+    <article class="candidate-card${item.rejected ? ' is-rejected' : ''}" role="listitem" data-candidate-id="${escapeAttribute(
+      item.candidateId,
+    )}">
+      <div class="candidate-card-header">
+        <strong>${escapeHtml(item.label)}</strong>
+        <span class="state-pill${stateClass}">${escapeHtml(localizedCandidateState(item.reviewLabel))}</span>
+      </div>
+      <dl class="candidate-meta">
+        <div>
+          <dt>${t('Confidence', '신뢰도')}</dt>
+          <dd>${escapeHtml(item.confidenceLabel)}</dd>
+        </div>
+        <div>
+          <dt>${t('Source', '소스')}</dt>
+          <dd>${escapeHtml(item.sourceLabel)}</dd>
+        </div>
+      </dl>
+      <label class="candidate-category-field">
+        <span>${t('Category', '카테고리')}</span>
+        <select data-candidate-category data-candidate-id="${escapeAttribute(item.candidateId)}"${disabled}>
+          ${candidateCategoryOptions
+            .map(
+              (category) =>
+                `<option value="${escapeAttribute(category)}"${category === item.category ? ' selected' : ''}>${escapeHtml(
+                  category,
+                )}</option>`,
+            )
+            .join('')}
+        </select>
+      </label>
+      <button type="button" data-candidate-action="reject" data-candidate-id="${escapeAttribute(
+        item.candidateId,
+      )}"${disabled}>${rejectText}</button>
+    </article>
+  `
+}
+
+function rejectCandidate(candidateId: string): void {
+  const nextModel = rejectCandidateInModel(spatialModel, candidateId)
+  if (nextModel === spatialModel) {
+    return
+  }
+  spatialModel = nextModel
+  geometryStatusElement.textContent = t(
+    'Candidate rejected and removed from placed CV objects.',
+    '후보를 거절하고 배치된 CV 객체에서 제거했습니다.',
+  )
+  updateSpatialStatus()
+  emitSceneState('roomforge.candidate.updated')
+}
+
+function updateCandidateCategory(candidateId: string, category: string): void {
+  const nextModel = updateCandidateCategoryInModel({
+    model: spatialModel,
+    candidateId,
+    category,
+  })
+  if (nextModel === spatialModel) {
+    return
+  }
+  spatialModel = nextModel
+  geometryStatusElement.textContent = t(
+    `Candidate category changed to ${category}; suggested asset will be recalculated later.`,
+    `후보 카테고리를 ${category}(으)로 변경했습니다. 추천 에셋은 나중에 다시 계산됩니다.`,
+  )
+  updateSpatialStatus()
+  emitSceneState('roomforge.candidate.updated')
+}
+
+function localizedCandidateState(label: string): string {
+  if (!usesKorean) {
+    return label
+  }
+  if (label === 'Needs review') {
+    return '검토 필요'
+  }
+  if (label === 'Rejected') {
+    return '거절됨'
+  }
+  return '후보'
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value)
 }
 
 function localizedSpatialSummary(model: SpatialModel): string {

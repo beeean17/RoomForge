@@ -396,6 +396,48 @@ enum FirebaseStructuralFixtureCategory {
   }
 }
 
+enum FirebaseSceneUnderstandingProviderType {
+  browserCv('browser_cv'),
+  androidArcoreDepth('android_arcore_depth'),
+  cloudGpu('cloud_gpu'),
+  manual('manual');
+
+  const FirebaseSceneUnderstandingProviderType(this.wireValue);
+
+  final String wireValue;
+
+  static FirebaseSceneUnderstandingProviderType fromWireValue(Object? value) {
+    return _enumFromWireValue(
+      value,
+      FirebaseSceneUnderstandingProviderType.values,
+      (provider) => provider.wireValue,
+      'scene_understanding_provider_type',
+    );
+  }
+}
+
+enum FirebaseSceneUnderstandingFailureReason {
+  noSourceImages('no_source_images'),
+  unsupportedRuntime('unsupported_runtime'),
+  detectorFailed('detector_failed'),
+  lowConfidence('low_confidence'),
+  insufficientCoverage('insufficient_coverage'),
+  providerUnavailable('provider_unavailable');
+
+  const FirebaseSceneUnderstandingFailureReason(this.wireValue);
+
+  final String wireValue;
+
+  static FirebaseSceneUnderstandingFailureReason fromWireValue(Object? value) {
+    return _enumFromWireValue(
+      value,
+      FirebaseSceneUnderstandingFailureReason.values,
+      (reason) => reason.wireValue,
+      'scene_understanding_failure_reason',
+    );
+  }
+}
+
 T _enumFromWireValue<T>(
   Object? value,
   List<T> values,
@@ -456,6 +498,24 @@ class FirebaseContractValidators {
       );
     }
     return status;
+  }
+}
+
+class FirebaseSceneUnderstandingQualityResolver {
+  const FirebaseSceneUnderstandingQualityResolver._();
+
+  static FirebaseQualityStatus fromSignal({
+    required double? confidenceScore,
+    required bool hasCandidateObjects,
+    required FirebaseSceneUnderstandingFailureReason? failureReasonCode,
+  }) {
+    if (failureReasonCode != null || !hasCandidateObjects) {
+      return FirebaseQualityStatus.failed;
+    }
+    if (confidenceScore == null || confidenceScore < 0.68) {
+      return FirebaseQualityStatus.reviewRequired;
+    }
+    return FirebaseQualityStatus.success;
   }
 }
 
@@ -1253,12 +1313,12 @@ class FirebaseSceneUnderstandingResult {
   final String ownerUid;
   final String captureSessionId;
   final String? jobId;
-  final String providerType;
+  final FirebaseSceneUnderstandingProviderType providerType;
   final String algorithmId;
   final String? modelId;
   final double? confidenceScore;
   final FirebaseQualityStatus qualityStatus;
-  final String? failureReasonCode;
+  final FirebaseSceneUnderstandingFailureReason? failureReasonCode;
   final String? failureReason;
   final FirebaseJson coverage;
   final List<FirebaseCandidateSceneObject> candidateObjects;
@@ -1277,6 +1337,12 @@ class FirebaseSceneUnderstandingResult {
         (confidenceScore! < 0 || confidenceScore! > 1)) {
       throw const FirebaseContractException(
         'scene_understanding_results confidence_score must be between 0 and 1.',
+      );
+    }
+    if (qualityStatus == FirebaseQualityStatus.failed &&
+        failureReasonCode == null) {
+      throw const FirebaseContractException(
+        'scene_understanding_results must include failure_reason_code when quality_status is failed.',
       );
     }
     for (final candidate in candidateObjects) {

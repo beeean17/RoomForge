@@ -353,14 +353,20 @@ class FirebaseModelSerializers {
       ownerUid: _requiredString(json, 'owner_uid'),
       captureSessionId: _requiredString(json, 'capture_session_id'),
       jobId: _optionalString(json, 'job_id'),
-      providerType: _requiredString(json, 'provider_type'),
+      providerType: FirebaseSceneUnderstandingProviderType.fromWireValue(
+        json['provider_type'],
+      ),
       algorithmId: _requiredString(json, 'algorithm_id'),
       modelId: _optionalString(json, 'model_id'),
       confidenceScore: _optionalDouble(json, 'confidence_score'),
       qualityStatus: FirebaseQualityStatus.fromWireValue(
         json['quality_status'],
       ),
-      failureReasonCode: _optionalString(json, 'failure_reason_code'),
+      failureReasonCode: json['failure_reason_code'] == null
+          ? null
+          : FirebaseSceneUnderstandingFailureReason.fromWireValue(
+              json['failure_reason_code'],
+            ),
       failureReason: _optionalString(json, 'failure_reason'),
       coverage: json['coverage'] == null
           ? const {}
@@ -870,12 +876,12 @@ extension FirebaseSceneUnderstandingResultSerializers
       'owner_uid': ownerUid,
       'capture_session_id': captureSessionId,
       'job_id': jobId,
-      'provider_type': providerType,
+      'provider_type': providerType.wireValue,
       'algorithm_id': algorithmId,
       'model_id': modelId,
       'confidence_score': confidenceScore,
       'quality_status': qualityStatus.wireValue,
-      'failure_reason_code': failureReasonCode,
+      'failure_reason_code': failureReasonCode?.wireValue,
       'failure_reason': failureReason,
       'coverage': _nestedValue(coverage, resolved),
       'candidate_objects': candidateObjects

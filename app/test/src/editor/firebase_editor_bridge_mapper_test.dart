@@ -166,6 +166,7 @@ void main() {
 
       expect(result, containsPair('resultId', 'scene-result-1'));
       expect(result, containsPair('captureSessionId', 'session-1'));
+      expect(result, containsPair('providerType', 'browser_cv'));
       expect(coverage, containsPair('frontWall', 'complete'));
       expect(candidate, containsPair('candidateId', 'candidate-bed-1'));
       expect(candidate, containsPair('coordinateSpace', 'image_pixels'));
@@ -341,7 +342,7 @@ FirebaseSceneUnderstandingResult _sceneUnderstandingResult() {
     projectId: 'project-1',
     ownerUid: 'user-1',
     captureSessionId: 'session-1',
-    providerType: 'browser_cv',
+    providerType: FirebaseSceneUnderstandingProviderType.browserCv,
     algorithmId: 'mock-scene-understanding-v1',
     confidenceScore: 0.74,
     qualityStatus: FirebaseQualityStatus.reviewRequired,

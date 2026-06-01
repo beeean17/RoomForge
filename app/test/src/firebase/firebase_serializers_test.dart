@@ -184,6 +184,10 @@ void main() {
           FirebaseModelSerializers.sceneUnderstandingResultFromFirestore(
             payload,
           );
+      expect(
+        parsed.providerType,
+        FirebaseSceneUnderstandingProviderType.browserCv,
+      );
       expect(parsed.candidateObjects.single.candidateId, 'candidate-bed-1');
       expect(parsed.confirmedObjects.single.objectId, 'confirmed-bed-1');
       expect(
@@ -370,7 +374,7 @@ FirebaseSceneUnderstandingResult _sceneUnderstandingResult() {
     projectId: 'project-1',
     ownerUid: 'user-1',
     captureSessionId: 'session-1',
-    providerType: 'browser_cv',
+    providerType: FirebaseSceneUnderstandingProviderType.browserCv,
     algorithmId: 'mock-scene-understanding-v1',
     confidenceScore: 0.74,
     qualityStatus: FirebaseQualityStatus.reviewRequired,

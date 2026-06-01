@@ -157,6 +157,64 @@ void main() {
       expect(result.structuralFixtures.single.fixtureId, 'window-1');
       expect(result.validate, returnsNormally);
     });
+
+    test('resolve scene understanding quality without new job statuses', () {
+      expect(
+        FirebaseSceneUnderstandingProviderType.fromWireValue('browser_cv'),
+        FirebaseSceneUnderstandingProviderType.browserCv,
+      );
+      expect(
+        FirebaseSceneUnderstandingProviderType.fromWireValue('cloud_gpu'),
+        FirebaseSceneUnderstandingProviderType.cloudGpu,
+      );
+      expect(
+        FirebaseSceneUnderstandingFailureReason.fromWireValue('low_confidence'),
+        FirebaseSceneUnderstandingFailureReason.lowConfidence,
+      );
+
+      expect(
+        FirebaseSceneUnderstandingQualityResolver.fromSignal(
+          confidenceScore: 0.82,
+          hasCandidateObjects: true,
+          failureReasonCode: null,
+        ),
+        FirebaseQualityStatus.success,
+      );
+      expect(
+        FirebaseSceneUnderstandingQualityResolver.fromSignal(
+          confidenceScore: 0.42,
+          hasCandidateObjects: true,
+          failureReasonCode: null,
+        ),
+        FirebaseQualityStatus.reviewRequired,
+      );
+      expect(
+        FirebaseSceneUnderstandingQualityResolver.fromSignal(
+          confidenceScore: 0.82,
+          hasCandidateObjects: false,
+          failureReasonCode: null,
+        ),
+        FirebaseQualityStatus.failed,
+      );
+    });
+
+    test('require failure reason for failed scene understanding results', () {
+      expect(
+        () => _sceneUnderstandingResult(
+          qualityStatus: FirebaseQualityStatus.failed,
+        ).validate(),
+        throwsA(isA<FirebaseContractException>()),
+      );
+
+      expect(
+        () => _sceneUnderstandingResult(
+          qualityStatus: FirebaseQualityStatus.failed,
+          failureReasonCode:
+              FirebaseSceneUnderstandingFailureReason.detectorFailed,
+        ).validate(),
+        returnsNormally,
+      );
+    });
   });
 }
 
@@ -342,16 +400,20 @@ FirebaseCandidateSceneObject _candidate({
   );
 }
 
-FirebaseSceneUnderstandingResult _sceneUnderstandingResult() {
+FirebaseSceneUnderstandingResult _sceneUnderstandingResult({
+  FirebaseQualityStatus qualityStatus = FirebaseQualityStatus.reviewRequired,
+  FirebaseSceneUnderstandingFailureReason? failureReasonCode,
+}) {
   return FirebaseSceneUnderstandingResult(
     resultId: 'scene-result-1',
     projectId: 'project-1',
     ownerUid: 'user-1',
     captureSessionId: 'capture-session-1',
-    providerType: 'browser_cv',
+    providerType: FirebaseSceneUnderstandingProviderType.browserCv,
     algorithmId: 'mock-scene-understanding-v1',
     confidenceScore: 0.74,
-    qualityStatus: FirebaseQualityStatus.reviewRequired,
+    qualityStatus: qualityStatus,
+    failureReasonCode: failureReasonCode,
     coverage: const {'front_wall': 'complete'},
     candidateObjects: [_candidate()],
     placedObjects: const [

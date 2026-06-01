@@ -5,6 +5,7 @@ import {
   BRIDGE_VERSION,
   isBridgeMessage,
   postBridgeMessage,
+  type BridgePayload,
   type BridgeMessage,
 } from './bridge'
 import {
@@ -580,7 +581,7 @@ function handleBridgeCommand(message: BridgeMessage): void {
   }
 
   if (message.type === 'roomforge.sceneUnderstanding.extractCandidates') {
-    requestSceneUnderstanding(message.requestId)
+    requestSceneUnderstanding(message.requestId, message.payload)
     respondToFlutter(message)
     return
   }
@@ -963,13 +964,14 @@ function ensureSceneUnderstandingWorker(): Worker {
   return sceneUnderstandingWorker
 }
 
-function requestSceneUnderstanding(requestId?: string): void {
+function requestSceneUnderstanding(requestId?: string, payload: BridgePayload = {}): void {
   ensureSceneUnderstandingWorker().postMessage({
     type: 'roomforge.sceneUnderstanding.extractCandidates',
     version: BRIDGE_VERSION,
     requestId: requestId ?? `scene-understanding-${Date.now()}`,
     payload: {
-      captureSession: captureSessionForSceneUnderstanding,
+      ...payload,
+      captureSession: captureSessionForSceneUnderstanding ?? payload.captureSession,
       spatialModel: spatialModelPayload(),
     },
   } satisfies BridgeMessage)

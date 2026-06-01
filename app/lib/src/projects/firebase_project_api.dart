@@ -263,6 +263,193 @@ class FirebaseProjectApi extends ProjectApi {
   }
 
   @override
+  Future<CaptureSession> createCaptureSession({
+    required String projectId,
+    bool depthEnabled = false,
+    String? notes,
+  }) async {
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
+    );
+    final dimensions = await _roomDimensionsRepository.getCurrent(
+      ownerUid: _session.uid,
+      projectId: project.projectId,
+    );
+    if (dimensions == null) {
+      throw const ProjectApiException(
+        'Room dimensions are required before starting guided capture.',
+        code: 'missing_room_dimensions',
+      );
+    }
+
+    final now = DateTime.now().toUtc();
+    final session = FirebaseCaptureSession(
+      captureSessionId: _sourceImageRepository.newCaptureSessionId(
+        projectId: project.projectId,
+      ),
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      roomDimensionsId: 'current',
+      captureMethod: depthEnabled
+          ? FirebaseCaptureMethod.androidArcoreDepth
+          : FirebaseCaptureMethod.androidGuidedPhoto,
+      depthEnabled: depthEnabled,
+      startedAt: now,
+      notes: notes,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+    final created = await _sourceImageRepository.createCaptureSession(session);
+    return _captureSessionFromFirebase(created);
+  }
+
+  @override
+  Future<CaptureImage> uploadCaptureImage({
+    required String projectId,
+    required String captureSessionId,
+    required String role,
+    required String filename,
+    required String contentType,
+    required Uint8List bytes,
+    int? widthPx,
+    int? heightPx,
+    int? captureOrder,
+    void Function(double progress)? onProgress,
+  }) async {
+    if (!FirebaseSourceImageUpload.isAllowedContentType(contentType)) {
+      throw const ProjectApiException(
+        'Unsupported image type. Use JPEG, PNG, or WebP.',
+        code: 'invalid_content_type',
+      );
+    }
+    if (bytes.length > FirebaseSourceImageUpload.maxBytes) {
+      throw const ProjectApiException(
+        'Room photo must be 10 MB or smaller.',
+        code: 'file_too_large',
+      );
+    }
+    if (widthPx == null || widthPx <= 0 || heightPx == null || heightPx <= 0) {
+      throw const ProjectApiException(
+        'Image dimensions are required before capture image metadata can be saved.',
+        code: 'missing_image_dimensions',
+      );
+    }
+
+    late final FirebaseCaptureImageRole roleValue;
+    try {
+      roleValue = FirebaseCaptureImageRole.fromWireValue(role);
+    } on FirebaseContractException {
+      throw const ProjectApiException(
+        'Unsupported capture image role.',
+        code: 'invalid_capture_role',
+      );
+    }
+
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
+    );
+    final sourceImageId = _sourceImageRepository.newSourceImageId(
+      projectId: project.projectId,
+    );
+    final captureImageId = _sourceImageRepository.newCaptureImageId(
+      projectId: project.projectId,
+      captureSessionId: captureSessionId,
+    );
+    final storedFilename = FirebaseSourceImageUpload.sanitizeFilename(filename);
+    final storagePath = FirebaseSourceImageUpload.captureImageStoragePath(
+      ownerUid: _session.uid,
+      projectId: project.projectId,
+      captureSessionId: captureSessionId,
+      captureImageId: captureImageId,
+      storedFilename: storedFilename,
+    );
+    final sha256Hex = FirebaseSourceImageUpload.sha256Hex(bytes);
+
+    try {
+      onProgress?.call(0);
+      await _sourceImageUploader.uploadBytes(
+        storagePath: storagePath,
+        bytes: bytes,
+        contentType: contentType,
+        metadata: {
+          'owner_uid': _session.uid,
+          'project_id': project.projectId,
+          'capture_session_id': captureSessionId,
+          'capture_image_id': captureImageId,
+          'source_image_id': sourceImageId,
+          'role': roleValue.wireValue,
+          'sha256_hex': sha256Hex,
+          'uploaded_by_uid': _session.uid,
+        },
+        onProgress: onProgress,
+      );
+    } on FirebaseException catch (error) {
+      throw _uploadException(error);
+    } catch (error) {
+      throw ProjectApiException(
+        'Capture image upload failed: $error',
+        code: 'upload_failed',
+      );
+    }
+
+    final now = DateTime.now().toUtc();
+    final sourceImage = FirebaseSourceImage(
+      sourceImageId: sourceImageId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      storagePath: storagePath,
+      originalFilename: filename,
+      storedFilename: storedFilename,
+      contentType: FirebaseImageContentType.fromWireValue(contentType),
+      byteSize: bytes.length,
+      sha256Hex: sha256Hex,
+      widthPx: widthPx,
+      heightPx: heightPx,
+      captureSource: 'guided_capture',
+      captureSessionId: captureSessionId,
+      captureImageId: captureImageId,
+      captureImageRole: roleValue,
+      retentionStatus: FirebaseRetentionStatus.active,
+      uploadedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+    final captureImage = FirebaseCaptureImage(
+      captureImageId: captureImageId,
+      captureSessionId: captureSessionId,
+      projectId: project.projectId,
+      ownerUid: _session.uid,
+      sourceImageId: sourceImageId,
+      role: roleValue,
+      storagePath: storagePath,
+      contentType: FirebaseImageContentType.fromWireValue(contentType),
+      widthPx: widthPx,
+      heightPx: heightPx,
+      captureOrder: captureOrder ?? _captureOrderForRole(roleValue),
+      guidanceState: 'uploaded',
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+
+    try {
+      await _sourceImageRepository.createMetadataAfterUpload(sourceImage);
+      final savedCaptureImage = await _sourceImageRepository
+          .createCaptureImageMetadataAfterUpload(captureImage);
+      return _captureImageFromFirebase(savedCaptureImage);
+    } catch (error) {
+      throw ProjectApiException(
+        'Upload succeeded, but guided capture image metadata could not be saved. Retry this role or replace the photo.',
+        code: 'metadata_save_failed',
+      );
+    }
+  }
+
+  @override
   Future<ReconstructionJob> createReconstructionJob({
     required String projectId,
     required String sourceImageId,
@@ -1205,9 +1392,47 @@ class FirebaseProjectApi extends ProjectApi {
       byteSize: sourceImage.byteSize,
       widthPx: sourceImage.widthPx,
       heightPx: sourceImage.heightPx,
+      captureSessionId: sourceImage.captureSessionId,
+      captureImageId: sourceImage.captureImageId,
+      captureImageRole: sourceImage.captureImageRole?.wireValue,
       sha256Hex: sourceImage.sha256Hex,
       retentionStatus: sourceImage.retentionStatus.wireValue,
       uploadedAt: sourceImage.uploadedAt,
+    );
+  }
+
+  CaptureSession _captureSessionFromFirebase(FirebaseCaptureSession session) {
+    return CaptureSession(
+      id: session.captureSessionId,
+      projectId: session.projectId,
+      userId: session.ownerUid,
+      roomDimensionsId: session.roomDimensionsId,
+      captureMethod: session.captureMethod.wireValue,
+      depthEnabled: session.depthEnabled,
+      startedAt: session.startedAt,
+      completedAt: session.completedAt,
+      notes: session.notes,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    );
+  }
+
+  CaptureImage _captureImageFromFirebase(FirebaseCaptureImage captureImage) {
+    return CaptureImage(
+      id: captureImage.captureImageId,
+      captureSessionId: captureImage.captureSessionId,
+      projectId: captureImage.projectId,
+      userId: captureImage.ownerUid,
+      sourceImageId: captureImage.sourceImageId,
+      role: captureImage.role.wireValue,
+      storagePath: captureImage.storagePath,
+      contentType: captureImage.contentType.wireValue,
+      widthPx: captureImage.widthPx,
+      heightPx: captureImage.heightPx,
+      captureOrder: captureImage.captureOrder,
+      guidanceState: captureImage.guidanceState,
+      createdAt: captureImage.createdAt,
+      updatedAt: captureImage.updatedAt,
     );
   }
 
@@ -1340,6 +1565,17 @@ class FirebaseProjectApi extends ProjectApi {
     } on FirebaseContractException {
       return FirebaseFurnitureCategory.custom;
     }
+  }
+
+  int _captureOrderForRole(FirebaseCaptureImageRole role) {
+    return switch (role) {
+      FirebaseCaptureImageRole.overview => 0,
+      FirebaseCaptureImageRole.frontWall => 1,
+      FirebaseCaptureImageRole.rightWall => 2,
+      FirebaseCaptureImageRole.backWall => 3,
+      FirebaseCaptureImageRole.leftWall => 4,
+      FirebaseCaptureImageRole.extra => 5,
+    };
   }
 
   Map<String, Object?> _requiredRecordValue(Object? value, String field) {

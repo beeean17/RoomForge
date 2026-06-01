@@ -28,6 +28,18 @@ service firebase.storage {
         && request.resource.size <= 10 * 1024 * 1024;
     }
 
+    function isAllowedCaptureImageRole() {
+      return request.resource != null
+        && request.resource.metadata.role in [
+          'overview',
+          'front_wall',
+          'right_wall',
+          'back_wall',
+          'left_wall',
+          'extra'
+        ];
+    }
+
     function isAllowedArtifactContentType() {
       return request.resource != null
         && request.resource.contentType in [
@@ -64,6 +76,10 @@ service firebase.storage {
       return /databases/(default)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId);
     }
 
+    function captureSessionPath(projectId, captureSessionId) {
+      return /databases/(default)/documents/projects/$(projectId)/capture_sessions/$(captureSessionId);
+    }
+
     function ownsProject(projectId) {
       return firestore.exists(ownedProjectPath(projectId))
         && firestore.get(ownedProjectPath(projectId)).data.owner_uid == request.auth.uid;
@@ -89,6 +105,11 @@ service firebase.storage {
         && request.resource.metadata.uploaded_by_uid == request.auth.uid;
     }
 
+    function validCaptureSessionStorageLink(uid, projectId, captureSessionId) {
+      return firestore.exists(captureSessionPath(projectId, captureSessionId))
+        && firestore.get(captureSessionPath(projectId, captureSessionId)).data.owner_uid == uid;
+    }
+
     match /users/{uid}/projects/{projectId}/source-images/{sourceImageId}/{filename} {
       allow read: if isPathOwner(uid) && ownsProject(projectId);
       allow write: if isNewObject()
@@ -99,6 +120,23 @@ service firebase.storage {
         && request.resource.metadata.owner_uid == uid
         && request.resource.metadata.project_id == projectId
         && request.resource.metadata.source_image_id == sourceImageId
+        && request.resource.metadata.uploaded_by_uid == request.auth.uid;
+    }
+
+    match /users/{uid}/projects/{projectId}/capture-sessions/{captureSessionId}/images/{captureImageId}/{filename} {
+      allow read: if isPathOwner(uid) && ownsProject(projectId);
+      allow write: if isNewObject()
+        && isPathOwner(uid)
+        && ownsProject(projectId)
+        && validCaptureSessionStorageLink(uid, projectId, captureSessionId)
+        && isAllowedSourceImageContentType()
+        && isAllowedSourceImageSize()
+        && isAllowedCaptureImageRole()
+        && request.resource.metadata.owner_uid == uid
+        && request.resource.metadata.project_id == projectId
+        && request.resource.metadata.capture_session_id == captureSessionId
+        && request.resource.metadata.capture_image_id == captureImageId
+        && request.resource.metadata.source_image_id is string
         && request.resource.metadata.uploaded_by_uid == request.auth.uid;
     }
 

@@ -36,6 +36,16 @@ class FirebaseSourceImageUpload {
   }) {
     return 'users/$ownerUid/projects/$projectId/source-images/$sourceImageId/$storedFilename';
   }
+
+  static String captureImageStoragePath({
+    required String ownerUid,
+    required String projectId,
+    required String captureSessionId,
+    required String captureImageId,
+    required String storedFilename,
+  }) {
+    return 'users/$ownerUid/projects/$projectId/capture-sessions/$captureSessionId/images/$captureImageId/$storedFilename';
+  }
 }
 
 abstract class FirebaseSourceImageUploader {

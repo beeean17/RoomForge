@@ -109,6 +109,11 @@ class FirebaseModelSerializers {
       widthPx: _requiredInt(json, 'width_px'),
       heightPx: _requiredInt(json, 'height_px'),
       captureSource: _optionalString(json, 'capture_source'),
+      captureSessionId: _optionalString(json, 'capture_session_id'),
+      captureImageId: _optionalString(json, 'capture_image_id'),
+      captureImageRole: json['capture_image_role'] == null
+          ? null
+          : FirebaseCaptureImageRole.fromWireValue(json['capture_image_role']),
       retentionStatus: FirebaseRetentionStatus.fromWireValue(
         json['retention_status'],
       ),
@@ -528,6 +533,9 @@ extension FirebaseSourceImageSerializers on FirebaseSourceImage {
       'width_px': widthPx,
       'height_px': heightPx,
       'capture_source': captureSource,
+      'capture_session_id': captureSessionId,
+      'capture_image_id': captureImageId,
+      'capture_image_role': captureImageRole?.wireValue,
       'retention_status': retentionStatus.wireValue,
       'uploaded_at': resolved.timestampEncoder(uploadedAt),
       'created_at': resolved.timestampEncoder(createdAt),

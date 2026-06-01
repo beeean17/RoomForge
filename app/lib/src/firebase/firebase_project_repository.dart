@@ -195,9 +195,40 @@ class FirebaseFirestoreSourceImageRepository
         .collection('source_images');
   }
 
+  CollectionReference<Map<String, dynamic>> _captureSessionsCollection(
+    String projectId,
+  ) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('capture_sessions');
+  }
+
+  CollectionReference<Map<String, dynamic>> _captureImagesCollection(
+    String projectId,
+    String captureSessionId,
+  ) {
+    return _captureSessionsCollection(
+      projectId,
+    ).doc(captureSessionId).collection('images');
+  }
+
   @override
   String newSourceImageId({required String projectId}) {
     return _sourceImagesCollection(projectId).doc().id;
+  }
+
+  @override
+  String newCaptureSessionId({required String projectId}) {
+    return _captureSessionsCollection(projectId).doc().id;
+  }
+
+  @override
+  String newCaptureImageId({
+    required String projectId,
+    required String captureSessionId,
+  }) {
+    return _captureImagesCollection(projectId, captureSessionId).doc().id;
   }
 
   @override
@@ -209,6 +240,29 @@ class FirebaseFirestoreSourceImageRepository
     ).doc(sourceImage.sourceImageId);
     await doc.set(sourceImage.toFirestoreJson());
     return sourceImage;
+  }
+
+  @override
+  Future<FirebaseCaptureSession> createCaptureSession(
+    FirebaseCaptureSession session,
+  ) async {
+    final doc = _captureSessionsCollection(
+      session.projectId,
+    ).doc(session.captureSessionId);
+    await doc.set(session.toFirestoreJson());
+    return session;
+  }
+
+  @override
+  Future<FirebaseCaptureImage> createCaptureImageMetadataAfterUpload(
+    FirebaseCaptureImage captureImage,
+  ) async {
+    final doc = _captureImagesCollection(
+      captureImage.projectId,
+      captureImage.captureSessionId,
+    ).doc(captureImage.captureImageId);
+    await doc.set(captureImage.toFirestoreJson());
+    return captureImage;
   }
 
   @override
@@ -249,6 +303,30 @@ class FirebaseFirestoreSourceImageRepository
           )
           .toList();
       images.sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
+      return images;
+    });
+  }
+
+  @override
+  Stream<List<FirebaseCaptureImage>> watchCaptureImages({
+    required String ownerUid,
+    required String projectId,
+    required String captureSessionId,
+  }) {
+    return _captureImagesCollection(
+      projectId,
+      captureSessionId,
+    ).where('owner_uid', isEqualTo: ownerUid).snapshots().map((snapshot) {
+      final images = snapshot.docs
+          .map(
+            (doc) => FirebaseModelSerializers.captureImageFromFirestore(
+              _firestoreJson(doc.data()),
+            ),
+          )
+          .toList();
+      images.sort(
+        (a, b) => (a.captureOrder ?? 0).compareTo(b.captureOrder ?? 0),
+      );
       return images;
     });
   }
@@ -686,10 +764,37 @@ class DisabledFirebaseSourceImageRepository
   }
 
   @override
+  String newCaptureSessionId({required String projectId}) {
+    throw UnsupportedError('Firebase capture session access is unavailable.');
+  }
+
+  @override
+  String newCaptureImageId({
+    required String projectId,
+    required String captureSessionId,
+  }) {
+    throw UnsupportedError('Firebase capture image access is unavailable.');
+  }
+
+  @override
   Future<FirebaseSourceImage> createMetadataAfterUpload(
     FirebaseSourceImage sourceImage,
   ) {
     throw UnsupportedError('Firebase source image access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseCaptureSession> createCaptureSession(
+    FirebaseCaptureSession session,
+  ) {
+    throw UnsupportedError('Firebase capture session access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseCaptureImage> createCaptureImageMetadataAfterUpload(
+    FirebaseCaptureImage captureImage,
+  ) {
+    throw UnsupportedError('Firebase capture image access is unavailable.');
   }
 
   @override
@@ -708,6 +813,17 @@ class DisabledFirebaseSourceImageRepository
   }) {
     return Stream.error(
       UnsupportedError('Firebase source image access is unavailable.'),
+    );
+  }
+
+  @override
+  Stream<List<FirebaseCaptureImage>> watchCaptureImages({
+    required String ownerUid,
+    required String projectId,
+    required String captureSessionId,
+  }) {
+    return Stream.error(
+      UnsupportedError('Firebase capture image access is unavailable.'),
     );
   }
 }

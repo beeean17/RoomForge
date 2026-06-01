@@ -123,8 +123,50 @@ service cloud.firestore {
         'width_px',
         'height_px',
         'capture_source',
+        'capture_session_id',
+        'capture_image_id',
+        'capture_image_role',
         'retention_status',
         'uploaded_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function captureSessionKeys() {
+      return [
+        'capture_session_id',
+        'project_id',
+        'owner_uid',
+        'room_dimensions_id',
+        'capture_method',
+        'depth_enabled',
+        'started_at',
+        'completed_at',
+        'notes',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function captureImageKeys() {
+      return [
+        'capture_image_id',
+        'capture_session_id',
+        'project_id',
+        'owner_uid',
+        'source_image_id',
+        'role',
+        'storage_path',
+        'content_type',
+        'width_px',
+        'height_px',
+        'capture_order',
+        'depth_artifact_refs',
+        'camera_pose',
+        'guidance_state',
         'created_at',
         'updated_at',
         'schema_version'
@@ -370,6 +412,25 @@ service cloud.firestore {
       return contentType in ['image/jpeg', 'image/png', 'image/webp'];
     }
 
+    function isAllowedCaptureMethod(method) {
+      return method in [
+        'android_guided_photo',
+        'android_arcore_depth',
+        'desktop_upload'
+      ];
+    }
+
+    function isAllowedCaptureImageRole(role) {
+      return role in [
+        'overview',
+        'front_wall',
+        'right_wall',
+        'back_wall',
+        'left_wall',
+        'extra'
+      ];
+    }
+
     function isAllowedJobStatus(status) {
       return status in [
         'created',
@@ -445,7 +506,7 @@ service cloud.firestore {
         && request.resource.data.source_image_id == sourceImageId
         && request.resource.data.project_id == projectId
         && request.resource.data.owner_uid == request.auth.uid
-        && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/source-images/' + sourceImageId + '/' + request.resource.data.stored_filename
+        && validSourceImageStoragePath(projectId, sourceImageId)
         && isAllowedSourceImageContentType(request.resource.data.content_type)
         && request.resource.data.byte_size <= 10 * 1024 * 1024
         && request.resource.data.byte_size > 0
@@ -471,6 +532,29 @@ service cloud.firestore {
           'updated_at',
           'schema_version'
         ]);
+    }
+
+    function validSourceImageStoragePath(projectId, sourceImageId) {
+      return (
+          (
+            !request.resource.data.keys().hasAny(['capture_source'])
+            || request.resource.data.capture_source == null
+            || request.resource.data.capture_source == 'file_upload'
+          )
+          && !request.resource.data.keys().hasAny([
+            'capture_session_id',
+            'capture_image_id',
+            'capture_image_role'
+          ])
+          && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/source-images/' + sourceImageId + '/' + request.resource.data.stored_filename
+        )
+        || (
+          request.resource.data.capture_source == 'guided_capture'
+          && request.resource.data.capture_session_id is string
+          && request.resource.data.capture_image_id is string
+          && isAllowedCaptureImageRole(request.resource.data.capture_image_role)
+          && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/capture-sessions/' + request.resource.data.capture_session_id + '/images/' + request.resource.data.capture_image_id + '/' + request.resource.data.stored_filename
+        );
     }
 
     function validUserProfileCreate(uid) {
@@ -552,12 +636,81 @@ service cloud.firestore {
       return /databases/$(database)/documents/projects/$(projectId)/source_images/$(sourceImageId);
     }
 
+    function captureSessionDocPath(projectId, captureSessionId) {
+      return /databases/$(database)/documents/projects/$(projectId)/capture_sessions/$(captureSessionId);
+    }
+
     function roomDimensionsDocPath(projectId) {
       return /databases/$(database)/documents/projects/$(projectId)/room_dimensions/current;
     }
 
     function reconstructionJobDocPath(projectId, jobId) {
       return /databases/$(database)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId);
+    }
+
+    function validCaptureSessionCreate(projectId, captureSessionId) {
+      return ownsProject(projectId)
+        && request.resource.data.capture_session_id == captureSessionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.room_dimensions_id == 'current'
+        && exists(roomDimensionsDocPath(projectId))
+        && get(roomDimensionsDocPath(projectId)).data.owner_uid == request.auth.uid
+        && isAllowedCaptureMethod(request.resource.data.capture_method)
+        && request.resource.data.depth_enabled is bool
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(captureSessionKeys())
+        && request.resource.data.keys().hasAll([
+          'capture_session_id',
+          'project_id',
+          'owner_uid',
+          'room_dimensions_id',
+          'capture_method',
+          'depth_enabled',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validCaptureImageCreate(projectId, captureSessionId, captureImageId) {
+      let sourcePath = sourceImageDocPath(projectId, request.resource.data.source_image_id);
+      let source = get(sourcePath).data;
+      return ownsProject(projectId)
+        && exists(captureSessionDocPath(projectId, captureSessionId))
+        && get(captureSessionDocPath(projectId, captureSessionId)).data.owner_uid == request.auth.uid
+        && exists(sourcePath)
+        && request.resource.data.capture_image_id == captureImageId
+        && request.resource.data.capture_session_id == captureSessionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && isAllowedCaptureImageRole(request.resource.data.role)
+        && isAllowedSourceImageContentType(request.resource.data.content_type)
+        && request.resource.data.width_px > 0
+        && request.resource.data.height_px > 0
+        && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/capture-sessions/' + captureSessionId + '/images/' + captureImageId + '/' + source.stored_filename
+        && source.owner_uid == request.auth.uid
+        && source.capture_session_id == captureSessionId
+        && source.capture_image_id == captureImageId
+        && source.capture_image_role == request.resource.data.role
+        && source.storage_path == request.resource.data.storage_path
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(captureImageKeys())
+        && request.resource.data.keys().hasAll([
+          'capture_image_id',
+          'capture_session_id',
+          'project_id',
+          'owner_uid',
+          'source_image_id',
+          'role',
+          'storage_path',
+          'content_type',
+          'width_px',
+          'height_px',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
     }
 
     function jobTransitionDocPath(projectId, jobId, transitionId) {
@@ -1305,6 +1458,18 @@ service cloud.firestore {
     match /projects/{projectId}/source_images/{sourceImageId} {
       allow get, list: if ownsProject(projectId) || isAdmin();
       allow create: if validSourceImageCreate(projectId, sourceImageId);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/capture_sessions/{captureSessionId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validCaptureSessionCreate(projectId, captureSessionId);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/capture_sessions/{captureSessionId}/images/{captureImageId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validCaptureImageCreate(projectId, captureSessionId, captureImageId);
       allow update, delete: if false;
     }
 

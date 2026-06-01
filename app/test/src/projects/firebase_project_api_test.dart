@@ -135,6 +135,209 @@ void main() {
   );
 
   test(
+    'FirebaseProjectApi creates guided capture sessions after dimensions exist',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final dimensions = _FakeRoomDimensionsRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+      final session = await api.createCaptureSession(projectId: 'project-1');
+
+      expect(session.id, 'capture-session-1');
+      expect(session.captureMethod, 'android_guided_photo');
+      expect(session.roomDimensionsId, 'current');
+      expect(session.depthEnabled, isFalse);
+      expect(sourceImages.captureSessions.single.captureSessionId, session.id);
+    },
+  );
+
+  test(
+    'FirebaseProjectApi uploads guided capture images with role metadata',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final dimensions = _FakeRoomDimensionsRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final uploader = _FakeSourceImageUploader();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: uploader,
+      );
+
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+      );
+      final session = await api.createCaptureSession(projectId: 'project-1');
+      final image = await api.uploadCaptureImage(
+        projectId: 'project-1',
+        captureSessionId: session.id,
+        role: 'overview',
+        filename: 'overview photo.png',
+        contentType: 'image/png',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+        widthPx: 1600,
+        heightPx: 900,
+      );
+
+      expect(image.id, 'capture-image-1');
+      expect(image.role, 'overview');
+      expect(image.captureSessionId, session.id);
+      expect(image.sourceImageId, 'source-1');
+      expect(
+        uploader.uploadedPath,
+        'users/user-1/projects/project-1/capture-sessions/${session.id}/images/capture-image-1/overview_photo.png',
+      );
+      expect(
+        uploader.uploadedMetadata,
+        containsPair('capture_session_id', session.id),
+      );
+      expect(
+        uploader.uploadedMetadata,
+        containsPair('capture_image_id', 'capture-image-1'),
+      );
+      expect(uploader.uploadedMetadata, containsPair('role', 'overview'));
+      expect(sourceImages.saved?.captureSessionId, session.id);
+      expect(sourceImages.saved?.captureImageId, 'capture-image-1');
+      expect(sourceImages.saved?.captureImageRole?.wireValue, 'overview');
+      expect(
+        sourceImages.captureImages.single.role,
+        FirebaseCaptureImageRole.overview,
+      );
+    },
+  );
+
+  test(
+    'FirebaseProjectApi keeps prior guided role metadata when another role upload fails',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final sourceImages = _FakeSourceImageRepository();
+      final uploader = _FakeSourceImageUploader();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: _FakeRoomDimensionsRepository()
+          ..dimensions = _roomDimensions(),
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: uploader,
+      );
+
+      final session = await api.createCaptureSession(projectId: 'project-1');
+      await api.uploadCaptureImage(
+        projectId: 'project-1',
+        captureSessionId: session.id,
+        role: 'overview',
+        filename: 'overview.png',
+        contentType: 'image/png',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+        widthPx: 1600,
+        heightPx: 900,
+      );
+
+      uploader.shouldFail = true;
+      await expectLater(
+        api.uploadCaptureImage(
+          projectId: 'project-1',
+          captureSessionId: session.id,
+          role: 'front_wall',
+          filename: 'front.png',
+          contentType: 'image/png',
+          bytes: Uint8List.fromList([5, 6, 7, 8]),
+          widthPx: 1600,
+          heightPx: 900,
+        ),
+        throwsA(
+          isA<ProjectApiException>().having(
+            (error) => error.code,
+            'code',
+            'upload_failed',
+          ),
+        ),
+      );
+
+      expect(sourceImages.captureImages, hasLength(1));
+      expect(
+        sourceImages.captureImages.single.role,
+        FirebaseCaptureImageRole.overview,
+      );
+    },
+  );
+
+  test('FirebaseProjectApi rejects unsupported guided capture roles', () async {
+    final projects = _FakeProjectRepository();
+    await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+    final sourceImages = _FakeSourceImageRepository();
+    final api = FirebaseProjectApi(
+      authRepository: DisabledAuthRepository(),
+      session: _session(),
+      floorPlanRepository: _FakeFloorPlanRepository(),
+      geometryRepository: _FakeGeometryRepository(),
+      layoutRepository: _FakeLayoutRepository(),
+      projectRepository: projects,
+      reconstructionRepository: _FakeReconstructionRepository(),
+      roomDimensionsRepository: _FakeRoomDimensionsRepository()
+        ..dimensions = _roomDimensions(),
+      sourceImageRepository: sourceImages,
+      sourceImageUploader: _FakeSourceImageUploader(),
+    );
+    final session = await api.createCaptureSession(projectId: 'project-1');
+
+    await expectLater(
+      api.uploadCaptureImage(
+        projectId: 'project-1',
+        captureSessionId: session.id,
+        role: 'side_wall',
+        filename: 'side.png',
+        contentType: 'image/png',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+        widthPx: 1600,
+        heightPx: 900,
+      ),
+      throwsA(
+        isA<ProjectApiException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_capture_role',
+        ),
+      ),
+    );
+  });
+
+  test(
     'FirebaseProjectApi does not store source metadata when upload fails',
     () async {
       final projects = _FakeProjectRepository();
@@ -1172,6 +1375,21 @@ FirebaseSourceImage _sourceImage() {
   );
 }
 
+FirebaseRoomDimensions _roomDimensions() {
+  return FirebaseRoomDimensions(
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    widthM: 4.2,
+    depthM: 3.6,
+    heightM: 2.7,
+    unit: 'meters',
+    source: 'user_entered',
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
 FirebaseOpenCvResult _openCvResult() {
   return FirebaseOpenCvResult(
     resultId: 'result-1',
@@ -1342,9 +1560,32 @@ class _FakeRoomDimensionsRepository
 
 class _FakeSourceImageRepository implements FirebaseSourceImageRepository {
   FirebaseSourceImage? saved;
+  final captureSessions = <FirebaseCaptureSession>[];
+  final captureImages = <FirebaseCaptureImage>[];
+  var _sourceImageCount = 0;
+  var _captureSessionCount = 0;
+  var _captureImageCount = 0;
 
   @override
-  String newSourceImageId({required String projectId}) => 'source-1';
+  String newSourceImageId({required String projectId}) {
+    _sourceImageCount += 1;
+    return 'source-$_sourceImageCount';
+  }
+
+  @override
+  String newCaptureSessionId({required String projectId}) {
+    _captureSessionCount += 1;
+    return 'capture-session-$_captureSessionCount';
+  }
+
+  @override
+  String newCaptureImageId({
+    required String projectId,
+    required String captureSessionId,
+  }) {
+    _captureImageCount += 1;
+    return 'capture-image-$_captureImageCount';
+  }
 
   @override
   Future<FirebaseSourceImage> createMetadataAfterUpload(
@@ -1352,6 +1593,22 @@ class _FakeSourceImageRepository implements FirebaseSourceImageRepository {
   ) async {
     saved = sourceImage;
     return sourceImage;
+  }
+
+  @override
+  Future<FirebaseCaptureSession> createCaptureSession(
+    FirebaseCaptureSession session,
+  ) async {
+    captureSessions.add(session);
+    return session;
+  }
+
+  @override
+  Future<FirebaseCaptureImage> createCaptureImageMetadataAfterUpload(
+    FirebaseCaptureImage captureImage,
+  ) async {
+    captureImages.add(captureImage);
+    return captureImage;
   }
 
   @override
@@ -1380,6 +1637,21 @@ class _FakeSourceImageRepository implements FirebaseSourceImageRepository {
           saved!.ownerUid == ownerUid &&
           saved!.projectId == projectId)
         saved!,
+    ]);
+  }
+
+  @override
+  Stream<List<FirebaseCaptureImage>> watchCaptureImages({
+    required String ownerUid,
+    required String projectId,
+    required String captureSessionId,
+  }) {
+    return Stream.value([
+      for (final image in captureImages)
+        if (image.ownerUid == ownerUid &&
+            image.projectId == projectId &&
+            image.captureSessionId == captureSessionId)
+          image,
     ]);
   }
 }
@@ -1597,7 +1869,7 @@ class _FakeLayoutRepository implements FirebaseLayoutRepository {
 class _FakeSourceImageUploader implements FirebaseSourceImageUploader {
   _FakeSourceImageUploader({this.shouldFail = false});
 
-  final bool shouldFail;
+  bool shouldFail;
   final uploads = <_FakeUpload>[];
   final deletedPaths = <String>[];
   String? uploadedPath;

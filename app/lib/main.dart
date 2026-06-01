@@ -3562,14 +3562,19 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   String? _sourceImageDataUrl;
   RoomDimensions? _dimensions;
   ReconstructionJob? _reconstructionJob;
+  CaptureSession? _captureSession;
   SourceImageUploadStatus _uploadState = SourceImageUploadStatus.empty;
   String? _uploadMessage;
   double? _uploadProgress;
   html.File? _lastUploadFile;
+  final Map<String, GuidedCaptureRoleUploadSnapshot> _guidedRoleUploads = {};
+  final Map<String, html.File> _lastGuidedRoleFiles = {};
   bool _isSavingDimensions = false;
   bool _isSubmittingReconstruction = false;
+  bool _isCreatingCaptureSession = false;
   bool _guidedCaptureStarted = false;
   String? _dimensionMessage;
+  String? _captureSessionMessage;
   String? _reconstructionMessage;
   StreamSubscription<html.MouseEvent>? _dragOverSubscription;
   StreamSubscription<html.MouseEvent>? _dragLeaveSubscription;
@@ -3599,11 +3604,15 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       _sourceImageDataUrl = null;
       _dimensions = null;
       _reconstructionJob = null;
+      _captureSession = null;
       _uploadState = SourceImageUploadStatus.empty;
       _uploadMessage = null;
       _uploadProgress = null;
       _lastUploadFile = null;
+      _guidedRoleUploads.clear();
+      _lastGuidedRoleFiles.clear();
       _guidedCaptureStarted = false;
+      _captureSessionMessage = null;
       _dimensionMessage = null;
       _reconstructionMessage = null;
       _widthController.clear();
@@ -3869,7 +3878,11 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
   }
 
-  void _startGuidedCaptureSession() {
+  Future<void> _startGuidedCaptureSession() async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
     if (_dimensions == null) {
       setState(() {
         _dimensionMessage = rf(
@@ -3879,8 +3892,174 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       });
       return;
     }
+    if (_isCreatingCaptureSession) {
+      return;
+    }
+    final existingSession = _captureSession;
+    if (existingSession != null) {
+      setState(() {
+        _guidedCaptureStarted = true;
+        _captureSessionMessage =
+            '${rf('Capture session ready', '촬영 세션 준비됨')}: ${existingSession.id}';
+      });
+      return;
+    }
 
-    setState(() => _guidedCaptureStarted = true);
+    setState(() {
+      _isCreatingCaptureSession = true;
+      _captureSessionMessage = rf(
+        'Creating guided capture session...',
+        '가이드 촬영 세션을 생성 중입니다...',
+      );
+    });
+
+    try {
+      final session = await widget.projectApi.createCaptureSession(
+        projectId: project.id,
+      );
+      setState(() {
+        _captureSession = session;
+        _guidedCaptureStarted = true;
+        _captureSessionMessage =
+            '${rf('Capture session ready', '촬영 세션 준비됨')}: ${session.id}';
+      });
+    } on ProjectApiException catch (error) {
+      setState(() => _captureSessionMessage = error.message);
+    } catch (error) {
+      setState(
+        () => _captureSessionMessage =
+            '${rf('Capture session failed', '촬영 세션 생성 실패')}: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingCaptureSession = false);
+      }
+    }
+  }
+
+  Future<void> _selectAndUploadGuidedRole(String roleId) async {
+    if (_captureSession == null) {
+      await _startGuidedCaptureSession();
+    }
+    if (_captureSession == null) {
+      return;
+    }
+
+    final input = html.FileUploadInputElement()
+      ..accept = _allowedImageTypes.join(',')
+      ..multiple = false;
+    input.click();
+    await input.onChange.first;
+
+    final file = input.files?.isNotEmpty == true ? input.files!.first : null;
+    if (file == null) {
+      return;
+    }
+    await _uploadGuidedRoleFile(roleId, file);
+  }
+
+  Future<void> _retryGuidedRoleUpload(String roleId) async {
+    final file = _lastGuidedRoleFiles[roleId];
+    if (file == null) {
+      setState(() {
+        _guidedRoleUploads[roleId] = GuidedCaptureRoleUploadSnapshot(
+          status: SourceImageUploadStatus.uploadFailed,
+          image: _guidedRoleUploads[roleId]?.image,
+          message: rf(
+            'Choose a photo again before retrying this role.',
+            '이 역할을 다시 시도하려면 사진을 다시 선택하세요.',
+          ),
+        );
+      });
+      return;
+    }
+    await _uploadGuidedRoleFile(roleId, file);
+  }
+
+  Future<void> _uploadGuidedRoleFile(String roleId, html.File file) async {
+    final project = widget.project;
+    final session = _captureSession;
+    if (project == null || session == null) {
+      return;
+    }
+
+    final contentType = _normalizedContentType(file);
+    final validationMessage = _clientImageValidationMessage(file, contentType);
+    if (validationMessage != null) {
+      setState(() {
+        _lastGuidedRoleFiles.remove(roleId);
+        _guidedRoleUploads[roleId] = GuidedCaptureRoleUploadSnapshot(
+          status: SourceImageUploadStatus.validationError,
+          image: _guidedRoleUploads[roleId]?.image,
+          message: validationMessage,
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      _lastGuidedRoleFiles[roleId] = file;
+      _guidedRoleUploads[roleId] = GuidedCaptureRoleUploadSnapshot(
+        status: SourceImageUploadStatus.uploading,
+        image: _guidedRoleUploads[roleId]?.image,
+        message: rf('Uploading role photo...', '역할 사진을 업로드 중입니다...'),
+      );
+    });
+
+    try {
+      final bytes = await _readFileBytes(file);
+      final imageSize = await _readImageSize(file);
+      final captureImage = await widget.projectApi.uploadCaptureImage(
+        projectId: project.id,
+        captureSessionId: session.id,
+        role: roleId,
+        filename: file.name,
+        contentType: contentType,
+        bytes: bytes,
+        widthPx: imageSize?.width,
+        heightPx: imageSize?.height,
+        captureOrder: _guidedRoleCaptureOrder(roleId),
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _guidedRoleUploads[roleId] = GuidedCaptureRoleUploadSnapshot(
+              status: SourceImageUploadStatus.uploading,
+              image: _guidedRoleUploads[roleId]?.image,
+              message: _localizedUploadProgressLabel(
+                progress.clamp(0, 1).toDouble(),
+              ),
+            );
+          });
+        },
+      );
+      setState(() {
+        _lastGuidedRoleFiles.remove(roleId);
+        _guidedRoleUploads[roleId] = GuidedCaptureRoleUploadSnapshot(
+          status: SourceImageUploadStatus.uploaded,
+          image: captureImage,
+          message:
+              '${rf('Uploaded', '업로드됨')}: ${captureImage.role} (${captureImage.widthPx} x ${captureImage.heightPx}px)',
+        );
+      });
+    } on ProjectApiException catch (error) {
+      setState(() {
+        _guidedRoleUploads[roleId] = GuidedCaptureRoleUploadSnapshot(
+          status: uploadStatusForProjectApiException(error),
+          image: _guidedRoleUploads[roleId]?.image,
+          message: uploadRecoveryMessage(error),
+        );
+      });
+    } catch (error) {
+      setState(() {
+        _guidedRoleUploads[roleId] = GuidedCaptureRoleUploadSnapshot(
+          status: SourceImageUploadStatus.uploadFailed,
+          image: _guidedRoleUploads[roleId]?.image,
+          message: '${rf('Upload failed', '업로드 실패')}: $error',
+        );
+      });
+    }
   }
 
   Future<void> _loadDimensions() async {
@@ -4188,10 +4367,29 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
               GuidedCaptureSessionSection(
                 dimensions: _dimensions,
                 started: _guidedCaptureStarted,
-                onStart: _startGuidedCaptureSession,
+                onStart: () => unawaited(_startGuidedCaptureSession()),
                 copy: _guidedCaptureCopy(),
                 roles: _guidedCaptureRoles(),
+                roleUploads: _guidedRoleUploads,
+                onUploadRole: (role) =>
+                    unawaited(_selectAndUploadGuidedRole(role.id)),
+                onRetryRole: (role) =>
+                    unawaited(_retryGuidedRoleUpload(role.id)),
               ),
+              if (_captureSessionMessage != null) ...[
+                const SizedBox(height: 12),
+                RoomForgeNotice(
+                  title:
+                      _captureSessionMessage!.toLowerCase().contains('failed')
+                      ? rf('Capture session issue', '촬영 세션 문제')
+                      : rf('Capture session state', '촬영 세션 상태'),
+                  message: _captureSessionMessage!,
+                  severity:
+                      _captureSessionMessage!.toLowerCase().contains('failed')
+                      ? NoticeSeverity.error
+                      : NoticeSeverity.info,
+                ),
+              ],
               const SizedBox(height: 20),
               PhotoIntakeSection(
                 state: _uploadState,
@@ -4277,6 +4475,13 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       defaultHeightLabel: rf('default height', '기본 높이'),
       userHeightLabel: rf('user height', '사용자 입력 높이'),
       sessionStateLabel: rf('Guided capture session state', '가이드 촬영 세션 상태'),
+      uploadRoleLabel: rf('Upload photo', '사진 업로드'),
+      replaceRoleLabel: rf('Replace photo', '사진 교체'),
+      retryRoleLabel: rf('Retry role', '역할 재시도'),
+      uploadingRoleLabel: rf('Uploading...', '업로드 중...'),
+      uploadedRoleLabel: rf('Uploaded', '업로드됨'),
+      noRolePhotoLabel: rf('No photo yet', '아직 사진 없음'),
+      roleUploadFailedLabel: rf('Upload failed', '업로드 실패'),
     );
   }
 
@@ -4338,6 +4543,17 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         required: false,
       ),
     ];
+  }
+
+  int _guidedRoleCaptureOrder(String roleId) {
+    return switch (roleId) {
+      'overview' => 0,
+      'front_wall' => 1,
+      'right_wall' => 2,
+      'back_wall' => 3,
+      'left_wall' => 4,
+      _ => 5,
+    };
   }
 
   String _normalizedContentType(html.File file) {

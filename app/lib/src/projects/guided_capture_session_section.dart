@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'project_api.dart';
+import 'source_image_upload_status.dart';
 
 const guidedCaptureSessionStartButtonKey = Key(
   'guided-capture-session-start-button',
@@ -35,6 +36,13 @@ class GuidedCaptureSessionCopy {
     this.defaultHeightLabel = 'default height',
     this.userHeightLabel = 'user height',
     this.sessionStateLabel = 'Guided capture session state',
+    this.uploadRoleLabel = 'Upload photo',
+    this.replaceRoleLabel = 'Replace photo',
+    this.retryRoleLabel = 'Retry role',
+    this.uploadingRoleLabel = 'Uploading...',
+    this.uploadedRoleLabel = 'Uploaded',
+    this.noRolePhotoLabel = 'No photo yet',
+    this.roleUploadFailedLabel = 'Upload failed',
   });
 
   final String title;
@@ -59,6 +67,13 @@ class GuidedCaptureSessionCopy {
   final String defaultHeightLabel;
   final String userHeightLabel;
   final String sessionStateLabel;
+  final String uploadRoleLabel;
+  final String replaceRoleLabel;
+  final String retryRoleLabel;
+  final String uploadingRoleLabel;
+  final String uploadedRoleLabel;
+  final String noRolePhotoLabel;
+  final String roleUploadFailedLabel;
 }
 
 class GuidedCaptureRoleInstruction {
@@ -118,6 +133,25 @@ const defaultGuidedCaptureRoles = [
   ),
 ];
 
+class GuidedCaptureRoleUploadSnapshot {
+  const GuidedCaptureRoleUploadSnapshot({
+    required this.status,
+    this.image,
+    this.message,
+  });
+
+  final SourceImageUploadStatus status;
+  final CaptureImage? image;
+  final String? message;
+
+  bool get isUploading => status == SourceImageUploadStatus.uploading;
+
+  bool get isUploaded =>
+      image != null && status == SourceImageUploadStatus.uploaded;
+
+  bool get isFailure => status.isFailure;
+}
+
 class GuidedCaptureSessionSection extends StatelessWidget {
   const GuidedCaptureSessionSection({
     required this.dimensions,
@@ -125,6 +159,9 @@ class GuidedCaptureSessionSection extends StatelessWidget {
     required this.onStart,
     this.copy = const GuidedCaptureSessionCopy(),
     this.roles = defaultGuidedCaptureRoles,
+    this.roleUploads = const {},
+    this.onUploadRole,
+    this.onRetryRole,
     super.key,
   });
 
@@ -133,6 +170,9 @@ class GuidedCaptureSessionSection extends StatelessWidget {
   final VoidCallback onStart;
   final GuidedCaptureSessionCopy copy;
   final List<GuidedCaptureRoleInstruction> roles;
+  final Map<String, GuidedCaptureRoleUploadSnapshot> roleUploads;
+  final ValueChanged<GuidedCaptureRoleInstruction>? onUploadRole;
+  final ValueChanged<GuidedCaptureRoleInstruction>? onRetryRole;
 
   @override
   Widget build(BuildContext context) {
@@ -211,8 +251,13 @@ class GuidedCaptureSessionSection extends StatelessWidget {
           _RoleInstructionList(
             title: copy.rolesTitle,
             roles: roles,
+            roleUploads: roleUploads,
+            captureActive: hasDimensions && started,
             requiredLabel: copy.requiredLabel,
             optionalLabel: copy.optionalLabel,
+            copy: copy,
+            onUploadRole: onUploadRole,
+            onRetryRole: onRetryRole,
           ),
           const SizedBox(height: 12),
           _CaptureStateBanner(
@@ -327,14 +372,24 @@ class _RoleInstructionList extends StatelessWidget {
   const _RoleInstructionList({
     required this.title,
     required this.roles,
+    required this.roleUploads,
+    required this.captureActive,
     required this.requiredLabel,
     required this.optionalLabel,
+    required this.copy,
+    required this.onUploadRole,
+    required this.onRetryRole,
   });
 
   final String title;
   final List<GuidedCaptureRoleInstruction> roles;
+  final Map<String, GuidedCaptureRoleUploadSnapshot> roleUploads;
+  final bool captureActive;
   final String requiredLabel;
   final String optionalLabel;
+  final GuidedCaptureSessionCopy copy;
+  final ValueChanged<GuidedCaptureRoleInstruction>? onUploadRole;
+  final ValueChanged<GuidedCaptureRoleInstruction>? onRetryRole;
 
   @override
   Widget build(BuildContext context) {
@@ -354,6 +409,11 @@ class _RoleInstructionList extends StatelessWidget {
           _RoleInstructionTile(
             role: role,
             stateLabel: role.required ? requiredLabel : optionalLabel,
+            upload: roleUploads[role.id],
+            captureActive: captureActive,
+            copy: copy,
+            onUpload: onUploadRole == null ? null : () => onUploadRole!(role),
+            onRetry: onRetryRole == null ? null : () => onRetryRole!(role),
           ),
           if (role != roles.last) const SizedBox(height: 8),
         ],
@@ -363,19 +423,49 @@ class _RoleInstructionList extends StatelessWidget {
 }
 
 class _RoleInstructionTile extends StatelessWidget {
-  const _RoleInstructionTile({required this.role, required this.stateLabel});
+  const _RoleInstructionTile({
+    required this.role,
+    required this.stateLabel,
+    required this.upload,
+    required this.captureActive,
+    required this.copy,
+    required this.onUpload,
+    required this.onRetry,
+  });
 
   final GuidedCaptureRoleInstruction role;
   final String stateLabel;
+  final GuidedCaptureRoleUploadSnapshot? upload;
+  final bool captureActive;
+  final GuidedCaptureSessionCopy copy;
+  final VoidCallback? onUpload;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final uploadState = upload?.status ?? SourceImageUploadStatus.empty;
+    final isUploading = uploadState == SourceImageUploadStatus.uploading;
+    final isUploaded = upload?.isUploaded == true;
+    final isFailure = uploadState.isFailure;
+    final uploadLabel = isUploading
+        ? copy.uploadingRoleLabel
+        : isUploaded
+        ? copy.uploadedRoleLabel
+        : isFailure
+        ? copy.roleUploadFailedLabel
+        : copy.noRolePhotoLabel;
+    final uploadColor = isFailure
+        ? colorScheme.error
+        : isUploaded
+        ? colorScheme.primary
+        : colorScheme.outline;
 
     return Semantics(
       container: true,
-      label: '${role.label}, ${role.id}, $stateLabel. ${role.description}',
+      label:
+          '${role.label}, ${role.id}, $stateLabel. $uploadLabel. ${role.description}',
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border.all(color: colorScheme.outlineVariant),
@@ -403,22 +493,129 @@ class _RoleInstructionTile extends StatelessWidget {
                       role.description,
                       style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
                     ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _RoleUploadPill(
+                          label: uploadLabel,
+                          color: uploadColor,
+                          icon: isUploading
+                              ? Icons.cloud_upload_outlined
+                              : isUploaded
+                              ? Icons.cloud_done_outlined
+                              : isFailure
+                              ? Icons.error_outline
+                              : Icons.image_not_supported_outlined,
+                        ),
+                        if (upload?.image != null)
+                          _RoleUploadPill(
+                            label:
+                                '${upload!.image!.widthPx} x ${upload!.image!.heightPx}px',
+                            color: colorScheme.primary,
+                            icon: Icons.aspect_ratio_outlined,
+                          ),
+                      ],
+                    ),
+                    if (upload?.message != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        upload!.message!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isFailure ? colorScheme.error : null,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                stateLabel,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: role.required
-                      ? colorScheme.primary
-                      : colorScheme.secondary,
-                  fontWeight: FontWeight.w800,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    stateLabel,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: role.required
+                          ? colorScheme.primary
+                          : colorScheme.secondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: captureActive && !isUploading ? onUpload : null,
+                    icon: Icon(
+                      isUploaded
+                          ? Icons.swap_horiz_outlined
+                          : Icons.file_upload_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      isUploaded ? copy.replaceRoleLabel : copy.uploadRoleLabel,
+                    ),
+                  ),
+                  if (isFailure) ...[
+                    const SizedBox(height: 6),
+                    TextButton.icon(
+                      onPressed: captureActive && !isUploading
+                          ? (onRetry ?? onUpload)
+                          : null,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(copy.retryRoleLabel),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RoleUploadPill extends StatelessWidget {
+  const _RoleUploadPill({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 15),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

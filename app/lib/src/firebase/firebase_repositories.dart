@@ -47,8 +47,23 @@ abstract class FirebaseProjectRepository {
 abstract class FirebaseSourceImageRepository {
   String newSourceImageId({required String projectId});
 
+  String newCaptureSessionId({required String projectId});
+
+  String newCaptureImageId({
+    required String projectId,
+    required String captureSessionId,
+  });
+
   Future<FirebaseSourceImage> createMetadataAfterUpload(
     FirebaseSourceImage sourceImage,
+  );
+
+  Future<FirebaseCaptureSession> createCaptureSession(
+    FirebaseCaptureSession session,
+  );
+
+  Future<FirebaseCaptureImage> createCaptureImageMetadataAfterUpload(
+    FirebaseCaptureImage captureImage,
   );
 
   Future<FirebaseSourceImage?> getSourceImage({
@@ -60,6 +75,12 @@ abstract class FirebaseSourceImageRepository {
   Stream<List<FirebaseSourceImage>> watchProjectSourceImages({
     required String ownerUid,
     required String projectId,
+  });
+
+  Stream<List<FirebaseCaptureImage>> watchCaptureImages({
+    required String ownerUid,
+    required String projectId,
+    required String captureSessionId,
   });
 }
 

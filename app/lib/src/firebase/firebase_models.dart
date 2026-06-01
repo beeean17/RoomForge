@@ -696,6 +696,9 @@ class FirebaseSourceImage {
     required this.schemaVersion,
     this.originalFilename,
     this.captureSource,
+    this.captureSessionId,
+    this.captureImageId,
+    this.captureImageRole,
   });
 
   final String sourceImageId;
@@ -710,6 +713,9 @@ class FirebaseSourceImage {
   final int widthPx;
   final int heightPx;
   final String? captureSource;
+  final String? captureSessionId;
+  final String? captureImageId;
+  final FirebaseCaptureImageRole? captureImageRole;
   final FirebaseRetentionStatus retentionStatus;
   final DateTime uploadedAt;
   final DateTime createdAt;

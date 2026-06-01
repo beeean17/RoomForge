@@ -49,6 +49,9 @@ class SourceImage {
     required this.uploadedAt,
     this.widthPx,
     this.heightPx,
+    this.captureSessionId,
+    this.captureImageId,
+    this.captureImageRole,
   });
 
   final String id;
@@ -60,6 +63,9 @@ class SourceImage {
   final int byteSize;
   final int? widthPx;
   final int? heightPx;
+  final String? captureSessionId;
+  final String? captureImageId;
+  final String? captureImageRole;
   final String sha256Hex;
   final String retentionStatus;
   final DateTime uploadedAt;
@@ -75,9 +81,113 @@ class SourceImage {
       byteSize: json['byte_size'] as int,
       widthPx: json['width_px'] as int?,
       heightPx: json['height_px'] as int?,
+      captureSessionId: json['capture_session_id'] as String?,
+      captureImageId: json['capture_image_id'] as String?,
+      captureImageRole: json['capture_image_role'] as String?,
       sha256Hex: json['sha256_hex'] as String,
       retentionStatus: json['retention_status'] as String,
       uploadedAt: DateTime.parse(json['uploaded_at'] as String),
+    );
+  }
+}
+
+class CaptureSession {
+  const CaptureSession({
+    required this.id,
+    required this.projectId,
+    required this.userId,
+    required this.roomDimensionsId,
+    required this.captureMethod,
+    required this.depthEnabled,
+    required this.createdAt,
+    required this.updatedAt,
+    this.startedAt,
+    this.completedAt,
+    this.notes,
+  });
+
+  final String id;
+  final String projectId;
+  final String userId;
+  final String roomDimensionsId;
+  final String captureMethod;
+  final bool depthEnabled;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory CaptureSession.fromJson(Map<String, Object?> json) {
+    return CaptureSession(
+      id: _stringId(json['id'] ?? json['capture_session_id']),
+      projectId: _stringId(json['project_id']),
+      userId: _stringId(json['user_id'] ?? json['owner_uid']),
+      roomDimensionsId: json['room_dimensions_id'] as String,
+      captureMethod: json['capture_method'] as String,
+      depthEnabled: json['depth_enabled'] as bool,
+      startedAt: json['started_at'] == null
+          ? null
+          : DateTime.parse(json['started_at'] as String),
+      completedAt: json['completed_at'] == null
+          ? null
+          : DateTime.parse(json['completed_at'] as String),
+      notes: json['notes'] as String?,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+}
+
+class CaptureImage {
+  const CaptureImage({
+    required this.id,
+    required this.captureSessionId,
+    required this.projectId,
+    required this.userId,
+    required this.sourceImageId,
+    required this.role,
+    required this.storagePath,
+    required this.contentType,
+    required this.widthPx,
+    required this.heightPx,
+    required this.createdAt,
+    required this.updatedAt,
+    this.captureOrder,
+    this.guidanceState,
+  });
+
+  final String id;
+  final String captureSessionId;
+  final String projectId;
+  final String userId;
+  final String sourceImageId;
+  final String role;
+  final String storagePath;
+  final String contentType;
+  final int widthPx;
+  final int heightPx;
+  final int? captureOrder;
+  final String? guidanceState;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory CaptureImage.fromJson(Map<String, Object?> json) {
+    return CaptureImage(
+      id: _stringId(json['id'] ?? json['capture_image_id']),
+      captureSessionId: _stringId(json['capture_session_id']),
+      projectId: _stringId(json['project_id']),
+      userId: _stringId(json['user_id'] ?? json['owner_uid']),
+      sourceImageId: _stringId(json['source_image_id']),
+      role: json['role'] as String,
+      storagePath: json['storage_path'] as String,
+      contentType: json['content_type'] as String,
+      widthPx: json['width_px'] as int,
+      heightPx: json['height_px'] as int,
+      captureOrder: json['capture_order'] as int?,
+      guidanceState: json['guidance_state'] as String?,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
     );
   }
 }
@@ -268,6 +378,25 @@ abstract class ProjectApi {
     required Uint8List bytes,
     int? widthPx,
     int? heightPx,
+    void Function(double progress)? onProgress,
+  });
+
+  Future<CaptureSession> createCaptureSession({
+    required String projectId,
+    bool depthEnabled = false,
+    String? notes,
+  });
+
+  Future<CaptureImage> uploadCaptureImage({
+    required String projectId,
+    required String captureSessionId,
+    required String role,
+    required String filename,
+    required String contentType,
+    required Uint8List bytes,
+    int? widthPx,
+    int? heightPx,
+    int? captureOrder,
     void Function(double progress)? onProgress,
   });
 
@@ -468,6 +597,37 @@ class LegacyProjectApi extends ProjectApi {
     );
     onProgress?.call(1);
     return sourceImage;
+  }
+
+  @override
+  Future<CaptureSession> createCaptureSession({
+    required String projectId,
+    bool depthEnabled = false,
+    String? notes,
+  }) {
+    throw const ProjectApiException(
+      'Guided capture sessions require the Firebase backend.',
+      code: 'unsupported_backend',
+    );
+  }
+
+  @override
+  Future<CaptureImage> uploadCaptureImage({
+    required String projectId,
+    required String captureSessionId,
+    required String role,
+    required String filename,
+    required String contentType,
+    required Uint8List bytes,
+    int? widthPx,
+    int? heightPx,
+    int? captureOrder,
+    void Function(double progress)? onProgress,
+  }) {
+    throw const ProjectApiException(
+      'Guided capture image upload requires the Firebase backend.',
+      code: 'unsupported_backend',
+    );
   }
 
   @override

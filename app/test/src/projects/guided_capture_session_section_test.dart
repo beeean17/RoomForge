@@ -1,5 +1,6 @@
 import 'package:app/src/projects/guided_capture_session_section.dart';
 import 'package:app/src/projects/project_api.dart';
+import 'package:app/src/projects/source_image_upload_status.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -80,6 +81,42 @@ void main() {
 
     semantics.dispose();
   });
+
+  testWidgets('shows per-role upload recovery without hiding uploaded roles', (
+    tester,
+  ) async {
+    final actions = <String>[];
+
+    await tester.pumpGuidedCaptureSection(
+      dimensions: _roomDimensions(),
+      started: true,
+      roleUploads: {
+        'overview': GuidedCaptureRoleUploadSnapshot(
+          status: SourceImageUploadStatus.uploaded,
+          image: _captureImage(role: 'overview'),
+          message: 'Uploaded: overview',
+        ),
+        'front_wall': const GuidedCaptureRoleUploadSnapshot(
+          status: SourceImageUploadStatus.uploadFailed,
+          message: 'Network failed',
+        ),
+      },
+      onUploadRole: (role) => actions.add('upload:${role.id}'),
+      onRetryRole: (role) => actions.add('retry:${role.id}'),
+    );
+
+    expect(find.text('Uploaded'), findsOneWidget);
+    expect(find.text('1600 x 900px'), findsOneWidget);
+    expect(find.text('Network failed'), findsOneWidget);
+    expect(find.text('Upload failed'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Retry role').first);
+    await tester.pump();
+    await tester.tap(find.text('Retry role').first);
+    await tester.pump();
+
+    expect(actions, ['retry:front_wall']);
+  });
 }
 
 extension on WidgetTester {
@@ -87,6 +124,9 @@ extension on WidgetTester {
     required RoomDimensions? dimensions,
     required bool started,
     VoidCallback? onStart,
+    Map<String, GuidedCaptureRoleUploadSnapshot> roleUploads = const {},
+    ValueChanged<GuidedCaptureRoleInstruction>? onUploadRole,
+    ValueChanged<GuidedCaptureRoleInstruction>? onRetryRole,
   }) {
     return pumpWidget(
       MaterialApp(
@@ -98,6 +138,9 @@ extension on WidgetTester {
                 dimensions: dimensions,
                 started: started,
                 onStart: onStart ?? () {},
+                roleUploads: roleUploads,
+                onUploadRole: onUploadRole,
+                onRetryRole: onRetryRole,
               ),
             ),
           ),
@@ -117,6 +160,25 @@ RoomDimensions _roomDimensions() {
     heightValue: 2.7,
     unit: 'meters',
     heightSource: 'user_entered',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+CaptureImage _captureImage({required String role}) {
+  final now = DateTime.utc(2026, 6, 2);
+  return CaptureImage(
+    id: 'capture-image-$role',
+    captureSessionId: 'capture-session-1',
+    projectId: 'project-1',
+    userId: 'user-1',
+    sourceImageId: 'source-image-$role',
+    role: role,
+    storagePath:
+        'users/user-1/projects/project-1/capture-sessions/capture-session-1/images/capture-image-$role/$role.png',
+    contentType: 'image/png',
+    widthPx: 1600,
+    heightPx: 900,
     createdAt: now,
     updatedAt: now,
   );

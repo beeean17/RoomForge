@@ -152,6 +152,76 @@ class FirebaseEditorBridgeMapper {
     return _withoutNulls(payload);
   }
 
+  FirebaseJson captureSessionToBridgePayload(
+    FirebaseCaptureSession session,
+    List<FirebaseCaptureImage> images,
+  ) {
+    for (final image in images) {
+      image.validate();
+    }
+    final sortedImages = [...images]
+      ..sort(
+        (a, b) => (a.captureOrder ?? _captureImageRoleOrder(a.role)).compareTo(
+          b.captureOrder ?? _captureImageRoleOrder(b.role),
+        ),
+      );
+    final payload = <String, Object?>{
+      'captureSession': {
+        'captureSessionId': session.captureSessionId,
+        'projectId': session.projectId,
+        'roomDimensionsId': session.roomDimensionsId,
+        'captureMethod': session.captureMethod.wireValue,
+        'depthEnabled': session.depthEnabled,
+        'startedAt': session.startedAt?.toUtc().toIso8601String(),
+        'completedAt': session.completedAt?.toUtc().toIso8601String(),
+        'notes': session.notes,
+        'availableRoles': sortedImages
+            .map((image) => image.role.wireValue)
+            .toSet()
+            .toList(growable: false),
+        'images': sortedImages.map(captureImageToBridgePayload).toList(),
+      },
+    };
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      payload,
+      'capture_session_bridge',
+    );
+    return _withoutNulls(payload);
+  }
+
+  FirebaseJson captureImageToBridgePayload(FirebaseCaptureImage image) {
+    image.validate();
+    final payload = <String, Object?>{
+      'captureImageId': image.captureImageId,
+      'captureSessionId': image.captureSessionId,
+      'sourceImageId': image.sourceImageId,
+      'role': image.role.wireValue,
+      'storagePath': image.storagePath,
+      'contentType': image.contentType.wireValue,
+      'widthPx': image.widthPx,
+      'heightPx': image.heightPx,
+      'captureOrder': image.captureOrder,
+      'guidanceState': image.guidanceState,
+      'depthArtifactRefs': image.depthArtifactRefs
+          .map(
+            (ref) => {
+              'artifactId': ref.artifactId,
+              'artifactType': ref.artifactType,
+              'storagePath': ref.storagePath,
+              'contentType': ref.contentType.wireValue,
+              'byteSize': ref.byteSize,
+            },
+          )
+          .toList(),
+      'cameraPose': _camelCaseNested(image.cameraPose),
+    };
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      payload,
+      'capture_image_bridge',
+    );
+    return _withoutNulls(payload);
+  }
+
   FirebaseJson bridgeSceneToEditorScene(FirebaseJson bridgeScene) {
     FirebaseSerializerValidators.requireCamelCasePayload(
       bridgeScene,
@@ -446,5 +516,16 @@ class FirebaseEditorBridgeMapper {
 
   double _numberValue(Object? value, double fallback) {
     return value is num ? value.toDouble() : fallback;
+  }
+
+  int _captureImageRoleOrder(FirebaseCaptureImageRole role) {
+    return switch (role) {
+      FirebaseCaptureImageRole.overview => 0,
+      FirebaseCaptureImageRole.frontWall => 1,
+      FirebaseCaptureImageRole.rightWall => 2,
+      FirebaseCaptureImageRole.backWall => 3,
+      FirebaseCaptureImageRole.leftWall => 4,
+      FirebaseCaptureImageRole.extra => 5,
+    };
   }
 }

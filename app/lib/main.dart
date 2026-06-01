@@ -3586,6 +3586,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     super.initState();
     if (widget.project != null) {
       unawaited(_loadDimensions());
+      unawaited(_loadLatestCaptureSession());
     }
     final body = html.document.body;
     if (body == null) {
@@ -3621,6 +3622,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       _reconstructionPollTimer?.cancel();
       if (widget.project != null) {
         unawaited(_loadDimensions());
+        unawaited(_loadLatestCaptureSession());
       }
     }
   }
@@ -4111,6 +4113,68 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
   }
 
+  Future<void> _loadLatestCaptureSession() async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
+
+    try {
+      final snapshot = await widget.projectApi.loadLatestCaptureSession(
+        projectId: project.id,
+      );
+      if (!mounted || widget.project?.id != project.id || snapshot == null) {
+        return;
+      }
+      final roleUploads = <String, GuidedCaptureRoleUploadSnapshot>{
+        for (final image in snapshot.images)
+          image.role: GuidedCaptureRoleUploadSnapshot(
+            status: SourceImageUploadStatus.uploaded,
+            image: image,
+            message:
+                '${rf('Uploaded', '업로드됨')}: ${image.role} (${image.widthPx} x ${image.heightPx}px)',
+          ),
+      };
+      setState(() {
+        _captureSession = snapshot.session;
+        _guidedCaptureStarted = true;
+        _guidedRoleUploads
+          ..clear()
+          ..addAll(roleUploads);
+        _captureSessionMessage = rf(
+          'Loaded guided capture session for desktop review.',
+          '데스크톱 검토용 가이드 촬영 세션을 불러왔습니다.',
+        );
+      });
+    } on ProjectApiException catch (error) {
+      if (!mounted || widget.project?.id != project.id) {
+        return;
+      }
+      setState(() => _captureSessionMessage = error.message);
+    } catch (error) {
+      if (!mounted || widget.project?.id != project.id) {
+        return;
+      }
+      setState(
+        () => _captureSessionMessage =
+            '${rf('Loading capture session failed', '촬영 세션 불러오기 실패')}: $error',
+      );
+    }
+  }
+
+  List<CaptureImage> get _uploadedCaptureImages {
+    final imagesByRole = {
+      for (final entry in _guidedRoleUploads.entries)
+        if (entry.value.image != null) entry.key: entry.value.image!,
+    };
+    return [
+      for (final role in defaultGuidedCaptureRoles)
+        if (imagesByRole.remove(role.id) != null)
+          _guidedRoleUploads[role.id]!.image!,
+      ...imagesByRole.values,
+    ];
+  }
+
   Future<void> _openReconstruction() async {
     final project = widget.project;
     if (project == null) {
@@ -4126,6 +4190,8 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
           reconstructionJob: _reconstructionJob,
           sourceImage: _sourceImage,
           sourceImageDataUrl: _sourceImageDataUrl,
+          captureSession: _captureSession,
+          captureImages: _uploadedCaptureImages,
         ),
       ),
     );
@@ -5346,6 +5412,8 @@ class EditorBridgeScreen extends StatefulWidget {
     this.reconstructionJob,
     this.sourceImage,
     this.sourceImageDataUrl,
+    this.captureSession,
+    this.captureImages = const [],
     super.key,
   });
 
@@ -5355,6 +5423,8 @@ class EditorBridgeScreen extends StatefulWidget {
   final ReconstructionJob? reconstructionJob;
   final SourceImage? sourceImage;
   final String? sourceImageDataUrl;
+  final CaptureSession? captureSession;
+  final List<CaptureImage> captureImages;
 
   @override
   State<EditorBridgeScreen> createState() => _EditorBridgeScreenState();
@@ -6705,6 +6775,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   Map<String, Object?> _sceneInitializePayload() {
     final dimensions = widget.initialDimensions;
     final sourceImage = widget.sourceImage;
+    final captureSession = _captureSessionBridgePayload();
     final width = dimensions?.widthValue ?? 4.2;
     final depth = dimensions?.depthValue ?? 3.6;
     final height = dimensions?.heightValue ?? 2.7;
@@ -6743,9 +6814,72 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
               'heightPx': sourceImage.heightPx,
               'dataUrl': widget.sourceImageDataUrl,
             },
+      'captureSession': captureSession,
       'reconstructionStatus': reviewRequired
           ? {'status': 'review_required', 'label': 'Needs review'}
           : null,
+    };
+  }
+
+  Map<String, Object?>? _captureSessionBridgePayload() {
+    final session = widget.captureSession;
+    if (session == null) {
+      return null;
+    }
+    final images = [...widget.captureImages]
+      ..sort(
+        (a, b) => (a.captureOrder ?? _captureRoleOrder(a.role)).compareTo(
+          b.captureOrder ?? _captureRoleOrder(b.role),
+        ),
+      );
+    return _compactPayload({
+      'captureSessionId': session.id,
+      'projectId': session.projectId,
+      'roomDimensionsId': session.roomDimensionsId,
+      'captureMethod': session.captureMethod,
+      'depthEnabled': session.depthEnabled,
+      'startedAt': session.startedAt?.toUtc().toIso8601String(),
+      'completedAt': session.completedAt?.toUtc().toIso8601String(),
+      'notes': session.notes,
+      'availableRoles': images
+          .map((image) => image.role)
+          .toSet()
+          .toList(growable: false),
+      'images': images
+          .map(
+            (image) => _compactPayload({
+              'captureImageId': image.id,
+              'captureSessionId': image.captureSessionId,
+              'sourceImageId': image.sourceImageId,
+              'role': image.role,
+              'storagePath': image.storagePath,
+              'contentType': image.contentType,
+              'widthPx': image.widthPx,
+              'heightPx': image.heightPx,
+              'captureOrder': image.captureOrder,
+              'guidanceState': image.guidanceState,
+            }),
+          )
+          .toList(),
+    });
+  }
+
+  Map<String, Object?> _compactPayload(Map<String, Object?> value) {
+    return {
+      for (final entry in value.entries)
+        if (entry.value != null) entry.key: entry.value,
+    };
+  }
+
+  int _captureRoleOrder(String role) {
+    return switch (role) {
+      'overview' => 0,
+      'front_wall' => 1,
+      'right_wall' => 2,
+      'back_wall' => 3,
+      'left_wall' => 4,
+      'extra' => 5,
+      _ => 99,
     };
   }
 

@@ -181,6 +181,36 @@ void main() {
       expect(fixture, containsPair('category', 'window'));
     });
 
+    test('maps capture session and image references to editor bridge', () {
+      final payload = mapper.captureSessionToBridgePayload(_captureSession(), [
+        _captureImage(role: FirebaseCaptureImageRole.frontWall),
+      ]);
+
+      FirebaseSerializerValidators.requireCamelCasePayload(
+        payload,
+        'capture_session_bridge',
+      );
+      final session = payload['captureSession'] as FirebaseJson;
+      final roles = session['availableRoles'] as List<Object?>;
+      final images = session['images'] as List<Object?>;
+      final image = Map<String, Object?>.from(images.single as Map);
+
+      expect(session, containsPair('captureSessionId', 'session-1'));
+      expect(session, containsPair('captureMethod', 'android_guided_photo'));
+      expect(session, containsPair('depthEnabled', false));
+      expect(roles, ['front_wall']);
+      expect(image, containsPair('captureImageId', 'capture-image-front_wall'));
+      expect(image, containsPair('sourceImageId', 'source-image-front_wall'));
+      expect(image, containsPair('role', 'front_wall'));
+      expect(image, containsPair('storagePath', contains('front_wall.png')));
+      expect(image, containsPair('contentType', 'image/png'));
+      expect(image, containsPair('widthPx', 1600));
+      expect(image, containsPair('heightPx', 900));
+      expect(image, containsPair('captureOrder', 1));
+      expect(image, isNot(contains('capture_image_id')));
+      expect(image, isNot(contains('source_image_id')));
+    });
+
     test('rejects snake_case bridge input before persistence mapping', () {
       expect(
         () => mapper.bridgeSceneToEditorScene(const {
@@ -314,6 +344,42 @@ FirebaseSavedLayout _layout({String viewMode = '2d'}) {
     updatedAt: _now,
     schemaVersion: 1,
     exportVersion: 1,
+  );
+}
+
+FirebaseCaptureSession _captureSession() {
+  return FirebaseCaptureSession(
+    captureSessionId: 'session-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    roomDimensionsId: 'current',
+    captureMethod: FirebaseCaptureMethod.androidGuidedPhoto,
+    depthEnabled: false,
+    startedAt: _now,
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
+  );
+}
+
+FirebaseCaptureImage _captureImage({required FirebaseCaptureImageRole role}) {
+  return FirebaseCaptureImage(
+    captureImageId: 'capture-image-${role.wireValue}',
+    captureSessionId: 'session-1',
+    projectId: 'project-1',
+    ownerUid: 'user-1',
+    sourceImageId: 'source-image-${role.wireValue}',
+    role: role,
+    storagePath:
+        'users/user-1/projects/project-1/capture-sessions/session-1/images/capture-image-${role.wireValue}/${role.wireValue}.png',
+    contentType: FirebaseImageContentType.png,
+    widthPx: 1600,
+    heightPx: 900,
+    captureOrder: 1,
+    guidanceState: 'uploaded',
+    createdAt: _now,
+    updatedAt: _now,
+    schemaVersion: 1,
   );
 }
 

@@ -254,6 +254,29 @@ class FirebaseFirestoreSourceImageRepository
   }
 
   @override
+  Future<FirebaseCaptureSession?> getLatestCaptureSession({
+    required String ownerUid,
+    required String projectId,
+  }) async {
+    final snapshot = await _captureSessionsCollection(projectId)
+        .orderBy('updated_at', descending: true)
+        .limit(1)
+        .get(const GetOptions(source: Source.server));
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+    final session = FirebaseModelSerializers.captureSessionFromFirestore(
+      _firestoreJson(snapshot.docs.first.data()),
+    );
+    if (session.ownerUid != ownerUid) {
+      throw const FirebaseContractException(
+        'Capture session is not available.',
+      );
+    }
+    return session;
+  }
+
+  @override
   Future<FirebaseCaptureImage> createCaptureImageMetadataAfterUpload(
     FirebaseCaptureImage captureImage,
   ) async {
@@ -787,6 +810,14 @@ class DisabledFirebaseSourceImageRepository
   Future<FirebaseCaptureSession> createCaptureSession(
     FirebaseCaptureSession session,
   ) {
+    throw UnsupportedError('Firebase capture session access is unavailable.');
+  }
+
+  @override
+  Future<FirebaseCaptureSession?> getLatestCaptureSession({
+    required String ownerUid,
+    required String projectId,
+  }) {
     throw UnsupportedError('Firebase capture session access is unavailable.');
   }
 

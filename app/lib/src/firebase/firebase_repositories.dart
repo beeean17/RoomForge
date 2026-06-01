@@ -62,6 +62,11 @@ abstract class FirebaseSourceImageRepository {
     FirebaseCaptureSession session,
   );
 
+  Future<FirebaseCaptureSession?> getLatestCaptureSession({
+    required String ownerUid,
+    required String projectId,
+  });
+
   Future<FirebaseCaptureImage> createCaptureImageMetadataAfterUpload(
     FirebaseCaptureImage captureImage,
   );

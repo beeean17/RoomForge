@@ -192,6 +192,21 @@ class CaptureImage {
   }
 }
 
+class CaptureSessionSnapshot {
+  const CaptureSessionSnapshot({required this.session, required this.images});
+
+  final CaptureSession session;
+  final List<CaptureImage> images;
+
+  List<String> get availableRoles {
+    final roles = <String>{};
+    for (final image in images) {
+      roles.add(image.role);
+    }
+    return roles.toList(growable: false);
+  }
+}
+
 class RoomDimensions {
   const RoomDimensions({
     required this.projectId,
@@ -385,6 +400,10 @@ abstract class ProjectApi {
     required String projectId,
     bool depthEnabled = false,
     String? notes,
+  });
+
+  Future<CaptureSessionSnapshot?> loadLatestCaptureSession({
+    required String projectId,
   });
 
   Future<CaptureImage> uploadCaptureImage({
@@ -609,6 +628,13 @@ class LegacyProjectApi extends ProjectApi {
       'Guided capture sessions require the Firebase backend.',
       code: 'unsupported_backend',
     );
+  }
+
+  @override
+  Future<CaptureSessionSnapshot?> loadLatestCaptureSession({
+    required String projectId,
+  }) async {
+    return null;
   }
 
   @override

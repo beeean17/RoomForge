@@ -306,6 +306,34 @@ class FirebaseProjectApi extends ProjectApi {
   }
 
   @override
+  Future<CaptureSessionSnapshot?> loadLatestCaptureSession({
+    required String projectId,
+  }) async {
+    final project = await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
+    );
+    final session = await _sourceImageRepository.getLatestCaptureSession(
+      ownerUid: _session.uid,
+      projectId: project.projectId,
+    );
+    if (session == null) {
+      return null;
+    }
+    final images = await _sourceImageRepository
+        .watchCaptureImages(
+          ownerUid: _session.uid,
+          projectId: project.projectId,
+          captureSessionId: session.captureSessionId,
+        )
+        .first;
+    return CaptureSessionSnapshot(
+      session: _captureSessionFromFirebase(session),
+      images: images.map(_captureImageFromFirebase).toList(growable: false),
+    );
+  }
+
+  @override
   Future<CaptureImage> uploadCaptureImage({
     required String projectId,
     required String captureSessionId,

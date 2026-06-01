@@ -15,6 +15,11 @@ import {
   type CameraSnapshot,
 } from './cameraControls'
 import {
+  captureRoleSummary,
+  captureSessionFromBridgePayload,
+  type CaptureSessionForSceneUnderstanding,
+} from './captureSession'
+import {
   addFurnitureToModel,
   editSelectedFurnitureInModel,
   furnitureDefaults,
@@ -83,6 +88,10 @@ app.innerHTML = `
       <div>
         <dt>${t('OpenCV runtime', 'OpenCV 런타임')}</dt>
         <dd id="opencv-status" role="status" aria-live="polite">${t('Loading worker assets', '워커 자산 로드 중')}</dd>
+      </div>
+      <div>
+        <dt>${t('Capture images', '촬영 이미지')}</dt>
+        <dd id="capture-session-status" role="status" aria-live="polite">${t('No capture session images', '촬영 세션 이미지 없음')}</dd>
       </div>
       <div>
         <dt>${t('Viewport', '뷰포트')}</dt>
@@ -218,6 +227,7 @@ app.innerHTML = `
 const canvas = document.querySelector<HTMLCanvasElement>('.editor-canvas')
 const bridgeStatus = document.querySelector<HTMLElement>('#bridge-status')
 const opencvStatus = document.querySelector<HTMLElement>('#opencv-status')
+const captureSessionStatus = document.querySelector<HTMLElement>('#capture-session-status')
 const viewportStatus = document.querySelector<HTMLElement>('#viewport-status')
 const geometryStatus = document.querySelector<HTMLElement>('#geometry-status')
 const spatialStatus = document.querySelector<HTMLElement>('#spatial-status')
@@ -250,6 +260,7 @@ if (
   !canvas ||
   !bridgeStatus ||
   !opencvStatus ||
+  !captureSessionStatus ||
   !viewportStatus ||
   !geometryStatus ||
   !spatialStatus ||
@@ -278,6 +289,7 @@ if (
 const editorCanvas = canvas
 const bridgeStatusElement = bridgeStatus
 const opencvStatusElement = opencvStatus
+const captureSessionStatusElement = captureSessionStatus
 const viewportStatusElement = viewportStatus
 const geometryStatusElement = geometryStatus
 const spatialStatusElement = spatialStatus
@@ -392,6 +404,7 @@ room.add(candidateLine)
 let runtimeState: Record<string, unknown> = { state: 'loading' }
 let runtimeReady = false
 let sourceImageForExtraction: SourceImageForExtraction | null = null
+let captureSessionForSceneUnderstanding: CaptureSessionForSceneUnderstanding | null = null
 let latestCandidateGeometry: Record<string, unknown> | null = null
 let latestCandidateQualityStatus = 'review_required'
 let latestCandidateReasonCode: string | null = 'low_confidence'
@@ -479,6 +492,7 @@ function respondToFlutter(message: BridgeMessage): void {
         width: editorCanvas.clientWidth,
         height: editorCanvas.clientHeight,
       },
+      captureSession: captureSessionForSceneUnderstanding,
       focusable: true,
       cameraPose: cameraPosePayload(),
       spatialModel: spatialModelPayload(),
@@ -490,6 +504,8 @@ function handleBridgeCommand(message: BridgeMessage): void {
   if (message.type === 'roomforge.scene.initialize') {
     spatialModel = spatialModelFromBridgePayload(message.payload)
     sourceImageForExtraction = sourceImageFromPayload(message.payload)
+    captureSessionForSceneUnderstanding = captureSessionFromBridgePayload(message.payload)
+    updateCaptureSessionStatus()
     applySpatialModel()
     respondToFlutter(message)
     emitSceneState('roomforge.scene.initialized', message.requestId)
@@ -964,6 +980,28 @@ function rebuildFurniture(): void {
       furnitureOutlineObjects.push(outline)
     }
   }
+}
+
+function updateCaptureSessionStatus(): void {
+  if (!captureSessionForSceneUnderstanding) {
+    captureSessionStatusElement.textContent = t(
+      'No capture session images',
+      '촬영 세션 이미지 없음',
+    )
+    return
+  }
+  const roleCount = captureSessionForSceneUnderstanding.availableRoles.length
+  if (roleCount === 0) {
+    captureSessionStatusElement.textContent = t(
+      'No capture session images',
+      '촬영 세션 이미지 없음',
+    )
+    return
+  }
+  const roleList = captureSessionForSceneUnderstanding.availableRoles.join(', ')
+  captureSessionStatusElement.textContent = usesKorean
+    ? `${roleCount}개 촬영 역할: ${roleList}`
+    : captureRoleSummary(captureSessionForSceneUnderstanding)
 }
 
 function updateSpatialStatus(): void {

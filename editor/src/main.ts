@@ -38,6 +38,13 @@ import {
   type FurnitureEditAction,
 } from './furnitureModel'
 import {
+  editSelectedFixtureInModel,
+  selectFixtureInModel,
+  selectedFixture as selectedFixtureFromModel,
+  selectedFixtureSummary,
+  type FixtureEditAction,
+} from './fixtureModel'
+import {
   measurementSummaryForModel,
   placementWarningForModel,
 } from './measurementGuidance'
@@ -48,6 +55,7 @@ import {
   type FurnitureCategory,
   type FurnitureObject,
   type SpatialModel,
+  type StructuralFixtureObject,
   type ViewMode,
 } from './spatialModel'
 
@@ -220,6 +228,18 @@ app.innerHTML = `
         <button type="button" data-furniture-edit="toggle-lock">${t('Lock object', '객체 잠금')}</button>
         <button type="button" data-furniture-edit="delete">${t('Delete', '삭제')}</button>
       </div>
+      <div class="fixture-edit-controls" aria-label="${t('Selected fixture editing controls', '선택 고정 요소 편집 컨트롤')}">
+        <button type="button" data-fixture-edit="wall-previous">${t('Previous wall', '이전 벽')}</button>
+        <button type="button" data-fixture-edit="wall-next">${t('Next wall', '다음 벽')}</button>
+        <button type="button" data-fixture-edit="offset-decrease">${t('Offset -', '오프셋 -')}</button>
+        <button type="button" data-fixture-edit="offset-increase">${t('Offset +', '오프셋 +')}</button>
+        <button type="button" data-fixture-edit="narrower">${t('Narrower', '너비 줄이기')}</button>
+        <button type="button" data-fixture-edit="wider">${t('Wider', '너비 늘리기')}</button>
+        <button type="button" data-fixture-edit="shorter">${t('Shorter', '높이 줄이기')}</button>
+        <button type="button" data-fixture-edit="taller">${t('Taller', '높이 늘리기')}</button>
+        <button type="button" data-fixture-edit="category-next">${t('Change category', '카테고리 변경')}</button>
+        <button type="button" data-fixture-edit="delete">${t('Delete fixture', '고정 요소 삭제')}</button>
+      </div>
     </section>
     <section class="panel-section" aria-labelledby="camera-title">
       <div class="panel-section-header">
@@ -277,6 +297,9 @@ const furnitureCategoryButtons = Array.from(
 const furnitureEditButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-furniture-edit]'),
 )
+const fixtureEditButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-fixture-edit]'),
+)
 
 if (
   !canvas ||
@@ -306,7 +329,8 @@ if (
   !view3dButton ||
   cameraActionButtons.length === 0 ||
   furnitureCategoryButtons.length === 0 ||
-  furnitureEditButtons.length === 0
+  furnitureEditButtons.length === 0 ||
+  fixtureEditButtons.length === 0
 ) {
   throw new Error('Missing editor UI element.')
 }
@@ -389,6 +413,9 @@ room.add(wallGroup)
 const furnitureGroup = new THREE.Group()
 room.add(furnitureGroup)
 
+const fixtureGroup = new THREE.Group()
+room.add(fixtureGroup)
+
 const selectionMaterial = new THREE.LineBasicMaterial({ color: 0x0f172a })
 const selectionLine = new THREE.Line(new THREE.BufferGeometry(), selectionMaterial)
 selectionLine.visible = true
@@ -397,6 +424,8 @@ room.add(selectionLine)
 const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0x111827 })
 const furnitureMeshes = new Map<string, THREE.Mesh>()
 const furnitureOutlineObjects: THREE.LineSegments[] = []
+const fixtureMeshes = new Map<string, THREE.Mesh>()
+const fixtureOutlineObjects: THREE.LineSegments[] = []
 
 const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0x0f172a })
 const cornerMeshes: THREE.Mesh[] = []
@@ -591,6 +620,14 @@ for (const button of furnitureEditButtons) {
     }
   })
 }
+for (const button of fixtureEditButtons) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.fixtureEdit
+    if (isFixtureEditAction(action)) {
+      editSelectedFixture(action)
+    }
+  })
+}
 
 candidateTrayListElement.addEventListener('click', (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null
@@ -729,6 +766,12 @@ editorCanvas.addEventListener('pointerdown', (event) => {
   const furnitureIntersections = raycaster.intersectObjects([...furnitureMeshes.values()])
   if (furnitureIntersections.length > 0) {
     selectFurniture(furnitureIntersections[0].object.userData.objectId)
+    return
+  }
+
+  const fixtureIntersections = raycaster.intersectObjects([...fixtureMeshes.values()])
+  if (fixtureIntersections.length > 0) {
+    selectFixture(fixtureIntersections[0].object.userData.objectId)
     return
   }
 
@@ -914,6 +957,7 @@ function applySpatialModel(): void {
   )
   syncConfirmedGeometryMeshes()
   rebuildWalls()
+  rebuildStructuralFixtures()
   rebuildFurniture()
   applyViewModeCamera()
   updateSpatialStatus()
@@ -921,6 +965,7 @@ function applySpatialModel(): void {
 
 function setViewMode(viewMode: ViewMode): void {
   spatialModel = { ...spatialModel, viewMode }
+  rebuildStructuralFixtures()
   rebuildFurniture()
   applyViewModeCamera()
   updateSpatialStatus()
@@ -985,6 +1030,51 @@ function syncConfirmedGeometryMeshes(): void {
   }
   for (const [index, point] of confirmedPoints.entries()) {
     cornerMeshes[index].position.copy(point)
+  }
+}
+
+function rebuildStructuralFixtures(): void {
+  for (const child of [...fixtureGroup.children]) {
+    fixtureGroup.remove(child)
+    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+      child.geometry.dispose()
+    }
+  }
+  fixtureMeshes.clear()
+  fixtureOutlineObjects.length = 0
+
+  for (const fixture of spatialModel.structuralFixtures) {
+    const isSelected =
+      spatialModel.selected?.objectType === 'fixture' &&
+      spatialModel.selected.objectId === fixture.fixtureId
+    const size = fixture.size ?? { x: 0.8, y: 1, z: 0.1 }
+    const height = spatialModel.viewMode === '2d' ? 0.07 : Math.max(size.y, 0.2)
+    const depth = spatialModel.viewMode === '2d' ? 0.08 : Math.max(size.z, 0.06)
+    const geometry = new THREE.BoxGeometry(Math.max(size.x, 0.2), height, depth)
+    const material = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(fixtureColor(fixture.category)),
+      transparent: true,
+      opacity: fixture.confidenceScore !== undefined && fixture.confidenceScore < 0.7 ? 0.58 : 0.82,
+    })
+    const mesh = new THREE.Mesh(geometry, material)
+    const position = fixtureScenePosition(fixture, height)
+    mesh.position.copy(position)
+    mesh.rotation.y = fixtureWallRotation(fixture.wallId)
+    mesh.userData.objectId = fixture.fixtureId
+    mesh.userData.objectType = 'fixture'
+    fixtureGroup.add(mesh)
+    fixtureMeshes.set(fixture.fixtureId, mesh)
+
+    if (isSelected) {
+      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), furnitureSelectionMaterial)
+      outline.position.copy(position)
+      outline.rotation.copy(mesh.rotation)
+      outline.scale.setScalar(1.06)
+      outline.userData.objectId = fixture.fixtureId
+      outline.userData.objectType = 'fixture-outline'
+      fixtureGroup.add(outline)
+      fixtureOutlineObjects.push(outline)
+    }
   }
 }
 
@@ -1070,7 +1160,9 @@ function updateSpatialStatus(): void {
   view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
   view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
+  const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()
+  const fixture = selectedFixture()
   furnitureCountElement.textContent = `${spatialModel.furniture.length} ${
     usesKorean ? '개 객체' : spatialModel.furniture.length === 1 ? 'object' : 'objects'
   }`
@@ -1088,6 +1180,8 @@ function updateSpatialStatus(): void {
     ? selected.locked
       ? t('Locked', '잠김')
       : t('Selected', '선택됨')
+    : fixture
+      ? t('Fixture', '고정 요소')
     : t('Room', '방')
   for (const button of furnitureEditButtons) {
     const action = button.dataset.furnitureEdit
@@ -1097,6 +1191,9 @@ function updateSpatialStatus(): void {
     if (action === 'toggle-lock') {
       button.textContent = locked ? t('Unlock object', '객체 잠금 해제') : t('Lock object', '객체 잠금')
     }
+  }
+  for (const button of fixtureEditButtons) {
+    button.disabled = !fixtureSelected
   }
 }
 
@@ -1251,6 +1348,8 @@ function localizedSpatialSummary(model: SpatialModel): string {
   const selected =
     model.selected?.objectType === 'furniture'
       ? selectedFurniture()?.label ?? model.selected.objectId
+      : model.selected?.objectType === 'fixture'
+        ? selectedFixture()?.label ?? model.selected.objectId
       : t('room shell', '방 외곽')
   const saveState = model.hasUnsavedChanges ? t('Unsaved changes', '저장 안 됨') : t('Saved', '저장됨')
   const furnitureCount = usesKorean
@@ -1321,6 +1420,20 @@ function selectFurniture(objectId: unknown): void {
   emitSceneState('roomforge.selection.changed')
 }
 
+function selectFixture(objectId: unknown): void {
+  if (typeof objectId !== 'string') {
+    return
+  }
+  const nextModel = selectFixtureInModel(spatialModel, objectId)
+  if (nextModel === spatialModel) {
+    return
+  }
+  spatialModel = nextModel
+  rebuildStructuralFixtures()
+  updateSpatialStatus()
+  emitSceneState('roomforge.selection.changed')
+}
+
 function editSelectedFurniture(action: FurnitureEditAction): void {
   const startedAt = performance.now()
   const result = editSelectedFurnitureInModel(spatialModel, action)
@@ -1362,8 +1475,30 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
   emitSceneState('roomforge.scene.updated')
 }
 
+function editSelectedFixture(action: FixtureEditAction): void {
+  const result = editSelectedFixtureInModel(spatialModel, action)
+  const selected = result.selected
+  if (!selected || !result.changed) {
+    return
+  }
+  spatialModel = result.model
+  rebuildStructuralFixtures()
+  geometryStatusElement.textContent = result.deleted
+    ? t(`Deleted ${selected.label ?? selected.category}.`, `${localizedFixtureLabel(selected)} 삭제됨.`)
+    : t(
+        `Updated ${selected.label ?? selected.category}.`,
+        `${localizedFixtureLabel(selected)} 업데이트됨.`,
+      )
+  updateSpatialStatus()
+  emitSceneState('roomforge.fixture.updated')
+}
+
 function selectedFurniture(): FurnitureObject | null {
   return selectedFurnitureFromModel(spatialModel)
+}
+
+function selectedFixture(): StructuralFixtureObject | null {
+  return selectedFixtureFromModel(spatialModel)
 }
 
 function localizedFurnitureLabel(item: FurnitureObject): string {
@@ -1380,6 +1515,22 @@ function localizedFurnitureLabel(item: FurnitureObject): string {
     return '소파'
   }
   return item.label
+}
+
+function localizedFixtureLabel(item: StructuralFixtureObject): string {
+  if (!usesKorean) {
+    return item.label ?? item.category
+  }
+  if (item.category === 'window') {
+    return '창문'
+  }
+  if (item.category === 'door') {
+    return '문'
+  }
+  if (item.category === 'built_in') {
+    return '붙박이 요소'
+  }
+  return item.label ?? item.category
 }
 
 function applyCameraAction(action: CameraAction): void {
@@ -1543,6 +1694,49 @@ function cameraLabelFor(action: CameraAction): string {
 function metricPointToScene(x: number, y: number, height = 0): THREE.Vector3 {
   const bounds = roomBounds(spatialModel)
   return new THREE.Vector3(x - bounds.centerX, height, y - bounds.centerY)
+}
+
+function fixtureScenePosition(fixture: StructuralFixtureObject, height: number): THREE.Vector3 {
+  const bounds = roomBounds(spatialModel)
+  const size = fixture.size ?? { x: 0.8, y: 1, z: 0.1 }
+  const position = fixture.position ?? { x: bounds.centerX, y: size.y / 2, z: 0 }
+  const wallPoint = fixtureWallMetricPoint(fixture.wallId, position.x, bounds)
+  const y = spatialModel.viewMode === '2d' ? 0.11 : Math.max(position.y, height / 2)
+  return metricPointToScene(wallPoint.x, wallPoint.y, y)
+}
+
+function fixtureWallMetricPoint(
+  wallId: string,
+  offset: number,
+  bounds: { widthMeters: number; depthMeters: number },
+): { x: number; y: number } {
+  if (wallId === 'right-wall') {
+    return { x: bounds.widthMeters, y: clampNumber(offset, 0, bounds.depthMeters) }
+  }
+  if (wallId === 'back-wall') {
+    return { x: clampNumber(bounds.widthMeters - offset, 0, bounds.widthMeters), y: bounds.depthMeters }
+  }
+  if (wallId === 'left-wall') {
+    return { x: 0, y: clampNumber(bounds.depthMeters - offset, 0, bounds.depthMeters) }
+  }
+  return { x: clampNumber(offset, 0, bounds.widthMeters), y: 0 }
+}
+
+function fixtureWallRotation(wallId: string): number {
+  if (wallId === 'right-wall' || wallId === 'left-wall') {
+    return Math.PI / 2
+  }
+  return 0
+}
+
+function fixtureColor(category: string): string {
+  if (category === 'door') {
+    return '#8b6f61'
+  }
+  if (category === 'built_in') {
+    return '#64748b'
+  }
+  return '#2563eb'
 }
 
 function scenePointToMetric(point: THREE.Vector3): { x: number; y: number } {
@@ -1879,6 +2073,21 @@ function inspectorSummary(model: SpatialModel): string {
       )
     }
   }
+  if (model.selected?.objectType === 'fixture') {
+    const fixture = selectedFixtureFromModel(model)
+    if (fixture) {
+      const size = fixture.size ?? { x: 0.8, y: 1, z: 0.1 }
+      const review = fixture.confidenceScore !== undefined && fixture.confidenceScore < 0.7
+        ? t('; Needs review', '; 검토 필요')
+        : ''
+      return t(
+        `${selectedFixtureSummary(model)}${review}`,
+        `${localizedFixtureLabel(fixture)}; ${fixture.wallId}; 너비 ${size.x.toFixed(
+          2,
+        )} m x 높이 ${size.y.toFixed(2)} m${review}`,
+      )
+    }
+  }
   const selected = model.selected?.objectId ?? 'none'
   return t(
     `${selected}; ${bounds.widthMeters.toFixed(2)} m x ${bounds.depthMeters.toFixed(
@@ -1924,6 +2133,21 @@ function isFurnitureEditAction(value: string | undefined): value is FurnitureEdi
     value === 'shallower' ||
     value === 'deeper' ||
     value === 'toggle-lock' ||
+    value === 'delete'
+  )
+}
+
+function isFixtureEditAction(value: string | undefined): value is FixtureEditAction {
+  return (
+    value === 'wall-previous' ||
+    value === 'wall-next' ||
+    value === 'offset-decrease' ||
+    value === 'offset-increase' ||
+    value === 'narrower' ||
+    value === 'wider' ||
+    value === 'shorter' ||
+    value === 'taller' ||
+    value === 'category-next' ||
     value === 'delete'
   )
 }

@@ -363,7 +363,8 @@ dd {
   gap: 8px;
 }
 
-.furniture-edit-controls {
+.furniture-edit-controls,
+.fixture-edit-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
@@ -374,12 +375,20 @@ dd {
   color: #991b1b;
 }
 
+.fixture-edit-controls button[data-fixture-edit='delete'] {
+  border-color: rgba(220, 38, 38, 0.42);
+  color: #991b1b;
+}
+
 .furniture-edit-controls button[data-furniture-edit='toggle-lock'],
-.furniture-edit-controls button[data-furniture-edit='delete'] {
+.furniture-edit-controls button[data-furniture-edit='delete'],
+.fixture-edit-controls button[data-fixture-edit='category-next'],
+.fixture-edit-controls button[data-fixture-edit='delete'] {
   grid-column: span 1;
 }
 
-.furniture-edit-controls button:disabled {
+.furniture-edit-controls button:disabled,
+.fixture-edit-controls button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -488,6 +497,7 @@ button:focus-visible {
   .geometry-controls,
   .candidate-meta,
   .furniture-edit-controls,
+  .fixture-edit-controls,
   .camera-controls {
     grid-template-columns: 1fr;
   }

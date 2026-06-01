@@ -53,7 +53,7 @@ export type FurnitureObject = {
 
 export type SpatialSelection = {
   objectId: string
-  objectType: 'room' | 'furniture'
+  objectType: 'room' | 'furniture' | 'fixture'
 } | null
 
 export type CandidateSceneObject = {
@@ -287,7 +287,12 @@ function selectionValue(value: unknown): SpatialSelection {
   if (typeof objectId !== 'string' || objectId.length === 0) {
     return null
   }
-  const objectType = record.objectType === 'furniture' ? 'furniture' : 'room'
+  const objectType =
+    record.objectType === 'furniture'
+      ? 'furniture'
+      : record.objectType === 'fixture'
+        ? 'fixture'
+        : 'room'
   return { objectId, objectType }
 }
 

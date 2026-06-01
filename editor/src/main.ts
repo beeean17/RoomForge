@@ -49,6 +49,11 @@ import {
   measurementSummaryForModel,
   placementWarningForModel,
 } from './measurementGuidance'
+import {
+  computeSceneCoverage,
+  coverageGuidanceText,
+  type SceneCoverageSummary,
+} from './sceneCoverage'
 import { applyMetricPlacementToCandidates } from './scenePlacement'
 import {
   defaultSpatialModel,
@@ -1279,6 +1284,7 @@ function updateSpatialStatus(): void {
 function updateCandidateTray(): void {
   const items = candidateTrayItems(spatialModel)
   const activeCount = items.filter((item) => !item.rejected).length
+  const coverage = currentSceneCoverage()
   candidateTrayCountElement.textContent = usesKorean
     ? `후보 ${items.length}개`
     : `${items.length} ${items.length === 1 ? 'candidate' : 'candidates'}`
@@ -1291,11 +1297,38 @@ function updateCandidateTray(): void {
     return
   }
   const needsReviewCount = items.filter((item) => item.lowConfidence && !item.rejected).length
-  candidateTrayStatusElement.textContent = t(
-    `${activeCount} active candidates; ${needsReviewCount} need review.`,
-    `활성 후보 ${activeCount}개; 검토 필요 ${needsReviewCount}개.`,
-  )
+  const guidance = localizedCoverageGuidance(coverage)
+  candidateTrayStatusElement.textContent = usesKorean
+    ? `활성 후보 ${activeCount}개; 검토 필요 ${needsReviewCount}개. ${guidance}`
+    : `${activeCount} active candidates; ${needsReviewCount} need review. ${guidance}`
   candidateTrayListElement.innerHTML = items.map(candidateTrayItemMarkup).join('')
+}
+
+function currentSceneCoverage(): SceneCoverageSummary {
+  return computeSceneCoverage({
+    availableRoles: captureSessionForSceneUnderstanding?.availableRoles ?? [],
+    images: captureSessionForSceneUnderstanding?.images ?? [],
+    candidateObjects: spatialModel.candidateObjects,
+    structuralFixtures: spatialModel.structuralFixtures,
+  })
+}
+
+function localizedCoverageGuidance(summary: SceneCoverageSummary): string {
+  const guidance = coverageGuidanceText(summary)
+  if (!usesKorean) {
+    return guidance
+  }
+  if (summary.canContinue) {
+    return '촬영 범위가 충분합니다. 생성된 배치를 계속 편집하세요.'
+  }
+  const role = (summary.guidance[0] ?? '').match(/(front_wall|right_wall|back_wall|left_wall)/)?.[0] ?? 'wall'
+  if ((summary.guidance[0] ?? '').startsWith('Capture')) {
+    return `${role} 사진을 추가로 촬영하세요.`
+  }
+  if ((summary.guidance[0] ?? '').startsWith('Retake')) {
+    return `${role} 사진을 벽과 가구가 보이도록 다시 촬영하세요.`
+  }
+  return `${role} 사진을 각도를 바꿔 추가하거나 수동으로 확인하세요.`
 }
 
 function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[number]): string {

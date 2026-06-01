@@ -5,6 +5,7 @@ import {
   type CaptureSessionForSceneUnderstanding,
 } from './captureSession.ts'
 import { mergeSceneCandidates } from './sceneCandidateMerge.ts'
+import { computeSceneCoverage, sceneCoveragePayload } from './sceneCoverage.ts'
 import { applyMetricPlacementToCandidates } from './scenePlacement.ts'
 import {
   furnitureSizePriorForCategory,
@@ -14,6 +15,7 @@ import {
   spatialModelFromBridgePayload,
   type CandidateSceneObject,
   type SpatialModel,
+  type StructuralFixtureObject,
 } from './spatialModel.ts'
 
 const providerType = 'browser_cv_mock'
@@ -193,6 +195,12 @@ export function detectorResult(
     images: session.images,
   })
   const mergedCandidateObjects = mergeSceneCandidates(placedCandidateModel.candidateObjects)
+  const coverage = computeSceneCoverage({
+    availableRoles: session.availableRoles,
+    images: session.images,
+    candidateObjects: mergedCandidateObjects,
+    structuralFixtures: structuralFixtures as StructuralFixtureObject[],
+  })
 
   return {
     resultId: `scene-understanding-${Date.now()}`,
@@ -204,10 +212,7 @@ export function detectorResult(
     detectorScoreThreshold: runtime.scoreThreshold,
     confidenceScore: 0.68,
     qualityStatus: 'review_required',
-    coverage: {
-      imageCount: session.images.length,
-      availableRoles: session.availableRoles,
-    },
+    coverage: sceneCoveragePayload(coverage),
     candidateObjects: mergedCandidateObjects,
     placedObjects: [],
     confirmedObjects: [],

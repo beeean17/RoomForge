@@ -20,6 +20,15 @@ export type ImageBoundingBox = {
   height: number
 }
 
+export type CandidateSourceEvidence = {
+  candidateId: string
+  sourceImageId?: string
+  captureImageId?: string
+  sourceImageRole?: string
+  confidenceScore?: number
+  boundingBox?: ImageBoundingBox
+}
+
 export type FurnitureCategory =
   | 'bed'
   | 'desk'
@@ -64,6 +73,7 @@ export type CandidateSceneObject = {
   sourceImageId?: string
   captureImageId?: string
   sourceImageRole?: string
+  sourceEvidence?: CandidateSourceEvidence[]
   coordinateSpace: string
   boundingBox?: ImageBoundingBox
   confidenceScore?: number
@@ -358,6 +368,7 @@ function candidateSceneObjectValue(value: unknown): CandidateSceneObject | null 
     sourceImageId: optionalStringValue(record.sourceImageId),
     captureImageId: optionalStringValue(record.captureImageId),
     sourceImageRole: optionalStringValue(record.sourceImageRole),
+    sourceEvidence: sourceEvidenceListValue(record.sourceEvidence),
     coordinateSpace: stringValue(record.coordinateSpace, 'image_pixels'),
     boundingBox: boundingBoxValue(record.boundingBox),
     confidenceScore: optionalNumberValue(record.confidenceScore),
@@ -369,6 +380,32 @@ function candidateSceneObjectValue(value: unknown): CandidateSceneObject | null 
     suggestedSize: point3dValue(record.suggestedSize),
     suggestedRotationDegrees: optionalNumberValue(record.suggestedRotationDegrees),
     notes: optionalStringValue(record.notes),
+  }
+}
+
+function sourceEvidenceListValue(value: unknown): CandidateSourceEvidence[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  const evidence = value
+    .map(sourceEvidenceValue)
+    .filter((item) => item !== null)
+  return evidence.length > 0 ? evidence : undefined
+}
+
+function sourceEvidenceValue(value: unknown): CandidateSourceEvidence | null {
+  const record = recordValue(value)
+  const candidateId = stringValue(record.candidateId, '')
+  if (!candidateId) {
+    return null
+  }
+  return {
+    candidateId,
+    sourceImageId: optionalStringValue(record.sourceImageId),
+    captureImageId: optionalStringValue(record.captureImageId),
+    sourceImageRole: optionalStringValue(record.sourceImageRole),
+    confidenceScore: optionalNumberValue(record.confidenceScore),
+    boundingBox: boundingBoxValue(record.boundingBox),
   }
 }
 

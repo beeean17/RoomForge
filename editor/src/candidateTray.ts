@@ -44,7 +44,7 @@ export function candidateTrayItems(model: SpatialModel): CandidateTrayItem[] {
         typeof candidate.confidenceScore === 'number'
           ? candidate.confidenceScore.toFixed(2)
           : 'n/a',
-      sourceLabel: candidate.sourceImageRole ?? candidate.sourceImageId ?? 'unknown source',
+      sourceLabel: sourceLabelForCandidate(candidate),
       reviewLabel: candidate.reviewLabel ?? reviewLabelFor({ rejected, placed, lowConfidence }),
       rejected,
       placed,
@@ -212,6 +212,23 @@ export function updateCandidateCategoryInModel({
 function candidateLabel(candidate: CandidateSceneObject): string {
   const prefix = candidate.objectType === 'structural_fixture' ? 'Fixture' : 'Furniture'
   return `${prefix}: ${candidate.category}`
+}
+
+function sourceLabelForCandidate(candidate: CandidateSceneObject): string {
+  const evidence = candidate.sourceEvidence ?? []
+  const roles = uniqueStrings(
+    evidence
+      .map((item) => item.sourceImageRole)
+      .filter((role): role is string => typeof role === 'string' && role.length > 0),
+  )
+  if (roles.length > 0) {
+    return roles.length === 1 ? roles[0] : `${roles.join(', ')} (${evidence.length} sources)`
+  }
+  return candidate.sourceImageRole ?? candidate.sourceImageId ?? 'unknown source'
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)]
 }
 
 function reviewLabelFor({

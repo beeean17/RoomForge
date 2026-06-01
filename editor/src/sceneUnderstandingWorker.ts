@@ -4,6 +4,7 @@ import {
   type CaptureImageReference,
   type CaptureSessionForSceneUnderstanding,
 } from './captureSession.ts'
+import { mergeSceneCandidates } from './sceneCandidateMerge.ts'
 import { applyMetricPlacementToCandidates } from './scenePlacement.ts'
 import {
   furnitureSizePriorForCategory,
@@ -191,6 +192,7 @@ export function detectorResult(
     },
     images: session.images,
   })
+  const mergedCandidateObjects = mergeSceneCandidates(placedCandidateModel.candidateObjects)
 
   return {
     resultId: `scene-understanding-${Date.now()}`,
@@ -206,7 +208,7 @@ export function detectorResult(
       imageCount: session.images.length,
       availableRoles: session.availableRoles,
     },
-    candidateObjects: placedCandidateModel.candidateObjects,
+    candidateObjects: mergedCandidateObjects,
     placedObjects: [],
     confirmedObjects: [],
     structuralFixtures: structuralFixtures.length > 0 ? structuralFixtures : [

@@ -24,6 +24,7 @@
     "test:cv-4.2": "node --experimental-strip-types scripts/verify-cv-4.2-detector-runtime.mjs",
     "test:cv-5.1": "node --experimental-strip-types scripts/verify-cv-5.1-size-priors.mjs",
     "test:cv-5.2": "node --experimental-strip-types scripts/verify-cv-5.2-wall-role-placement.mjs",
+    "test:cv-5.3": "node --experimental-strip-types scripts/verify-cv-5.3-candidate-merge.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

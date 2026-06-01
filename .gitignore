@@ -106,6 +106,18 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local CV evaluation media
+editor/fixtures/cv-evaluation/local/
+editor/fixtures/cv-evaluation/**/*.jpg
+editor/fixtures/cv-evaluation/**/*.jpeg
+editor/fixtures/cv-evaluation/**/*.png
+editor/fixtures/cv-evaluation/**/*.webp
+editor/fixtures/cv-evaluation/**/*.heic
+editor/fixtures/cv-evaluation/**/*.dng
+editor/fixtures/cv-evaluation/**/*.mp4
+editor/fixtures/cv-evaluation/**/*.mov
+editor/fixtures/cv-evaluation/**/*.depth.json
+
 # Flutter / Dart app
 .dart_tool/
 .flutter-plugins

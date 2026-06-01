@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "fixtureId": "studio-demo",
+      "description": "Privacy-safe example manifest. Image files are expected to live under the ignored local/ directory.",
+      "room": {
+        "widthMeters": 4.2,
+        "depthMeters": 3.6,
+        "heightMeters": 2.7
+      },
+      "images": [
+        {
+          "imageId": "studio-front",
+          "role": "front_wall",
+          "path": "local/studio-demo/front.jpg",
+          "widthPx": 1600,
+          "heightPx": 900
+        },
+        {
+          "imageId": "studio-right",
+          "role": "right_wall",
+          "path": "local/studio-demo/right.jpg",
+          "widthPx": 1600,
+          "heightPx": 900
+        }
+      ],
+      "expectedObjects": [
+        {
+          "objectId": "bed-1",
+          "objectType": "furniture",
+          "category": "bed",
+          "visibleIn": ["front_wall", "right_wall"],
+          "approxPositionMeters": {
+            "x": 1.25,
+            "y": 0,
+            "z": 2.55
+          },
+          "approxSizeMeters": {
+            "x": 1.5,
+            "y": 0.55,
+            "z": 2
+          },
+          "positionToleranceMeters": 0.45,
+          "sizeToleranceMeters": 0.35,
+          "expectedCorrections": 1
+        },
+        {
+          "objectId": "desk-1",
+          "objectType": "furniture",
+          "category": "desk",
+          "visibleIn": ["front_wall"],
+          "approxPositionMeters": {
+            "x": 3.1,
+            "y": 0,
+            "z": 0.7
+          },
+          "approxSizeMeters": {
+            "x": 1.2,
+            "y": 0.75,
+            "z": 0.65
+          },
+          "positionToleranceMeters": 0.5,
+          "sizeToleranceMeters": 0.3,
+          "expectedCorrections": 2
+        },
+        {
+          "objectId": "window-1",
+          "objectType": "structural_fixture",
+          "category": "window",
+          "wallRole": "front_wall",
+          "visibleIn": ["front_wall"],
+          "approxPositionMeters": {
+            "x": 2.4,
+            "y": 1.25,
+            "z": 0
+          },
+          "approxSizeMeters": {
+            "x": 1.2,
+            "y": 0.9,
+            "z": 0.08
+          },
+          "positionToleranceMeters": 0.35,
+          "sizeToleranceMeters": 0.25,
+          "expectedCorrections": 0
+        }
+      ],
+      "metrics": {
+        "expectedDetectionCount": 3,
+        "notes": "This checked-in manifest is synthetic. Replace local paths with private photos under local/ when evaluating real rooms."
+      }
+    }
+  ]
+}

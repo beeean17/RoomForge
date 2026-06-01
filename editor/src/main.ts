@@ -579,6 +579,12 @@ function handleBridgeCommand(message: BridgeMessage): void {
     return
   }
 
+  if (message.type === 'roomforge.sceneUnderstanding.extractCandidates') {
+    requestSceneUnderstanding(message.requestId)
+    respondToFlutter(message)
+    return
+  }
+
   respondToFlutter(message)
 }
 
@@ -892,6 +898,7 @@ editorCanvas.addEventListener('keydown', (event) => {
 })
 
 let worker: Worker | null = null
+let sceneUnderstandingWorker: Worker | null = null
 
 function ensureOpenCvWorker(): Worker {
   if (worker !== null) {
@@ -925,6 +932,67 @@ function ensureOpenCvWorker(): Worker {
     payload: {},
   } satisfies BridgeMessage)
   return worker
+}
+
+function ensureSceneUnderstandingWorker(): Worker {
+  if (sceneUnderstandingWorker !== null) {
+    return sceneUnderstandingWorker
+  }
+
+  sceneUnderstandingWorker = new Worker(new URL('./sceneUnderstandingWorker.ts', import.meta.url), {
+    type: 'module',
+  })
+  sceneUnderstandingWorker.onmessage = (event: MessageEvent<BridgeMessage>) => {
+    if (!isBridgeMessage(event.data)) {
+      return
+    }
+    if (event.data.type === 'roomforge.sceneUnderstanding.candidatesExtracted') {
+      applySceneUnderstandingResult(event.data.payload)
+      candidateTrayStatusElement.textContent = t(
+        'Scene understanding mock candidates loaded.',
+        '장면 이해 mock 후보를 불러왔습니다.',
+      )
+    } else if (event.data.type === 'roomforge.sceneUnderstanding.candidatesFailed') {
+      const error = recordFromUnknown(event.data.payload.error)
+      candidateTrayStatusElement.textContent =
+        stringFromUnknown(error.message) ??
+        t('Scene understanding could not run.', '장면 이해를 실행할 수 없습니다.')
+    }
+    postToParent(event.data)
+  }
+  return sceneUnderstandingWorker
+}
+
+function requestSceneUnderstanding(requestId?: string): void {
+  ensureSceneUnderstandingWorker().postMessage({
+    type: 'roomforge.sceneUnderstanding.extractCandidates',
+    version: BRIDGE_VERSION,
+    requestId: requestId ?? `scene-understanding-${Date.now()}`,
+    payload: {
+      captureSession: captureSessionForSceneUnderstanding,
+      spatialModel: spatialModelPayload(),
+    },
+  } satisfies BridgeMessage)
+}
+
+function applySceneUnderstandingResult(payload: Record<string, unknown>): void {
+  const result = recordFromUnknown(payload.sceneUnderstandingResult)
+  const nextModel = spatialModelFromBridgePayload({
+    scene: spatialModelPayload(),
+    sceneUnderstandingResult: result,
+  })
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    candidateObjects: nextModel.candidateObjects,
+    placedObjects: nextModel.placedObjects,
+    confirmedObjects: nextModel.confirmedObjects,
+    structuralFixtures: nextModel.structuralFixtures,
+  }
+  rebuildStructuralFixtures()
+  rebuildFurniture()
+  updateSpatialStatus()
+  emitSceneState('roomforge.sceneUnderstanding.applied')
 }
 
 applySpatialModel()

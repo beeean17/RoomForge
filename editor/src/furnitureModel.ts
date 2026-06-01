@@ -1,4 +1,5 @@
 import type { FurnitureCategory, FurnitureObject, SpatialModel } from './spatialModel'
+import { furnitureSizePriorForCategory } from './sizePriors.ts'
 
 export type FurnitureEditAction =
   | 'move-up'
@@ -56,61 +57,7 @@ export function furnitureDefaults({
   model,
 }: FurnitureDefaultsOptions): FurnitureObject {
   const bounds = furnitureRoomBounds(model)
-  const baseByCategory: Record<
-    FurnitureCategory,
-    {
-      label: string
-      size: { widthMeters: number; depthMeters: number; heightMeters: number }
-      color: string
-    }
-  > = {
-    bed: {
-      label: 'Bed',
-      size: { widthMeters: 1.5, depthMeters: 2, heightMeters: 0.55 },
-      color: '#6f7f8f',
-    },
-    desk: {
-      label: 'Desk',
-      size: { widthMeters: 1.2, depthMeters: 0.65, heightMeters: 0.75 },
-      color: '#7f6f8f',
-    },
-    chair: {
-      label: 'Chair',
-      size: { widthMeters: 0.55, depthMeters: 0.55, heightMeters: 0.85 },
-      color: '#64748b',
-    },
-    table: {
-      label: 'Table',
-      size: { widthMeters: 1.2, depthMeters: 0.75, heightMeters: 0.74 },
-      color: '#7f8f6f',
-    },
-    sofa: {
-      label: 'Sofa',
-      size: { widthMeters: 1.8, depthMeters: 0.85, heightMeters: 0.82 },
-      color: '#8b6f61',
-    },
-    wardrobe: {
-      label: 'Wardrobe',
-      size: { widthMeters: 1, depthMeters: 0.6, heightMeters: 2 },
-      color: '#64748b',
-    },
-    shelf: {
-      label: 'Shelf',
-      size: { widthMeters: 0.9, depthMeters: 0.35, heightMeters: 1.6 },
-      color: '#5f7f7a',
-    },
-    cabinet: {
-      label: 'Cabinet',
-      size: { widthMeters: 0.9, depthMeters: 0.45, heightMeters: 0.9 },
-      color: '#7a6f61',
-    },
-    custom: {
-      label: 'Custom',
-      size: { widthMeters: 0.8, depthMeters: 0.8, heightMeters: 0.8 },
-      color: '#64748b',
-    },
-  }
-  const base = baseByCategory[category]
+  const base = furnitureSizePriorForCategory(category)
 
   return {
     objectId: id,

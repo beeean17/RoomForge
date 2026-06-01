@@ -1377,8 +1377,8 @@ function updateCandidateCategory(candidateId: string, category: string): void {
   }
   spatialModel = nextModel
   geometryStatusElement.textContent = t(
-    `Candidate category changed to ${category}; suggested asset will be recalculated later.`,
-    `후보 카테고리를 ${category}(으)로 변경했습니다. 추천 에셋은 나중에 다시 계산됩니다.`,
+    `Candidate category changed to ${category}; suggested size and asset were recalculated.`,
+    `후보 카테고리를 ${category}(으)로 변경했습니다. 추천 크기와 에셋을 다시 계산했습니다.`,
   )
   updateSpatialStatus()
   emitSceneState('roomforge.candidate.updated')

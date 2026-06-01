@@ -4,6 +4,10 @@ import {
   type CaptureImageReference,
   type CaptureSessionForSceneUnderstanding,
 } from './captureSession.ts'
+import {
+  furnitureSizePriorForCategory,
+  structuralFixtureSizePriorForCategory,
+} from './sizePriors.ts'
 
 const providerType = 'browser_cv_mock'
 const algorithmId = 'mock-scene-understanding-v1'
@@ -171,6 +175,7 @@ export function detectorResult(
   const structuralFixtures = mapped
     .filter((item) => item.kind === 'fixture')
     .map((item) => item.value)
+  const fallbackWindowPrior = structuralFixtureSizePriorForCategory('window')
 
   return {
     resultId: `scene-understanding-${Date.now()}`,
@@ -195,9 +200,9 @@ export function detectorResult(
         candidateId: `candidate-${fixtureImage.captureImageId}-window`,
         category: 'window',
         wallId: 'front-wall',
-        label: 'Detected window',
+        label: `Detected ${fallbackWindowPrior.category}`,
         position: { x: 1.8, y: 1.1, z: 0 },
-        size: { x: 1.1, y: 0.9, z: 0.1 },
+        size: fallbackWindowPrior.size,
         rotationDegrees: 0,
         confidenceScore: 0.64,
         locked: true,
@@ -295,6 +300,7 @@ function detectionToCandidate(
   | { kind: 'fixture'; value: Record<string, unknown> } {
   const category = categoryForClass(detection.className)
   if (category === 'window' || category === 'door') {
+    const prior = structuralFixtureSizePriorForCategory(category)
     return {
       kind: 'fixture',
       value: {
@@ -307,22 +313,23 @@ function detectionToCandidate(
         coordinateSpace: 'image_pixels',
         boundingBox: detection.box,
         wallId: 'front-wall',
-        label: `Detected ${category}`,
+        label: `Detected ${prior.category}`,
         position: { x: 1 + index * 0.4, y: category === 'door' ? 1 : 1.1, z: 0 },
-        size: category === 'door' ? { x: 0.85, y: 2.05, z: 0.1 } : { x: 1.1, y: 0.9, z: 0.1 },
+        size: prior.size,
         rotationDegrees: 0,
         confidenceScore: detection.score,
         locked: true,
       },
     }
   }
+  const prior = furnitureSizePriorForCategory(category)
   return {
     kind: 'candidate',
     value: {
       candidateId: `candidate-${image.captureImageId}-${category}-${index}`,
       objectType: 'furniture',
-      category,
-      label: `Detected ${category}`,
+      category: prior.category,
+      label: `Detected ${prior.category}`,
       sourceImageId: image.sourceImageId,
       captureImageId: image.captureImageId,
       sourceImageRole: image.role,
@@ -331,9 +338,9 @@ function detectionToCandidate(
       confidenceScore: detection.score,
       reviewState: detection.score < 0.7 ? 'review_required' : 'new',
       reviewLabel: detection.score < 0.7 ? 'Needs review' : 'Candidate',
-      suggestedAssetId: `${category}.pending`,
+      suggestedAssetId: prior.assetId,
       suggestedPosition: { x: 1.2 + index * 0.3, y: 0, z: 1.4 },
-      suggestedSize: suggestedSizeForCategory(category),
+      suggestedSize: prior.suggestedSize,
       suggestedRotationDegrees: 0,
     },
   }
@@ -354,19 +361,6 @@ function categoryForClass(className: string): string {
     door: 'door',
   }
   return mapping[normalized] ?? 'custom'
-}
-
-function suggestedSizeForCategory(category: string): { x: number; y: number; z: number } {
-  const sizes: Record<string, { x: number; y: number; z: number }> = {
-    bed: { x: 1.5, y: 0.55, z: 2 },
-    desk: { x: 1.2, y: 0.75, z: 0.65 },
-    chair: { x: 0.55, y: 0.85, z: 0.55 },
-    wardrobe: { x: 1, y: 2, z: 0.6 },
-    sofa: { x: 1.8, y: 0.82, z: 0.85 },
-    table: { x: 1.2, y: 0.74, z: 0.75 },
-    custom: { x: 0.8, y: 0.8, z: 0.8 },
-  }
-  return sizes[category] ?? sizes.custom
 }
 
 function imageForDetection(

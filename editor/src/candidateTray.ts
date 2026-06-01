@@ -1,4 +1,8 @@
 import { roomBounds, type CandidateSceneObject, type FurnitureCategory, type SpatialModel } from './spatialModel.ts'
+import {
+  furnitureCategoryForValue,
+  furnitureSizePriorForCategory,
+} from './sizePriors.ts'
 
 export type CandidateTrayItem = {
   candidateId: string
@@ -67,13 +71,14 @@ export function placeCandidateInModel(
 
   const bounds = roomBounds(model)
   const category = furnitureCategoryForCandidate(candidate.category)
+  const prior = furnitureSizePriorForCategory(category)
   const size = candidate.suggestedSize
     ? {
         widthMeters: Math.max(candidate.suggestedSize.x, 0.2),
         depthMeters: Math.max(candidate.suggestedSize.z, 0.2),
         heightMeters: Math.max(candidate.suggestedSize.y, 0.2),
       }
-    : defaultSizeForCategory(category)
+    : prior.size
   const position = candidate.suggestedPosition
     ? {
         x: clamp(candidate.suggestedPosition.x, size.widthMeters / 2, bounds.widthMeters - size.widthMeters / 2),
@@ -93,7 +98,7 @@ export function placeCandidateInModel(
     size,
     position,
     rotationDegrees: candidate.suggestedRotationDegrees ?? 0,
-    color: colorForCategory(category),
+    color: prior.color,
     locked: false,
   }
 
@@ -109,7 +114,7 @@ export function placeCandidateInModel(
         candidateId,
         objectType: 'furniture',
         category,
-        assetId: candidate.suggestedAssetId,
+        assetId: candidate.suggestedAssetId ?? prior.assetId,
         label: furniture.label,
         position: { x: position.x, y: 0, z: position.y },
         size: { x: size.widthMeters, y: size.heightMeters, z: size.depthMeters },
@@ -184,6 +189,7 @@ export function updateCandidateCategoryInModel({
   if (!model.candidateObjects.some((candidate) => candidate.candidateId === candidateId)) {
     return model
   }
+  const prior = furnitureSizePriorForCategory(category)
   return {
     ...model,
     hasUnsavedChanges: true,
@@ -194,8 +200,9 @@ export function updateCandidateCategoryInModel({
             category,
             reviewState: 'review_required',
             reviewLabel: 'Needs review',
-            suggestedAssetId: suggestedAssetIdForCategory(category),
-            notes: 'Category changed; suggested asset and size prior pending recalculation.',
+            suggestedAssetId: prior.assetId,
+            suggestedSize: prior.suggestedSize,
+            notes: 'Category changed; suggested size and representative asset were recalculated from category priors.',
           }
         : candidate,
     ),
@@ -225,60 +232,8 @@ function reviewLabelFor({
   return lowConfidence ? 'Needs review' : 'Candidate'
 }
 
-function suggestedAssetIdForCategory(category: string): string {
-  return `${category}.pending`
-}
-
 function furnitureCategoryForCandidate(category: string): FurnitureCategory {
-  return isCandidateFurnitureCategory(category) ? category : 'custom'
-}
-
-function isCandidateFurnitureCategory(category: string): category is FurnitureCategory {
-  return [
-    'bed',
-    'desk',
-    'chair',
-    'wardrobe',
-    'sofa',
-    'table',
-    'shelf',
-    'cabinet',
-    'custom',
-  ].includes(category)
-}
-
-function defaultSizeForCategory(category: FurnitureCategory): {
-  widthMeters: number
-  depthMeters: number
-  heightMeters: number
-} {
-  const sizes: Record<FurnitureCategory, { widthMeters: number; depthMeters: number; heightMeters: number }> = {
-    bed: { widthMeters: 1.5, depthMeters: 2, heightMeters: 0.55 },
-    desk: { widthMeters: 1.2, depthMeters: 0.65, heightMeters: 0.75 },
-    chair: { widthMeters: 0.55, depthMeters: 0.55, heightMeters: 0.85 },
-    wardrobe: { widthMeters: 1, depthMeters: 0.6, heightMeters: 2 },
-    sofa: { widthMeters: 1.8, depthMeters: 0.85, heightMeters: 0.82 },
-    table: { widthMeters: 1.2, depthMeters: 0.75, heightMeters: 0.74 },
-    shelf: { widthMeters: 0.9, depthMeters: 0.35, heightMeters: 1.6 },
-    cabinet: { widthMeters: 0.9, depthMeters: 0.45, heightMeters: 0.9 },
-    custom: { widthMeters: 0.8, depthMeters: 0.8, heightMeters: 0.8 },
-  }
-  return sizes[category]
-}
-
-function colorForCategory(category: FurnitureCategory): string {
-  const colors: Record<FurnitureCategory, string> = {
-    bed: '#6f7f8f',
-    desk: '#7f6f8f',
-    chair: '#64748b',
-    wardrobe: '#64748b',
-    sofa: '#8b6f61',
-    table: '#7f8f6f',
-    shelf: '#5f7f7a',
-    cabinet: '#7a6f61',
-    custom: '#64748b',
-  }
-  return colors[category]
+  return furnitureCategoryForValue(category)
 }
 
 function clamp(value: number, min: number, max: number): number {

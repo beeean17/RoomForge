@@ -68,7 +68,8 @@ const changedCategory = updateCandidateCategoryInModel({
 })
 assert.equal(changedCategory.candidateObjects[1].category, 'sofa')
 assert.equal(changedCategory.candidateObjects[1].reviewLabel, 'Needs review')
-assert.equal(changedCategory.candidateObjects[1].suggestedAssetId, 'sofa.pending')
+assert.equal(changedCategory.candidateObjects[1].suggestedAssetId, 'sofa.two-seat')
+assert.deepEqual(changedCategory.candidateObjects[1].suggestedSize, { x: 1.8, y: 0.82, z: 0.85 })
 assert.equal(changedCategory.hasUnsavedChanges, true)
 
 assert.equal(

@@ -265,6 +265,82 @@ void main() {
       },
     );
 
+    test('preserves confirmed object size across bridge round trip', () {
+      final result = mapper.sceneUnderstandingResultFromBridgePayload(
+        bridgePayload: const {
+          'sceneUnderstandingResult': {
+            'resultId': 'scene-understanding-size-prior-1',
+            'captureSessionId': 'session-1',
+            'providerType': 'browser_cv_webgpu_mock',
+            'algorithmId': 'mock-scene-understanding-v1',
+            'modelId': 'roomforge-detector-webgpu-mock',
+            'confidenceScore': 0.78,
+            'qualityStatus': 'review_required',
+            'coverage': {'frontWall': 'complete'},
+            'candidateObjects': [
+              {
+                'candidateId': 'candidate-bed-1',
+                'objectType': 'furniture',
+                'category': 'bed',
+                'sourceImageId': 'source-image-1',
+                'captureImageId': 'capture-image-1',
+                'sourceImageRole': 'front_wall',
+                'coordinateSpace': 'image_pixels',
+                'boundingBox': {
+                  'x': 120,
+                  'y': 340,
+                  'width': 520,
+                  'height': 300,
+                },
+                'confidenceScore': 0.82,
+                'reviewState': 'review_required',
+                'suggestedAssetId': 'bed.double',
+                'suggestedPosition': {'x': 1.2, 'y': 0, 'z': 2.4},
+                'suggestedSize': {'x': 1.5, 'y': 0.55, 'z': 2.0},
+                'suggestedRotationDegrees': 90,
+              },
+            ],
+            'placedObjects': [],
+            'confirmedObjects': [
+              {
+                'objectId': 'confirmed-bed-1',
+                'candidateId': 'candidate-bed-1',
+                'objectType': 'furniture',
+                'category': 'bed',
+                'assetId': 'bed.double',
+                'position': {'x': 1.4, 'y': 0, 'z': 2.2},
+                'size': {'x': 1.72, 'y': 0.64, 'z': 2.08},
+                'rotationDegrees': 90,
+                'confirmedByUid': 'user-1',
+                'confirmedAt': '2026-05-24T12:00:00.000Z',
+                'locked': false,
+              },
+            ],
+            'structuralFixtures': [],
+          },
+        },
+        projectId: 'project-1',
+        ownerUid: 'user-1',
+        resultId: 'scene-understanding-size-prior-1',
+        now: _now,
+      );
+
+      expect(result.confirmedObjects.single.sizeM.x, 1.72);
+      expect(result.confirmedObjects.single.sizeM.y, 0.64);
+      expect(result.confirmedObjects.single.sizeM.z, 2.08);
+      expect(result.candidateObjects.single.suggestedSizeM?.x, 1.5);
+
+      final payload = mapper.sceneUnderstandingResultToBridgePayload(result);
+      final bridgeResult = payload['sceneUnderstandingResult'] as FirebaseJson;
+      final confirmedObjects =
+          bridgeResult['confirmedObjects'] as List<Object?>;
+      final confirmed = Map<String, Object?>.from(
+        confirmedObjects.single as Map,
+      );
+
+      expect(confirmed['size'], {'x': 1.72, 'y': 0.64, 'z': 2.08});
+    });
+
     test('maps capture session and image references to editor bridge', () {
       final payload = mapper.captureSessionToBridgePayload(_captureSession(), [
         _captureImage(role: FirebaseCaptureImageRole.frontWall),

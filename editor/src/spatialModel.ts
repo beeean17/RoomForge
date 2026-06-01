@@ -20,11 +20,22 @@ export type ImageBoundingBox = {
   height: number
 }
 
-export type FurnitureCategory = 'chair' | 'table' | 'sofa'
+export type FurnitureCategory =
+  | 'bed'
+  | 'desk'
+  | 'chair'
+  | 'wardrobe'
+  | 'sofa'
+  | 'table'
+  | 'shelf'
+  | 'cabinet'
+  | 'custom'
 
 export type FurnitureObject = {
   objectId: string
   category: FurnitureCategory
+  candidateId?: string
+  source?: 'catalog' | 'cv_candidate'
   label: string
   size: {
     widthMeters: number
@@ -433,6 +444,8 @@ function furnitureValue(value: unknown): FurnitureObject | null {
     rotationDegrees: numberValue(record.rotationDegrees, 0),
     color: stringValue(record.color, '#64748b'),
     locked: booleanValue(record.locked, false),
+    candidateId: optionalStringValue(record.candidateId),
+    source: furnitureSourceValue(record.source),
   }
 }
 
@@ -477,9 +490,34 @@ function boundingBoxValue(value: unknown): ImageBoundingBox | undefined {
 }
 
 function isFurnitureCategory(value: unknown): value is FurnitureCategory {
-  return value === 'chair' || value === 'table' || value === 'sofa'
+  return (
+    value === 'bed' ||
+    value === 'desk' ||
+    value === 'chair' ||
+    value === 'wardrobe' ||
+    value === 'sofa' ||
+    value === 'table' ||
+    value === 'shelf' ||
+    value === 'cabinet' ||
+    value === 'custom'
+  )
+}
+
+function furnitureSourceValue(value: unknown): FurnitureObject['source'] | undefined {
+  return value === 'catalog' || value === 'cv_candidate' ? value : undefined
 }
 
 function categoryLabel(category: FurnitureCategory): string {
-  return category === 'chair' ? 'Chair' : category === 'table' ? 'Table' : 'Sofa'
+  const labels: Record<FurnitureCategory, string> = {
+    bed: 'Bed',
+    desk: 'Desk',
+    chair: 'Chair',
+    wardrobe: 'Wardrobe',
+    sofa: 'Sofa',
+    table: 'Table',
+    shelf: 'Shelf',
+    cabinet: 'Cabinet',
+    custom: 'Custom',
+  }
+  return labels[category]
 }

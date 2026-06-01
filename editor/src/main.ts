@@ -22,6 +22,8 @@ import {
 import {
   candidateCategoryOptions,
   candidateTrayItems,
+  placeCandidateInModel,
+  releaseCandidatePlacementInModel,
   rejectCandidateInModel,
   updateCandidateCategoryInModel,
 } from './candidateTray'
@@ -592,9 +594,12 @@ for (const button of furnitureEditButtons) {
 
 candidateTrayListElement.addEventListener('click', (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null
-  const button = target?.closest<HTMLButtonElement>('[data-candidate-action="reject"]')
+  const button = target?.closest<HTMLButtonElement>('[data-candidate-action]')
+  const action = button?.dataset.candidateAction
   const candidateId = button?.dataset.candidateId
-  if (candidateId) {
+  if (candidateId && action === 'place') {
+    placeCandidate(candidateId)
+  } else if (candidateId && action === 'reject') {
     rejectCandidate(candidateId)
   }
 })
@@ -1120,6 +1125,8 @@ function updateCandidateTray(): void {
 function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[number]): string {
   const stateClass = item.rejected || item.lowConfidence ? ' warning' : ''
   const disabled = item.rejected ? ' disabled' : ''
+  const placeDisabled = item.rejected || item.placed ? ' disabled' : ''
+  const placeText = item.placed ? t('Placed', '배치됨') : t('Place', '배치')
   const rejectText = item.rejected ? t('Rejected', '거절됨') : t('Reject', '거절')
   return `
     <article class="candidate-card${item.rejected ? ' is-rejected' : ''}" role="listitem" data-candidate-id="${escapeAttribute(
@@ -1155,8 +1162,26 @@ function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[num
       <button type="button" data-candidate-action="reject" data-candidate-id="${escapeAttribute(
         item.candidateId,
       )}"${disabled}>${rejectText}</button>
+      <button type="button" data-candidate-action="place" data-candidate-id="${escapeAttribute(
+        item.candidateId,
+      )}"${placeDisabled}>${placeText}</button>
     </article>
   `
+}
+
+function placeCandidate(candidateId: string): void {
+  const nextModel = placeCandidateInModel(spatialModel, candidateId)
+  if (nextModel === spatialModel) {
+    return
+  }
+  spatialModel = nextModel
+  rebuildFurniture()
+  geometryStatusElement.textContent = t(
+    'Candidate placed as an editable furniture object.',
+    '후보를 편집 가능한 가구 객체로 배치했습니다.',
+  )
+  updateSpatialStatus()
+  emitSceneState('roomforge.candidate.placed')
 }
 
 function rejectCandidate(candidateId: string): void {
@@ -1165,6 +1190,7 @@ function rejectCandidate(candidateId: string): void {
     return
   }
   spatialModel = nextModel
+  rebuildFurniture()
   geometryStatusElement.textContent = t(
     'Candidate rejected and removed from placed CV objects.',
     '후보를 거절하고 배치된 CV 객체에서 제거했습니다.',
@@ -1200,6 +1226,9 @@ function localizedCandidateState(label: string): string {
   }
   if (label === 'Rejected') {
     return '거절됨'
+  }
+  if (label === 'Placed') {
+    return '배치됨'
   }
   return '후보'
 }
@@ -1317,6 +1346,9 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
       ? t(`${selected.label} unlocked.`, `${localizedFurnitureLabel(selected)} 잠금 해제됨.`)
       : t(`${selected.label} locked.`, `${localizedFurnitureLabel(selected)} 잠김.`)
   } else if (result.deleted) {
+    spatialModel = selected.candidateId
+      ? releaseCandidatePlacementInModel(spatialModel, selected.candidateId)
+      : spatialModel
     geometryStatusElement.textContent = t(`Deleted ${selected.label}.`, `${localizedFurnitureLabel(selected)} 삭제됨.`)
   } else {
     const elapsed = performance.now() - startedAt

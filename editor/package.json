@@ -18,6 +18,7 @@
     "test:cv-2.3": "node --experimental-strip-types scripts/verify-cv-2.3-capture-session.mjs",
     "test:cv-3.1": "node --experimental-strip-types scripts/verify-cv-3.1-spatial-candidate-layers.mjs",
     "test:cv-3.2": "node --experimental-strip-types scripts/verify-cv-3.2-candidate-tray.mjs",
+    "test:cv-3.3": "node --experimental-strip-types scripts/verify-cv-3.3-candidate-placement.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

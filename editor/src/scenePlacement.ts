@@ -13,12 +13,21 @@ export type PlacementImageReference = {
   role?: string
   widthPx?: number
   heightPx?: number
+  depthArtifactRefs?: { artifactId: string }[]
+  cameraPose?: {
+    depthEstimateMeters?: number
+    depthConfidence?: number
+    sizeScale?: number
+  }
 }
 
 export type MetricPlacementEstimate = {
   suggestedPosition: MeterPoint3d
+  suggestedSize: MeterPoint3d
   suggestedRotationDegrees: number
   suggestedWallId: string
+  evidenceSource: 'wall_role' | 'depth_assisted'
+  depthConfidence?: number
   reviewRequired: boolean
   reviewReasons: string[]
 }
@@ -33,6 +42,9 @@ const roleToWall: Record<WallRole, { wallId: string; rotationDegrees: number }> 
   back_wall: { wallId: 'back-wall', rotationDegrees: 180 },
   left_wall: { wallId: 'left-wall', rotationDegrees: 270 },
 }
+
+const minUsableDepthConfidence = 0.5
+const depthReviewConfidence = 0.75
 
 export function estimateMetricPlacementForCandidate({
   candidate,
@@ -71,19 +83,52 @@ export function estimateMetricPlacementForCandidate({
     imageWidth,
     imageHeight,
   })
-  const position = positionForWallRole({
+  const fallbackPosition = positionForWallRole({
     role: placementRole,
     normalizedX: normalized.x,
     normalizedBottomY: normalized.bottomY,
     bounds,
     size,
   })
+  let position = fallbackPosition
+  let suggestedSize = size
+  let evidenceSource: MetricPlacementEstimate['evidenceSource'] = 'wall_role'
+  let depthConfidence: number | undefined
+  const depthEvidence = depthEvidenceForPlacement({
+    image,
+    bounds,
+    role: placementRole,
+    size,
+  })
+  if (depthEvidence.kind === 'usable') {
+    suggestedSize = depthEvidence.sizeScale
+      ? scaledSize(size, depthEvidence.sizeScale)
+      : size
+    position = positionForWallRole({
+      role: placementRole,
+      normalizedX: normalized.x,
+      normalizedBottomY: normalized.bottomY,
+      bounds,
+      size: suggestedSize,
+      depthInsetMeters: depthEvidence.depthInsetMeters,
+    })
+    evidenceSource = 'depth_assisted'
+    depthConfidence = depthEvidence.confidence
+    if ((depthEvidence.confidence ?? 1) < depthReviewConfidence) {
+      reviewReasons.push('depth_assisted_low_confidence')
+    }
+  } else if (depthEvidence.kind === 'noisy') {
+    reviewReasons.push('noisy_depth_metadata')
+  }
   const wall = roleToWall[placementRole]
 
   return {
     suggestedPosition: position,
+    suggestedSize,
     suggestedRotationDegrees: wall.rotationDegrees,
     suggestedWallId: wall.wallId,
+    evidenceSource,
+    depthConfidence,
     reviewRequired: reviewReasons.length > 0,
     reviewReasons,
   }
@@ -116,26 +161,32 @@ function applyMetricPlacementToCandidate({
   if (candidate.objectType !== 'furniture') {
     return candidate
   }
+  if (candidate.reviewState === 'rejected' || candidate.reviewState === 'placed') {
+    return candidate
+  }
   const estimate = estimateMetricPlacementForCandidate({ candidate, model, images })
   const shouldReview = estimate.reviewRequired || candidate.reviewState === 'review_required'
   return {
     ...candidate,
     suggestedPosition: estimate.suggestedPosition,
+    suggestedSize: estimate.suggestedSize,
     suggestedRotationDegrees: estimate.suggestedRotationDegrees,
     suggestedWallId: estimate.suggestedWallId,
     reviewState:
-      candidate.reviewState === 'rejected' || candidate.reviewState === 'placed'
-        ? candidate.reviewState
-        : shouldReview
-          ? 'review_required'
-          : candidate.reviewState,
+      shouldReview
+        ? 'review_required'
+        : candidate.reviewState,
     reviewLabel:
-      candidate.reviewState === 'rejected' || candidate.reviewState === 'placed'
-        ? candidate.reviewLabel
-        : shouldReview
-          ? 'Needs review'
-          : candidate.reviewLabel,
-    notes: placementNotes(candidate.notes, estimate.reviewReasons, estimate.suggestedWallId),
+      shouldReview
+        ? 'Needs review'
+        : candidate.reviewLabel,
+    notes: placementNotes({
+      existingNotes: candidate.notes,
+      reviewReasons: estimate.reviewReasons,
+      wallId: estimate.suggestedWallId,
+      evidenceSource: estimate.evidenceSource,
+      depthConfidence: estimate.depthConfidence,
+    }),
   }
 }
 
@@ -145,25 +196,31 @@ function positionForWallRole({
   normalizedBottomY,
   bounds,
   size,
+  depthInsetMeters,
 }: {
   role: WallRole
   normalizedX: number
   normalizedBottomY: number
   bounds: RoomBounds
   size: MeterPoint3d
+  depthInsetMeters?: number
 }): MeterPoint3d {
   const xMargin = Math.max(0.1, size.x / 2)
   const zMargin = Math.max(0.1, size.z / 2)
-  const frontBackInset = perpendicularInset({
-    normalizedBottomY,
-    roomSpanMeters: bounds.depthMeters,
-    objectDepthMeters: size.z,
-  })
-  const sideInset = perpendicularInset({
-    normalizedBottomY,
-    roomSpanMeters: bounds.widthMeters,
-    objectDepthMeters: size.z,
-  })
+  const frontBackInset =
+    depthInsetMeters ??
+    perpendicularInset({
+      normalizedBottomY,
+      roomSpanMeters: bounds.depthMeters,
+      objectDepthMeters: size.z,
+    })
+  const sideInset =
+    depthInsetMeters ??
+    perpendicularInset({
+      normalizedBottomY,
+      roomSpanMeters: bounds.widthMeters,
+      objectDepthMeters: size.z,
+    })
   const widthOffset = normalizedX * bounds.widthMeters
   const depthOffset = normalizedX * bounds.depthMeters
 
@@ -192,6 +249,61 @@ function positionForWallRole({
     x: round2(clamp(widthOffset, xMargin, bounds.widthMeters - xMargin)),
     y: 0,
     z: round2(clamp(frontBackInset, zMargin, bounds.depthMeters - zMargin)),
+  }
+}
+
+type DepthEvidence =
+  | {
+      kind: 'usable'
+      depthInsetMeters: number
+      confidence?: number
+      sizeScale?: number
+    }
+  | { kind: 'noisy' }
+  | { kind: 'missing' }
+
+function depthEvidenceForPlacement({
+  image,
+  bounds,
+  role,
+  size,
+}: {
+  image: PlacementImageReference | null
+  bounds: RoomBounds
+  role: WallRole
+  size: MeterPoint3d
+}): DepthEvidence {
+  if (!image?.cameraPose || !image.depthArtifactRefs || image.depthArtifactRefs.length === 0) {
+    return { kind: 'missing' }
+  }
+  const depthEstimateMeters = positiveNumber(image.cameraPose.depthEstimateMeters)
+  const confidence = normalizedNumber(image.cameraPose.depthConfidence)
+  const roomSpanMeters = role === 'front_wall' || role === 'back_wall'
+    ? bounds.depthMeters
+    : bounds.widthMeters
+  const minInset = Math.max(0.1, size.z / 2)
+  const maxInset = Math.max(minInset, roomSpanMeters - minInset)
+  if (
+    !depthEstimateMeters ||
+    depthEstimateMeters < minInset ||
+    depthEstimateMeters > maxInset ||
+    (confidence !== undefined && confidence < minUsableDepthConfidence)
+  ) {
+    return { kind: 'noisy' }
+  }
+  return {
+    kind: 'usable',
+    depthInsetMeters: round2(clamp(depthEstimateMeters, minInset, maxInset)),
+    confidence,
+    sizeScale: sizeScaleValue(image.cameraPose.sizeScale),
+  }
+}
+
+function scaledSize(size: MeterPoint3d, scale: number): MeterPoint3d {
+  return {
+    x: round2(size.x * scale),
+    y: size.y,
+    z: round2(size.z * scale),
   }
 }
 
@@ -266,15 +378,27 @@ function validBoundingBox(box: ImageBoundingBox | undefined): ImageBoundingBox |
   return box
 }
 
-function placementNotes(
-  existingNotes: string | undefined,
-  reviewReasons: string[],
-  wallId: string,
-): string | undefined {
+function placementNotes({
+  existingNotes,
+  reviewReasons,
+  wallId,
+  evidenceSource,
+  depthConfidence,
+}: {
+  existingNotes: string | undefined
+  reviewReasons: string[]
+  wallId: string
+  evidenceSource: MetricPlacementEstimate['evidenceSource']
+  depthConfidence?: number
+}): string | undefined {
+  const evidenceLabel =
+    evidenceSource === 'depth_assisted'
+      ? ` with depth metadata${depthConfidence === undefined ? '' : ` (${depthConfidence.toFixed(2)})`}`
+      : ''
   const placementNote =
     reviewReasons.length > 0
-      ? `Metric placement estimated for ${wallId}; review: ${reviewReasons.join(', ')}.`
-      : `Metric placement estimated for ${wallId}.`
+      ? `Metric placement estimated for ${wallId}${evidenceLabel}; review: ${reviewReasons.join(', ')}.`
+      : `Metric placement estimated for ${wallId}${evidenceLabel}.`
   if (!existingNotes || existingNotes.startsWith('Metric placement estimated for ')) {
     return placementNote
   }
@@ -283,6 +407,19 @@ function placementNotes(
 
 function positiveNumber(value: number | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function normalizedNumber(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : undefined
+}
+
+function sizeScaleValue(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return clamp(value, 0.75, 1.3)
 }
 
 function clamp(value: number, min: number, max: number): number {

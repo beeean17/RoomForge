@@ -11,6 +11,24 @@ export type CaptureImageReference = {
   heightPx?: number
   captureOrder?: number
   guidanceState?: string
+  depthArtifactRefs?: CaptureDepthArtifactReference[]
+  cameraPose?: CaptureCameraPoseReference
+}
+
+export type CaptureDepthArtifactReference = {
+  artifactId: string
+  artifactType?: string
+  storagePath?: string
+  contentType?: string
+  byteSize?: number
+}
+
+export type CaptureCameraPoseReference = {
+  translationM?: { x: number; y: number; z: number }
+  rotationQuat?: { x: number; y: number; z: number; w: number }
+  depthEstimateMeters?: number
+  depthConfidence?: number
+  sizeScale?: number
 }
 
 export type CaptureSessionForSceneUnderstanding = {
@@ -81,7 +99,66 @@ function captureImageValue(value: unknown): CaptureImageReference | null {
     heightPx: positiveNumberValue(record.heightPx),
     captureOrder: nonNegativeNumberValue(record.captureOrder),
     guidanceState: optionalStringValue(record.guidanceState),
+    depthArtifactRefs: depthArtifactRefsValue(record.depthArtifactRefs),
+    cameraPose: cameraPoseValue(record.cameraPose),
   }
+}
+
+function depthArtifactRefsValue(value: unknown): CaptureDepthArtifactReference[] | undefined {
+  const refs = listValue(value).map(depthArtifactRefValue).filter((ref) => ref !== null)
+  return refs.length > 0 ? refs : undefined
+}
+
+function depthArtifactRefValue(value: unknown): CaptureDepthArtifactReference | null {
+  const record = recordValue(value)
+  const artifactId = stringValue(record.artifactId)
+  if (!artifactId) {
+    return null
+  }
+  return {
+    artifactId,
+    artifactType: optionalStringValue(record.artifactType),
+    storagePath: optionalStringValue(record.storagePath),
+    contentType: optionalStringValue(record.contentType),
+    byteSize: positiveNumberValue(record.byteSize),
+  }
+}
+
+function cameraPoseValue(value: unknown): CaptureCameraPoseReference | undefined {
+  const record = recordValue(value)
+  if (Object.keys(record).length === 0) {
+    return undefined
+  }
+  const depthSummary = recordValue(record.depthSummary)
+  const pose: CaptureCameraPoseReference = {
+    translationM: point3dValue(record.translationM),
+    rotationQuat: quaternionValue(record.rotationQuat),
+    depthEstimateMeters: positiveNumberValue(
+      record.depthEstimateMeters ?? record.objectDistanceMeters ?? depthSummary.medianDistanceMeters,
+    ),
+    depthConfidence: normalizedNumberValue(record.depthConfidence ?? depthSummary.confidence),
+    sizeScale: positiveNumberValue(record.sizeScale ?? depthSummary.sizeScale),
+  }
+  return Object.values(pose).some((item) => item !== undefined) ? pose : undefined
+}
+
+function point3dValue(value: unknown): { x: number; y: number; z: number } | undefined {
+  const record = recordValue(value)
+  const x = finiteNumberValue(record.x)
+  const y = finiteNumberValue(record.y)
+  const z = finiteNumberValue(record.z)
+  return x === undefined || y === undefined || z === undefined ? undefined : { x, y, z }
+}
+
+function quaternionValue(value: unknown): { x: number; y: number; z: number; w: number } | undefined {
+  const record = recordValue(value)
+  const x = finiteNumberValue(record.x)
+  const y = finiteNumberValue(record.y)
+  const z = finiteNumberValue(record.z)
+  const w = finiteNumberValue(record.w)
+  return x === undefined || y === undefined || z === undefined || w === undefined
+    ? undefined
+    : { x, y, z, w }
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -109,8 +186,18 @@ function positiveNumberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
+function finiteNumberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 function nonNegativeNumberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+function normalizedNumberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : undefined
 }
 
 function uniqueStrings(values: string[]): string[] {

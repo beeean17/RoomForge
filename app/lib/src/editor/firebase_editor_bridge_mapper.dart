@@ -152,6 +152,89 @@ class FirebaseEditorBridgeMapper {
     return _withoutNulls(payload);
   }
 
+  FirebaseSceneUnderstandingResult sceneUnderstandingResultFromBridgePayload({
+    required FirebaseJson bridgePayload,
+    required String projectId,
+    required String ownerUid,
+    required String resultId,
+    required DateTime now,
+  }) {
+    FirebaseSerializerValidators.requireCamelCasePayload(
+      bridgePayload,
+      'scene_understanding_bridge',
+    );
+    final result = _recordValue(bridgePayload['sceneUnderstandingResult']);
+    final candidateObjects = _listValue(result['candidateObjects'])
+        .map(_recordValue)
+        .where((object) => object.isNotEmpty)
+        .map(_candidateSceneObjectFromBridgePayload)
+        .toList();
+    final placedObjects = _listValue(result['placedObjects'])
+        .map(_recordValue)
+        .where((object) => object.isNotEmpty)
+        .map(_placedSceneObjectFromBridgePayload)
+        .toList();
+    final confirmedObjects = _listValue(result['confirmedObjects'])
+        .map(_recordValue)
+        .where((object) => object.isNotEmpty)
+        .map(
+          (object) => _confirmedSceneObjectFromBridgePayload(
+            object,
+            ownerUid: ownerUid,
+            fallbackConfirmedAt: now,
+          ),
+        )
+        .toList();
+    final structuralFixtures = _listValue(result['structuralFixtures'])
+        .map(_recordValue)
+        .where((fixture) => fixture.isNotEmpty)
+        .map(_structuralFixtureFromBridgePayload)
+        .toList();
+    final failureReasonCode = _sceneUnderstandingFailureReason(
+      result['failureReasonCode'],
+    );
+    final confidenceScore = _optionalNumberValue(result['confidenceScore']);
+    final coverage = _recordValue(_snakeCaseNested(result['coverage']));
+
+    return FirebaseSceneUnderstandingResult(
+      resultId: resultId,
+      projectId: projectId,
+      ownerUid: ownerUid,
+      captureSessionId: _stringValue(
+        result['captureSessionId'],
+        'capture-session-unknown',
+      ),
+      jobId: _optionalStringValue(result['jobId']),
+      providerType: _sceneUnderstandingProviderType(result['providerType']),
+      algorithmId: _stringValue(
+        result['algorithmId'],
+        'browser-scene-understanding-v1',
+      ),
+      modelId: _optionalStringValue(result['modelId']),
+      confidenceScore: confidenceScore,
+      qualityStatus: _qualityStatusFromBridge(
+        result['qualityStatus'],
+        confidenceScore: confidenceScore,
+        hasCandidateObjects: candidateObjects.isNotEmpty,
+        failureReasonCode: failureReasonCode,
+      ),
+      failureReasonCode: failureReasonCode,
+      failureReason: _optionalStringValue(result['failureReason']),
+      coverage: coverage,
+      candidateObjects: candidateObjects,
+      placedObjects: placedObjects,
+      confirmedObjects: confirmedObjects,
+      structuralFixtures: structuralFixtures,
+      processingStartedAt: _optionalDateValue(result['processingStartedAt']),
+      processingCompletedAt: _optionalDateValue(
+        result['processingCompletedAt'],
+      ),
+      createdAt: _optionalDateValue(result['createdAt']) ?? now,
+      updatedAt: now,
+      schemaVersion: 1,
+    );
+  }
+
   FirebaseJson captureSessionToBridgePayload(
     FirebaseCaptureSession session,
     List<FirebaseCaptureImage> images,
@@ -401,6 +484,104 @@ class FirebaseEditorBridgeMapper {
     return _withoutNulls(payload);
   }
 
+  FirebaseCandidateSceneObject _candidateSceneObjectFromBridgePayload(
+    FirebaseJson object,
+  ) {
+    final boundingBox = _recordValue(object['boundingBox']);
+    return FirebaseCandidateSceneObject(
+      candidateId: _stringValue(object['candidateId'], 'candidate-unknown'),
+      objectType: _sceneObjectType(object['objectType']),
+      category: _stringValue(object['category'], 'custom'),
+      label: _optionalStringValue(object['label']),
+      sourceImageId: _stringValue(
+        object['sourceImageId'],
+        'source-image-unknown',
+      ),
+      captureImageId: _stringValue(
+        object['captureImageId'],
+        'capture-image-unknown',
+      ),
+      sourceImageRole: _captureImageRole(object['sourceImageRole']),
+      coordinateSpace: _coordinateSpace(object['coordinateSpace']),
+      boundingBox: FirebaseBoundingBox(
+        x: _numberValue(boundingBox['x'], 0),
+        y: _numberValue(boundingBox['y'], 0),
+        width: _positiveNumberValue(boundingBox['width'], 1),
+        height: _positiveNumberValue(boundingBox['height'], 1),
+      ),
+      confidenceScore: _clampedConfidence(object['confidenceScore']),
+      reviewState: _candidateReviewState(object['reviewState']),
+      suggestedAssetId: _optionalStringValue(object['suggestedAssetId']),
+      suggestedPositionM: _optionalPoint3d(
+        object['suggestedPosition'] ?? object['suggestedPositionM'],
+      ),
+      suggestedSizeM: _optionalPoint3d(
+        object['suggestedSize'] ?? object['suggestedSizeM'],
+      ),
+      suggestedRotationDeg: _optionalNumberValue(
+        object['suggestedRotationDegrees'] ?? object['suggestedRotationDeg'],
+      ),
+      notes: _optionalStringValue(object['notes']),
+    );
+  }
+
+  FirebasePlacedSceneObject _placedSceneObjectFromBridgePayload(
+    FirebaseJson object,
+  ) {
+    return FirebasePlacedSceneObject(
+      objectId: _stringValue(object['objectId'], 'placed-object-unknown'),
+      candidateId: _optionalStringValue(object['candidateId']),
+      objectType: _sceneObjectType(object['objectType']),
+      category: _stringValue(object['category'], 'custom'),
+      assetId: _optionalStringValue(object['assetId']),
+      label: _optionalStringValue(object['label']),
+      positionM: _point3dWithFallback(object['position']),
+      sizeM: _point3dWithFallback(object['size'], positiveFallback: 1),
+      rotationDeg: _numberValue(object['rotationDegrees'], 0),
+      confidenceScore: _optionalNumberValue(object['confidenceScore']),
+      locked: object['locked'] is bool ? object['locked'] as bool : null,
+    );
+  }
+
+  FirebaseConfirmedSceneObject _confirmedSceneObjectFromBridgePayload(
+    FirebaseJson object, {
+    required String ownerUid,
+    required DateTime fallbackConfirmedAt,
+  }) {
+    return FirebaseConfirmedSceneObject(
+      objectId: _stringValue(object['objectId'], 'confirmed-object-unknown'),
+      candidateId: _optionalStringValue(object['candidateId']),
+      objectType: _sceneObjectType(object['objectType']),
+      category: _stringValue(object['category'], 'custom'),
+      assetId: _optionalStringValue(object['assetId']),
+      label: _optionalStringValue(object['label']),
+      positionM: _point3dWithFallback(object['position']),
+      sizeM: _point3dWithFallback(object['size'], positiveFallback: 1),
+      rotationDeg: _numberValue(object['rotationDegrees'], 0),
+      confirmedByUid: _stringValue(object['confirmedByUid'], ownerUid),
+      confirmedAt:
+          _optionalDateValue(object['confirmedAt']) ?? fallbackConfirmedAt,
+      locked: object['locked'] is bool ? object['locked'] as bool : null,
+    );
+  }
+
+  FirebaseStructuralFixture _structuralFixtureFromBridgePayload(
+    FirebaseJson fixture,
+  ) {
+    return FirebaseStructuralFixture(
+      fixtureId: _stringValue(fixture['fixtureId'], 'fixture-unknown'),
+      candidateId: _optionalStringValue(fixture['candidateId']),
+      category: _structuralFixtureCategory(fixture['category']),
+      wallId: _stringValue(fixture['wallId'], 'room-shell'),
+      label: _optionalStringValue(fixture['label']),
+      positionM: _point3dWithFallback(fixture['position']),
+      sizeM: _point3dWithFallback(fixture['size'], positiveFallback: 1),
+      rotationDeg: _numberValue(fixture['rotationDegrees'], 0),
+      confidenceScore: _optionalNumberValue(fixture['confidenceScore']),
+      locked: fixture['locked'] is bool ? fixture['locked'] as bool : null,
+    );
+  }
+
   FirebaseJson point2dToBridgePayload(FirebasePoint2d point) {
     return {'x': point.x, 'y': point.y};
   }
@@ -466,6 +647,19 @@ class FirebaseEditorBridgeMapper {
     return value;
   }
 
+  Object? _snakeCaseNested(Object? value) {
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          _camelToSnake(entry.key.toString()): _snakeCaseNested(entry.value),
+      };
+    }
+    if (value is Iterable) {
+      return value.map(_snakeCaseNested).toList();
+    }
+    return value;
+  }
+
   String _snakeToCamel(String value) {
     final parts = value.split('_');
     if (parts.isEmpty) {
@@ -481,6 +675,13 @@ class FirebaseEditorBridgeMapper {
                 : '${part[0].toUpperCase()}${part.substring(1)}',
           ),
     ].join();
+  }
+
+  String _camelToSnake(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'(?<=[a-z0-9])[A-Z]'),
+      (match) => '_${match.group(0)!.toLowerCase()}',
+    );
   }
 
   FirebaseJson _snakeCasePayload(FirebaseJson payload) {
@@ -514,8 +715,180 @@ class FirebaseEditorBridgeMapper {
     return value is String && value.isNotEmpty ? value : fallback;
   }
 
+  String? _optionalStringValue(Object? value) {
+    return value is String && value.isNotEmpty ? value : null;
+  }
+
   double _numberValue(Object? value, double fallback) {
     return value is num ? value.toDouble() : fallback;
+  }
+
+  double? _optionalNumberValue(Object? value) {
+    return value is num ? value.toDouble() : null;
+  }
+
+  double _positiveNumberValue(Object? value, double fallback) {
+    final parsed = _numberValue(value, fallback);
+    return parsed > 0 ? parsed : fallback;
+  }
+
+  double _clampedConfidence(Object? value) {
+    final parsed = _numberValue(value, 0);
+    if (parsed < 0) {
+      return 0;
+    }
+    if (parsed > 1) {
+      return 1;
+    }
+    return parsed;
+  }
+
+  DateTime? _optionalDateValue(Object? value) {
+    if (value is DateTime) {
+      return value.toUtc();
+    }
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value)?.toUtc();
+    }
+    return null;
+  }
+
+  FirebasePoint3d? _optionalPoint3d(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    final point = Map<String, Object?>.from(value);
+    if (point['x'] is! num || point['y'] is! num || point['z'] is! num) {
+      return null;
+    }
+    return FirebasePoint3d(
+      x: (point['x'] as num).toDouble(),
+      y: (point['y'] as num).toDouble(),
+      z: (point['z'] as num).toDouble(),
+    );
+  }
+
+  FirebasePoint3d _point3dWithFallback(
+    Object? value, {
+    double positiveFallback = 0,
+  }) {
+    return _optionalPoint3d(value) ??
+        FirebasePoint3d(
+          x: positiveFallback,
+          y: positiveFallback,
+          z: positiveFallback,
+        );
+  }
+
+  FirebaseSceneUnderstandingProviderType _sceneUnderstandingProviderType(
+    Object? value,
+  ) {
+    final provider = value?.toString() ?? '';
+    if (provider.startsWith('browser_cv')) {
+      return FirebaseSceneUnderstandingProviderType.browserCv;
+    }
+    try {
+      return FirebaseSceneUnderstandingProviderType.fromWireValue(provider);
+    } on FirebaseContractException {
+      return FirebaseSceneUnderstandingProviderType.browserCv;
+    }
+  }
+
+  FirebaseSceneUnderstandingFailureReason? _sceneUnderstandingFailureReason(
+    Object? value,
+  ) {
+    final reason = value?.toString();
+    if (reason == null || reason.isEmpty) {
+      return null;
+    }
+    final normalized = reason == 'no_capture_images'
+        ? 'no_source_images'
+        : reason;
+    try {
+      return FirebaseSceneUnderstandingFailureReason.fromWireValue(normalized);
+    } on FirebaseContractException {
+      return FirebaseSceneUnderstandingFailureReason.detectorFailed;
+    }
+  }
+
+  FirebaseQualityStatus _qualityStatusFromBridge(
+    Object? value, {
+    required double? confidenceScore,
+    required bool hasCandidateObjects,
+    required FirebaseSceneUnderstandingFailureReason? failureReasonCode,
+  }) {
+    if (value is String && value.isNotEmpty) {
+      try {
+        return FirebaseQualityStatus.fromWireValue(value);
+      } on FirebaseContractException {
+        // Fall back to signal-based resolution below.
+      }
+    }
+    return FirebaseSceneUnderstandingQualityResolver.fromSignal(
+      confidenceScore: confidenceScore,
+      hasCandidateObjects: hasCandidateObjects,
+      failureReasonCode: failureReasonCode,
+    );
+  }
+
+  FirebaseSceneObjectType _sceneObjectType(Object? value) {
+    final type = value?.toString();
+    if (type == null || type.isEmpty) {
+      return FirebaseSceneObjectType.furniture;
+    }
+    try {
+      return FirebaseSceneObjectType.fromWireValue(type);
+    } on FirebaseContractException {
+      return FirebaseSceneObjectType.furniture;
+    }
+  }
+
+  FirebaseCandidateReviewState _candidateReviewState(Object? value) {
+    final state = value?.toString();
+    if (state == null || state == 'new' || state.isEmpty) {
+      return FirebaseCandidateReviewState.suggested;
+    }
+    try {
+      return FirebaseCandidateReviewState.fromWireValue(state);
+    } on FirebaseContractException {
+      return FirebaseCandidateReviewState.reviewRequired;
+    }
+  }
+
+  FirebaseCaptureImageRole _captureImageRole(Object? value) {
+    final role = value?.toString();
+    if (role == null || role.isEmpty) {
+      return FirebaseCaptureImageRole.overview;
+    }
+    try {
+      return FirebaseCaptureImageRole.fromWireValue(role);
+    } on FirebaseContractException {
+      return FirebaseCaptureImageRole.overview;
+    }
+  }
+
+  FirebaseCoordinateSpace _coordinateSpace(Object? value) {
+    final coordinateSpace = value?.toString();
+    if (coordinateSpace == null || coordinateSpace.isEmpty) {
+      return FirebaseCoordinateSpace.imagePixels;
+    }
+    try {
+      return FirebaseCoordinateSpace.fromWireValue(coordinateSpace);
+    } on FirebaseContractException {
+      return FirebaseCoordinateSpace.imagePixels;
+    }
+  }
+
+  FirebaseStructuralFixtureCategory _structuralFixtureCategory(Object? value) {
+    final category = value?.toString();
+    if (category == null || category.isEmpty) {
+      return FirebaseStructuralFixtureCategory.custom;
+    }
+    try {
+      return FirebaseStructuralFixtureCategory.fromWireValue(category);
+    } on FirebaseContractException {
+      return FirebaseStructuralFixtureCategory.custom;
+    }
   }
 
   int _captureImageRoleOrder(FirebaseCaptureImageRole role) {

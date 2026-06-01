@@ -180,6 +180,19 @@ abstract class FirebaseLayoutRepository {
   });
 }
 
+abstract class FirebaseSceneUnderstandingRepository {
+  String newResultId({required String projectId});
+
+  Future<FirebaseSceneUnderstandingResult> saveSceneUnderstandingResult(
+    FirebaseSceneUnderstandingResult result,
+  );
+
+  Future<FirebaseSceneUnderstandingResult?> loadLatestSceneUnderstandingResult({
+    required String ownerUid,
+    required String projectId,
+  });
+}
+
 abstract class FirebaseDraftRepository {
   Future<void> saveLocalDraft({
     required String ownerUid,
@@ -202,6 +215,7 @@ enum FirebaseAdminCollectionGroup {
   reconstructionJobs('reconstruction_jobs'),
   transitions('transitions'),
   openCvResults('opencv_results'),
+  sceneUnderstandingResults('scene_understanding_results'),
   layouts('layouts'),
   adminActions('admin_actions');
 

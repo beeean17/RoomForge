@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../auth/auth_repository.dart';
+import '../editor/firebase_editor_bridge_mapper.dart';
 import '../firebase/firebase_models.dart';
 import '../firebase/firebase_repositories.dart';
 import '../firebase/firebase_serializers.dart';
@@ -20,6 +21,7 @@ class FirebaseProjectApi extends ProjectApi {
     required FirebaseProjectRepository projectRepository,
     required FirebaseReconstructionRepository reconstructionRepository,
     required FirebaseRoomDimensionsRepository roomDimensionsRepository,
+    FirebaseSceneUnderstandingRepository? sceneUnderstandingRepository,
     required FirebaseSourceImageRepository sourceImageRepository,
     required FirebaseSourceImageUploader sourceImageUploader,
   }) : _session = session,
@@ -29,6 +31,9 @@ class FirebaseProjectApi extends ProjectApi {
        _projectRepository = projectRepository,
        _reconstructionRepository = reconstructionRepository,
        _roomDimensionsRepository = roomDimensionsRepository,
+       _sceneUnderstandingRepository =
+           sceneUnderstandingRepository ??
+           const _UnavailableSceneUnderstandingRepository(),
        _sourceImageRepository = sourceImageRepository,
        _sourceImageUploader = sourceImageUploader;
 
@@ -39,8 +44,11 @@ class FirebaseProjectApi extends ProjectApi {
   final FirebaseProjectRepository _projectRepository;
   final FirebaseReconstructionRepository _reconstructionRepository;
   final FirebaseRoomDimensionsRepository _roomDimensionsRepository;
+  final FirebaseSceneUnderstandingRepository _sceneUnderstandingRepository;
   final FirebaseSourceImageRepository _sourceImageRepository;
   final FirebaseSourceImageUploader _sourceImageUploader;
+  final FirebaseEditorBridgeMapper _editorBridgeMapper =
+      const FirebaseEditorBridgeMapper();
 
   @override
   Future<List<RoomProject>> listProjects() async {
@@ -1086,6 +1094,47 @@ class FirebaseProjectApi extends ProjectApi {
   }
 
   @override
+  Future<SceneUnderstandingResultRef> persistSceneUnderstandingResult({
+    required String projectId,
+    required Map<String, Object?> sceneUnderstandingResult,
+  }) async {
+    await _projectRepository.getProject(
+      ownerUid: _session.uid,
+      projectId: projectId,
+    );
+    final now = DateTime.now().toUtc();
+    final resultId =
+        _stringValue(sceneUnderstandingResult['resultId']) ??
+        _sceneUnderstandingRepository.newResultId(projectId: projectId);
+    final result = _editorBridgeMapper
+        .sceneUnderstandingResultFromBridgePayload(
+          bridgePayload: {'sceneUnderstandingResult': sceneUnderstandingResult},
+          projectId: projectId,
+          ownerUid: _session.uid,
+          resultId: resultId,
+          now: now,
+        );
+    final saved = await _sceneUnderstandingRepository
+        .saveSceneUnderstandingResult(result);
+    return SceneUnderstandingResultRef(id: saved.resultId);
+  }
+
+  @override
+  Future<Map<String, Object?>?> loadLatestSceneUnderstandingResult({
+    required String projectId,
+  }) async {
+    final result = await _sceneUnderstandingRepository
+        .loadLatestSceneUnderstandingResult(
+          ownerUid: _session.uid,
+          projectId: projectId,
+        );
+    if (result == null) {
+      return null;
+    }
+    return _editorBridgeMapper.sceneUnderstandingResultToBridgePayload(result);
+  }
+
+  @override
   Future<SavedLayout> saveLayout({
     required String projectId,
     required Map<String, Object?> roomDimensions,
@@ -1773,6 +1822,37 @@ class FirebaseProjectApi extends ProjectApi {
 
   bool _isPermissionError(String code) {
     return code == 'permission-denied' || code == 'unauthorized';
+  }
+}
+
+class _UnavailableSceneUnderstandingRepository
+    implements FirebaseSceneUnderstandingRepository {
+  const _UnavailableSceneUnderstandingRepository();
+
+  @override
+  String newResultId({required String projectId}) {
+    throw UnsupportedError(
+      'Firebase scene understanding access is unavailable.',
+    );
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult> saveSceneUnderstandingResult(
+    FirebaseSceneUnderstandingResult result,
+  ) {
+    throw UnsupportedError(
+      'Firebase scene understanding access is unavailable.',
+    );
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult?> loadLatestSceneUnderstandingResult({
+    required String ownerUid,
+    required String projectId,
+  }) {
+    throw UnsupportedError(
+      'Firebase scene understanding access is unavailable.',
+    );
   }
 }
 

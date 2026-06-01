@@ -12,6 +12,7 @@ void main() {
       expect(FirebaseGeometryRepository, isNotNull);
       expect(FirebaseFloorPlanRepository, isNotNull);
       expect(FirebaseLayoutRepository, isNotNull);
+      expect(FirebaseSceneUnderstandingRepository, isNotNull);
       expect(FirebaseDraftRepository, isNotNull);
       expect(FirebaseAdminRepository, isNotNull);
     });

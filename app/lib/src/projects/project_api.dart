@@ -364,6 +364,12 @@ class FloorPlanRef {
   final String id;
 }
 
+class SceneUnderstandingResultRef {
+  const SceneUnderstandingResultRef({required this.id});
+
+  final String id;
+}
+
 abstract class ProjectApi {
   const ProjectApi({required this.authRepository});
 
@@ -490,6 +496,15 @@ abstract class ProjectApi {
     required Map<String, Object?> perspectiveAssumptions,
     String unit = 'meters',
     String? qualityStatus,
+  });
+
+  Future<SceneUnderstandingResultRef> persistSceneUnderstandingResult({
+    required String projectId,
+    required Map<String, Object?> sceneUnderstandingResult,
+  });
+
+  Future<Map<String, Object?>?> loadLatestSceneUnderstandingResult({
+    required String projectId,
   });
 
   Future<SavedLayout> saveLayout({
@@ -876,6 +891,24 @@ class LegacyProjectApi extends ProjectApi {
     final data = body['data'] as Map<String, Object?>;
     final floorPlan = data['floor_plan'] as Map<String, Object?>;
     return FloorPlanRef(id: _stringId(floorPlan['id']));
+  }
+
+  @override
+  Future<SceneUnderstandingResultRef> persistSceneUnderstandingResult({
+    required String projectId,
+    required Map<String, Object?> sceneUnderstandingResult,
+  }) {
+    throw const ProjectApiException(
+      'Scene understanding persistence requires the Firebase backend.',
+      code: 'unsupported_backend',
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>?> loadLatestSceneUnderstandingResult({
+    required String projectId,
+  }) async {
+    return null;
   }
 
   @override

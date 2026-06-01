@@ -975,6 +975,80 @@ void main() {
   );
 
   test(
+    'FirebaseProjectApi saves and reloads scene understanding results',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final sceneResults = _FakeSceneUnderstandingRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sceneUnderstandingRepository: sceneResults,
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      final ref = await api.persistSceneUnderstandingResult(
+        projectId: 'project-1',
+        sceneUnderstandingResult: const {
+          'resultId': 'scene-result-1',
+          'captureSessionId': 'session-1',
+          'providerType': 'browser_cv_mock',
+          'algorithmId': 'mock-scene-understanding-v1',
+          'confidenceScore': 0.72,
+          'qualityStatus': 'review_required',
+          'coverage': {'frontWall': 'complete'},
+          'candidateObjects': [
+            {
+              'candidateId': 'candidate-chair-1',
+              'objectType': 'furniture',
+              'category': 'chair',
+              'sourceImageId': 'source-image-1',
+              'captureImageId': 'capture-image-1',
+              'sourceImageRole': 'front_wall',
+              'coordinateSpace': 'image_pixels',
+              'boundingBox': {'x': 10, 'y': 20, 'width': 120, 'height': 160},
+              'confidenceScore': 0.72,
+              'reviewState': 'review_required',
+            },
+          ],
+          'placedObjects': [],
+          'confirmedObjects': [],
+          'structuralFixtures': [],
+        },
+      );
+      final reloaded = await api.loadLatestSceneUnderstandingResult(
+        projectId: 'project-1',
+      );
+
+      expect(ref.id, 'scene-result-1');
+      expect(sceneResults.saved?.ownerUid, 'user-1');
+      expect(
+        sceneResults.saved?.providerType,
+        FirebaseSceneUnderstandingProviderType.browserCv,
+      );
+      expect(
+        sceneResults.saved?.coverage,
+        containsPair('front_wall', 'complete'),
+      );
+      final result = reloaded?['sceneUnderstandingResult'] as FirebaseJson;
+      final candidates = result['candidateObjects'] as List<Object?>;
+      expect(result, containsPair('resultId', 'scene-result-1'));
+      expect(candidates, hasLength(1));
+      expect(
+        Map<String, Object?>.from(candidates.single as Map),
+        containsPair('coordinateSpace', 'image_pixels'),
+      );
+    },
+  );
+
+  test(
     'FirebaseProjectApi exercises the signed-in default smoke flow in order',
     () async {
       final projects = _FakeProjectRepository();
@@ -1940,6 +2014,41 @@ class _FakeLayoutRepository implements FirebaseLayoutRepository {
       throw const FirebaseContractException('Layout is not available.');
     }
     return layout.toExportJson();
+  }
+}
+
+class _FakeSceneUnderstandingRepository
+    implements FirebaseSceneUnderstandingRepository {
+  FirebaseSceneUnderstandingResult? saved;
+  var _resultCount = 0;
+
+  @override
+  String newResultId({required String projectId}) {
+    _resultCount += 1;
+    return 'scene-result-$_resultCount';
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult> saveSceneUnderstandingResult(
+    FirebaseSceneUnderstandingResult result,
+  ) async {
+    result.validate();
+    saved = result;
+    return result;
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult?> loadLatestSceneUnderstandingResult({
+    required String ownerUid,
+    required String projectId,
+  }) async {
+    final result = saved;
+    if (result == null ||
+        result.ownerUid != ownerUid ||
+        result.projectId != projectId) {
+      return null;
+    }
+    return result;
   }
 }
 

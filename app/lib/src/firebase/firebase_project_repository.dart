@@ -736,6 +736,64 @@ class FirebaseFirestoreLayoutRepository implements FirebaseLayoutRepository {
   }
 }
 
+class FirebaseFirestoreSceneUnderstandingRepository
+    implements FirebaseSceneUnderstandingRepository {
+  const FirebaseFirestoreSceneUnderstandingRepository({
+    required FirebaseFirestore firestore,
+  }) : _firestore = firestore;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> _resultsCollection(
+    String projectId,
+  ) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('scene_understanding_results');
+  }
+
+  @override
+  String newResultId({required String projectId}) {
+    return _resultsCollection(projectId).doc().id;
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult> saveSceneUnderstandingResult(
+    FirebaseSceneUnderstandingResult result,
+  ) async {
+    result.validate();
+    await _resultsCollection(
+      result.projectId,
+    ).doc(result.resultId).set(result.toFirestoreJson());
+    return result;
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult?> loadLatestSceneUnderstandingResult({
+    required String ownerUid,
+    required String projectId,
+  }) async {
+    final snapshot = await _resultsCollection(projectId)
+        .orderBy('updated_at', descending: true)
+        .limit(1)
+        .get(const GetOptions(source: Source.server));
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+    final result =
+        FirebaseModelSerializers.sceneUnderstandingResultFromFirestore(
+          _firestoreJson(snapshot.docs.first.data()),
+        );
+    if (result.ownerUid != ownerUid) {
+      throw const FirebaseContractException(
+        'Scene understanding result is not available.',
+      );
+    }
+    return result;
+  }
+}
+
 class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
   const DisabledFirebaseProjectRepository();
 
@@ -998,6 +1056,37 @@ class DisabledFirebaseLayoutRepository implements FirebaseLayoutRepository {
     required String projectId,
   }) {
     throw UnsupportedError('Firebase layout access is unavailable.');
+  }
+}
+
+class DisabledFirebaseSceneUnderstandingRepository
+    implements FirebaseSceneUnderstandingRepository {
+  const DisabledFirebaseSceneUnderstandingRepository();
+
+  @override
+  String newResultId({required String projectId}) {
+    throw UnsupportedError(
+      'Firebase scene understanding access is unavailable.',
+    );
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult> saveSceneUnderstandingResult(
+    FirebaseSceneUnderstandingResult result,
+  ) {
+    throw UnsupportedError(
+      'Firebase scene understanding access is unavailable.',
+    );
+  }
+
+  @override
+  Future<FirebaseSceneUnderstandingResult?> loadLatestSceneUnderstandingResult({
+    required String ownerUid,
+    required String projectId,
+  }) {
+    throw UnsupportedError(
+      'Firebase scene understanding access is unavailable.',
+    );
   }
 }
 

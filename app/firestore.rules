@@ -334,6 +334,34 @@ service cloud.firestore {
       ];
     }
 
+    function sceneUnderstandingResultKeys() {
+      return [
+        'result_id',
+        'project_id',
+        'owner_uid',
+        'capture_session_id',
+        'job_id',
+        'provider_type',
+        'algorithm_id',
+        'model_id',
+        'confidence_score',
+        'quality_status',
+        'failure_reason_code',
+        'failure_reason',
+        'coverage',
+        'candidate_objects',
+        'placed_objects',
+        'confirmed_objects',
+        'structural_fixtures',
+        'artifact_refs',
+        'processing_started_at',
+        'processing_completed_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
     function artifactRefKeys() {
       return [
         'artifact_id',
@@ -447,6 +475,26 @@ service cloud.firestore {
 
     function isAllowedQualityStatus(status) {
       return status in ['success', 'review_required', 'failed'];
+    }
+
+    function isAllowedSceneUnderstandingProvider(providerType) {
+      return providerType in [
+        'browser_cv',
+        'android_arcore_depth',
+        'cloud_gpu',
+        'manual'
+      ];
+    }
+
+    function isAllowedSceneUnderstandingFailureReason(reasonCode) {
+      return reasonCode in [
+        'no_source_images',
+        'unsupported_runtime',
+        'detector_failed',
+        'low_confidence',
+        'insufficient_coverage',
+        'provider_unavailable'
+      ];
     }
 
     function isAllowedArtifactContentType(contentType) {
@@ -1280,6 +1328,81 @@ service cloud.firestore {
         && request.resource.data.schema_version == resource.data.schema_version;
     }
 
+    function validSceneUnderstandingFailureFields() {
+      return (
+          !request.resource.data.keys().hasAny(['failure_reason_code'])
+          || request.resource.data.failure_reason_code == null
+          || isAllowedSceneUnderstandingFailureReason(request.resource.data.failure_reason_code)
+        )
+        && (
+          request.resource.data.quality_status != 'failed'
+          || (
+            request.resource.data.failure_reason_code is string
+            && isAllowedSceneUnderstandingFailureReason(request.resource.data.failure_reason_code)
+          )
+        );
+    }
+
+    function validSceneUnderstandingObjects() {
+      return request.resource.data.candidate_objects is list
+        && request.resource.data.candidate_objects.size() <= 64
+        && request.resource.data.placed_objects is list
+        && request.resource.data.placed_objects.size() <= 64
+        && request.resource.data.confirmed_objects is list
+        && request.resource.data.confirmed_objects.size() <= 64
+        && request.resource.data.structural_fixtures is list
+        && request.resource.data.structural_fixtures.size() <= 32;
+    }
+
+    function validSceneUnderstandingWrite(projectId, resultId) {
+      return ownsProject(projectId)
+        && request.resource.data.result_id == resultId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.capture_session_id is string
+        && request.resource.data.provider_type is string
+        && isAllowedSceneUnderstandingProvider(request.resource.data.provider_type)
+        && request.resource.data.algorithm_id is string
+        && request.resource.data.quality_status is string
+        && isAllowedQualityStatus(request.resource.data.quality_status)
+        && validSceneUnderstandingFailureFields()
+        && validSceneUnderstandingObjects()
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.updated_at is timestamp
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(sceneUnderstandingResultKeys())
+        && request.resource.data.keys().hasAll([
+          'result_id',
+          'project_id',
+          'owner_uid',
+          'capture_session_id',
+          'provider_type',
+          'algorithm_id',
+          'quality_status',
+          'candidate_objects',
+          'placed_objects',
+          'confirmed_objects',
+          'structural_fixtures',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validSceneUnderstandingCreate(projectId, resultId) {
+      return validSceneUnderstandingWrite(projectId, resultId);
+    }
+
+    function validSceneUnderstandingUpdate(projectId, resultId) {
+      return validSceneUnderstandingWrite(projectId, resultId)
+        && request.resource.data.result_id == resource.data.result_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.capture_session_id == resource.data.capture_session_id
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version;
+    }
+
     function validLayoutRoomDimensions(projectId) {
       return request.resource.data.room_dimensions is map
         && request.resource.data.floor_plan is map
@@ -1509,6 +1632,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /projects/{projectId}/scene_understanding_results/{resultId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validSceneUnderstandingCreate(projectId, resultId);
+      allow update: if validSceneUnderstandingUpdate(projectId, resultId);
+      allow delete: if false;
+    }
+
     match /projects/{projectId}/layouts/{layoutId} {
       allow get, list: if ownsProject(projectId) || isAdmin();
       allow create: if validLayoutCreate(projectId, layoutId);
@@ -1534,6 +1664,11 @@ service cloud.firestore {
     }
 
     match /{path=**}/opencv_results/{resultId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/scene_understanding_results/{resultId} {
       allow get, list: if isAdmin();
       allow create, update, delete: if false;
     }

@@ -19,6 +19,7 @@ class RoomForgeBackendBindings {
     required FirebaseProjectRepository projectRepository,
     required FirebaseReconstructionRepository reconstructionRepository,
     required FirebaseRoomDimensionsRepository roomDimensionsRepository,
+    required FirebaseSceneUnderstandingRepository sceneUnderstandingRepository,
     required FirebaseSourceImageRepository sourceImageRepository,
     required FirebaseSourceImageUploader sourceImageUploader,
   }) {
@@ -35,6 +36,7 @@ class RoomForgeBackendBindings {
       projectRepository: projectRepository,
       reconstructionRepository: reconstructionRepository,
       roomDimensionsRepository: roomDimensionsRepository,
+      sceneUnderstandingRepository: sceneUnderstandingRepository,
       sourceImageRepository: sourceImageRepository,
       sourceImageUploader: sourceImageUploader,
     );

@@ -142,6 +142,8 @@ Future<void> main() async {
       projectRepository: firebaseBootstrap.projectRepository,
       reconstructionRepository: firebaseBootstrap.reconstructionRepository,
       roomDimensionsRepository: firebaseBootstrap.roomDimensionsRepository,
+      sceneUnderstandingRepository:
+          firebaseBootstrap.sceneUnderstandingRepository,
       sourceImageRepository: firebaseBootstrap.sourceImageRepository,
       sourceImageUploader: firebaseBootstrap.sourceImageUploader,
       userRepository: firebaseBootstrap.userRepository,
@@ -161,6 +163,7 @@ class RoomForgeApp extends StatelessWidget {
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
+    required this.sceneUnderstandingRepository,
     required this.sourceImageRepository,
     required this.sourceImageUploader,
     required this.userRepository,
@@ -177,6 +180,7 @@ class RoomForgeApp extends StatelessWidget {
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
+  final FirebaseSceneUnderstandingRepository sceneUnderstandingRepository;
   final FirebaseSourceImageRepository sourceImageRepository;
   final FirebaseSourceImageUploader sourceImageUploader;
   final FirebaseUserRepository userRepository;
@@ -251,6 +255,7 @@ class RoomForgeApp extends StatelessWidget {
         projectRepository: projectRepository,
         reconstructionRepository: reconstructionRepository,
         roomDimensionsRepository: roomDimensionsRepository,
+        sceneUnderstandingRepository: sceneUnderstandingRepository,
         sourceImageRepository: sourceImageRepository,
         sourceImageUploader: sourceImageUploader,
         userRepository: userRepository,
@@ -271,6 +276,7 @@ class AuthGate extends StatelessWidget {
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
+    required this.sceneUnderstandingRepository,
     required this.sourceImageRepository,
     required this.sourceImageUploader,
     required this.userRepository,
@@ -287,6 +293,7 @@ class AuthGate extends StatelessWidget {
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
+  final FirebaseSceneUnderstandingRepository sceneUnderstandingRepository;
   final FirebaseSourceImageRepository sourceImageRepository;
   final FirebaseSourceImageUploader sourceImageUploader;
   final FirebaseUserRepository userRepository;
@@ -328,6 +335,7 @@ class AuthGate extends StatelessWidget {
               projectRepository: projectRepository,
               reconstructionRepository: reconstructionRepository,
               roomDimensionsRepository: roomDimensionsRepository,
+              sceneUnderstandingRepository: sceneUnderstandingRepository,
               sourceImageRepository: sourceImageRepository,
               sourceImageUploader: sourceImageUploader,
             ),
@@ -5457,6 +5465,8 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
   String? _latestOpenCvResultId;
   String? _latestConfirmedGeometryId;
   String? _latestFloorPlanId;
+  String? _latestSceneUnderstandingResultId;
+  Map<String, Object?>? _latestSceneUnderstandingBridgePayload;
   String? _persistedJobStatus;
   String? _activeLayoutId;
   DateTime? _activeCloudUpdatedAt;
@@ -5507,6 +5517,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
 
     _messageSubscription = html.window.onMessage.listen(_handleEditorMessage);
     unawaited(_detectRecoverableDraftWithLatestCloud());
+    unawaited(_loadPersistedSceneUnderstandingResult());
   }
 
   @override
@@ -5585,6 +5596,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     Map<String, Object?>? openCvPayload;
     Map<String, Object?>? confirmedGeometryPayload;
     Map<String, Object?>? floorPlanPayload;
+    Map<String, Object?>? sceneUnderstandingPayload;
     setState(() {
       if (type == 'roomforge.editor.ready') {
         _bridgeStatus = rf('Editor ready.', '편집기 준비됨.');
@@ -5618,6 +5630,21 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
         final payload = _recordValue(data['payload']);
         floorPlanPayload = payload;
         _sceneStatus = rf('Metric floor plan generated.', '미터 평면도 생성됨.');
+      } else if (type == 'roomforge.sceneUnderstanding.candidatesExtracted') {
+        final payload = _recordValue(data['payload']);
+        sceneUnderstandingPayload = payload;
+        final result = _recordValue(payload['sceneUnderstandingResult']);
+        final candidates = _listValue(result['candidateObjects']).length;
+        _runtimeStatus = rf(
+          'Scene understanding candidates extracted: $candidates',
+          '장면 이해 후보 추출됨: $candidates개',
+        );
+      } else if (type == 'roomforge.sceneUnderstanding.candidatesFailed') {
+        final payload = _recordValue(data['payload']);
+        sceneUnderstandingPayload = payload;
+        final error = _recordValue(payload['error']);
+        _runtimeStatus =
+            '${rf('Scene understanding failed', '장면 이해 실패')}: ${error['message'] ?? error['code'] ?? 'unknown'}';
       } else if (type == 'roomforge.scene.initialized' ||
           type == 'roomforge.view.changed' ||
           type == 'roomforge.selection.changed' ||
@@ -5666,6 +5693,10 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     if (floorPlanPayload != null) {
       final payload = floorPlanPayload!;
       _queuePersistArtifact(() => _persistFloorPlanPayload(payload));
+    }
+    if (sceneUnderstandingPayload != null) {
+      final payload = sceneUnderstandingPayload!;
+      _queuePersistArtifact(() => _persistSceneUnderstandingPayload(payload));
     }
   }
 
@@ -5874,6 +5905,55 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       setState(() {
         _artifactStatus =
             '${rf('Floor plan save failed', '평면도 저장 실패')}: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isPersistingArtifacts = false);
+      }
+    }
+  }
+
+  Future<void> _persistSceneUnderstandingPayload(
+    Map<String, Object?> payload,
+  ) async {
+    final resultPayload = _recordValue(payload['sceneUnderstandingResult']);
+    if (resultPayload.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isPersistingArtifacts = true;
+      _artifactStatus = rf(
+        'Saving scene understanding result...',
+        '장면 이해 결과 저장 중...',
+      );
+    });
+
+    try {
+      final result = await widget.projectApi.persistSceneUnderstandingResult(
+        projectId: widget.project.id,
+        sceneUnderstandingResult: resultPayload,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestSceneUnderstandingResultId = result.id;
+        _latestSceneUnderstandingBridgePayload = {
+          'sceneUnderstandingResult': resultPayload,
+        };
+        _artifactStatus = rf(
+          'Scene understanding result saved.',
+          '장면 이해 결과 저장됨.',
+        );
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _artifactStatus =
+            '${rf('Scene understanding save failed', '장면 이해 저장 실패')}: $error';
       });
     } finally {
       if (mounted) {
@@ -6227,6 +6307,46 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       layoutId: latestLayout?.id,
       latestCloudUpdatedAt: latestLayout?.updatedAt,
     );
+  }
+
+  Future<void> _loadPersistedSceneUnderstandingResult() async {
+    try {
+      final payload = await widget.projectApi
+          .loadLatestSceneUnderstandingResult(projectId: widget.project.id);
+      if (payload == null) {
+        return;
+      }
+      final result = _recordValue(payload['sceneUnderstandingResult']);
+      if (!mounted || result.isEmpty) {
+        return;
+      }
+      setState(() {
+        _latestSceneUnderstandingBridgePayload = payload;
+        _latestSceneUnderstandingResultId = result['resultId']?.toString();
+        _artifactStatus = rf(
+          'Loaded saved scene understanding result.',
+          '저장된 장면 이해 결과를 불러왔습니다.',
+        );
+      });
+      _postEditorMessage(
+        type: 'roomforge.scene.initialize',
+        requestId: 'load-scene-understanding-${result['resultId']}',
+        payload: _sceneInitializePayload(),
+      );
+    } on ProjectApiException catch (error) {
+      if (error.code == 'unsupported_backend' || error.code == 'not_found') {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _artifactStatus =
+            '${rf('Scene understanding load failed', '장면 이해 불러오기 실패')}: ${error.message}';
+      });
+    } catch (_) {
+      // Scene understanding replay is optional; manual editing and layout load still work.
+    }
   }
 
   Future<void> _detectRecoverableDraft({
@@ -6781,7 +6901,7 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
     final height = dimensions?.heightValue ?? 2.7;
     final reviewRequired = _effectiveReconstructionStatus == 'review_required';
 
-    return {
+    final payload = <String, Object?>{
       'scene': {
         'sceneId': 'project-${widget.project.id}-planning-scene',
         'viewMode': _viewMode,
@@ -6818,7 +6938,13 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       'reconstructionStatus': reviewRequired
           ? {'status': 'review_required', 'label': 'Needs review'}
           : null,
+      'sceneUnderstandingResultId': _latestSceneUnderstandingResultId,
     };
+    final sceneUnderstandingPayload = _latestSceneUnderstandingBridgePayload;
+    if (sceneUnderstandingPayload != null) {
+      payload.addAll(sceneUnderstandingPayload);
+    }
+    return payload;
   }
 
   Map<String, Object?>? _captureSessionBridgePayload() {

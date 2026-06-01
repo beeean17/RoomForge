@@ -22,6 +22,7 @@ class FirebaseAppBootstrapResult {
     required this.projectRepository,
     required this.reconstructionRepository,
     required this.roomDimensionsRepository,
+    required this.sceneUnderstandingRepository,
     required this.sourceImageRepository,
     required this.sourceImageUploader,
     required this.userRepository,
@@ -37,6 +38,7 @@ class FirebaseAppBootstrapResult {
   final FirebaseProjectRepository projectRepository;
   final FirebaseReconstructionRepository reconstructionRepository;
   final FirebaseRoomDimensionsRepository roomDimensionsRepository;
+  final FirebaseSceneUnderstandingRepository sceneUnderstandingRepository;
   final FirebaseSourceImageRepository sourceImageRepository;
   final FirebaseSourceImageUploader sourceImageUploader;
   final FirebaseUserRepository userRepository;
@@ -60,6 +62,8 @@ class FirebaseAppBootstrap {
             const DisabledFirebaseReconstructionRepository(),
         roomDimensionsRepository:
             const DisabledFirebaseRoomDimensionsRepository(),
+        sceneUnderstandingRepository:
+            const DisabledFirebaseSceneUnderstandingRepository(),
         sourceImageRepository: const DisabledFirebaseSourceImageRepository(),
         sourceImageUploader: const DisabledFirebaseSourceImageUploader(),
         userRepository: DisabledFirebaseUserRepository(),
@@ -101,6 +105,8 @@ class FirebaseAppBootstrap {
       roomDimensionsRepository: FirebaseFirestoreRoomDimensionsRepository(
         firestore: firestore,
       ),
+      sceneUnderstandingRepository:
+          FirebaseFirestoreSceneUnderstandingRepository(firestore: firestore),
       sourceImageRepository: FirebaseFirestoreSourceImageRepository(
         firestore: firestore,
       ),

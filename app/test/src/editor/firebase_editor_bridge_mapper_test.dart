@@ -181,6 +181,90 @@ void main() {
       expect(fixture, containsPair('category', 'window'));
     });
 
+    test(
+      'maps browser scene understanding bridge output to Firestore model',
+      () {
+        final result = mapper.sceneUnderstandingResultFromBridgePayload(
+          bridgePayload: const {
+            'sceneUnderstandingResult': {
+              'resultId': 'scene-understanding-1',
+              'captureSessionId': 'session-1',
+              'providerType': 'browser_cv_webgpu_mock',
+              'algorithmId': 'mock-scene-understanding-v1',
+              'modelId': 'roomforge-detector-webgpu-mock',
+              'confidenceScore': 0.72,
+              'qualityStatus': 'review_required',
+              'coverage': {'frontWall': 'complete'},
+              'candidateObjects': [
+                {
+                  'candidateId': 'candidate-bed-1',
+                  'objectType': 'furniture',
+                  'category': 'bed',
+                  'sourceImageId': 'source-image-1',
+                  'captureImageId': 'capture-image-1',
+                  'sourceImageRole': 'front_wall',
+                  'coordinateSpace': 'image_pixels',
+                  'boundingBox': {
+                    'x': 120,
+                    'y': 340,
+                    'width': 520,
+                    'height': 300,
+                  },
+                  'confidenceScore': 0.82,
+                  'reviewState': 'new',
+                  'suggestedAssetId': 'bed.pending',
+                  'suggestedPosition': {'x': 1.2, 'y': 0, 'z': 2.4},
+                  'suggestedSize': {'x': 1.5, 'y': 0.55, 'z': 2.0},
+                  'suggestedRotationDegrees': 90,
+                },
+              ],
+              'placedObjects': [],
+              'confirmedObjects': [],
+              'structuralFixtures': [
+                {
+                  'fixtureId': 'fixture-window-1',
+                  'candidateId': 'candidate-window-1',
+                  'category': 'window',
+                  'wallId': 'front-wall',
+                  'position': {'x': 2.1, 'y': 1.1, 'z': 0},
+                  'size': {'x': 1.2, 'y': 1.0, 'z': 0.1},
+                  'rotationDegrees': 0,
+                  'confidenceScore': 0.73,
+                  'locked': true,
+                },
+              ],
+            },
+          },
+          projectId: 'project-1',
+          ownerUid: 'user-1',
+          resultId: 'scene-understanding-1',
+          now: _now,
+        );
+
+        expect(
+          result.providerType,
+          FirebaseSceneUnderstandingProviderType.browserCv,
+        );
+        expect(result.qualityStatus, FirebaseQualityStatus.reviewRequired);
+        expect(result.coverage, containsPair('front_wall', 'complete'));
+        expect(result.candidateObjects.single.candidateId, 'candidate-bed-1');
+        expect(
+          result.candidateObjects.single.reviewState,
+          FirebaseCandidateReviewState.suggested,
+        );
+        expect(
+          result.candidateObjects.single.coordinateSpace,
+          FirebaseCoordinateSpace.imagePixels,
+        );
+        expect(
+          result.structuralFixtures.single.category,
+          FirebaseStructuralFixtureCategory.window,
+        );
+        expect(result.confirmedObjects, isEmpty);
+        expect(result.validate, returnsNormally);
+      },
+    );
+
     test('maps capture session and image references to editor bridge', () {
       final payload = mapper.captureSessionToBridgePayload(_captureSession(), [
         _captureImage(role: FirebaseCaptureImageRole.frontWall),

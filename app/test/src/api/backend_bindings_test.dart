@@ -42,6 +42,8 @@ void main() {
             const DisabledFirebaseReconstructionRepository(),
         roomDimensionsRepository:
             const DisabledFirebaseRoomDimensionsRepository(),
+        sceneUnderstandingRepository:
+            const DisabledFirebaseSceneUnderstandingRepository(),
         sourceImageRepository: const DisabledFirebaseSourceImageRepository(),
         sourceImageUploader: const DisabledFirebaseSourceImageUploader(),
       );
@@ -68,6 +70,8 @@ void main() {
             const DisabledFirebaseReconstructionRepository(),
         roomDimensionsRepository:
             const DisabledFirebaseRoomDimensionsRepository(),
+        sceneUnderstandingRepository:
+            const DisabledFirebaseSceneUnderstandingRepository(),
         sourceImageRepository: const DisabledFirebaseSourceImageRepository(),
         sourceImageUploader: const DisabledFirebaseSourceImageUploader(),
       );

@@ -586,11 +586,25 @@ class FirebaseArtifactRef {
     required String projectId,
     required String jobId,
   }) {
-    final expectedPrefix =
-        'users/$ownerUid/projects/$projectId/artifacts/$jobId/$artifactId/';
+    _validateStoragePath(
+      'users/$ownerUid/projects/$projectId/artifacts/$jobId/$artifactId/',
+    );
+  }
+
+  void validateCaptureSessionArtifact({
+    required String ownerUid,
+    required String projectId,
+    required String captureSessionId,
+  }) {
+    _validateStoragePath(
+      'users/$ownerUid/projects/$projectId/capture-sessions/$captureSessionId/artifacts/$artifactId/',
+    );
+  }
+
+  void _validateStoragePath(String expectedPrefix) {
     if (!storagePath.startsWith(expectedPrefix)) {
       throw const FirebaseContractException(
-        'artifact_refs storage_path must match the owning project, job, and artifact.',
+        'artifact_refs storage_path must match the owning project and artifact parent.',
       );
     }
     if (byteSize != null && byteSize! <= 0) {
@@ -1104,10 +1118,10 @@ class FirebaseCaptureImage {
       );
     }
     for (final artifactRef in depthArtifactRefs) {
-      artifactRef.validate(
+      artifactRef.validateCaptureSessionArtifact(
         ownerUid: ownerUid,
         projectId: projectId,
-        jobId: captureSessionId,
+        captureSessionId: captureSessionId,
       );
     }
   }

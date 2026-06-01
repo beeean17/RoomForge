@@ -352,6 +352,9 @@ class FirebaseProjectApi extends ProjectApi {
     int? widthPx,
     int? heightPx,
     int? captureOrder,
+    List<CaptureDepthArtifactRef> depthArtifactRefs = const [],
+    Map<String, Object?>? cameraPose,
+    String? depthWarning,
     void Function(double progress)? onProgress,
   }) async {
     if (!FirebaseSourceImageUpload.isAllowedContentType(contentType)) {
@@ -466,7 +469,11 @@ class FirebaseProjectApi extends ProjectApi {
       widthPx: widthPx,
       heightPx: heightPx,
       captureOrder: captureOrder ?? _captureOrderForRole(roleValue),
-      guidanceState: 'uploaded',
+      depthArtifactRefs: depthArtifactRefs
+          .map(_captureDepthArtifactRefToFirebase)
+          .toList(growable: false),
+      cameraPose: cameraPose,
+      guidanceState: depthWarning == null ? 'uploaded' : 'depth_warning',
       createdAt: now,
       updatedAt: now,
       schemaVersion: 1,
@@ -1507,9 +1514,37 @@ class FirebaseProjectApi extends ProjectApi {
       widthPx: captureImage.widthPx,
       heightPx: captureImage.heightPx,
       captureOrder: captureImage.captureOrder,
+      depthArtifactRefs: captureImage.depthArtifactRefs
+          .map(_captureDepthArtifactRefFromFirebase)
+          .toList(growable: false),
+      cameraPose: captureImage.cameraPose,
       guidanceState: captureImage.guidanceState,
       createdAt: captureImage.createdAt,
       updatedAt: captureImage.updatedAt,
+    );
+  }
+
+  FirebaseArtifactRef _captureDepthArtifactRefToFirebase(
+    CaptureDepthArtifactRef ref,
+  ) {
+    return FirebaseArtifactRef(
+      artifactId: ref.artifactId,
+      storagePath: ref.storagePath,
+      artifactType: ref.artifactType,
+      contentType: FirebaseArtifactContentType.fromWireValue(ref.contentType),
+      byteSize: ref.byteSize,
+    );
+  }
+
+  CaptureDepthArtifactRef _captureDepthArtifactRefFromFirebase(
+    FirebaseArtifactRef ref,
+  ) {
+    return CaptureDepthArtifactRef(
+      artifactId: ref.artifactId,
+      storagePath: ref.storagePath,
+      artifactType: ref.artifactType,
+      contentType: ref.contentType.wireValue,
+      byteSize: ref.byteSize,
     );
   }
 

@@ -273,6 +273,120 @@ void main() {
   );
 
   test(
+    'FirebaseProjectApi stores optional depth metadata for capture images',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final dimensions = _FakeRoomDimensionsRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final uploader = _FakeSourceImageUploader();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: uploader,
+      );
+
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+      final session = await api.createCaptureSession(
+        projectId: 'project-1',
+        depthEnabled: true,
+      );
+      final depthRef = CaptureDepthArtifactRef(
+        artifactId: 'depth-artifact-1',
+        storagePath:
+            'users/user-1/projects/project-1/capture-sessions/${session.id}/artifacts/depth-artifact-1/depth.json',
+        artifactType: 'arcore_depth',
+        contentType: 'application/json',
+        byteSize: 128,
+      );
+
+      final image = await api.uploadCaptureImage(
+        projectId: 'project-1',
+        captureSessionId: session.id,
+        role: 'front_wall',
+        filename: 'front.png',
+        contentType: 'image/png',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+        widthPx: 1600,
+        heightPx: 900,
+        depthArtifactRefs: [depthRef],
+        cameraPose: const {
+          'translation_m': {'x': 1.0, 'y': 1.4, 'z': 0.8},
+          'rotation_quat': {'x': 0, 'y': 0, 'z': 0, 'w': 1},
+        },
+      );
+
+      expect(image.depthArtifactRefs.single.artifactId, 'depth-artifact-1');
+      expect(image.cameraPose?['translation_m'], isA<Map>());
+      expect(image.guidanceState, 'uploaded');
+      expect(sourceImages.captureImages.single.depthArtifactRefs, hasLength(1));
+      expect(sourceImages.captureImages.single.cameraPose, isNotNull);
+    },
+  );
+
+  test(
+    'FirebaseProjectApi keeps capture image valid when depth capture warns',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final dimensions = _FakeRoomDimensionsRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+      final session = await api.createCaptureSession(
+        projectId: 'project-1',
+        depthEnabled: true,
+      );
+
+      final image = await api.uploadCaptureImage(
+        projectId: 'project-1',
+        captureSessionId: session.id,
+        role: 'front_wall',
+        filename: 'front.png',
+        contentType: 'image/png',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+        widthPx: 1600,
+        heightPx: 900,
+        depthWarning: 'Depth capture failed; photo saved without depth.',
+      );
+
+      expect(image.guidanceState, 'depth_warning');
+      expect(image.depthArtifactRefs, isEmpty);
+      expect(image.cameraPose, isNull);
+      expect(sourceImages.captureImages.single.guidanceState, 'depth_warning');
+    },
+  );
+
+  test(
     'FirebaseProjectApi loads latest capture session with uploaded role images',
     () async {
       final projects = _FakeProjectRepository();

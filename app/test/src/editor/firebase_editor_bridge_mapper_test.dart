@@ -343,7 +343,10 @@ void main() {
 
     test('maps capture session and image references to editor bridge', () {
       final payload = mapper.captureSessionToBridgePayload(_captureSession(), [
-        _captureImage(role: FirebaseCaptureImageRole.frontWall),
+        _captureImage(
+          role: FirebaseCaptureImageRole.frontWall,
+          withDepth: true,
+        ),
       ]);
 
       FirebaseSerializerValidators.requireCamelCasePayload(
@@ -354,6 +357,9 @@ void main() {
       final roles = session['availableRoles'] as List<Object?>;
       final images = session['images'] as List<Object?>;
       final image = Map<String, Object?>.from(images.single as Map);
+      final depthRefs = image['depthArtifactRefs'] as List<Object?>;
+      final depthRef = Map<String, Object?>.from(depthRefs.single as Map);
+      final cameraPose = Map<String, Object?>.from(image['cameraPose'] as Map);
 
       expect(session, containsPair('captureSessionId', 'session-1'));
       expect(session, containsPair('captureMethod', 'android_guided_photo'));
@@ -367,8 +373,18 @@ void main() {
       expect(image, containsPair('widthPx', 1600));
       expect(image, containsPair('heightPx', 900));
       expect(image, containsPair('captureOrder', 1));
+      expect(depthRef, containsPair('artifactId', 'depth-artifact-1'));
+      expect(
+        depthRef,
+        containsPair(
+          'storagePath',
+          contains('capture-sessions/session-1/artifacts/depth-artifact-1'),
+        ),
+      );
+      expect(cameraPose, contains('translationM'));
       expect(image, isNot(contains('capture_image_id')));
       expect(image, isNot(contains('source_image_id')));
+      expect(image, isNot(contains('camera_pose')));
     });
 
     test('rejects snake_case bridge input before persistence mapping', () {
@@ -522,7 +538,10 @@ FirebaseCaptureSession _captureSession() {
   );
 }
 
-FirebaseCaptureImage _captureImage({required FirebaseCaptureImageRole role}) {
+FirebaseCaptureImage _captureImage({
+  required FirebaseCaptureImageRole role,
+  bool withDepth = false,
+}) {
   return FirebaseCaptureImage(
     captureImageId: 'capture-image-${role.wireValue}',
     captureSessionId: 'session-1',
@@ -536,6 +555,24 @@ FirebaseCaptureImage _captureImage({required FirebaseCaptureImageRole role}) {
     widthPx: 1600,
     heightPx: 900,
     captureOrder: 1,
+    depthArtifactRefs: withDepth
+        ? const [
+            FirebaseArtifactRef(
+              artifactId: 'depth-artifact-1',
+              storagePath:
+                  'users/user-1/projects/project-1/capture-sessions/session-1/artifacts/depth-artifact-1/depth.json',
+              artifactType: 'arcore_depth',
+              contentType: FirebaseArtifactContentType.json,
+              byteSize: 128,
+            ),
+          ]
+        : const [],
+    cameraPose: withDepth
+        ? const {
+            'translation_m': {'x': 1.0, 'y': 1.2, 'z': 0.8},
+            'rotation_quat': {'x': 0, 'y': 0, 'z': 0, 'w': 1},
+          }
+        : null,
     guidanceState: 'uploaded',
     createdAt: _now,
     updatedAt: _now,

@@ -7032,6 +7032,18 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
               'heightPx': image.heightPx,
               'captureOrder': image.captureOrder,
               'guidanceState': image.guidanceState,
+              'depthArtifactRefs': image.depthArtifactRefs
+                  .map(
+                    (ref) => _compactPayload({
+                      'artifactId': ref.artifactId,
+                      'artifactType': ref.artifactType,
+                      'storagePath': ref.storagePath,
+                      'contentType': ref.contentType,
+                      'byteSize': ref.byteSize,
+                    }),
+                  )
+                  .toList(),
+              'cameraPose': _camelCaseNested(image.cameraPose),
             }),
           )
           .toList(),
@@ -7043,6 +7055,36 @@ class _EditorBridgeScreenState extends State<EditorBridgeScreen> {
       for (final entry in value.entries)
         if (entry.value != null) entry.key: entry.value,
     };
+  }
+
+  Object? _camelCaseNested(Object? value) {
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          _snakeToCamel(entry.key.toString()): _camelCaseNested(entry.value),
+      };
+    }
+    if (value is Iterable) {
+      return value.map(_camelCaseNested).toList();
+    }
+    return value;
+  }
+
+  String _snakeToCamel(String value) {
+    final parts = value.split('_');
+    if (parts.isEmpty) {
+      return value;
+    }
+    return [
+      parts.first,
+      ...parts
+          .skip(1)
+          .map(
+            (part) => part.isEmpty
+                ? part
+                : '${part[0].toUpperCase()}${part.substring(1)}',
+          ),
+    ].join();
   }
 
   int _captureRoleOrder(String role) {

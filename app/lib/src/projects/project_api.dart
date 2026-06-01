@@ -154,6 +154,8 @@ class CaptureImage {
     required this.createdAt,
     required this.updatedAt,
     this.captureOrder,
+    this.depthArtifactRefs = const [],
+    this.cameraPose,
     this.guidanceState,
   });
 
@@ -168,6 +170,8 @@ class CaptureImage {
   final int widthPx;
   final int heightPx;
   final int? captureOrder;
+  final List<CaptureDepthArtifactRef> depthArtifactRefs;
+  final Map<String, Object?>? cameraPose;
   final String? guidanceState;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -185,9 +189,42 @@ class CaptureImage {
       widthPx: json['width_px'] as int,
       heightPx: json['height_px'] as int,
       captureOrder: json['capture_order'] as int?,
+      depthArtifactRefs: _depthArtifactRefs(json['depth_artifact_refs']),
+      cameraPose: json['camera_pose'] is Map
+          ? Map<String, Object?>.from(json['camera_pose'] as Map)
+          : null,
       guidanceState: json['guidance_state'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+}
+
+class CaptureDepthArtifactRef {
+  const CaptureDepthArtifactRef({
+    required this.artifactId,
+    required this.storagePath,
+    required this.artifactType,
+    required this.contentType,
+    this.byteSize,
+  });
+
+  final String artifactId;
+  final String storagePath;
+  final String artifactType;
+  final String contentType;
+  final int? byteSize;
+
+  factory CaptureDepthArtifactRef.fromJson(Map<String, Object?> json) {
+    return CaptureDepthArtifactRef(
+      artifactId: _stringId(json['artifact_id'] ?? json['artifactId']),
+      storagePath:
+          json['storage_path'] as String? ?? json['storagePath'] as String,
+      artifactType:
+          json['artifact_type'] as String? ?? json['artifactType'] as String,
+      contentType:
+          json['content_type'] as String? ?? json['contentType'] as String,
+      byteSize: json['byte_size'] as int? ?? json['byteSize'] as int?,
     );
   }
 }
@@ -205,6 +242,19 @@ class CaptureSessionSnapshot {
     }
     return roles.toList(growable: false);
   }
+}
+
+List<CaptureDepthArtifactRef> _depthArtifactRefs(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return value
+      .whereType<Map>()
+      .map(
+        (item) =>
+            CaptureDepthArtifactRef.fromJson(Map<String, Object?>.from(item)),
+      )
+      .toList(growable: false);
 }
 
 class RoomDimensions {
@@ -422,6 +472,9 @@ abstract class ProjectApi {
     int? widthPx,
     int? heightPx,
     int? captureOrder,
+    List<CaptureDepthArtifactRef> depthArtifactRefs = const [],
+    Map<String, Object?>? cameraPose,
+    String? depthWarning,
     void Function(double progress)? onProgress,
   });
 
@@ -663,6 +716,9 @@ class LegacyProjectApi extends ProjectApi {
     int? widthPx,
     int? heightPx,
     int? captureOrder,
+    List<CaptureDepthArtifactRef> depthArtifactRefs = const [],
+    Map<String, Object?>? cameraPose,
+    String? depthWarning,
     void Function(double progress)? onProgress,
   }) {
     throw const ProjectApiException(

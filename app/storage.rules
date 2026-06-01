@@ -105,6 +105,21 @@ service firebase.storage {
         && request.resource.metadata.uploaded_by_uid == request.auth.uid;
     }
 
+    function validCaptureArtifactMetadata(uid, projectId, captureSessionId, artifactId) {
+      return request.resource.metadata.keys().hasAll([
+          'owner_uid',
+          'project_id',
+          'capture_session_id',
+          'artifact_id',
+          'uploaded_by_uid'
+        ])
+        && request.resource.metadata.owner_uid == uid
+        && request.resource.metadata.project_id == projectId
+        && request.resource.metadata.capture_session_id == captureSessionId
+        && request.resource.metadata.artifact_id == artifactId
+        && request.resource.metadata.uploaded_by_uid == request.auth.uid;
+    }
+
     function validCaptureSessionStorageLink(uid, projectId, captureSessionId) {
       return firestore.exists(captureSessionPath(projectId, captureSessionId))
         && firestore.get(captureSessionPath(projectId, captureSessionId)).data.owner_uid == uid;
@@ -138,6 +153,20 @@ service firebase.storage {
         && request.resource.metadata.capture_image_id == captureImageId
         && request.resource.metadata.source_image_id is string
         && request.resource.metadata.uploaded_by_uid == request.auth.uid;
+    }
+
+    match /users/{uid}/projects/{projectId}/capture-sessions/{captureSessionId}/artifacts/{artifactId}/{filename} {
+      allow read: if (
+        (isPathOwner(uid) && ownsProject(projectId))
+        || (isAdmin() && pathProjectOwner(uid, projectId))
+      );
+      allow write: if isNewObject()
+        && isPathOwner(uid)
+        && ownsProject(projectId)
+        && validCaptureSessionStorageLink(uid, projectId, captureSessionId)
+        && isAllowedArtifactContentType()
+        && isAllowedArtifactSize()
+        && validCaptureArtifactMetadata(uid, projectId, captureSessionId, artifactId);
     }
 
     match /users/{uid}/projects/{projectId}/artifacts/{jobId}/{artifactId}/{filename} {

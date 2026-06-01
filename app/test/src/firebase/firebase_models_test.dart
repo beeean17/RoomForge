@@ -139,6 +139,40 @@ void main() {
       );
     });
 
+    test('validate capture image depth artifact refs under capture session', () {
+      expect(
+        () => _captureImage(
+          depthArtifactRefs: const [
+            FirebaseArtifactRef(
+              artifactId: 'depth-artifact-1',
+              storagePath:
+                  'users/user-1/projects/project-1/capture-sessions/capture-session-1/artifacts/depth-artifact-1/depth.json',
+              artifactType: 'arcore_depth',
+              contentType: FirebaseArtifactContentType.json,
+              byteSize: 128,
+            ),
+          ],
+        ).validate(),
+        returnsNormally,
+      );
+
+      expect(
+        () => _captureImage(
+          depthArtifactRefs: const [
+            FirebaseArtifactRef(
+              artifactId: 'depth-artifact-1',
+              storagePath:
+                  'users/user-1/projects/project-1/artifacts/capture-session-1/depth-artifact-1/depth.json',
+              artifactType: 'arcore_depth',
+              contentType: FirebaseArtifactContentType.json,
+              byteSize: 128,
+            ),
+          ],
+        ).validate(),
+        throwsA(isA<FirebaseContractException>()),
+      );
+    });
+
     test('keep candidate scene objects in image pixels', () {
       expect(
         () => _candidate(
@@ -354,7 +388,10 @@ FirebaseCaptureSession _captureSession() {
   );
 }
 
-FirebaseCaptureImage _captureImage({int widthPx = 1600}) {
+FirebaseCaptureImage _captureImage({
+  int widthPx = 1600,
+  List<FirebaseArtifactRef> depthArtifactRefs = const [],
+}) {
   return FirebaseCaptureImage(
     captureImageId: 'capture-image-1',
     captureSessionId: _captureSession().captureSessionId,
@@ -367,6 +404,7 @@ FirebaseCaptureImage _captureImage({int widthPx = 1600}) {
     contentType: FirebaseImageContentType.jpeg,
     widthPx: widthPx,
     heightPx: 1200,
+    depthArtifactRefs: depthArtifactRefs,
     createdAt: _now,
     updatedAt: _now,
     schemaVersion: 1,

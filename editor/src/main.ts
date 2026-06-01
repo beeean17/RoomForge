@@ -1090,6 +1090,10 @@ function spatialModelPayload(): Record<string, unknown> {
     scale: spatialModel.scale,
     room: spatialModel.room,
     furniture: spatialModel.furniture,
+    candidateObjects: spatialModel.candidateObjects,
+    placedObjects: spatialModel.placedObjects,
+    confirmedObjects: spatialModel.confirmedObjects,
+    structuralFixtures: spatialModel.structuralFixtures,
   }
 }
 

@@ -7,6 +7,19 @@ export type MeterPoint = {
   y: number
 }
 
+export type MeterPoint3d = {
+  x: number
+  y: number
+  z: number
+}
+
+export type ImageBoundingBox = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export type FurnitureCategory = 'chair' | 'table' | 'sofa'
 
 export type FurnitureObject = {
@@ -32,6 +45,58 @@ export type SpatialSelection = {
   objectType: 'room' | 'furniture'
 } | null
 
+export type CandidateSceneObject = {
+  candidateId: string
+  objectType: string
+  category: string
+  label?: string
+  sourceImageId?: string
+  captureImageId?: string
+  sourceImageRole?: string
+  coordinateSpace: string
+  boundingBox?: ImageBoundingBox
+  confidenceScore?: number
+  reviewState: string
+  reviewLabel?: string
+  suggestedAssetId?: string
+  suggestedPosition?: MeterPoint3d
+  suggestedSize?: MeterPoint3d
+  suggestedRotationDegrees?: number
+  notes?: string
+}
+
+export type PlacedSceneObject = {
+  objectId: string
+  candidateId?: string
+  objectType: string
+  category: string
+  assetId?: string
+  label?: string
+  position?: MeterPoint3d
+  size?: MeterPoint3d
+  rotationDegrees: number
+  confidenceScore?: number
+  locked: boolean
+}
+
+export type ConfirmedSceneObject = PlacedSceneObject & {
+  confirmedByUid?: string
+  confirmedAt?: string
+}
+
+export type StructuralFixtureObject = {
+  fixtureId: string
+  candidateId?: string
+  category: string
+  wallId: string
+  label?: string
+  position?: MeterPoint3d
+  size?: MeterPoint3d
+  rotationDegrees: number
+  confidenceScore?: number
+  locked: boolean
+}
+
 export type SpatialModel = {
   version: 1
   sceneId: string
@@ -56,6 +121,10 @@ export type SpatialModel = {
     }
   }
   furniture: FurnitureObject[]
+  candidateObjects: CandidateSceneObject[]
+  placedObjects: PlacedSceneObject[]
+  confirmedObjects: ConfirmedSceneObject[]
+  structuralFixtures: StructuralFixtureObject[]
 }
 
 export function defaultSpatialModel(): SpatialModel {
@@ -86,12 +155,17 @@ export function defaultSpatialModel(): SpatialModel {
       },
     },
     furniture: [],
+    candidateObjects: [],
+    placedObjects: [],
+    confirmedObjects: [],
+    structuralFixtures: [],
   }
 }
 
 export function spatialModelFromBridgePayload(payload: BridgePayload): SpatialModel {
   const fallback = defaultSpatialModel()
   const scene = recordValue(payload.scene)
+  const layers = sceneObjectLayersFromPayload(payload, scene)
   const room = recordValue(scene.room ?? payload.room)
   const floorPlan = recordValue(room.floorPlan ?? payload.floorPlan)
   const metricGeometry = recordValue(floorPlan.metricGeometry ?? payload.metricGeometry)
@@ -109,7 +183,7 @@ export function spatialModelFromBridgePayload(payload: BridgePayload): SpatialMo
     .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
 
   if (metricGeometry.coordinateSpace !== 'meters' || !points || points.length < 3) {
-    return fallback
+    return { ...fallback, ...layers }
   }
 
   return {
@@ -141,6 +215,7 @@ export function spatialModelFromBridgePayload(payload: BridgePayload): SpatialMo
       },
     },
     furniture: rawFurniture.map(furnitureValue).filter((item) => item !== null),
+    ...layers,
   }
 }
 
@@ -205,6 +280,134 @@ function selectionValue(value: unknown): SpatialSelection {
   return { objectId, objectType }
 }
 
+function sceneObjectLayersFromPayload(
+  payload: BridgePayload,
+  scene: Record<string, unknown>,
+): {
+  candidateObjects: CandidateSceneObject[]
+  placedObjects: PlacedSceneObject[]
+  confirmedObjects: ConfirmedSceneObject[]
+  structuralFixtures: StructuralFixtureObject[]
+} {
+  const sceneUnderstanding = recordValue(payload.sceneUnderstandingResult)
+  const candidateObjects = firstListValue(
+    scene.candidateObjects,
+    payload.candidateObjects,
+    sceneUnderstanding.candidateObjects,
+  )
+    .map(candidateSceneObjectValue)
+    .filter((item) => item !== null)
+  const placedObjects = firstListValue(
+    scene.placedObjects,
+    payload.placedObjects,
+    sceneUnderstanding.placedObjects,
+  )
+    .map(placedSceneObjectValue)
+    .filter((item) => item !== null)
+  const confirmedObjects = firstListValue(
+    scene.confirmedObjects,
+    payload.confirmedObjects,
+    sceneUnderstanding.confirmedObjects,
+  )
+    .map(confirmedSceneObjectValue)
+    .filter((item) => item !== null)
+  const structuralFixtures = firstListValue(
+    scene.structuralFixtures,
+    payload.structuralFixtures,
+    sceneUnderstanding.structuralFixtures,
+  )
+    .map(structuralFixtureValue)
+    .filter((item) => item !== null)
+
+  return {
+    candidateObjects,
+    placedObjects,
+    confirmedObjects,
+    structuralFixtures,
+  }
+}
+
+function candidateSceneObjectValue(value: unknown): CandidateSceneObject | null {
+  const record = recordValue(value)
+  const candidateId = stringValue(record.candidateId, '')
+  if (!candidateId) {
+    return null
+  }
+  return {
+    candidateId,
+    objectType: stringValue(record.objectType, 'unknown'),
+    category: stringValue(record.category, 'unknown'),
+    label: optionalStringValue(record.label),
+    sourceImageId: optionalStringValue(record.sourceImageId),
+    captureImageId: optionalStringValue(record.captureImageId),
+    sourceImageRole: optionalStringValue(record.sourceImageRole),
+    coordinateSpace: stringValue(record.coordinateSpace, 'image_pixels'),
+    boundingBox: boundingBoxValue(record.boundingBox),
+    confidenceScore: optionalNumberValue(record.confidenceScore),
+    reviewState: stringValue(record.reviewState, 'review_required'),
+    reviewLabel: optionalStringValue(record.reviewLabel),
+    suggestedAssetId: optionalStringValue(record.suggestedAssetId),
+    suggestedPosition: point3dValue(record.suggestedPosition),
+    suggestedSize: point3dValue(record.suggestedSize),
+    suggestedRotationDegrees: optionalNumberValue(record.suggestedRotationDegrees),
+    notes: optionalStringValue(record.notes),
+  }
+}
+
+function placedSceneObjectValue(value: unknown): PlacedSceneObject | null {
+  const record = recordValue(value)
+  const objectId = stringValue(record.objectId, '')
+  if (!objectId) {
+    return null
+  }
+  return {
+    objectId,
+    candidateId: optionalStringValue(record.candidateId),
+    objectType: stringValue(record.objectType, 'furniture'),
+    category: stringValue(record.category, 'custom'),
+    assetId: optionalStringValue(record.assetId),
+    label: optionalStringValue(record.label),
+    position: point3dValue(record.position),
+    size: point3dValue(record.size),
+    rotationDegrees: numberValue(record.rotationDegrees, 0),
+    confidenceScore: optionalNumberValue(record.confidenceScore),
+    locked: booleanValue(record.locked, false),
+  }
+}
+
+function confirmedSceneObjectValue(value: unknown): ConfirmedSceneObject | null {
+  const placed = placedSceneObjectValue(value)
+  if (!placed) {
+    return null
+  }
+  const record = recordValue(value)
+  return {
+    ...placed,
+    confirmedByUid: optionalStringValue(record.confirmedByUid),
+    confirmedAt: optionalStringValue(record.confirmedAt),
+  }
+}
+
+function structuralFixtureValue(value: unknown): StructuralFixtureObject | null {
+  const record = recordValue(value)
+  const fixtureId = stringValue(record.fixtureId, '')
+  if (!fixtureId) {
+    return null
+  }
+  return {
+    fixtureId,
+    candidateId: optionalStringValue(record.candidateId),
+    category: stringValue(record.category, 'fixture'),
+    wallId: stringValue(record.wallId, 'room-shell'),
+    label: optionalStringValue(record.label),
+    position: point3dValue(record.position),
+    size: point3dValue(record.size),
+    rotationDegrees: numberValue(record.rotationDegrees, 0),
+    confidenceScore: optionalNumberValue(record.confidenceScore),
+    locked: booleanValue(record.locked, true),
+  }
+}
+
 function furnitureValue(value: unknown): FurnitureObject | null {
   const record = recordValue(value)
   const objectId = record.objectId
@@ -231,6 +434,46 @@ function furnitureValue(value: unknown): FurnitureObject | null {
     color: stringValue(record.color, '#64748b'),
     locked: booleanValue(record.locked, false),
   }
+}
+
+function firstListValue(...values: unknown[]): unknown[] {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      return value
+    }
+  }
+  return []
+}
+
+function optionalStringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function optionalNumberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function point3dValue(value: unknown): MeterPoint3d | undefined {
+  const point = recordValue(value)
+  const x = optionalNumberValue(point.x)
+  const y = optionalNumberValue(point.y)
+  const z = optionalNumberValue(point.z)
+  if (x === undefined || y === undefined || z === undefined) {
+    return undefined
+  }
+  return { x, y, z }
+}
+
+function boundingBoxValue(value: unknown): ImageBoundingBox | undefined {
+  const box = recordValue(value)
+  const x = optionalNumberValue(box.x)
+  const y = optionalNumberValue(box.y)
+  const width = optionalNumberValue(box.width)
+  const height = optionalNumberValue(box.height)
+  if (x === undefined || y === undefined || width === undefined || height === undefined) {
+    return undefined
+  }
+  return { x, y, width, height }
 }
 
 function isFurnitureCategory(value: unknown): value is FurnitureCategory {

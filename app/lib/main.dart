@@ -28,6 +28,7 @@ import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
 import 'src/layouts/layout_remote_update_guard.dart';
 import 'src/projects/firebase_source_image_upload.dart';
+import 'src/projects/guided_capture_session_section.dart';
 import 'src/projects/project_api.dart';
 import 'src/projects/source_image_upload_recovery_controls.dart';
 import 'src/projects/source_image_upload_status.dart';
@@ -3567,6 +3568,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   html.File? _lastUploadFile;
   bool _isSavingDimensions = false;
   bool _isSubmittingReconstruction = false;
+  bool _guidedCaptureStarted = false;
   String? _dimensionMessage;
   String? _reconstructionMessage;
   StreamSubscription<html.MouseEvent>? _dragOverSubscription;
@@ -3601,6 +3603,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       _uploadMessage = null;
       _uploadProgress = null;
       _lastUploadFile = null;
+      _guidedCaptureStarted = false;
       _dimensionMessage = null;
       _reconstructionMessage = null;
       _widthController.clear();
@@ -3864,6 +3867,20 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         setState(() => _isSavingDimensions = false);
       }
     }
+  }
+
+  void _startGuidedCaptureSession() {
+    if (_dimensions == null) {
+      setState(() {
+        _dimensionMessage = rf(
+          'Save room dimensions before starting guided capture.',
+          '가이드 촬영을 시작하기 전에 방 치수를 저장하세요.',
+        );
+      });
+      return;
+    }
+
+    setState(() => _guidedCaptureStarted = true);
   }
 
   Future<void> _loadDimensions() async {
@@ -4168,6 +4185,14 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 onSave: _saveDimensions,
               ),
               const SizedBox(height: 20),
+              GuidedCaptureSessionSection(
+                dimensions: _dimensions,
+                started: _guidedCaptureStarted,
+                onStart: _startGuidedCaptureSession,
+                copy: _guidedCaptureCopy(),
+                roles: _guidedCaptureRoles(),
+              ),
+              const SizedBox(height: 20),
               PhotoIntakeSection(
                 state: _uploadState,
                 message: _uploadMessage,
@@ -4211,6 +4236,108 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
         ),
       ),
     );
+  }
+
+  GuidedCaptureSessionCopy _guidedCaptureCopy() {
+    return GuidedCaptureSessionCopy(
+      title: rf('Guided room capture', '가이드 방 촬영'),
+      description: rf(
+        'Start a role-based capture session after confirming room dimensions.',
+        '방 치수를 확인한 뒤 역할 기반 촬영 세션을 시작하세요.',
+      ),
+      missingDimensionsTitle: rf('Room dimensions required', '방 치수가 필요합니다'),
+      missingDimensionsMessage: rf(
+        'Enter or confirm room width, depth, and height in meters before starting guided capture.',
+        '가이드 촬영을 시작하기 전에 방의 너비, 깊이, 높이를 미터 단위로 입력하거나 확인하세요.',
+      ),
+      readyTitle: rf('Ready for guided capture', '가이드 촬영 준비됨'),
+      readyMessage: rf(
+        'Use the guided roles below to collect photos for browser CV scene understanding.',
+        '아래 촬영 역할에 따라 브라우저 CV 장면 인식에 사용할 사진을 모으세요.',
+      ),
+      startedTitle: rf('Capture session ready', '촬영 세션 준비됨'),
+      startedMessage: rf(
+        'Capture each required role, then continue on desktop for review and correction.',
+        '필수 역할별 사진을 촬영한 뒤 데스크톱에서 검토와 수정을 이어가세요.',
+      ),
+      rolesTitle: rf('Photo roles', '사진 역할'),
+      requiredLabel: rf('Required', '필수'),
+      optionalLabel: rf('Optional', '선택'),
+      startLabel: rf('Start guided capture', '가이드 촬영 시작'),
+      startedLabel: rf('Guided capture started', '가이드 촬영 시작됨'),
+      occlusionTitle: rf('Blocked walls are acceptable', '가려진 벽도 괜찮습니다'),
+      occlusionMessage: rf(
+        'If furniture blocks a wall, capture the visible wall and floor evidence from that side. You can manually correct room shape and object placement later.',
+        '가구가 벽을 가리면 그쪽에서 보이는 벽과 바닥 단서만 촬영하세요. 방 모양과 오브젝트 배치는 나중에 직접 수정할 수 있습니다.',
+      ),
+      dimensionsLabel: rf('Room dimensions', '방 치수'),
+      widthLabel: rf('Width', '너비'),
+      depthLabel: rf('Depth', '깊이'),
+      heightLabel: rf('Height', '높이'),
+      defaultHeightLabel: rf('default height', '기본 높이'),
+      userHeightLabel: rf('user height', '사용자 입력 높이'),
+      sessionStateLabel: rf('Guided capture session state', '가이드 촬영 세션 상태'),
+    );
+  }
+
+  List<GuidedCaptureRoleInstruction> _guidedCaptureRoles() {
+    return [
+      GuidedCaptureRoleInstruction(
+        id: 'overview',
+        label: rf('Overview', '전체'),
+        description: rf(
+          'Capture the room from the widest available corner or doorway.',
+          '가능한 가장 넓게 보이는 모서리나 문 근처에서 방 전체를 촬영하세요.',
+        ),
+        icon: Icons.photo_size_select_large_outlined,
+      ),
+      GuidedCaptureRoleInstruction(
+        id: 'front_wall',
+        label: rf('Front wall', '앞 벽'),
+        description: rf(
+          'Stand near the opposite side and capture the front wall.',
+          '반대쪽 근처에 서서 앞 벽을 촬영하세요.',
+        ),
+        icon: Icons.border_top_outlined,
+      ),
+      GuidedCaptureRoleInstruction(
+        id: 'right_wall',
+        label: rf('Right wall', '오른쪽 벽'),
+        description: rf(
+          'Capture the right wall with visible floor-wall evidence.',
+          '바닥과 벽의 단서가 보이도록 오른쪽 벽을 촬영하세요.',
+        ),
+        icon: Icons.border_right_outlined,
+      ),
+      GuidedCaptureRoleInstruction(
+        id: 'back_wall',
+        label: rf('Back wall', '뒤 벽'),
+        description: rf(
+          'Capture the back wall from the clearest available angle.',
+          '가장 잘 보이는 각도에서 뒤 벽을 촬영하세요.',
+        ),
+        icon: Icons.border_bottom_outlined,
+      ),
+      GuidedCaptureRoleInstruction(
+        id: 'left_wall',
+        label: rf('Left wall', '왼쪽 벽'),
+        description: rf(
+          'Capture the left wall with any doors or windows visible.',
+          '문이나 창문이 있다면 함께 보이도록 왼쪽 벽을 촬영하세요.',
+        ),
+        icon: Icons.border_left_outlined,
+      ),
+      GuidedCaptureRoleInstruction(
+        id: 'extra',
+        label: rf('Extra', '추가'),
+        description: rf(
+          'Add another photo when a wall or large object is unclear.',
+          '벽이나 큰 오브젝트가 불명확하면 사진을 추가하세요.',
+        ),
+        icon: Icons.add_photo_alternate_outlined,
+        required: false,
+      ),
+    ];
   }
 
   String _normalizedContentType(html.File file) {

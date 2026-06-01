@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'arcore_depth_capability.dart';
 import 'project_api.dart';
 import 'source_image_upload_status.dart';
 
 const guidedCaptureSessionStartButtonKey = Key(
   'guided-capture-session-start-button',
 );
+const guidedCaptureDepthToggleKey = Key('guided-capture-depth-toggle');
 
 class GuidedCaptureSessionCopy {
   const GuidedCaptureSessionCopy({
@@ -43,6 +45,14 @@ class GuidedCaptureSessionCopy {
     this.uploadedRoleLabel = 'Uploaded',
     this.noRolePhotoLabel = 'No photo yet',
     this.roleUploadFailedLabel = 'Upload failed',
+    this.depthToggleTitle = 'Accuracy enhancement',
+    this.depthToggleLabel = 'Use distance metadata',
+    this.depthSupportedMessage =
+        'On supported Android devices, RoomForge can attach ARCore Depth distance metadata to improve placement estimates. It is approximate and remains editable.',
+    this.depthUnsupportedMessage =
+        'This device will use normal guided photos because ARCore Depth distance metadata is unavailable.',
+    this.depthDisabledMessage =
+        'Distance metadata is off. Guided photos still work, and no depth metadata is required.',
   });
 
   final String title;
@@ -74,6 +84,11 @@ class GuidedCaptureSessionCopy {
   final String uploadedRoleLabel;
   final String noRolePhotoLabel;
   final String roleUploadFailedLabel;
+  final String depthToggleTitle;
+  final String depthToggleLabel;
+  final String depthSupportedMessage;
+  final String depthUnsupportedMessage;
+  final String depthDisabledMessage;
 }
 
 class GuidedCaptureRoleInstruction {
@@ -160,6 +175,9 @@ class GuidedCaptureSessionSection extends StatelessWidget {
     this.copy = const GuidedCaptureSessionCopy(),
     this.roles = defaultGuidedCaptureRoles,
     this.roleUploads = const {},
+    this.depthCapability = const ArCoreDepthCapability.unsupported(),
+    this.depthEnhancementEnabled = false,
+    this.onDepthEnhancementChanged,
     this.onUploadRole,
     this.onRetryRole,
     super.key,
@@ -171,6 +189,9 @@ class GuidedCaptureSessionSection extends StatelessWidget {
   final GuidedCaptureSessionCopy copy;
   final List<GuidedCaptureRoleInstruction> roles;
   final Map<String, GuidedCaptureRoleUploadSnapshot> roleUploads;
+  final ArCoreDepthCapability depthCapability;
+  final bool depthEnhancementEnabled;
+  final ValueChanged<bool>? onDepthEnhancementChanged;
   final ValueChanged<GuidedCaptureRoleInstruction>? onUploadRole;
   final ValueChanged<GuidedCaptureRoleInstruction>? onRetryRole;
 
@@ -246,6 +267,14 @@ class GuidedCaptureSessionSection extends StatelessWidget {
           if (hasDimensions) ...[
             const SizedBox(height: 12),
             _DimensionSummary(dimensions: dimensions!, copy: copy),
+            const SizedBox(height: 12),
+            _DepthEnhancementToggle(
+              capability: depthCapability,
+              enabled: depthEnhancementEnabled,
+              locked: started,
+              copy: copy,
+              onChanged: onDepthEnhancementChanged,
+            ),
           ],
           const SizedBox(height: 12),
           _RoleInstructionList(
@@ -363,6 +392,61 @@ class _DimensionSummary extends StatelessWidget {
           for (final value in values)
             Chip(label: Text(value), visualDensity: VisualDensity.compact),
         ],
+      ),
+    );
+  }
+}
+
+class _DepthEnhancementToggle extends StatelessWidget {
+  const _DepthEnhancementToggle({
+    required this.capability,
+    required this.enabled,
+    required this.locked,
+    required this.copy,
+    required this.onChanged,
+  });
+
+  final ArCoreDepthCapability capability;
+  final bool enabled;
+  final bool locked;
+  final GuidedCaptureSessionCopy copy;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final canEnable = capability.canEnableDepth && !locked;
+    final effectiveEnabled = capability.canEnableDepth && enabled;
+    final message = !capability.canEnableDepth
+        ? copy.depthUnsupportedMessage
+        : effectiveEnabled
+        ? copy.depthSupportedMessage
+        : copy.depthDisabledMessage;
+
+    return Semantics(
+      container: true,
+      label: '${copy.depthToggleTitle}. $message',
+      child: SwitchListTile(
+        key: guidedCaptureDepthToggleKey,
+        value: effectiveEnabled,
+        onChanged: canEnable ? onChanged : null,
+        secondary: Icon(
+          Icons.speed_outlined,
+          color: capability.canEnableDepth
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outline,
+        ),
+        title: Text(
+          copy.depthToggleTitle,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        subtitle: Text(
+          '${copy.depthToggleLabel}. $message',
+          style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+        ),
+        contentPadding: EdgeInsets.zero,
       ),
     );
   }

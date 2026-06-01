@@ -171,6 +171,43 @@ void main() {
   );
 
   test(
+    'FirebaseProjectApi creates depth-enabled capture sessions on request',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final dimensions = _FakeRoomDimensionsRepository();
+      final sourceImages = _FakeSourceImageRepository();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: dimensions,
+        sourceImageRepository: sourceImages,
+        sourceImageUploader: _FakeSourceImageUploader(),
+      );
+
+      await api.saveRoomDimensions(
+        projectId: 'project-1',
+        widthValue: 4.2,
+        depthValue: 3.6,
+        heightValue: 2.7,
+      );
+      final session = await api.createCaptureSession(
+        projectId: 'project-1',
+        depthEnabled: true,
+      );
+
+      expect(session.captureMethod, 'android_arcore_depth');
+      expect(session.depthEnabled, isTrue);
+      expect(sourceImages.captureSessions.single.depthEnabled, isTrue);
+    },
+  );
+
+  test(
     'FirebaseProjectApi uploads guided capture images with role metadata',
     () async {
       final projects = _FakeProjectRepository();

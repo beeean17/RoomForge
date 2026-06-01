@@ -27,6 +27,7 @@ import 'src/layouts/layout_draft_repository.dart';
 import 'src/layouts/layout_export_warning.dart';
 import 'src/layouts/layout_furniture_bridge_mapper.dart';
 import 'src/layouts/layout_remote_update_guard.dart';
+import 'src/projects/arcore_depth_capability.dart';
 import 'src/projects/firebase_source_image_upload.dart';
 import 'src/projects/guided_capture_session_section.dart';
 import 'src/projects/project_api.dart';
@@ -3565,6 +3566,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   final _widthController = TextEditingController();
   final _depthController = TextEditingController();
   final _heightController = TextEditingController();
+  final _arCoreDepthCapabilityProvider = const ArCoreDepthCapabilityProvider();
 
   SourceImage? _sourceImage;
   String? _sourceImageDataUrl;
@@ -3577,10 +3579,13 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
   html.File? _lastUploadFile;
   final Map<String, GuidedCaptureRoleUploadSnapshot> _guidedRoleUploads = {};
   final Map<String, html.File> _lastGuidedRoleFiles = {};
+  ArCoreDepthCapability _arCoreDepthCapability =
+      const ArCoreDepthCapability.unsupported();
   bool _isSavingDimensions = false;
   bool _isSubmittingReconstruction = false;
   bool _isCreatingCaptureSession = false;
   bool _guidedCaptureStarted = false;
+  bool _depthEnhancementEnabled = false;
   String? _dimensionMessage;
   String? _captureSessionMessage;
   String? _reconstructionMessage;
@@ -3595,6 +3600,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     if (widget.project != null) {
       unawaited(_loadDimensions());
       unawaited(_loadLatestCaptureSession());
+      unawaited(_loadArCoreDepthCapability());
     }
     final body = html.document.body;
     if (body == null) {
@@ -3620,6 +3626,8 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       _lastUploadFile = null;
       _guidedRoleUploads.clear();
       _lastGuidedRoleFiles.clear();
+      _arCoreDepthCapability = const ArCoreDepthCapability.unsupported();
+      _depthEnhancementEnabled = false;
       _guidedCaptureStarted = false;
       _captureSessionMessage = null;
       _dimensionMessage = null;
@@ -3631,6 +3639,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       if (widget.project != null) {
         unawaited(_loadDimensions());
         unawaited(_loadLatestCaptureSession());
+        unawaited(_loadArCoreDepthCapability());
       }
     }
   }
@@ -3888,6 +3897,23 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     }
   }
 
+  Future<void> _loadArCoreDepthCapability() async {
+    final project = widget.project;
+    if (project == null) {
+      return;
+    }
+    final capability = await _arCoreDepthCapabilityProvider.check();
+    if (!mounted || widget.project?.id != project.id) {
+      return;
+    }
+    setState(() {
+      _arCoreDepthCapability = capability;
+      if (!capability.canEnableDepth) {
+        _depthEnhancementEnabled = false;
+      }
+    });
+  }
+
   Future<void> _startGuidedCaptureSession() async {
     final project = widget.project;
     if (project == null) {
@@ -3926,6 +3952,8 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
     try {
       final session = await widget.projectApi.createCaptureSession(
         projectId: project.id,
+        depthEnabled:
+            _arCoreDepthCapability.canEnableDepth && _depthEnhancementEnabled,
       );
       setState(() {
         _captureSession = session;
@@ -4146,6 +4174,7 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       setState(() {
         _captureSession = snapshot.session;
         _guidedCaptureStarted = true;
+        _depthEnhancementEnabled = snapshot.session.depthEnabled;
         _guidedRoleUploads
           ..clear()
           ..addAll(roleUploads);
@@ -4445,6 +4474,11 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                 copy: _guidedCaptureCopy(),
                 roles: _guidedCaptureRoles(),
                 roleUploads: _guidedRoleUploads,
+                depthCapability: _arCoreDepthCapability,
+                depthEnhancementEnabled: _depthEnhancementEnabled,
+                onDepthEnhancementChanged: (value) {
+                  setState(() => _depthEnhancementEnabled = value);
+                },
                 onUploadRole: (role) =>
                     unawaited(_selectAndUploadGuidedRole(role.id)),
                 onRetryRole: (role) =>
@@ -4556,6 +4590,20 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
       uploadedRoleLabel: rf('Uploaded', '업로드됨'),
       noRolePhotoLabel: rf('No photo yet', '아직 사진 없음'),
       roleUploadFailedLabel: rf('Upload failed', '업로드 실패'),
+      depthToggleTitle: rf('Accuracy enhancement', '정확도 향상'),
+      depthToggleLabel: rf('Use distance metadata', '거리 메타데이터 사용'),
+      depthSupportedMessage: rf(
+        'On supported Android devices, RoomForge can attach ARCore Depth distance metadata to improve placement estimates. It is approximate and remains editable.',
+        '지원되는 Android 기기에서는 ARCore Depth 거리 메타데이터를 첨부해 배치 추정을 보강할 수 있습니다. 값은 근사치이며 나중에 수정할 수 있습니다.',
+      ),
+      depthUnsupportedMessage: rf(
+        'This device will use normal guided photos because ARCore Depth distance metadata is unavailable.',
+        '이 기기에서는 ARCore Depth 거리 메타데이터를 사용할 수 없어 일반 가이드 사진 촬영을 사용합니다.',
+      ),
+      depthDisabledMessage: rf(
+        'Distance metadata is off. Guided photos still work, and no depth metadata is required.',
+        '거리 메타데이터가 꺼져 있습니다. 가이드 사진은 그대로 동작하며 depth 메타데이터는 필요하지 않습니다.',
+      ),
     );
   }
 

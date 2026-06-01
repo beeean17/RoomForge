@@ -1,3 +1,4 @@
+import 'package:app/src/projects/arcore_depth_capability.dart';
 import 'package:app/src/projects/guided_capture_session_section.dart';
 import 'package:app/src/projects/project_api.dart';
 import 'package:app/src/projects/source_image_upload_status.dart';
@@ -117,6 +118,89 @@ void main() {
 
     expect(actions, ['retry:front_wall']);
   });
+
+  testWidgets('enables ARCore depth enhancement when supported', (
+    tester,
+  ) async {
+    bool? enabled;
+
+    await tester.pumpGuidedCaptureSection(
+      dimensions: _roomDimensions(),
+      started: false,
+      depthCapability: const ArCoreDepthCapability(
+        isAndroid: true,
+        isSupported: true,
+        reason: 'supported by test',
+      ),
+      depthEnhancementEnabled: true,
+      onDepthEnhancementChanged: (value) => enabled = value,
+    );
+
+    expect(find.text('Accuracy enhancement'), findsOneWidget);
+    expect(find.textContaining('distance metadata'), findsOneWidget);
+    expect(find.textContaining('approximate'), findsOneWidget);
+    expect(find.textContaining('remains editable'), findsOneWidget);
+
+    final toggle = tester.widget<SwitchListTile>(
+      find.byKey(guidedCaptureDepthToggleKey),
+    );
+    expect(toggle.value, isTrue);
+    expect(toggle.onChanged, isNotNull);
+
+    await tester.tap(find.byKey(guidedCaptureDepthToggleKey));
+    await tester.pump();
+
+    expect(enabled, isFalse);
+  });
+
+  testWidgets('falls back to normal guided photos when depth is unsupported', (
+    tester,
+  ) async {
+    await tester.pumpGuidedCaptureSection(
+      dimensions: _roomDimensions(),
+      started: false,
+      depthCapability: const ArCoreDepthCapability(
+        isAndroid: true,
+        isSupported: false,
+        reason: 'unsupported by test',
+      ),
+    );
+
+    expect(find.textContaining('normal guided photos'), findsOneWidget);
+    expect(find.textContaining('unavailable'), findsOneWidget);
+
+    final toggle = tester.widget<SwitchListTile>(
+      find.byKey(guidedCaptureDepthToggleKey),
+    );
+    expect(toggle.value, isFalse);
+    expect(toggle.onChanged, isNull);
+
+    final startButton = tester.widget<FilledButton>(
+      find.byKey(guidedCaptureSessionStartButtonKey),
+    );
+    expect(startButton.onPressed, isNotNull);
+  });
+
+  testWidgets('disabled depth enhancement requires no depth metadata', (
+    tester,
+  ) async {
+    await tester.pumpGuidedCaptureSection(
+      dimensions: _roomDimensions(),
+      started: false,
+      depthCapability: const ArCoreDepthCapability(
+        isAndroid: true,
+        isSupported: true,
+        reason: 'supported by test',
+      ),
+      depthEnhancementEnabled: false,
+    );
+
+    expect(find.textContaining('Distance metadata is off'), findsOneWidget);
+    expect(
+      find.textContaining('no depth metadata is required'),
+      findsOneWidget,
+    );
+  });
 }
 
 extension on WidgetTester {
@@ -127,6 +211,10 @@ extension on WidgetTester {
     Map<String, GuidedCaptureRoleUploadSnapshot> roleUploads = const {},
     ValueChanged<GuidedCaptureRoleInstruction>? onUploadRole,
     ValueChanged<GuidedCaptureRoleInstruction>? onRetryRole,
+    ArCoreDepthCapability depthCapability =
+        const ArCoreDepthCapability.unsupported(),
+    bool depthEnhancementEnabled = false,
+    ValueChanged<bool>? onDepthEnhancementChanged,
   }) {
     return pumpWidget(
       MaterialApp(
@@ -139,6 +227,9 @@ extension on WidgetTester {
                 started: started,
                 onStart: onStart ?? () {},
                 roleUploads: roleUploads,
+                depthCapability: depthCapability,
+                depthEnhancementEnabled: depthEnhancementEnabled,
+                onDepthEnhancementChanged: onDepthEnhancementChanged,
                 onUploadRole: onUploadRole,
                 onRetryRole: onRetryRole,
               ),

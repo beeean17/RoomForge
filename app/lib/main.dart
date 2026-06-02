@@ -2001,28 +2001,9 @@ class _FirebaseAdminDiagnosticsScreenState
                     ],
                   ),
                   const SizedBox(height: 16),
-                  RoomForgePanel(
-                    padding: const EdgeInsets.all(14),
-                    child: Semantics(
-                      container: true,
-                      label: FirebaseAdminDiagnosticsUiText
-                          .statusFilterSemanticsLabel,
-                      child: DropdownButtonFormField<FirebaseJobStatus>(
-                        value: _statusFilter,
-                        decoration: InputDecoration(
-                          labelText: rf('Job status', '작업 상태'),
-                          prefixIcon: const Icon(Icons.filter_alt_outlined),
-                        ),
-                        items: [
-                          for (final status in FirebaseJobStatus.values)
-                            DropdownMenuItem(
-                              value: status,
-                              child: Text(_adminStatusLabel(status.wireValue)),
-                            ),
-                        ],
-                        onChanged: _setStatusFilter,
-                      ),
-                    ),
+                  _FirebaseAdminStatusFilters(
+                    selectedStatus: _statusFilter,
+                    onChanged: _setStatusFilter,
                   ),
                   const SizedBox(height: 12),
                   RoomForgePanel(
@@ -2092,6 +2073,15 @@ class _FirebaseAdminDiagnosticsScreenState
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              RoomForgeSectionHeader(
+                                icon: Icons.manage_search_outlined,
+                                title: rf('Global search', '전체 검색'),
+                                description: rf(
+                                  'Search by exact user, project, or job id without exposing unrelated rows.',
+                                  '관련 없는 행을 노출하지 않고 사용자, 프로젝트, 작업 ID를 정확히 검색합니다.',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                               fieldPicker,
                               const SizedBox(height: 10),
                               queryInput,
@@ -2112,6 +2102,15 @@ class _FirebaseAdminDiagnosticsScreenState
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            RoomForgeSectionHeader(
+                              icon: Icons.manage_search_outlined,
+                              title: rf('Global search', '전체 검색'),
+                              description: rf(
+                                'Search by exact user, project, or job id without exposing unrelated rows.',
+                                '관련 없는 행을 노출하지 않고 사용자, 프로젝트, 작업 ID를 정확히 검색합니다.',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -2158,16 +2157,16 @@ class _FirebaseAdminDiagnosticsScreenState
                         );
                       }
                       if (snapshot.hasError) {
-                        return RoomForgeNotice(
-                          title: rf('Admin query failed', '관리자 조회 실패'),
-                          message: firebaseAdminSafeErrorMessage(
-                            snapshot.error!,
-                          ),
-                          severity: NoticeSeverity.error,
-                          icon: Icons.lock_outline,
+                        return _FirebaseAdminPermissionRow(
+                          error: snapshot.error!,
                         );
                       }
                       final jobs = snapshot.data ?? const [];
+                      final metrics = _FirebaseAdminDashboardMetrics(
+                        jobs: jobs,
+                        statusFilter: _statusFilter,
+                        activeSearchLabel: _activeSearchLabel,
+                      );
                       final jobList = _FirebaseAdminJobList(
                         jobs: jobs,
                         selectedJobId: _selectedJob?.jobId,
@@ -2184,24 +2183,39 @@ class _FirebaseAdminDiagnosticsScreenState
                             );
                       return LayoutBuilder(
                         builder: (context, constraints) {
+                          final dashboardBody = constraints.maxWidth < 760
+                              ? Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    metrics,
+                                    const SizedBox(height: 16),
+                                    jobList,
+                                    const SizedBox(height: 16),
+                                    detail,
+                                  ],
+                                )
+                              : Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    metrics,
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(flex: 2, child: jobList),
+                                        const SizedBox(width: 16),
+                                        Expanded(flex: 3, child: detail),
+                                      ],
+                                    ),
+                                  ],
+                                );
                           if (constraints.maxWidth < 760) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                jobList,
-                                const SizedBox(height: 16),
-                                detail,
-                              ],
-                            );
+                            return dashboardBody;
                           }
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 2, child: jobList),
-                              const SizedBox(width: 16),
-                              Expanded(flex: 3, child: detail),
-                            ],
-                          );
+                          return dashboardBody;
                         },
                       );
                     },
@@ -2211,6 +2225,266 @@ class _FirebaseAdminDiagnosticsScreenState
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminStatusFilters extends StatelessWidget {
+  const _FirebaseAdminStatusFilters({
+    required this.selectedStatus,
+    required this.onChanged,
+  });
+
+  final FirebaseJobStatus selectedStatus;
+  final ValueChanged<FirebaseJobStatus?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(14),
+      child: Semantics(
+        container: true,
+        label: FirebaseAdminDiagnosticsUiText.statusFilterSemanticsLabel,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            RoomForgeSectionHeader(
+              icon: Icons.filter_alt_outlined,
+              title: rf('Status filters', '상태 필터'),
+              description: rf(
+                'Scan created, processing, Needs review, failed, and timeout jobs quickly.',
+                'created, processing, 검토 필요, 실패, 시간 초과 작업을 빠르게 스캔합니다.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final status in FirebaseJobStatus.values)
+                  ChoiceChip(
+                    selected: selectedStatus == status,
+                    label: Text(_adminStatusLabel(status.wireValue)),
+                    avatar: Icon(
+                      Icons.circle,
+                      size: 10,
+                      color: _adminStatusColor(status.wireValue),
+                    ),
+                    onSelected: (_) => onChanged(status),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminDashboardMetrics extends StatelessWidget {
+  const _FirebaseAdminDashboardMetrics({
+    required this.jobs,
+    required this.statusFilter,
+    required this.activeSearchLabel,
+  });
+
+  final List<FirebaseReconstructionJob> jobs;
+  final FirebaseJobStatus statusFilter;
+  final String? activeSearchLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final needsReview = jobs
+        .where((job) => job.status == FirebaseJobStatus.reviewRequired)
+        .length;
+    final failed = jobs
+        .where(
+          (job) =>
+              job.status == FirebaseJobStatus.failed ||
+              job.status == FirebaseJobStatus.timeout,
+        )
+        .length;
+    final stateLabel = jobs.isEmpty
+        ? rf('empty', 'empty')
+        : activeSearchLabel != null
+        ? rf('filtered', 'filtered')
+        : _adminStatusLabel(statusFilter.wireValue);
+    final stateColor = jobs.isEmpty
+        ? _roomForgeAdmin
+        : activeSearchLabel != null
+        ? _roomForgeMeasure
+        : _adminStatusColor(statusFilter.wireValue);
+
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: RoomForgeSectionHeader(
+                  icon: Icons.analytics_outlined,
+                  title: rf('Operations dashboard', '운영 대시보드'),
+                  description: rf(
+                    'Visible job volume, review pressure, and failure pressure for the active filter.',
+                    '현재 필터의 작업 수, 검토 필요, 실패 압력을 한 번에 확인합니다.',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              RoomForgeStatusPill(
+                label: stateLabel,
+                color: stateColor,
+                icon: Icons.tune_outlined,
+                dense: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 640;
+              final cards = [
+                _FirebaseAdminMetricCell(
+                  value: jobs.length.toString(),
+                  label: rf('jobs', '작업'),
+                  color: _roomForgeAdmin,
+                ),
+                _FirebaseAdminMetricCell(
+                  value: needsReview.toString(),
+                  label: rf('Needs review', '검토 필요'),
+                  color: _roomForgeWarning,
+                ),
+                _FirebaseAdminMetricCell(
+                  value: failed.toString(),
+                  label: rf('failed or timeout', '실패 또는 시간 초과'),
+                  color: _roomForgeError,
+                ),
+              ];
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final card in cards) ...[
+                      card,
+                      if (card != cards.last) const SizedBox(height: 8),
+                    ],
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  for (final card in cards) ...[
+                    Expanded(child: card),
+                    if (card != cards.last) const SizedBox(width: 8),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminMetricCell extends StatelessWidget {
+  const _FirebaseAdminMetricCell({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  final String value;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: color.withValues(alpha: 0.34)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.circle, color: color, size: 12),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: _roomForgeInk,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: _roomForgeMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminPermissionRow extends StatelessWidget {
+  const _FirebaseAdminPermissionRow({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(14),
+      borderColor: _roomForgeError.withValues(alpha: 0.42),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              RoomForgeStatusPill(
+                label: rf('permission denied', '권한 거부'),
+                color: _roomForgeError,
+                icon: Icons.lock_outline,
+                dense: true,
+              ),
+              const Spacer(),
+              Text(
+                rf('row hidden', '행 숨김'),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: _roomForgeMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          RoomForgeNotice(
+            title: rf('Admin query failed', '관리자 조회 실패'),
+            message: firebaseAdminSafeErrorMessage(error),
+            severity: NoticeSeverity.error,
+            icon: Icons.lock_outline,
+          ),
+        ],
       ),
     );
   }
@@ -2245,43 +2519,265 @@ class _FirebaseAdminJobList extends StatelessWidget {
       child: Semantics(
         container: true,
         label: FirebaseAdminDiagnosticsUiText.jobListSemanticsLabel,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                rf('Jobs', '작업'),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            for (final job in jobs)
-              Semantics(
-                container: true,
-                button: true,
-                selected: job.jobId == selectedJobId,
-                label: FirebaseAdminDiagnosticsUiText.jobRowAccessibilityLabel(
-                  job,
-                ),
-                child: ListTile(
-                  selected: job.jobId == selectedJobId,
-                  onTap: () => onSelect(job),
-                  title: Text('${rf('Job', '작업')} ${job.jobId}'),
-                  subtitle: Text(
-                    '${rf('Owner', '소유자')} ${job.ownerUid}\n${rf('Project', '프로젝트')} ${job.projectId}',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 640;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          rf('Job table', '작업 테이블'),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      RoomForgeStatusPill(
+                        icon: Icons.view_list_outlined,
+                        label: '${jobs.length} ${rf('rows', '행')}',
+                        color: _roomForgeAdmin,
+                        dense: true,
+                      ),
+                    ],
                   ),
-                  isThreeLine: true,
-                  trailing: RoomForgeStatusPill(
+                ),
+                const Divider(height: 1),
+                if (!compact) const _FirebaseAdminJobTableHeader(),
+                for (final job in jobs) ...[
+                  if (compact)
+                    _FirebaseAdminJobCompactCard(
+                      job: job,
+                      selected: job.jobId == selectedJobId,
+                      onSelect: () => onSelect(job),
+                    )
+                  else
+                    _FirebaseAdminJobTableRow(
+                      job: job,
+                      selected: job.jobId == selectedJobId,
+                      onSelect: () => onSelect(job),
+                    ),
+                  const Divider(height: 1),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminJobTableHeader extends StatelessWidget {
+  const _FirebaseAdminJobTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: _roomForgeMuted,
+      fontWeight: FontWeight.w800,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: Text(rf('Job', '작업'), style: style)),
+          Expanded(flex: 2, child: Text(rf('Owner', '소유자'), style: style)),
+          Expanded(flex: 2, child: Text(rf('Project', '프로젝트'), style: style)),
+          Expanded(flex: 2, child: Text(rf('Status', '상태'), style: style)),
+          Expanded(flex: 2, child: Text(rf('Provider', '제공자'), style: style)),
+          Expanded(flex: 2, child: Text(rf('Updated', '수정 시각'), style: style)),
+          SizedBox(width: 82, child: Text(rf('Action', '액션'), style: style)),
+        ],
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminJobTableRow extends StatelessWidget {
+  const _FirebaseAdminJobTableRow({
+    required this.job,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final FirebaseReconstructionJob job;
+  final bool selected;
+  final VoidCallback onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final rowColor = selected
+        ? _roomForgePrimary.withValues(alpha: 0.12)
+        : Colors.transparent;
+    final valueStyle = theme.textTheme.bodySmall?.copyWith(
+      color: _roomForgeInk,
+      fontWeight: FontWeight.w600,
+    );
+    final mutedStyle = theme.textTheme.bodySmall?.copyWith(
+      color: _roomForgeMuted,
+    );
+
+    return Semantics(
+      container: true,
+      button: true,
+      selected: selected,
+      label: FirebaseAdminDiagnosticsUiText.jobRowAccessibilityLabel(job),
+      child: InkWell(
+        onTap: onSelect,
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: rowColor),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    job.jobId,
+                    overflow: TextOverflow.ellipsis,
+                    style: valueStyle,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    job.ownerUid,
+                    overflow: TextOverflow.ellipsis,
+                    style: mutedStyle,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    job.projectId,
+                    overflow: TextOverflow.ellipsis,
+                    style: mutedStyle,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: RoomForgeStatusPill(
                     label: _adminStatusLabel(job.status.wireValue),
                     color: _adminStatusColor(job.status.wireValue),
                     dense: true,
                   ),
                 ),
-              ),
-          ],
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    job.providerType,
+                    overflow: TextOverflow.ellipsis,
+                    style: mutedStyle,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    _adminTimestampLabel(job.updatedAt),
+                    overflow: TextOverflow.ellipsis,
+                    style: mutedStyle,
+                  ),
+                ),
+                SizedBox(
+                  width: 82,
+                  child: TextButton(
+                    onPressed: onSelect,
+                    child: Text(rf('View', '보기')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminJobCompactCard extends StatelessWidget {
+  const _FirebaseAdminJobCompactCard({
+    required this.job,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final FirebaseReconstructionJob job;
+  final bool selected;
+  final VoidCallback onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      button: true,
+      selected: selected,
+      label: FirebaseAdminDiagnosticsUiText.jobRowAccessibilityLabel(job),
+      child: InkWell(
+        onTap: onSelect,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected
+                ? _roomForgePrimary.withValues(alpha: 0.12)
+                : Colors.transparent,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        job.jobId,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: _roomForgeInk,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    RoomForgeStatusPill(
+                      label: _adminStatusLabel(job.status.wireValue),
+                      color: _adminStatusColor(job.status.wireValue),
+                      dense: true,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${rf('Owner', '소유자')} ${job.ownerUid}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _roomForgeMuted,
+                  ),
+                ),
+                Text(
+                  '${rf('Project', '프로젝트')} ${job.projectId}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _roomForgeMuted,
+                  ),
+                ),
+                Text(
+                  '${rf('Provider', '제공자')} ${job.providerType}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _roomForgeMuted,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: onSelect,
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: Text(rf('View job', '작업 보기')),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

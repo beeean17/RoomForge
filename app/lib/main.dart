@@ -1334,6 +1334,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
             adminRepository: adminRepository,
             legacyAdminApi: legacyAdminApi,
             backendMode: backendMode,
+            onSwitchAccount: authRepository.signOut,
           ),
           TextButton(
             onPressed: authRepository.signOut,
@@ -1357,6 +1358,7 @@ class AdminRouteGuardButton extends StatefulWidget {
     required this.adminRepository,
     required this.legacyAdminApi,
     required this.backendMode,
+    required this.onSwitchAccount,
     super.key,
   });
 
@@ -1364,6 +1366,7 @@ class AdminRouteGuardButton extends StatefulWidget {
   final FirebaseAdminRepository adminRepository;
   final AdminApi? legacyAdminApi;
   final BackendMode backendMode;
+  final Future<void> Function() onSwitchAccount;
 
   @override
   State<AdminRouteGuardButton> createState() => _AdminRouteGuardButtonState();
@@ -1373,6 +1376,14 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
   bool _isChecking = false;
 
   Future<void> _openAdmin() async {
+    if (_isChecking) {
+      return;
+    }
+
+    var shouldOpenAdmin = false;
+    var shouldRetry = false;
+    var shouldSwitchAccount = false;
+
     setState(() => _isChecking = true);
 
     try {
@@ -1381,26 +1392,25 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
         return;
       }
 
-      final isAdmin = await widget.adminRepository.isCurrentUserAdmin(
-        widget.session,
+      final action = await showDialog<_AdminRouteGuardDialogAction>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _AdminRouteGuardDialog(
+          check: _checkFirebaseAdminAccess(),
+          accountLabel:
+              widget.session.email ??
+              widget.session.displayName ??
+              rf('signed-in account', '로그인 계정'),
+        ),
       );
       if (!mounted) {
         return;
       }
 
-      if (!isAdmin) {
-        _showDeniedMessage();
-        return;
-      }
-
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (context) => FirebaseAdminDiagnosticsScreen(
-            session: widget.session,
-            adminRepository: widget.adminRepository,
-          ),
-        ),
-      );
+      shouldOpenAdmin = action == _AdminRouteGuardDialogAction.openAdmin;
+      shouldRetry = action == _AdminRouteGuardDialogAction.retry;
+      shouldSwitchAccount =
+          action == _AdminRouteGuardDialogAction.switchAccount;
     } on AdminApiException catch (error) {
       if (!mounted) {
         return;
@@ -1424,6 +1434,47 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
         setState(() => _isChecking = false);
       }
     }
+
+    if (!mounted) {
+      return;
+    }
+    if (shouldOpenAdmin) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => FirebaseAdminDiagnosticsScreen(
+            session: widget.session,
+            adminRepository: widget.adminRepository,
+          ),
+        ),
+      );
+      return;
+    }
+    if (shouldSwitchAccount) {
+      await widget.onSwitchAccount();
+      return;
+    }
+    if (shouldRetry) {
+      unawaited(_openAdmin());
+    }
+  }
+
+  Future<_AdminRouteGuardCheckResult> _checkFirebaseAdminAccess() async {
+    try {
+      final isAdmin = await widget.adminRepository.isCurrentUserAdmin(
+        widget.session,
+      );
+      if (isAdmin) {
+        return _AdminRouteGuardCheckResult.allowed();
+      }
+      return _AdminRouteGuardCheckResult.denied();
+    } on AdminApiException catch (error) {
+      if (error.code == 'unauthorized') {
+        return _AdminRouteGuardCheckResult.denied();
+      }
+      return _AdminRouteGuardCheckResult.staleRole();
+    } catch (_) {
+      return _AdminRouteGuardCheckResult.staleRole();
+    }
   }
 
   Future<void> _openLegacyAdmin() async {
@@ -1443,15 +1494,6 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
       MaterialPageRoute<void>(
         builder: (context) =>
             AdminShellScreen(session: adminSession, adminApi: adminApi),
-      ),
-    );
-  }
-
-  void _showDeniedMessage() {
-    _showSnackBar(
-      rf(
-        'Admin role required. Refresh role or contact an admin.',
-        '관리자 권한이 필요합니다. 권한을 새로고침하거나 관리자에게 문의하세요.',
       ),
     );
   }
@@ -1480,6 +1522,343 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
           : const Icon(Icons.admin_panel_settings_outlined),
       label: Text(
         _isChecking ? rf('Checking role...', '권한 확인 중...') : rf('Admin', '관리자'),
+      ),
+    );
+  }
+}
+
+enum _AdminRouteGuardDialogAction { openAdmin, retry, switchAccount, dismiss }
+
+enum _AdminRouteGuardState { checking, denied, staleRole }
+
+class _AdminRouteGuardCheckResult {
+  const _AdminRouteGuardCheckResult({
+    required this.state,
+    required this.allowed,
+  });
+
+  factory _AdminRouteGuardCheckResult.allowed() =>
+      const _AdminRouteGuardCheckResult(
+        state: _AdminRouteGuardState.checking,
+        allowed: true,
+      );
+
+  factory _AdminRouteGuardCheckResult.denied() =>
+      const _AdminRouteGuardCheckResult(
+        state: _AdminRouteGuardState.denied,
+        allowed: false,
+      );
+
+  factory _AdminRouteGuardCheckResult.staleRole() =>
+      const _AdminRouteGuardCheckResult(
+        state: _AdminRouteGuardState.staleRole,
+        allowed: false,
+      );
+
+  final _AdminRouteGuardState state;
+  final bool allowed;
+}
+
+class _AdminRouteGuardDialog extends StatelessWidget {
+  const _AdminRouteGuardDialog({
+    required this.check,
+    required this.accountLabel,
+  });
+
+  final Future<_AdminRouteGuardCheckResult> check;
+  final String accountLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxWidth = MediaQuery.sizeOf(context).width < 560 ? 360.0 : 520.0;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: RoomForgePanel(
+          padding: const EdgeInsets.all(18),
+          borderColor: _roomForgeBorderStrong,
+          backgroundColor: _roomForgePanel,
+          child: FutureBuilder<_AdminRouteGuardCheckResult>(
+            future: check,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return _AdminRouteGuardPanel(
+                  state: _AdminRouteGuardState.checking,
+                  accountLabel: accountLabel,
+                  showSkeleton: true,
+                );
+              }
+
+              final result = snapshot.data!;
+              if (result.allowed) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(
+                      context,
+                    ).pop(_AdminRouteGuardDialogAction.openAdmin);
+                  }
+                });
+                return _AdminRouteGuardPanel(
+                  state: _AdminRouteGuardState.checking,
+                  accountLabel: accountLabel,
+                  message: rf(
+                    'Admin role confirmed. Opening diagnostics.',
+                    '관리자 권한을 확인했습니다. 진단 화면을 여는 중입니다.',
+                  ),
+                );
+              }
+
+              return _AdminRouteGuardPanel(
+                state: result.state,
+                accountLabel: accountLabel,
+                onRetry: () => Navigator.of(
+                  context,
+                ).pop(_AdminRouteGuardDialogAction.retry),
+                onSwitchAccount: () => Navigator.of(
+                  context,
+                ).pop(_AdminRouteGuardDialogAction.switchAccount),
+                onDismiss: () => Navigator.of(
+                  context,
+                ).pop(_AdminRouteGuardDialogAction.dismiss),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminRouteGuardPanel extends StatelessWidget {
+  const _AdminRouteGuardPanel({
+    required this.state,
+    required this.accountLabel,
+    this.message,
+    this.showSkeleton = false,
+    this.onRetry,
+    this.onSwitchAccount,
+    this.onDismiss,
+  });
+
+  final _AdminRouteGuardState state;
+  final String accountLabel;
+  final String? message;
+  final bool showSkeleton;
+  final VoidCallback? onRetry;
+  final VoidCallback? onSwitchAccount;
+  final VoidCallback? onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = _colorForState(state);
+    final isChecking = state == _AdminRouteGuardState.checking;
+    final title = _titleForState(state);
+    final body = message ?? _messageForState(state);
+
+    return Semantics(
+      container: true,
+      liveRegion: !isChecking,
+      label: '$title. $body',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RoomForgeStatusPill(
+                label: _chipLabelForState(state),
+                color: color,
+                icon: isChecking
+                    ? Icons.admin_panel_settings_outlined
+                    : Icons.privacy_tip_outlined,
+                dense: true,
+              ),
+              const Spacer(),
+              if (onDismiss != null)
+                IconButton(
+                  tooltip: rf('Close', '닫기'),
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.close),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: _roomForgeInk,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: _roomForgeInkSoft,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _roomForgeCanvas,
+              border: Border.all(color: color.withValues(alpha: 0.34)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rf('Signed-in account', '로그인 계정'),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: _roomForgeMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    accountLabel,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _roomForgeInk,
+                    ),
+                  ),
+                  if (showSkeleton) ...[
+                    const SizedBox(height: 12),
+                    const _AdminRouteGuardSkeletonLine(widthFactor: .82),
+                    const SizedBox(height: 8),
+                    const _AdminRouteGuardSkeletonLine(widthFactor: .56),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (!isChecking) ...[
+            const SizedBox(height: 12),
+            RoomForgeNotice(
+              title: _noticeTitleForState(state),
+              message: _noticeMessageForState(state),
+              severity: state == _AdminRouteGuardState.denied
+                  ? NoticeSeverity.error
+                  : NoticeSeverity.warning,
+              icon: state == _AdminRouteGuardState.denied
+                  ? Icons.block_outlined
+                  : Icons.update_outlined,
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_outlined),
+                  label: Text(rf('Check role again', '권한 다시 확인')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onSwitchAccount,
+                  icon: const Icon(Icons.switch_account_outlined),
+                  label: Text(rf('Switch account', '계정 전환')),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _colorForState(_AdminRouteGuardState state) {
+    return switch (state) {
+      _AdminRouteGuardState.checking => _roomForgeSave,
+      _AdminRouteGuardState.denied => _roomForgeError,
+      _AdminRouteGuardState.staleRole => _roomForgeWarning,
+    };
+  }
+
+  String _chipLabelForState(_AdminRouteGuardState state) {
+    return switch (state) {
+      _AdminRouteGuardState.checking => rf('checking', '확인 중'),
+      _AdminRouteGuardState.denied => rf('denied', '거부됨'),
+      _AdminRouteGuardState.staleRole => rf('stale role', 'stale role'),
+    };
+  }
+
+  String _titleForState(_AdminRouteGuardState state) {
+    return switch (state) {
+      _AdminRouteGuardState.checking => rf(
+        'Checking admin role',
+        '관리자 권한 확인 중',
+      ),
+      _AdminRouteGuardState.denied => rf('Admin access denied', '접근 권한이 없습니다'),
+      _AdminRouteGuardState.staleRole => rf(
+        'Role refresh needed',
+        '권한 갱신이 필요합니다',
+      ),
+    };
+  }
+
+  String _messageForState(_AdminRouteGuardState state) {
+    return switch (state) {
+      _AdminRouteGuardState.checking => rf(
+        'Verifying the signed-in account before showing operational data.',
+        '운영 데이터를 표시하기 전에 로그인 계정의 관리자 역할을 확인하고 있습니다.',
+      ),
+      _AdminRouteGuardState.denied => rf(
+        'Operational data is only available after an admin role is confirmed.',
+        '운영 데이터는 관리자 역할이 확인된 계정만 볼 수 있습니다.',
+      ),
+      _AdminRouteGuardState.staleRole => rf(
+        'Your token or role change may not have propagated yet. Refresh the role check before opening admin diagnostics.',
+        '토큰 또는 권한 변경이 아직 반영되지 않았을 수 있습니다. 관리자 진단을 열기 전에 권한 확인을 다시 실행하세요.',
+      ),
+    };
+  }
+
+  String _noticeTitleForState(_AdminRouteGuardState state) {
+    return switch (state) {
+      _AdminRouteGuardState.denied => rf(
+        'No sensitive details exposed',
+        '민감 정보는 표시하지 않습니다',
+      ),
+      _ => rf('Stale role notice', '권한 반영 지연 안내'),
+    };
+  }
+
+  String _noticeMessageForState(_AdminRouteGuardState state) {
+    return switch (state) {
+      _AdminRouteGuardState.denied => rf(
+        'Switch to an admin account or ask an existing admin to update your role.',
+        '관리자 계정으로 전환하거나 기존 관리자에게 역할 업데이트를 요청하세요.',
+      ),
+      _ => rf(
+        'If your role changed recently, refresh the check to request a fresh token and role snapshot.',
+        '최근 권한이 변경되었다면 새 토큰과 역할 스냅샷을 받도록 권한 확인을 다시 실행하세요.',
+      ),
+    };
+  }
+}
+
+class _AdminRouteGuardSkeletonLine extends StatelessWidget {
+  const _AdminRouteGuardSkeletonLine({required this.widthFactor});
+
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      alignment: Alignment.centerLeft,
+      widthFactor: widthFactor,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _roomForgeBorderStrong,
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: const SizedBox(height: 12),
       ),
     );
   }

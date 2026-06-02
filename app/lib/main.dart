@@ -8572,6 +8572,12 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
+                    _DraftRecoveryDiffSummary(
+                      draft: recoverableDraft!,
+                      latestCloudUpdatedAt: activeCloudUpdatedAt,
+                      hasCloudConflict: includeContinueSavedVersion,
+                    ),
+                    const SizedBox(height: 8),
                     LayoutDraftRecoveryControls(
                       actions: recoveryActions,
                       isHandlingDraft: isHandlingDraft,
@@ -8657,6 +8663,238 @@ class _EditorBridgeCommandBar extends StatelessWidget {
       return _roomForgePrimary;
     }
     return _roomForgeMuted;
+  }
+}
+
+class _DraftRecoveryDiffSummary extends StatelessWidget {
+  const _DraftRecoveryDiffSummary({
+    required this.draft,
+    required this.latestCloudUpdatedAt,
+    required this.hasCloudConflict,
+  });
+
+  final LayoutDraft draft;
+  final DateTime? latestCloudUpdatedAt;
+  final bool hasCloudConflict;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dirtySummary = _dirtyFieldSummary(draft.dirtyFields);
+    final localLines = [
+      rf(
+        '${draft.furnitureObjects.length} furniture objects',
+        '가구 ${draft.furnitureObjects.length}개',
+      ),
+      rf(
+        'Updated ${_timeLabel(draft.updatedAt)}',
+        '${_timeLabel(draft.updatedAt)} 수정',
+      ),
+      dirtySummary,
+    ];
+    final cloudLines = [
+      hasCloudConflict
+          ? rf('Cloud changed after this draft', '클라우드가 이 드래프트 이후 변경됨')
+          : rf('Cloud version is unchanged', '클라우드 버전 변경 없음'),
+      rf(
+        'Saved ${_timeLabel(latestCloudUpdatedAt ?? draft.baseCloudUpdatedAt)}',
+        '${_timeLabel(latestCloudUpdatedAt ?? draft.baseCloudUpdatedAt)} 저장',
+      ),
+      draft.baseCloudLayoutId == null
+          ? rf('No cloud layout id', '클라우드 layout id 없음')
+          : rf(
+              'Base ${draft.baseCloudLayoutId}',
+              '기준 ${draft.baseCloudLayoutId}',
+            ),
+    ];
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: _roomForgeBorderStrong),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 560;
+            final cards = [
+              _diffCard(
+                context,
+                chipLabel: rf('local draft', '로컬 draft'),
+                chipColor: _roomForgeWarning,
+                title: rf('Recoverable local draft', '복구 가능한 로컬 draft'),
+                lines: localLines,
+              ),
+              _diffCard(
+                context,
+                chipLabel: hasCloudConflict
+                    ? rf('cloud newer', '클라우드 최신')
+                    : rf('cloud saved', '클라우드 저장본'),
+                chipColor: hasCloudConflict
+                    ? _roomForgePrimary
+                    : _roomForgeSuccess,
+                title: rf('Cloud saved layout', '클라우드 저장본'),
+                lines: cloudLines,
+              ),
+            ];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  rf(
+                    'Compare before choosing recovery.',
+                    '복구 선택 전에 차이를 비교하세요.',
+                  ),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: _roomForgeInk,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  rf(
+                    'RoomForge will not auto-merge conflicting drafts.',
+                    'RoomForge는 충돌 draft를 자동 병합하지 않습니다.',
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _roomForgeMuted,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (stacked)
+                  Column(
+                    children: [cards[0], const SizedBox(height: 8), cards[1]],
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: cards[0]),
+                      const SizedBox(width: 8),
+                      Expanded(child: cards[1]),
+                    ],
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _diffCard(
+    BuildContext context, {
+    required String chipLabel,
+    required Color chipColor,
+    required String title,
+    required List<String> lines,
+  }) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgePanel,
+        border: Border.all(color: _roomForgeBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DraftRecoveryChip(label: chipLabel, color: chipColor),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: _roomForgeInk,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final line in lines)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  line,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _roomForgeMuted,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _dirtyFieldSummary(List<String> dirtyFields) {
+    if (dirtyFields.isEmpty) {
+      return rf('No changed fields listed', '변경 필드 없음');
+    }
+    final labels = dirtyFields
+        .map((field) {
+          return switch (field) {
+            'editor_scene' => rf('editor scene', '편집 장면'),
+            'furniture_objects' => rf('furniture', '가구'),
+            'room_dimensions' => rf('room dimensions', '방 치수'),
+            'floor_plan' => rf('floor plan', '평면도'),
+            _ => field,
+          };
+        })
+        .join(', ');
+    return rf('Changed: $labels', '변경: $labels');
+  }
+
+  String _timeLabel(DateTime? value) {
+    if (value == null) {
+      return rf('unknown time', '시간 없음');
+    }
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '${local.year}.$month.$day $hour:$minute';
+  }
+}
+
+class _DraftRecoveryChip extends StatelessWidget {
+  const _DraftRecoveryChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        border: Border.all(color: color.withValues(alpha: 0.52)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: const SizedBox.square(dimension: 6),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: _roomForgeInk,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

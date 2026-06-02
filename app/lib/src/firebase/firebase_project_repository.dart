@@ -259,6 +259,7 @@ class FirebaseFirestoreSourceImageRepository
     required String projectId,
   }) async {
     final snapshot = await _captureSessionsCollection(projectId)
+        .where('owner_uid', isEqualTo: ownerUid)
         .orderBy('updated_at', descending: true)
         .limit(1)
         .get(const GetOptions(source: Source.server));

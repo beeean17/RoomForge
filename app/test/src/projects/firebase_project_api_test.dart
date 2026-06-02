@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/src/auth/auth_repository.dart';
 import 'package:app/src/firebase/firebase_models.dart';
@@ -445,6 +446,42 @@ void main() {
       expect(snapshot.images.last.sourceImageId, 'source-2');
     },
   );
+
+  test('FirebaseProjectApi maps capture session permission failures', () async {
+    final projects = _FakeProjectRepository();
+    await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+    final sourceImages = _FakeSourceImageRepository()
+      ..latestCaptureSessionError = FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+        message: 'Missing or insufficient permissions.',
+      );
+    final api = FirebaseProjectApi(
+      authRepository: DisabledAuthRepository(),
+      session: _session(),
+      floorPlanRepository: _FakeFloorPlanRepository(),
+      geometryRepository: _FakeGeometryRepository(),
+      layoutRepository: _FakeLayoutRepository(),
+      projectRepository: projects,
+      reconstructionRepository: _FakeReconstructionRepository(),
+      roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+      sourceImageRepository: sourceImages,
+      sourceImageUploader: _FakeSourceImageUploader(),
+    );
+
+    await expectLater(
+      api.loadLatestCaptureSession(projectId: 'project-1'),
+      throwsA(
+        isA<ProjectApiException>()
+            .having((error) => error.code, 'code', 'permission_denied')
+            .having(
+              (error) => error.message,
+              'message',
+              contains('guided capture session access'),
+            ),
+      ),
+    );
+  });
 
   test(
     'FirebaseProjectApi keeps prior guided role metadata when another role upload fails',
@@ -1845,6 +1882,7 @@ class _FakeRoomDimensionsRepository
 
 class _FakeSourceImageRepository implements FirebaseSourceImageRepository {
   FirebaseSourceImage? saved;
+  FirebaseException? latestCaptureSessionError;
   final captureSessions = <FirebaseCaptureSession>[];
   final captureImages = <FirebaseCaptureImage>[];
   var _sourceImageCount = 0;
@@ -1893,6 +1931,10 @@ class _FakeSourceImageRepository implements FirebaseSourceImageRepository {
     required String ownerUid,
     required String projectId,
   }) async {
+    final error = latestCaptureSessionError;
+    if (error != null) {
+      throw error;
+    }
     final matches = [
       for (final session in captureSessions)
         if (session.ownerUid == ownerUid && session.projectId == projectId)

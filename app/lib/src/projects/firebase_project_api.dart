@@ -317,28 +317,37 @@ class FirebaseProjectApi extends ProjectApi {
   Future<CaptureSessionSnapshot?> loadLatestCaptureSession({
     required String projectId,
   }) async {
-    final project = await _projectRepository.getProject(
-      ownerUid: _session.uid,
-      projectId: projectId,
-    );
-    final session = await _sourceImageRepository.getLatestCaptureSession(
-      ownerUid: _session.uid,
-      projectId: project.projectId,
-    );
-    if (session == null) {
-      return null;
+    try {
+      final project = await _projectRepository.getProject(
+        ownerUid: _session.uid,
+        projectId: projectId,
+      );
+      final session = await _sourceImageRepository.getLatestCaptureSession(
+        ownerUid: _session.uid,
+        projectId: project.projectId,
+      );
+      if (session == null) {
+        return null;
+      }
+      final images = await _sourceImageRepository
+          .watchCaptureImages(
+            ownerUid: _session.uid,
+            projectId: project.projectId,
+            captureSessionId: session.captureSessionId,
+          )
+          .first;
+      return CaptureSessionSnapshot(
+        session: _captureSessionFromFirebase(session),
+        images: images.map(_captureImageFromFirebase).toList(growable: false),
+      );
+    } on FirebaseException catch (error) {
+      throw _captureSessionAccessException(error);
+    } on FirebaseContractException {
+      throw const ProjectApiException(
+        'Guided capture session access is no longer available. Reopen the project or start a new capture session.',
+        code: 'permission_denied',
+      );
     }
-    final images = await _sourceImageRepository
-        .watchCaptureImages(
-          ownerUid: _session.uid,
-          projectId: project.projectId,
-          captureSessionId: session.captureSessionId,
-        )
-        .first;
-    return CaptureSessionSnapshot(
-      session: _captureSessionFromFirebase(session),
-      images: images.map(_captureImageFromFirebase).toList(growable: false),
-    );
   }
 
   @override
@@ -1839,6 +1848,19 @@ class FirebaseProjectApi extends ProjectApi {
     return ProjectApiException(
       'Source image upload failed: ${error.message ?? error.code}',
       code: 'upload_failed',
+    );
+  }
+
+  ProjectApiException _captureSessionAccessException(FirebaseException error) {
+    if (_isPermissionError(error.code)) {
+      return const ProjectApiException(
+        'Permission blocked guided capture session access. Check that you are signed in with the project owner account, then retry.',
+        code: 'permission_denied',
+      );
+    }
+    return ProjectApiException(
+      'Guided capture session access failed: ${error.message ?? error.code}',
+      code: 'capture_session_load_failed',
     );
   }
 

@@ -1321,6 +1321,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayName =
         session.displayName ?? session.email ?? 'signed-in user';
+    final compactTopbar = MediaQuery.sizeOf(context).width < 720;
 
     return Scaffold(
       appBar: AppBar(
@@ -1336,11 +1337,19 @@ class ProjectWorkspaceScreen extends StatelessWidget {
             legacyAdminApi: legacyAdminApi,
             backendMode: backendMode,
             onSwitchAccount: authRepository.signOut,
+            compact: compactTopbar,
           ),
-          TextButton(
-            onPressed: authRepository.signOut,
-            child: Text(rf('Sign out', '로그아웃')),
-          ),
+          if (compactTopbar)
+            IconButton(
+              tooltip: rf('Sign out', '로그아웃'),
+              onPressed: authRepository.signOut,
+              icon: const Icon(Icons.logout_outlined),
+            )
+          else
+            TextButton(
+              onPressed: authRepository.signOut,
+              child: Text(rf('Sign out', '로그아웃')),
+            ),
         ],
       ),
       body: _RoomForgeAppBackground(
@@ -1360,6 +1369,7 @@ class AdminRouteGuardButton extends StatefulWidget {
     required this.legacyAdminApi,
     required this.backendMode,
     required this.onSwitchAccount,
+    this.compact = false,
     super.key,
   });
 
@@ -1368,6 +1378,7 @@ class AdminRouteGuardButton extends StatefulWidget {
   final AdminApi? legacyAdminApi;
   final BackendMode backendMode;
   final Future<void> Function() onSwitchAccount;
+  final bool compact;
 
   @override
   State<AdminRouteGuardButton> createState() => _AdminRouteGuardButtonState();
@@ -1513,6 +1524,21 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.compact) {
+      return IconButton(
+        tooltip: _isChecking
+            ? rf('Checking admin role...', '관리자 권한 확인 중...')
+            : rf('Admin', '관리자'),
+        onPressed: _isChecking ? null : _openAdmin,
+        icon: _isChecking
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.admin_panel_settings_outlined),
+      );
+    }
+
     return TextButton.icon(
       onPressed: _isChecking ? null : _openAdmin,
       icon: _isChecking
@@ -5366,59 +5392,83 @@ class _WorkspaceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final createButton = FilledButton.icon(
+      onPressed: onCreateProject,
+      icon: const Icon(Icons.add),
+      label: Text(rf('Create project', '프로젝트 생성')),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 680;
+            final titleBlock = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    RoomForgeStatusPill(
+                      label: rf('My projects', '내 프로젝트'),
+                      color: _roomForgeAdmin,
+                      dense: true,
+                    ),
+                    RoomForgeStatusPill(
+                      label: rf('Cloud workspace', '클라우드 작업공간'),
+                      color: _roomForgeSave,
+                      dense: true,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  rf('Project workspace', '프로젝트 작업공간'),
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: _roomForgeInk,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${rf('Signed in as', '로그인 계정')}: $displayName',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: _roomForgeMuted,
+                  ),
+                ),
+              ],
+            );
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      RoomForgeStatusPill(
-                        label: rf('My projects', '내 프로젝트'),
-                        color: _roomForgeAdmin,
-                        dense: true,
-                      ),
-                      RoomForgeStatusPill(
-                        label: rf('Cloud workspace', '클라우드 작업공간'),
-                        color: _roomForgeSave,
-                        dense: true,
-                      ),
-                    ],
-                  ),
+                  titleBlock,
                   const SizedBox(height: 12),
-                  Text(
-                    rf('Project workspace', '프로젝트 작업공간'),
-                    style: theme.textTheme.displaySmall?.copyWith(
-                      color: _roomForgeInk,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${rf('Signed in as', '로그인 계정')}: $displayName',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: _roomForgeMuted,
-                    ),
-                  ),
+                  SizedBox(height: 48, child: createButton),
+                  const SizedBox(height: 12),
+                  _ResponsiveLayoutModeStrip(width: constraints.maxWidth),
                 ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: onCreateProject,
-              icon: const Icon(Icons.add),
-              label: Text(rf('Create project', '프로젝트 생성')),
-            ),
-          ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: titleBlock),
+                    const SizedBox(width: 12),
+                    createButton,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _ResponsiveLayoutModeStrip(width: constraints.maxWidth),
+              ],
+            );
+          },
         ),
         if (message != null) ...[
           const SizedBox(height: 12),
@@ -5436,6 +5486,98 @@ class _WorkspaceHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ResponsiveLayoutModeStrip extends StatelessWidget {
+  const _ResponsiveLayoutModeStrip({required this.width});
+
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final motionReduced = media.disableAnimations || media.accessibleNavigation;
+    final activeMode = _responsiveModeForWidth(width);
+    final modes = [
+      _ResponsiveLayoutMode(
+        id: 'mobile',
+        label: rf('mobile', '모바일'),
+        detail: rf('capture first', '촬영 우선'),
+        color: _roomForgePrimary,
+      ),
+      _ResponsiveLayoutMode(
+        id: 'tablet',
+        label: rf('tablet', '태블릿'),
+        detail: rf('review tray', '리뷰 tray'),
+        color: _roomForgeMeasure,
+      ),
+      _ResponsiveLayoutMode(
+        id: 'desktop',
+        label: rf('desktop', '데스크톱'),
+        detail: rf('editor shell', '편집 shell'),
+        color: _roomForgeSuccess,
+      ),
+      _ResponsiveLayoutMode(
+        id: 'wide',
+        label: rf('wide ops', 'wide ops'),
+        detail: rf('admin split', '관리자 split'),
+        color: _roomForgeAdmin,
+      ),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final mode in modes)
+          RoomForgeStatusPill(
+            label: mode.id == activeMode
+                ? '${mode.label} · ${mode.detail}'
+                : mode.label,
+            color: mode.id == activeMode ? mode.color : _roomForgeMuted,
+            icon: mode.id == activeMode ? Icons.check_circle_outline : null,
+            dense: true,
+          ),
+        RoomForgeStatusPill(
+          label: motionReduced
+              ? rf('reduced motion', 'reduced motion')
+              : rf('motion normal', 'motion normal'),
+          color: motionReduced ? _roomForgeAdmin : _roomForgeMuted,
+          icon: motionReduced
+              ? Icons.motion_photos_off_outlined
+              : Icons.motion_photos_on_outlined,
+          dense: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _ResponsiveLayoutMode {
+  const _ResponsiveLayoutMode({
+    required this.id,
+    required this.label,
+    required this.detail,
+    required this.color,
+  });
+
+  final String id;
+  final String label;
+  final String detail;
+  final Color color;
+}
+
+String _responsiveModeForWidth(double width) {
+  if (width < 600) {
+    return 'mobile';
+  }
+  if (width < 980) {
+    return 'tablet';
+  }
+  if (width < 1280) {
+    return 'desktop';
+  }
+  return 'wide';
 }
 
 class _ProjectListPanel extends StatelessWidget {

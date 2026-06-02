@@ -211,8 +211,9 @@ app.innerHTML = `
           <p class="eyebrow">${t('Scale', '스케일')}</p>
           <h2 id="scale-title">${t('Metric floor plan', '미터 평면도')}</h2>
         </div>
-        <span class="state-pill measurement">${t('Meters', '미터')}</span>
+        <span class="state-pill measurement" id="scale-state">${t('reference selected', '기준선 선택됨')}</span>
       </div>
+      <div class="reference-line-list" id="reference-line-list" aria-label="${t('Reference wall segment', '기준 벽 세그먼트')}"></div>
       <label class="field-label" for="known-wall-length">${t('Known wall length', '알려진 벽 길이')}</label>
       <div class="scale-input-row">
         <input
@@ -226,8 +227,21 @@ app.innerHTML = `
         />
         <span aria-hidden="true">m</span>
       </div>
+      <div class="scale-summary-grid" aria-label="${t('Scale calibration summary', '스케일 보정 요약')}">
+        <div>
+          <strong id="scale-ratio">142 px/m</strong>
+          <span>${t('conversion ratio', '변환 비율')}</span>
+        </div>
+        <div>
+          <strong id="scale-error">±0.0%</strong>
+          <span>${t('estimated error', '예상 오차')}</span>
+        </div>
+      </div>
+      <div class="scale-recalculate-notice" id="scale-recalculate-notice" hidden>
+        ${t('Outline changed. Recalculate scale before exporting.', '윤곽이 변경되었습니다. 내보내기 전에 스케일을 다시 계산하세요.')}
+      </div>
       <p class="helper-text" id="scale-status">${t('Use the longest trusted wall to anchor image pixels into meters.', '가장 신뢰할 수 있는 긴 벽을 기준으로 이미지 픽셀을 미터로 보정하세요.')}</p>
-      <button id="generate-floor-plan" type="button">${t('Generate floor plan', '평면도 생성')}</button>
+      <button id="generate-floor-plan" type="button">${t('Apply scale', '스케일 적용')}</button>
     </section>
     <section class="panel-section" aria-labelledby="furniture-catalog-title">
       <div class="panel-section-header">
@@ -326,6 +340,11 @@ const redoGeometryButton = document.querySelector<HTMLButtonElement>('#redo-geom
 const confirmOutlineButton = document.querySelector<HTMLButtonElement>('#confirm-outline')
 const knownWallLengthInput = document.querySelector<HTMLInputElement>('#known-wall-length')
 const scaleStatus = document.querySelector<HTMLElement>('#scale-status')
+const scaleState = document.querySelector<HTMLElement>('#scale-state')
+const referenceLineList = document.querySelector<HTMLElement>('#reference-line-list')
+const scaleRatio = document.querySelector<HTMLElement>('#scale-ratio')
+const scaleError = document.querySelector<HTMLElement>('#scale-error')
+const scaleRecalculateNotice = document.querySelector<HTMLElement>('#scale-recalculate-notice')
 const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
 const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-catalog-status')
 const selectionState = document.querySelector<HTMLElement>('#selection-state')
@@ -373,6 +392,11 @@ if (
   !confirmOutlineButton ||
   !knownWallLengthInput ||
   !scaleStatus ||
+  !scaleState ||
+  !referenceLineList ||
+  !scaleRatio ||
+  !scaleError ||
+  !scaleRecalculateNotice ||
   !furnitureCount ||
   !furnitureCatalogStatus ||
   !selectionState ||
@@ -412,6 +436,11 @@ const redoGeometryButtonElement = redoGeometryButton
 const confirmOutlineButtonElement = confirmOutlineButton
 const knownWallLengthInputElement = knownWallLengthInput
 const scaleStatusElement = scaleStatus
+const scaleStateElement = scaleState
+const referenceLineListElement = referenceLineList
+const scaleRatioElement = scaleRatio
+const scaleErrorElement = scaleError
+const scaleRecalculateNoticeElement = scaleRecalculateNotice
 const furnitureCountElement = furnitureCount
 const furnitureCatalogStatusElement = furnitureCatalogStatus
 const selectionStateElement = selectionState
@@ -570,6 +599,8 @@ let activeCameraDrag:
   | null = null
 let cameraTransition: CameraTransition | null = null
 let furnitureIdCounter = 0
+let selectedReferenceEdgeIndex = 0
+let scaleNeedsRecalculation = false
 const geometryUndoStack: THREE.Vector3[][] = []
 const geometryRedoStack: THREE.Vector3[][] = []
 const layerVisibility: Record<CandidateLayer, boolean> = {
@@ -801,6 +832,23 @@ document.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('c
 undoGeometryButtonElement.addEventListener('click', () => restoreGeometryHistory('undo'))
 redoGeometryButtonElement.addEventListener('click', () => restoreGeometryHistory('redo'))
 
+referenceLineListElement.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const button = target?.closest<HTMLButtonElement>('[data-reference-edge]')
+  const index = Number.parseInt(button?.dataset.referenceEdge ?? '', 10)
+  if (!Number.isInteger(index) || index < 0 || index >= confirmedPoints.length) {
+    return
+  }
+  selectedReferenceEdgeIndex = index
+  scaleNeedsRecalculation = true
+  updateScaleCalibrationPanel()
+})
+
+knownWallLengthInputElement.addEventListener('input', () => {
+  scaleNeedsRecalculation = true
+  updateScaleCalibrationPanel()
+})
+
 document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
   pushGeometryUndoState()
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
@@ -816,12 +864,13 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     return
   }
   const knownLength = Number.parseFloat(knownWallLengthInputElement.value)
-  if (!Number.isFinite(knownLength) || knownLength <= 0) {
+  if (!Number.isFinite(knownLength) || knownLength <= 0 || knownLength > 50) {
     scaleStatusElement.textContent = t(
       'Enter a positive known wall length before generating a floor plan.',
       '평면도를 생성하기 전에 양수 벽 길이를 입력하세요.',
     )
     geometryStatusElement.textContent = t('Invalid calibration length.', '잘못된 보정 길이입니다.')
+    updateScaleCalibrationPanel()
     return
   }
   const depth = roomBounds(spatialModel).depthMeters
@@ -833,6 +882,7 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     `Calibrated with ${knownLength.toFixed(2)} m known wall length.`,
     `알려진 벽 길이 ${knownLength.toFixed(2)} m로 보정했습니다.`,
   )
+  scaleNeedsRecalculation = false
   const imageGeometryBeforeCalibration = confirmedGeometryPayload()
   const metricGeometry = {
     coordinateSpace: 'meters' as const,
@@ -856,6 +906,7 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
   }
   spatialModel = recalculateCandidatePlacements(spatialModel)
   applySpatialModel()
+  updateScaleCalibrationPanel()
   postToParent({
     type: 'roomforge.calibration.floorPlanGenerated',
     version: BRIDGE_VERSION,
@@ -1401,6 +1452,93 @@ function syncCornerHandleStyles(): void {
   }
 }
 
+function updateScaleCalibrationPanel(): void {
+  if (confirmedPoints.length < 2) {
+    referenceLineListElement.innerHTML = ''
+    scaleStateElement.className = 'state-pill error'
+    scaleStateElement.textContent = t('invalid length', '잘못된 길이')
+    scaleRatioElement.textContent = 'n/a'
+    scaleErrorElement.textContent = 'n/a'
+    scaleRecalculateNoticeElement.hidden = false
+    return
+  }
+  if (selectedReferenceEdgeIndex >= confirmedPoints.length) {
+    selectedReferenceEdgeIndex = 0
+  }
+  renderReferenceLineButtons()
+  const knownLength = Number.parseFloat(knownWallLengthInputElement.value)
+  const edge = selectedReferenceEdge()
+  const pixelLength = referencePixelLength(edge)
+  const currentMeters = referenceMetricLength(edge)
+  if (!Number.isFinite(knownLength) || knownLength <= 0 || knownLength > 50) {
+    scaleStateElement.className = 'state-pill error'
+    scaleStateElement.textContent = t('invalid length', '잘못된 길이')
+    scaleRatioElement.textContent = 'n/a'
+    scaleErrorElement.textContent = 'n/a'
+    scaleRecalculateNoticeElement.hidden = false
+    scaleStatusElement.textContent = t(
+      'Enter a wall length between 0.10 m and 50.00 m.',
+      '0.10 m에서 50.00 m 사이의 벽 길이를 입력하세요.',
+    )
+    return
+  }
+  const pixelsPerMeter = pixelLength / knownLength
+  const errorPercent =
+    currentMeters > 0 ? (Math.abs(currentMeters - knownLength) / knownLength) * 100 : 0
+  scaleRatioElement.textContent = `${Math.round(pixelsPerMeter)} px/m`
+  scaleErrorElement.textContent = `±${errorPercent.toFixed(1)}%`
+  scaleStateElement.className = scaleNeedsRecalculation
+    ? 'state-pill warning'
+    : 'state-pill measurement'
+  scaleStateElement.textContent = scaleNeedsRecalculation
+    ? t('recalculate', '재계산 필요')
+    : t('reference selected', '기준선 선택됨')
+  scaleRecalculateNoticeElement.hidden = !scaleNeedsRecalculation
+  if (!scaleNeedsRecalculation) {
+    scaleStatusElement.textContent = t(
+      `Reference wall ${selectedReferenceEdgeIndex + 1} maps ${Math.round(
+        pixelLength,
+      )} px to ${knownLength.toFixed(2)} m.`,
+      `기준 벽 ${selectedReferenceEdgeIndex + 1}: ${Math.round(
+        pixelLength,
+      )} px를 ${knownLength.toFixed(2)} m로 매핑했습니다.`,
+    )
+  }
+}
+
+function renderReferenceLineButtons(): void {
+  referenceLineListElement.innerHTML = confirmedPoints
+    .map((_, index) => {
+      const selected = index === selectedReferenceEdgeIndex
+      const next = (index + 1) % confirmedPoints.length
+      const label = usesKorean
+        ? `벽 ${index + 1}-${next + 1}`
+        : `Wall ${index + 1}-${next + 1}`
+      return `<button type="button" data-reference-edge="${index}" aria-pressed="${selected}" class="${
+        selected ? 'is-active' : ''
+      }">${label}</button>`
+    })
+    .join('')
+}
+
+function selectedReferenceEdge(): { start: THREE.Vector3; end: THREE.Vector3 } {
+  const start = confirmedPoints[selectedReferenceEdgeIndex]
+  const end = confirmedPoints[(selectedReferenceEdgeIndex + 1) % confirmedPoints.length]
+  return { start, end }
+}
+
+function referencePixelLength(edge: { start: THREE.Vector3; end: THREE.Vector3 }): number {
+  const start = scenePointToImage(edge.start)
+  const end = scenePointToImage(edge.end)
+  return Math.hypot(end.x - start.x, end.y - start.y)
+}
+
+function referenceMetricLength(edge: { start: THREE.Vector3; end: THREE.Vector3 }): number {
+  const start = scenePointToMetric(edge.start)
+  const end = scenePointToMetric(edge.end)
+  return Math.hypot(end.x - start.x, end.y - start.y)
+}
+
 function rebuildWalls(): void {
   for (const child of [...wallGroup.children]) {
     wallGroup.remove(child)
@@ -1580,6 +1718,7 @@ function updateSpatialStatus(): void {
   view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
   applyLayerVisibility()
   updateOutlineValidityPanel()
+  updateScaleCalibrationPanel()
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()
@@ -2480,6 +2619,7 @@ function clampNumber(value: number, min: number, max: number): number {
 }
 
 function updateConfirmedGeometry(message: string, emit = true): void {
+  scaleNeedsRecalculation = true
   spatialModel = {
     ...spatialModel,
     hasUnsavedChanges: true,

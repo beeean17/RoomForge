@@ -516,6 +516,24 @@ dd {
   text-transform: uppercase;
 }
 
+.reference-line-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reference-line-list button {
+  min-height: 38px;
+  border-style: dashed;
+}
+
+.reference-line-list button.is-active {
+  border-style: solid;
+  border-color: rgba(154, 179, 209, 0.5);
+  background: rgba(154, 179, 209, 0.12);
+  color: #c7d7e9;
+}
+
 .scale-input-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -532,6 +550,43 @@ dd {
   background: #0d0f12;
   color: var(--rf-ink);
   font: inherit;
+}
+
+.scale-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scale-summary-grid div {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--rf-border);
+  background: var(--rf-panel-strong);
+}
+
+.scale-summary-grid strong {
+  color: var(--rf-ink);
+  font-size: 16px;
+}
+
+.scale-summary-grid span {
+  color: var(--rf-muted);
+  font-size: 12px;
+}
+
+.scale-recalculate-notice {
+  padding: 10px;
+  border: 1px dashed rgba(214, 167, 91, 0.52);
+  background: rgba(214, 167, 91, 0.1);
+  color: #f3d2a5;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.scale-recalculate-notice[hidden] {
+  display: none;
 }
 
 .helper-text {
@@ -734,6 +789,8 @@ button:focus-visible {
   .candidate-meta,
   .candidate-card-actions,
   .outline-validity-panel,
+  .reference-line-list,
+  .scale-summary-grid,
   .furniture-edit-controls,
   .fixture-edit-controls,
   .camera-controls {

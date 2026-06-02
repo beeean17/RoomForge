@@ -8047,10 +8047,16 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
     final theme = Theme.of(context);
 
     return AlertDialog(
+      backgroundColor: _roomForgePanel,
+      surfaceTintColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(20),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: _roomForgeBorderStrong),
+      ),
       title: Row(
         children: [
           Icon(
@@ -8063,6 +8069,10 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
               isCreate
                   ? rf('Create room project', '방 프로젝트 생성')
                   : rf('Edit project', '프로젝트 수정'),
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: _roomForgeInk,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -8089,6 +8099,29 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
                   color: _roomForgeMuted,
                   height: 1.4,
                 ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  RoomForgeStatusPill(
+                    label: isCreate ? 'create' : 'edit',
+                    color: _roomForgePrimary,
+                    dense: true,
+                  ),
+                  RoomForgeStatusPill(
+                    label: rf('save footer', '저장 footer'),
+                    color: _roomForgeSave,
+                    dense: true,
+                  ),
+                  if (!isCreate)
+                    RoomForgeStatusPill(
+                      label: rf('danger zone', '삭제 영역'),
+                      color: _roomForgeError,
+                      dense: true,
+                    ),
+                ],
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -8124,6 +8157,44 @@ class _ProjectEditorDialogState extends State<ProjectEditorDialog> {
                 minLines: 3,
                 maxLines: 5,
               ),
+              if (!isCreate) ...[
+                const SizedBox(height: 12),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _roomForgeError.withValues(alpha: .12),
+                    border: Border.all(
+                      color: _roomForgeError.withValues(alpha: .38),
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.delete_outline,
+                          color: _roomForgeError,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            rf(
+                              'Project deletion is handled from the detail panel with a final confirmation.',
+                              '프로젝트 삭제는 상세 패널에서 최종 확인 후 실행됩니다.',
+                            ),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: _roomForgeInkSoft,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

@@ -42,7 +42,7 @@ export function candidateTrayItems(model: SpatialModel): CandidateTrayItem[] {
       category: candidate.category,
       confidenceLabel:
         typeof candidate.confidenceScore === 'number'
-          ? candidate.confidenceScore.toFixed(2)
+          ? `${Math.round(candidate.confidenceScore * 100)}%`
           : 'n/a',
       sourceLabel: sourceLabelForCandidate(candidate),
       reviewLabel: candidate.reviewLabel ?? reviewLabelFor({ rejected, placed, lowConfidence }),

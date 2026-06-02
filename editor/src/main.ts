@@ -83,6 +83,20 @@ app.innerHTML = `
       <button id="view-2d" type="button" aria-label="${t('Show 2D planning view', '2D 배치 보기 표시')}" aria-pressed="true">2D</button>
       <button id="view-3d" type="button" aria-label="${t('Show 3D inspection view', '3D 검사 보기 표시')}" aria-pressed="false">3D</button>
     </div>
+    <div class="viewport-layer-controls" aria-label="${t('Candidate layer visibility', '후보 레이어 표시')}">
+      <button type="button" data-layer-toggle="furniture" aria-pressed="true">
+        <span class="layer-dot furniture" aria-hidden="true"></span>${t('Furniture', '가구')}
+      </button>
+      <button type="button" data-layer-toggle="fixtures" aria-pressed="true">
+        <span class="layer-dot fixtures" aria-hidden="true"></span>${t('Fixtures', '고정 요소')}
+      </button>
+      <button type="button" data-layer-toggle="boundaries" aria-pressed="true">
+        <span class="layer-dot boundaries" aria-hidden="true"></span>${t('Boundaries', '경계선')}
+      </button>
+      <button type="button" data-layer-toggle="lowConfidence" aria-pressed="true">
+        <span class="layer-dot low-confidence" aria-hidden="true"></span>${t('Low confidence', '낮은 신뢰도')}
+      </button>
+    </div>
     <div class="viewport-measurements" id="measurement-status" role="status" aria-live="polite">
       ${t('Room 4.20 m x 3.60 m', '방 4.20 m x 3.60 m')}
     </div>
@@ -98,6 +112,10 @@ app.innerHTML = `
     ></canvas>
     <div class="viewport-status-strip" id="scene-status" role="status" aria-live="polite">
       ${t('Initializing metric room scene', '미터 단위 방 장면 초기화 중')}
+    </div>
+    <div class="viewport-cv-readout" aria-hidden="true">
+      <span>${t('source image canvas', '소스 이미지 캔버스')}</span>
+      <strong>${t('CV overlay active', 'CV 오버레이 활성')}</strong>
     </div>
   </div>
   <aside class="status-panel" aria-label="${t('Inspector and status', '인스펙터 및 상태')}">
@@ -155,6 +173,11 @@ app.innerHTML = `
           <dd id="candidate-confidence">0.72</dd>
         </div>
       </dl>
+      <div class="candidate-state-row" aria-label="${t('Candidate review states', '후보 검토 상태')}">
+        <span class="state-pill candidate">${t('candidate', '후보')}</span>
+        <span class="state-pill warning">${t('low confidence', '낮은 신뢰도')}</span>
+        <span class="state-pill confirmed">${t('accepted', '적용됨')}</span>
+      </div>
       <div class="geometry-controls" aria-label="${t('Geometry correction controls', '지오메트리 보정 컨트롤')}">
         <button id="accept-candidate" type="button">${t('Accept candidate', '후보 적용')}</button>
         <button id="manual-outline" type="button">${t('Manual rectangle', '수동 사각형')}</button>
@@ -295,6 +318,9 @@ const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-c
 const selectionState = document.querySelector<HTMLElement>('#selection-state')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
 const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
+const layerToggleButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-layer-toggle]'),
+)
 const cameraActionButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-camera-action]'),
 )
@@ -334,6 +360,7 @@ if (
   !selectionState ||
   !view2dButton ||
   !view3dButton ||
+  layerToggleButtons.length === 0 ||
   cameraActionButtons.length === 0 ||
   furnitureCategoryButtons.length === 0 ||
   furnitureEditButtons.length === 0 ||
@@ -367,10 +394,11 @@ const furnitureCatalogStatusElement = furnitureCatalogStatus
 const selectionStateElement = selectionState
 const view2dButtonElement = view2dButton
 const view3dButtonElement = view3dButton
+const layerToggleButtonElements = layerToggleButtons
 
 const renderer = new THREE.WebGLRenderer({ canvas: editorCanvas, antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
-renderer.setClearColor(0xeef2f7)
+renderer.setClearColor(0x090a0c)
 
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
@@ -383,9 +411,9 @@ const room = new THREE.Group()
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(4, 3),
   new THREE.MeshBasicMaterial({
-    color: 0x2563eb,
+    color: 0xd8c7a3,
     transparent: true,
-    opacity: 0.16,
+    opacity: 0.14,
     side: THREE.DoubleSide,
   }),
 )
@@ -393,7 +421,7 @@ floor.rotation.x = -Math.PI / 2
 floor.userData.objectId = spatialModel.room.objectId
 room.add(floor)
 
-const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x2563eb })
+const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xf4f1ea })
 const outlinePoints = [
   new THREE.Vector3(-2, 0.02, -1.5),
   new THREE.Vector3(2, 0.02, -1.5),
@@ -409,9 +437,9 @@ const confirmedLine = new THREE.Line(
 room.add(confirmedLine)
 
 const wallMaterial = new THREE.MeshBasicMaterial({
-  color: 0x94a3b8,
+  color: 0x5d6673,
   transparent: true,
-  opacity: 0.28,
+  opacity: 0.24,
   side: THREE.DoubleSide,
 })
 const wallGroup = new THREE.Group()
@@ -423,18 +451,18 @@ room.add(furnitureGroup)
 const fixtureGroup = new THREE.Group()
 room.add(fixtureGroup)
 
-const selectionMaterial = new THREE.LineBasicMaterial({ color: 0x0f172a })
+const selectionMaterial = new THREE.LineBasicMaterial({ color: 0xd6a75b })
 const selectionLine = new THREE.Line(new THREE.BufferGeometry(), selectionMaterial)
 selectionLine.visible = true
 room.add(selectionLine)
 
-const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0x111827 })
+const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0xf4f1ea })
 const furnitureMeshes = new Map<string, THREE.Mesh>()
 const furnitureOutlineObjects: THREE.LineSegments[] = []
 const fixtureMeshes = new Map<string, THREE.Mesh>()
 const fixtureOutlineObjects: THREE.LineSegments[] = []
 
-const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0x0f172a })
+const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0xd6a75b })
 const cornerMeshes: THREE.Mesh[] = []
 for (const point of confirmedPoints) {
   const corner = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), cornerMaterial)
@@ -445,11 +473,11 @@ for (const point of confirmedPoints) {
 scene.add(room)
 
 const candidateMaterial = new THREE.LineDashedMaterial({
-  color: 0x7c3aed,
+  color: 0xd6a75b,
   dashSize: 0.12,
   gapSize: 0.08,
   transparent: true,
-  opacity: 0.48,
+  opacity: 0.58,
 })
 let candidatePoints = [
   new THREE.Vector3(-1.85, 0.06, -1.34),
@@ -500,6 +528,8 @@ type CameraTransition = {
   durationMs: number
 }
 
+type CandidateLayer = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
+
 let activeCameraDrag:
   | {
       pointerId: number
@@ -510,6 +540,12 @@ let activeCameraDrag:
   | null = null
 let cameraTransition: CameraTransition | null = null
 let furnitureIdCounter = 0
+const layerVisibility: Record<CandidateLayer, boolean> = {
+  furniture: true,
+  fixtures: true,
+  boundaries: true,
+  lowConfidence: true,
+}
 
 function resizeRenderer(): void {
   const parent = editorCanvas.parentElement
@@ -609,6 +645,20 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
 
 view2dButtonElement.addEventListener('click', () => setViewMode('2d'))
 view3dButtonElement.addEventListener('click', () => setViewMode('3d'))
+for (const button of layerToggleButtonElements) {
+  button.addEventListener('click', () => {
+    const layer = button.dataset.layerToggle
+    if (!isCandidateLayer(layer)) {
+      return
+    }
+    layerVisibility[layer] = !layerVisibility[layer]
+    syncLayerToggleButtons()
+    applyLayerVisibility()
+    geometryStatusElement.textContent = usesKorean
+      ? `${localizedLayerLabel(layer)} 레이어 ${layerVisibility[layer] ? '표시' : '숨김'}`
+      : `${localizedLayerLabel(layer)} layer ${layerVisibility[layer] ? 'shown' : 'hidden'}`
+  })
+}
 for (const button of cameraActionButtons) {
   button.addEventListener('click', () => {
     const action = button.dataset.cameraAction
@@ -1011,6 +1061,7 @@ function recalculateCandidatePlacements(model: SpatialModel): SpatialModel {
   })
 }
 
+syncLayerToggleButtons()
 applySpatialModel()
 window.addEventListener('resize', resizeRenderer)
 resizeRenderer()
@@ -1058,12 +1109,57 @@ function setViewMode(viewMode: ViewMode): void {
 
 function applyViewModeCamera(): void {
   if (spatialModel.viewMode === '2d') {
-    wallGroup.visible = false
     queueCameraSnapshot(cameraSnapshotFor('top'), '2D top view', false)
   } else {
-    wallGroup.visible = true
     queueCameraSnapshot(cameraSnapshotFor('corner'), '3D corner view', true)
   }
+  applyLayerVisibility()
+}
+
+function isCandidateLayer(value: string | undefined): value is CandidateLayer {
+  return value === 'furniture' || value === 'fixtures' || value === 'boundaries' || value === 'lowConfidence'
+}
+
+function syncLayerToggleButtons(): void {
+  for (const button of layerToggleButtonElements) {
+    const layer = button.dataset.layerToggle
+    if (!isCandidateLayer(layer)) {
+      continue
+    }
+    const isVisible = layerVisibility[layer]
+    button.setAttribute('aria-pressed', String(isVisible))
+    button.classList.toggle('is-active', isVisible)
+  }
+}
+
+function applyLayerVisibility(): void {
+  furnitureGroup.visible = layerVisibility.furniture
+  fixtureGroup.visible = layerVisibility.fixtures
+  candidateLine.visible = layerVisibility.lowConfidence
+  confirmedLine.visible = layerVisibility.boundaries
+  for (const corner of cornerMeshes) {
+    corner.visible = layerVisibility.boundaries
+  }
+  selectionLine.visible =
+    layerVisibility.boundaries && spatialModel.selected?.objectId === spatialModel.room.objectId
+  wallGroup.visible = layerVisibility.boundaries && spatialModel.viewMode === '3d'
+}
+
+function localizedLayerLabel(layer: CandidateLayer): string {
+  if (usesKorean) {
+    return {
+      furniture: '가구',
+      fixtures: '고정 요소',
+      boundaries: '경계선',
+      lowConfidence: '낮은 신뢰도',
+    }[layer]
+  }
+  return {
+    furniture: 'Furniture',
+    fixtures: 'Fixtures',
+    boundaries: 'Boundaries',
+    lowConfidence: 'Low confidence',
+  }[layer]
 }
 
 function rebuildWalls(): void {
@@ -1098,7 +1194,6 @@ function syncConfirmedGeometryMeshes(): void {
   selectionLine.geometry = new THREE.BufferGeometry().setFromPoints(
     closedPoints.map((point) => point.clone().setY(0.09)),
   )
-  selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
 
   while (cornerMeshes.length < confirmedPoints.length) {
     const corner = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), cornerMaterial)
@@ -1115,6 +1210,7 @@ function syncConfirmedGeometryMeshes(): void {
   for (const [index, point] of confirmedPoints.entries()) {
     cornerMeshes[index].position.copy(point)
   }
+  applyLayerVisibility()
 }
 
 function rebuildStructuralFixtures(): void {
@@ -1238,11 +1334,11 @@ function updateSpatialStatus(): void {
   placementStatusElement.hidden = warning === null
   placementStatusElement.textContent = warning ?? ''
   placementSummaryElement.textContent = warning ?? t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음')
-  selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
   view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d'))
   view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d'))
   view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
   view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
+  applyLayerVisibility()
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()
@@ -1332,13 +1428,22 @@ function localizedCoverageGuidance(summary: SceneCoverageSummary): string {
 }
 
 function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[number]): string {
-  const stateClass = item.rejected || item.lowConfidence ? ' warning' : ''
+  const stateClass = item.placed
+    ? ' confirmed'
+    : item.rejected || item.lowConfidence
+      ? ' warning'
+      : ' candidate'
+  const cardStateClass = item.placed
+    ? ' is-accepted'
+    : item.lowConfidence
+      ? ' is-low-confidence'
+      : ''
   const disabled = item.rejected ? ' disabled' : ''
   const placeDisabled = item.rejected || item.placed ? ' disabled' : ''
   const placeText = item.placed ? t('Placed', '배치됨') : t('Place', '배치')
   const rejectText = item.rejected ? t('Rejected', '거절됨') : t('Reject', '거절')
   return `
-    <article class="candidate-card${item.rejected ? ' is-rejected' : ''}" role="listitem" data-candidate-id="${escapeAttribute(
+    <article class="candidate-card${item.rejected ? ' is-rejected' : ''}${cardStateClass}" role="listitem" data-candidate-id="${escapeAttribute(
       item.candidateId,
     )}">
       <div class="candidate-card-header">
@@ -1368,12 +1473,14 @@ function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[num
             .join('')}
         </select>
       </label>
-      <button type="button" data-candidate-action="reject" data-candidate-id="${escapeAttribute(
-        item.candidateId,
-      )}"${disabled}>${rejectText}</button>
-      <button type="button" data-candidate-action="place" data-candidate-id="${escapeAttribute(
-        item.candidateId,
-      )}"${placeDisabled}>${placeText}</button>
+      <div class="candidate-card-actions">
+        <button type="button" data-candidate-action="reject" data-candidate-id="${escapeAttribute(
+          item.candidateId,
+        )}"${disabled}>${rejectText}</button>
+        <button type="button" data-candidate-action="place" data-candidate-id="${escapeAttribute(
+          item.candidateId,
+        )}"${placeDisabled}>${placeText}</button>
+      </div>
     </article>
   `
 }

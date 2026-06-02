@@ -11,6 +11,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
 import 'src/admin/admin_api.dart';
+import 'src/admin/firebase_admin_access_repository.dart';
 import 'src/admin/firebase_admin_diagnostics.dart';
 import 'src/auth/auth_repository.dart';
 import 'src/editor/editor_config.dart';
@@ -3372,6 +3373,7 @@ class _FirebaseAdminRetryAction extends StatefulWidget {
 class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
   bool _isRetrying = false;
   String? _message;
+  _FirebaseAdminRetryReceipt? _receipt;
 
   Future<void> _confirmRetry() async {
     final confirmed = await showDialog<bool>(
@@ -3379,10 +3381,34 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
       builder: (context) {
         return AlertDialog(
           title: Text(rf('Retry reconstruction job', '재구성 작업 재시도')),
-          content: Text(
-            rf(
-              'Create a linked retry job for ${widget.job.jobId} and record an admin action?',
-              '${widget.job.jobId}에 연결된 재시도 작업을 만들고 관리자 액션을 기록할까요?',
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RoomForgeStatusPill(
+                  label: rf('confirm retry', '재시도 확인'),
+                  color: _roomForgeWarning,
+                  icon: Icons.warning_amber_outlined,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  rf(
+                    'Create a linked retry job from the original attempt and record an admin action receipt.',
+                    '원본 attempt에서 연결된 재시도 작업을 만들고 관리자 action receipt를 남깁니다.',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _FirebaseAdminRetryConditionGrid(job: widget.job),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: true,
+                  onChanged: null,
+                  title: Text(rf('Write admin audit log', '관리자 감사 로그 남기기')),
+                ),
+              ],
             ),
           ),
           actions: [
@@ -3408,6 +3434,7 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
     setState(() {
       _isRetrying = true;
       _message = rf('Retrying...', '재시도 중...');
+      _receipt = null;
     });
     try {
       final retryJob = await widget.adminRepository.retryJobWithAdminAction(
@@ -3419,8 +3446,14 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
         return;
       }
       setState(() {
-        _message =
-            '${rf('Retry job created', '재시도 작업이 생성되었습니다')}: ${retryJob.jobId}';
+        _message = null;
+        _receipt = _FirebaseAdminRetryReceipt(
+          actionId: firebaseAdminRetryActionId(retryJob.jobId),
+          targetJobId: widget.job.jobId,
+          retryJobId: retryJob.jobId,
+          createdByUid: widget.session.uid,
+          createdAt: retryJob.createdAt,
+        );
       });
     } catch (error) {
       if (!mounted) {
@@ -3429,6 +3462,7 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
       setState(() {
         _message =
             '${rf('Retry unavailable', '재시도할 수 없습니다')}: ${firebaseAdminSafeErrorMessage(error)}';
+        _receipt = null;
       });
     } finally {
       if (mounted) {
@@ -3442,28 +3476,287 @@ class _FirebaseAdminRetryActionState extends State<_FirebaseAdminRetryAction> {
     final canRetry =
         widget.job.status == FirebaseJobStatus.failed ||
         widget.job.status == FirebaseJobStatus.timeout;
+    final theme = Theme.of(context);
     return _FirebaseAdminSection(
       title: rf('Admin retry', '관리자 재시도'),
       children: [
-        FilledButton(
-          onPressed: canRetry && !_isRetrying ? _confirmRetry : null,
-          child: Text(
-            _isRetrying
-                ? rf('Retrying...', '재시도 중...')
-                : rf('Retry job', '작업 재시도'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            RoomForgeStatusPill(
+              label: canRetry
+                  ? rf('confirm', '확인 필요')
+                  : rf('unavailable', '재시도 불가'),
+              color: canRetry ? _roomForgeWarning : _roomForgeError,
+              icon: canRetry ? Icons.fact_check_outlined : Icons.block_outlined,
+            ),
+            if (_receipt != null)
+              RoomForgeStatusPill(
+                label: rf('audited', '감사 기록됨'),
+                color: _roomForgeSuccess,
+                icon: Icons.verified_outlined,
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          canRetry
+              ? rf(
+                  'Review the original job and retry conditions before creating a linked attempt.',
+                  '연결된 attempt를 만들기 전에 원본 작업과 재시도 조건을 확인하세요.',
+                )
+              : _retryUnavailableMessage(widget.job),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: _roomForgeInkSoft,
+            height: 1.4,
           ),
         ),
+        const SizedBox(height: 12),
+        _FirebaseAdminRetryConditionGrid(job: widget.job),
         if (!canRetry)
-          Text(
-            rf(
-              'Only failed or timeout jobs can be retried.',
-              '실패 또는 시간 초과 작업만 재시도할 수 있습니다.',
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: RoomForgeNotice(
+              title: rf('Retry unavailable', '재시도할 수 없습니다'),
+              message: _retryUnavailableMessage(widget.job),
+              severity: NoticeSeverity.error,
+              icon: Icons.block_outlined,
             ),
           ),
-        if (_message != null) Text(_message!),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: canRetry && !_isRetrying ? _confirmRetry : null,
+          icon: _isRetrying
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.replay_outlined),
+          label: Text(
+            _isRetrying
+                ? rf('Retrying...', '재시도 중...')
+                : rf('Run retry', '재시도 실행'),
+          ),
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: 12),
+          RoomForgeNotice(
+            title: rf('Retry status', '재시도 상태'),
+            message: _message!,
+            severity:
+                _message!.contains('unavailable') || _message!.contains('불가')
+                ? NoticeSeverity.error
+                : NoticeSeverity.info,
+            icon: Icons.info_outline,
+          ),
+        ],
+        if (_receipt != null) ...[
+          const SizedBox(height: 12),
+          _FirebaseAdminAuditReceiptCard(receipt: _receipt!),
+        ],
       ],
     );
   }
+}
+
+class _FirebaseAdminRetryReceipt {
+  const _FirebaseAdminRetryReceipt({
+    required this.actionId,
+    required this.targetJobId,
+    required this.retryJobId,
+    required this.createdByUid,
+    required this.createdAt,
+  });
+
+  final String actionId;
+  final String targetJobId;
+  final String retryJobId;
+  final String createdByUid;
+  final DateTime createdAt;
+}
+
+class _FirebaseAdminRetryConditionGrid extends StatelessWidget {
+  const _FirebaseAdminRetryConditionGrid({required this.job});
+
+  final FirebaseReconstructionJob job;
+
+  @override
+  Widget build(BuildContext context) {
+    final canRetry =
+        job.status == FirebaseJobStatus.failed ||
+        job.status == FirebaseJobStatus.timeout;
+    final cells = [
+      _FirebaseAdminRetryConditionCell(
+        label: rf('original job', '원본 작업'),
+        value: job.jobId,
+        color: _roomForgeAdmin,
+      ),
+      _FirebaseAdminRetryConditionCell(
+        label: rf('new job', '새 작업'),
+        value: rf('generated on confirm', '확인 후 생성'),
+        color: _roomForgeWarning,
+      ),
+      _FirebaseAdminRetryConditionCell(
+        label: rf('eligible status', '가능 상태'),
+        value: _adminStatusLabel(job.status.wireValue),
+        color: canRetry ? _roomForgeSuccess : _roomForgeError,
+      ),
+      _FirebaseAdminRetryConditionCell(
+        label: rf('audit receipt', '감사 receipt'),
+        value: rf('required', '필수'),
+        color: _roomForgeSuccess,
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final cell in cells) ...[
+                cell,
+                if (cell != cells.last) const SizedBox(height: 8),
+              ],
+            ],
+          );
+        }
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final cell in cells)
+              SizedBox(width: (constraints.maxWidth - 8) / 2, child: cell),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FirebaseAdminRetryConditionCell extends StatelessWidget {
+  const _FirebaseAdminRetryConditionCell({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: _roomForgeMuted,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _roomForgeInk,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminAuditReceiptCard extends StatelessWidget {
+  const _FirebaseAdminAuditReceiptCard({required this.receipt});
+
+  final _FirebaseAdminRetryReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: _roomForgeSuccess.withValues(alpha: 0.36)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            RoomForgeStatusPill(
+              label: rf('audited', '감사 기록됨'),
+              color: _roomForgeSuccess,
+              icon: Icons.verified_outlined,
+            ),
+            const SizedBox(height: 10),
+            _FirebaseAdminDetailLine(
+              label: rf('Action ID', 'Action ID'),
+              value: receipt.actionId,
+              color: _roomForgeInk,
+            ),
+            _FirebaseAdminDetailLine(
+              label: rf('Target', '대상'),
+              value: receipt.targetJobId,
+              color: _roomForgeInk,
+            ),
+            _FirebaseAdminDetailLine(
+              label: rf('Retry job', '재시도 작업'),
+              value: receipt.retryJobId,
+              color: _roomForgeInk,
+            ),
+            _FirebaseAdminDetailLine(
+              label: rf('Created by', '생성자'),
+              value: receipt.createdByUid,
+              color: _roomForgeInk,
+            ),
+            _FirebaseAdminDetailLine(
+              label: rf('Created at', '생성 시각'),
+              value: _adminTimestampLabel(receipt.createdAt),
+              color: _roomForgeInk,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _retryUnavailableMessage(FirebaseReconstructionJob job) {
+  return switch (job.status) {
+    FirebaseJobStatus.processing ||
+    FirebaseJobStatus.uploading ||
+    FirebaseJobStatus.retrying => rf(
+      'This job is already active, so a linked retry cannot be created yet.',
+      '이 작업은 이미 진행 중이므로 아직 연결된 재시도 작업을 만들 수 없습니다.',
+    ),
+    FirebaseJobStatus.succeeded => rf(
+      'Succeeded jobs do not need an admin retry.',
+      '성공한 작업은 관리자 재시도가 필요하지 않습니다.',
+    ),
+    _ => rf(
+      'Only failed or timeout jobs can be retried by an admin.',
+      '관리자는 실패 또는 시간 초과 작업만 재시도할 수 있습니다.',
+    ),
+  };
 }
 
 class _FirebaseAdminTransitions extends StatelessWidget {

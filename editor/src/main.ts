@@ -178,11 +178,19 @@ app.innerHTML = `
         <span class="state-pill warning">${t('low confidence', '낮은 신뢰도')}</span>
         <span class="state-pill confirmed">${t('accepted', '적용됨')}</span>
       </div>
+      <div class="outline-validity-panel" id="outline-validity-panel" role="status" aria-live="polite">
+        <span class="state-pill confirmed" id="outline-validity-state">${t('valid polygon', '유효한 폴리곤')}</span>
+        <span id="outline-summary">${t('4 points · 15.1 m² · image pixels', '4점 · 15.1 m² · image pixels')}</span>
+      </div>
       <div class="geometry-controls" aria-label="${t('Geometry correction controls', '지오메트리 보정 컨트롤')}">
         <button id="accept-candidate" type="button">${t('Accept candidate', '후보 적용')}</button>
+        <button id="confirm-outline" type="button">${t('Confirm outline', '윤곽 확정')}</button>
         <button id="manual-outline" type="button">${t('Manual rectangle', '수동 사각형')}</button>
+        <button id="orthogonalize-outline" type="button">${t('Right angle', '직각 보정')}</button>
         <button id="add-corner" type="button">${t('Add corner', '꼭짓점 추가')}</button>
         <button id="delete-corner" type="button">${t('Delete corner', '꼭짓점 삭제')}</button>
+        <button id="undo-geometry" type="button">${t('Undo', '되돌리기')}</button>
+        <button id="redo-geometry" type="button">${t('Redo', '다시 실행')}</button>
         <button id="reset-candidate" type="button">${t('Reset', '초기화')}</button>
       </div>
     </section>
@@ -311,6 +319,11 @@ const candidateConfidence = document.querySelector<HTMLElement>('#candidate-conf
 const candidateTrayCount = document.querySelector<HTMLElement>('#candidate-tray-count')
 const candidateTrayStatus = document.querySelector<HTMLElement>('#candidate-tray-status')
 const candidateTrayList = document.querySelector<HTMLElement>('#candidate-tray-list')
+const outlineValidityState = document.querySelector<HTMLElement>('#outline-validity-state')
+const outlineSummary = document.querySelector<HTMLElement>('#outline-summary')
+const undoGeometryButton = document.querySelector<HTMLButtonElement>('#undo-geometry')
+const redoGeometryButton = document.querySelector<HTMLButtonElement>('#redo-geometry')
+const confirmOutlineButton = document.querySelector<HTMLButtonElement>('#confirm-outline')
 const knownWallLengthInput = document.querySelector<HTMLInputElement>('#known-wall-length')
 const scaleStatus = document.querySelector<HTMLElement>('#scale-status')
 const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
@@ -353,6 +366,11 @@ if (
   !candidateTrayCount ||
   !candidateTrayStatus ||
   !candidateTrayList ||
+  !outlineValidityState ||
+  !outlineSummary ||
+  !undoGeometryButton ||
+  !redoGeometryButton ||
+  !confirmOutlineButton ||
   !knownWallLengthInput ||
   !scaleStatus ||
   !furnitureCount ||
@@ -387,6 +405,11 @@ const candidateConfidenceElement = candidateConfidence
 const candidateTrayCountElement = candidateTrayCount
 const candidateTrayStatusElement = candidateTrayStatus
 const candidateTrayListElement = candidateTrayList
+const outlineValidityStateElement = outlineValidityState
+const outlineSummaryElement = outlineSummary
+const undoGeometryButtonElement = undoGeometryButton
+const redoGeometryButtonElement = redoGeometryButton
+const confirmOutlineButtonElement = confirmOutlineButton
 const knownWallLengthInputElement = knownWallLengthInput
 const scaleStatusElement = scaleStatus
 const furnitureCountElement = furnitureCount
@@ -530,6 +553,13 @@ type CameraTransition = {
 
 type CandidateLayer = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
 
+type OutlineValidity = {
+  state: 'calibrating' | 'invalid' | 'valid'
+  label: string
+  detail: string
+  areaSquareMeters: number
+}
+
 let activeCameraDrag:
   | {
       pointerId: number
@@ -540,6 +570,8 @@ let activeCameraDrag:
   | null = null
 let cameraTransition: CameraTransition | null = null
 let furnitureIdCounter = 0
+const geometryUndoStack: THREE.Vector3[][] = []
+const geometryRedoStack: THREE.Vector3[][] = []
 const layerVisibility: Record<CandidateLayer, boolean> = {
   furniture: true,
   fixtures: true,
@@ -715,16 +747,40 @@ candidateTrayListElement.addEventListener('change', (event) => {
 })
 
 document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Accepted OpenCV candidate.', 'OpenCV 후보를 적용했습니다.'))
 })
 
+confirmOutlineButtonElement.addEventListener('click', () => {
+  const validity = outlineValidity()
+  if (validity.state === 'invalid') {
+    geometryStatusElement.textContent = validity.detail
+    updateOutlineValidityPanel()
+    return
+  }
+  updateConfirmedGeometry(t('Confirmed corrected room outline.', '보정된 방 윤곽을 확정했습니다.'))
+})
+
 document.querySelector<HTMLButtonElement>('#manual-outline')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   confirmedPoints = outlinePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Started from manual rectangle.', '수동 사각형에서 시작했습니다.'))
 })
 
+document.querySelector<HTMLButtonElement>('#orthogonalize-outline')?.addEventListener('click', () => {
+  if (confirmedPoints.length < 3) {
+    geometryStatusElement.textContent = t('At least three corners are required.', '최소 3개 꼭짓점이 필요합니다.')
+    updateOutlineValidityPanel()
+    return
+  }
+  pushGeometryUndoState()
+  confirmedPoints = orthogonalizedOutlinePoints()
+  updateConfirmedGeometry(t('Orthogonalized the room outline.', '방 윤곽을 직각으로 보정했습니다.'))
+})
+
 document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   const lastPoint = confirmedPoints[confirmedPoints.length - 1]
   const firstPoint = confirmedPoints[0]
   confirmedPoints.push(lastPoint.clone().lerp(firstPoint, 0.5))
@@ -734,13 +790,19 @@ document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('clic
 document.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('click', () => {
   if (confirmedPoints.length <= 3) {
     geometryStatusElement.textContent = t('At least three corners are required.', '최소 3개 꼭짓점이 필요합니다.')
+    updateOutlineValidityPanel()
     return
   }
+  pushGeometryUndoState()
   confirmedPoints.pop()
   updateConfirmedGeometry(t('Deleted the last boundary corner.', '마지막 경계 꼭짓점을 삭제했습니다.'))
 })
 
+undoGeometryButtonElement.addEventListener('click', () => restoreGeometryHistory('undo'))
+redoGeometryButtonElement.addEventListener('click', () => restoreGeometryHistory('redo'))
+
 document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Reset to OpenCV candidate.', 'OpenCV 후보로 초기화했습니다.'))
 })
@@ -822,7 +884,9 @@ editorCanvas.addEventListener('pointerdown', (event) => {
     if (cornerIndex < 0) {
       return
     }
+    pushGeometryUndoState()
     activeCornerIndex = cornerIndex
+    syncCornerHandleStyles()
     editorCanvas.setPointerCapture(event.pointerId)
     return
   }
@@ -912,6 +976,7 @@ editorCanvas.addEventListener('pointerup', (event) => {
     }
   }
   activeCornerIndex = null
+  syncCornerHandleStyles()
 })
 
 editorCanvas.addEventListener('pointercancel', (event) => {
@@ -919,6 +984,7 @@ editorCanvas.addEventListener('pointercancel', (event) => {
     activeCameraDrag = null
   }
   activeCornerIndex = null
+  syncCornerHandleStyles()
 })
 
 editorCanvas.addEventListener(
@@ -1162,6 +1228,179 @@ function localizedLayerLabel(layer: CandidateLayer): string {
   }[layer]
 }
 
+function cloneConfirmedPoints(): THREE.Vector3[] {
+  return confirmedPoints.map((point) => point.clone())
+}
+
+function pushGeometryUndoState(): void {
+  geometryUndoStack.push(cloneConfirmedPoints())
+  if (geometryUndoStack.length > 24) {
+    geometryUndoStack.shift()
+  }
+  geometryRedoStack.length = 0
+  updateGeometryUndoRedoControls()
+}
+
+function restoreGeometryHistory(direction: 'undo' | 'redo'): void {
+  const sourceStack = direction === 'undo' ? geometryUndoStack : geometryRedoStack
+  const targetStack = direction === 'undo' ? geometryRedoStack : geometryUndoStack
+  const nextPoints = sourceStack.pop()
+  if (!nextPoints) {
+    updateGeometryUndoRedoControls()
+    return
+  }
+  targetStack.push(cloneConfirmedPoints())
+  confirmedPoints = nextPoints.map((point) => point.clone())
+  updateConfirmedGeometry(
+    direction === 'undo'
+      ? t('Reverted the previous geometry edit.', '이전 지오메트리 편집을 되돌렸습니다.')
+      : t('Reapplied the geometry edit.', '지오메트리 편집을 다시 적용했습니다.'),
+  )
+}
+
+function updateGeometryUndoRedoControls(): void {
+  undoGeometryButtonElement.disabled = geometryUndoStack.length === 0
+  redoGeometryButtonElement.disabled = geometryRedoStack.length === 0
+}
+
+function orthogonalizedOutlinePoints(): THREE.Vector3[] {
+  const xs = confirmedPoints.map((point) => point.x)
+  const zs = confirmedPoints.map((point) => point.z)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+  return [
+    new THREE.Vector3(minX, 0.02, minZ),
+    new THREE.Vector3(maxX, 0.02, minZ),
+    new THREE.Vector3(maxX, 0.02, maxZ),
+    new THREE.Vector3(minX, 0.02, maxZ),
+  ]
+}
+
+function updateOutlineValidityPanel(): void {
+  const validity = outlineValidity()
+  const stateClass =
+    validity.state === 'valid'
+      ? 'confirmed'
+      : validity.state === 'calibrating'
+        ? 'measurement'
+        : 'error'
+  outlineValidityStateElement.className = `state-pill ${stateClass}`
+  outlineValidityStateElement.textContent = validity.label
+  outlineSummaryElement.textContent = validity.detail
+  confirmOutlineButtonElement.disabled = validity.state === 'invalid'
+  updateGeometryUndoRedoControls()
+}
+
+function outlineValidity(): OutlineValidity {
+  const area = polygonAreaSquareMeters()
+  const coordinateSpace = String(confirmedGeometryPayload().coordinateSpace)
+  const pointSummary = usesKorean
+    ? `${confirmedPoints.length}점 · ${area.toFixed(1)} m² · ${coordinateSpace}`
+    : `${confirmedPoints.length} points · ${area.toFixed(1)} m² · ${coordinateSpace}`
+  if (confirmedPoints.length < 3) {
+    return {
+      state: 'invalid',
+      label: t('invalid polygon', '잘못된 폴리곤'),
+      detail: t(
+        `${pointSummary} · at least three points required`,
+        `${pointSummary} · 최소 3개 점 필요`,
+      ),
+      areaSquareMeters: area,
+    }
+  }
+  if (outlineHasSelfIntersection()) {
+    return {
+      state: 'invalid',
+      label: t('invalid polygon', '잘못된 폴리곤'),
+      detail: t(`${pointSummary} · self-intersection`, `${pointSummary} · 자체 교차`),
+      areaSquareMeters: area,
+    }
+  }
+  if (area < 0.1) {
+    return {
+      state: 'calibrating',
+      label: t('calibrating', '보정 중'),
+      detail: t(`${pointSummary} · area too small`, `${pointSummary} · 면적이 너무 작음`),
+      areaSquareMeters: area,
+    }
+  }
+  return {
+    state: 'valid',
+    label: t('valid polygon', '유효한 폴리곤'),
+    detail: pointSummary,
+    areaSquareMeters: area,
+  }
+}
+
+function polygonAreaSquareMeters(): number {
+  if (confirmedPoints.length < 3) {
+    return 0
+  }
+  const points = confirmedPoints.map(scenePointToMetric)
+  let sum = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]
+    const next = points[(index + 1) % points.length]
+    sum += current.x * next.y - next.x * current.y
+  }
+  return Math.abs(sum / 2)
+}
+
+function outlineHasSelfIntersection(): boolean {
+  if (confirmedPoints.length < 4) {
+    return false
+  }
+  for (let first = 0; first < confirmedPoints.length; first += 1) {
+    const firstNext = (first + 1) % confirmedPoints.length
+    for (let second = first + 1; second < confirmedPoints.length; second += 1) {
+      const secondNext = (second + 1) % confirmedPoints.length
+      const adjacent =
+        first === second ||
+        firstNext === second ||
+        secondNext === first
+      if (adjacent) {
+        continue
+      }
+      if (
+        segmentsIntersect(
+          confirmedPoints[first],
+          confirmedPoints[firstNext],
+          confirmedPoints[second],
+          confirmedPoints[secondNext],
+        )
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function segmentsIntersect(
+  aStart: THREE.Vector3,
+  aEnd: THREE.Vector3,
+  bStart: THREE.Vector3,
+  bEnd: THREE.Vector3,
+): boolean {
+  const d1 = orientation(aStart, aEnd, bStart)
+  const d2 = orientation(aStart, aEnd, bEnd)
+  const d3 = orientation(bStart, bEnd, aStart)
+  const d4 = orientation(bStart, bEnd, aEnd)
+  return d1 * d2 < 0 && d3 * d4 < 0
+}
+
+function orientation(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number {
+  return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x)
+}
+
+function syncCornerHandleStyles(): void {
+  for (const [index, corner] of cornerMeshes.entries()) {
+    corner.scale.setScalar(index === activeCornerIndex ? 1.55 : 1)
+  }
+}
+
 function rebuildWalls(): void {
   for (const child of [...wallGroup.children]) {
     wallGroup.remove(child)
@@ -1210,6 +1449,7 @@ function syncConfirmedGeometryMeshes(): void {
   for (const [index, point] of confirmedPoints.entries()) {
     cornerMeshes[index].position.copy(point)
   }
+  syncCornerHandleStyles()
   applyLayerVisibility()
 }
 
@@ -1339,6 +1579,7 @@ function updateSpatialStatus(): void {
   view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
   view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
   applyLayerVisibility()
+  updateOutlineValidityPanel()
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()

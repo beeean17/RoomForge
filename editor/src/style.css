@@ -344,6 +344,12 @@ dd {
   color: #c7e4ce;
 }
 
+.state-pill.error {
+  border-color: rgba(223, 143, 127, 0.52);
+  background: rgba(223, 143, 127, 0.12);
+  color: #f1b6aa;
+}
+
 .state-pill.measurement {
   border-color: rgba(154, 179, 209, 0.38);
   background: rgba(154, 179, 209, 0.1);
@@ -369,6 +375,24 @@ dd {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.outline-validity-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--rf-border);
+  background: #0d0f12;
+  color: var(--rf-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.outline-validity-panel span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .geometry-controls {
@@ -596,6 +620,12 @@ button:active {
   transform: translateY(0);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
 button:focus-visible {
   outline: 3px solid #f59e0b;
   outline-offset: 2px;
@@ -703,6 +733,7 @@ button:focus-visible {
   .geometry-controls,
   .candidate-meta,
   .candidate-card-actions,
+  .outline-validity-panel,
   .furniture-edit-controls,
   .fixture-edit-controls,
   .camera-controls {

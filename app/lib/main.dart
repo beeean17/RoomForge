@@ -8549,6 +8549,17 @@ class _EditorBridgeCommandBar extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (isSyncFailureVisible) ...[
+                    const SizedBox(height: 10),
+                    _SyncFailurePanel(
+                      saveStatus: saveStatus,
+                      draftStatus: draftStatus,
+                      onRetry: onSaveLayout,
+                      onKeepLocal: () {},
+                      onShowLogs: onPingEditor,
+                      onReopenProject: onLoadLayout,
+                    ),
+                  ],
                   if (recoverableDraft != null) ...[
                     const SizedBox(height: 10),
                     Semantics(
@@ -8664,6 +8675,234 @@ class _EditorBridgeCommandBar extends StatelessWidget {
     }
     return _roomForgeMuted;
   }
+}
+
+class _SyncFailurePanel extends StatelessWidget {
+  const _SyncFailurePanel({
+    required this.saveStatus,
+    required this.draftStatus,
+    required this.onRetry,
+    required this.onKeepLocal,
+    required this.onShowLogs,
+    required this.onReopenProject,
+  });
+
+  final String saveStatus;
+  final String draftStatus;
+  final VoidCallback onRetry;
+  final VoidCallback onKeepLocal;
+  final VoidCallback onShowLogs;
+  final VoidCallback onReopenProject;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final state = _issueState();
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: rf(
+        'Layout sync failed. ${state.label}. Actions: retry, keep local draft, inspect logs, reopen project.',
+        '레이아웃 동기화 실패. ${state.label}. 작업: 재시도, 로컬 draft 유지, 로그 확인, 프로젝트 다시 열기.',
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _roomForgeCanvas,
+          border: Border.all(color: state.color.withValues(alpha: 0.56)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _DraftRecoveryChip(label: state.label, color: state.color),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rf('Sync failed', '동기화 실패'),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: _roomForgeInk,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _messageForState(state.id),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: _roomForgeMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _roomForgePanel,
+                  border: Border.all(color: _roomForgeBorder),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        rf('Reupload bridge', '재업로드 연결'),
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: _roomForgeInk,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        rf(
+                          'Existing dimensions, CV candidates, and manual corrections remain in the local draft while you retry or reupload.',
+                          '재시도하거나 새 사진을 업로드하는 동안 기존 치수, CV 후보, 수동 수정값은 로컬 draft에 유지됩니다.',
+                        ),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _roomForgeMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _DraftRecoveryChip(
+                            label: rf('dimensions', '치수'),
+                            color: _roomForgeSuccess,
+                          ),
+                          _DraftRecoveryChip(
+                            label: rf('CV candidates', 'CV 후보'),
+                            color: _roomForgeSuccess,
+                          ),
+                          _DraftRecoveryChip(
+                            label: rf('manual edits', '수동 수정값'),
+                            color: _roomForgeSuccess,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_outlined),
+                    label: Text(rf('Retry sync', '동기화 재시도')),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onKeepLocal,
+                    icon: const Icon(Icons.edit_note_outlined),
+                    label: Text(rf('Keep local', '로컬 유지')),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onShowLogs,
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: Text(rf('View logs', '로그 보기')),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onReopenProject,
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: Text(rf('Reopen project', '프로젝트 다시 열기')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  _SyncIssueState _issueState() {
+    final lower = '$saveStatus $draftStatus'.toLowerCase();
+    if (lower.contains('retrying') ||
+        lower.contains('saving') ||
+        lower.contains('저장 중') ||
+        lower.contains('재시도 중')) {
+      return _SyncIssueState(
+        id: 'retrying',
+        label: rf('retrying', '재시도 중'),
+        color: _roomForgePrimary,
+      );
+    }
+    if (lower.contains('permission') ||
+        lower.contains('token') ||
+        lower.contains('auth') ||
+        lower.contains('권한') ||
+        lower.contains('토큰')) {
+      return _SyncIssueState(
+        id: 'permission',
+        label: rf('permission', '권한'),
+        color: _roomForgeError,
+      );
+    }
+    if (lower.contains('network') ||
+        lower.contains('offline') ||
+        lower.contains('timeout') ||
+        lower.contains('네트워크') ||
+        lower.contains('오프라인')) {
+      return _SyncIssueState(
+        id: 'network',
+        label: rf('network', '네트워크'),
+        color: _roomForgeWarning,
+      );
+    }
+    return _SyncIssueState(
+      id: 'server',
+      label: rf('server', '서버'),
+      color: _roomForgeError,
+    );
+  }
+
+  String _messageForState(String state) {
+    return switch (state) {
+      'retrying' => rf(
+        'Retry is running now. Keep the local draft open until the latest save confirms.',
+        '재시도가 진행 중입니다. 최신 저장이 확인될 때까지 로컬 draft를 열린 상태로 유지하세요.',
+      ),
+      'permission' => rf(
+        'Your session or project permission blocked the save. Refresh access, then retry sync.',
+        '세션 또는 프로젝트 권한 때문에 저장이 차단되었습니다. 접근 권한을 새로고침한 뒤 동기화를 재시도하세요.',
+      ),
+      'network' => rf(
+        'Network connectivity interrupted the save. Keep the local draft and retry when online.',
+        '네트워크 연결 문제로 저장이 중단되었습니다. 로컬 draft를 유지하고 온라인 상태에서 다시 시도하세요.',
+      ),
+      _ => rf(
+        'The server did not accept the latest layout save. Keep the local draft while you inspect logs or retry.',
+        '서버가 최신 레이아웃 저장을 수락하지 않았습니다. 로그를 확인하거나 재시도하는 동안 로컬 draft를 유지하세요.',
+      ),
+    };
+  }
+}
+
+class _SyncIssueState {
+  const _SyncIssueState({
+    required this.id,
+    required this.label,
+    required this.color,
+  });
+
+  final String id;
+  final String label;
+  final Color color;
 }
 
 class _DraftRecoveryDiffSummary extends StatelessWidget {

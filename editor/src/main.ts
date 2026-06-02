@@ -46,6 +46,7 @@ import {
   type FixtureEditAction,
 } from './fixtureModel'
 import {
+  furnitureOutsideRoom,
   measurementSummaryForModel,
   placementWarningForModel,
 } from './measurementGuidance'
@@ -65,6 +66,7 @@ import {
   type StructuralFixtureObject,
   type ViewMode,
 } from './spatialModel'
+import { furnitureSizePriorForCategory } from './sizePriors.ts'
 
 const app = document.querySelector<HTMLDivElement>('#app')
 
@@ -75,6 +77,32 @@ if (!app) {
 const localeOverride = new URLSearchParams(window.location.search).get('locale')?.toLowerCase() ?? ''
 const usesKorean = localeOverride.startsWith('ko') || navigator.language.toLowerCase().startsWith('ko')
 const t = (english: string, korean: string): string => (usesKorean ? korean : english)
+
+const catalogFurnitureItems: Array<{
+  category: FurnitureCategory
+  label: string
+  labelKo: string
+  note: string
+  noteKo: string
+}> = [
+  { category: 'bed', label: 'Bed', labelKo: '침대', note: 'sleep zone', noteKo: '수면 영역' },
+  { category: 'desk', label: 'Desk', labelKo: '책상', note: 'work surface', noteKo: '작업면' },
+  { category: 'chair', label: 'Chair', labelKo: '의자', note: 'seating', noteKo: '좌석' },
+  { category: 'wardrobe', label: 'Storage', labelKo: '수납장', note: 'wall aligned', noteKo: '벽면 정렬' },
+]
+
+const furnitureCatalogMarkup = catalogFurnitureItems
+  .map((item) => {
+    const prior = furnitureSizePriorForCategory(item.category)
+    const label = t(item.label, item.labelKo)
+    const note = t(item.note, item.noteKo)
+    return `<button class="obj-tile" type="button" data-furniture-category="${item.category}">
+      <strong>${label}</strong>
+      <span>${prior.size.widthMeters.toFixed(1)} x ${prior.size.depthMeters.toFixed(1)} m</span>
+      <small>${note}</small>
+    </button>`
+  })
+  .join('')
 
 app.innerHTML = `
 <section class="editor-shell">
@@ -299,17 +327,22 @@ app.innerHTML = `
     <section class="panel-section" aria-labelledby="furniture-catalog-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">${t('Furniture', '가구')}</p>
-          <h2 id="furniture-catalog-title">${t('Add preset object', '프리셋 객체 추가')}</h2>
+          <p class="eyebrow">${t('Objects', '오브젝트')}</p>
+          <h2 id="furniture-catalog-title">${t('Furniture catalog', '가구 카탈로그')}</h2>
         </div>
         <span class="state-pill" id="furniture-count">${t('0 objects', '객체 0개')}</span>
       </div>
       <p class="helper-text" id="furniture-catalog-status">${t('Choose a preset to place it inside the measured room.', '측정된 방 안에 배치할 프리셋을 선택하세요.')}</p>
-      <div class="furniture-controls" aria-label="${t('Furniture catalog', '가구 카탈로그')}">
-        <button type="button" data-furniture-category="chair">${t('Add chair', '의자 추가')}</button>
-        <button type="button" data-furniture-category="table">${t('Add table', '테이블 추가')}</button>
-        <button type="button" data-furniture-category="sofa">${t('Add sofa', '소파 추가')}</button>
+      <div class="object-state-row" aria-label="${t('Object state legend', '오브젝트 상태 범례')}">
+        <span class="state-pill candidate">${t('candidate', '후보')}</span>
+        <span class="state-pill confirmed">${t('confirmed', '확정')}</span>
+        <span class="state-pill selected">${t('selected', '선택됨')}</span>
+        <span class="state-pill collision">${t('collision', '충돌')}</span>
       </div>
+      <div class="object-catalog furniture-controls" aria-label="${t('Furniture catalog', '가구 카탈로그')}">
+        ${furnitureCatalogMarkup}
+      </div>
+      <div class="furniture-object-list" id="furniture-object-list" role="list" aria-label="${t('Placed furniture objects', '배치된 가구 오브젝트')}"></div>
     </section>
     <section class="panel-section" aria-labelledby="selection-inspector-title">
       <div class="panel-section-header">
@@ -318,6 +351,66 @@ app.innerHTML = `
           <h2 id="selection-inspector-title">${t('Selected object', '선택된 객체')}</h2>
         </div>
         <span class="state-pill" id="selection-state">${t('Room', '방')}</span>
+      </div>
+      <div class="selected-object-card" id="selected-object-card" aria-label="${t('Selected object summary', '선택 객체 요약')}">
+        <div class="selected-object-header">
+          <strong id="selected-object-title">${t('Room shell', '방 외곽')}</strong>
+          <span id="selected-object-source">${t('meters coordinate space', 'meters 좌표계')}</span>
+        </div>
+        <dl class="transform-readout" aria-label="${t('Selected transform readout', '선택 객체 변환 값')}">
+          <div>
+            <dt>X</dt>
+            <dd id="transform-x-readout">--</dd>
+          </div>
+          <div>
+            <dt>Y</dt>
+            <dd id="transform-y-readout">--</dd>
+          </div>
+          <div>
+            <dt>${t('Rotate', '회전')}</dt>
+            <dd id="transform-rotation-readout">--</dd>
+          </div>
+          <div>
+            <dt>${t('Size', '크기')}</dt>
+            <dd id="transform-size-readout">--</dd>
+          </div>
+        </dl>
+      </div>
+      <div class="transform-slider-grid" aria-label="${t('Transform sliders', '변환 슬라이더')}">
+        <label>
+          <span>X</span>
+          <input type="range" min="0" max="4.2" step="0.05" data-transform-field="position-x" disabled />
+          <output data-transform-output="position-x">--</output>
+        </label>
+        <label>
+          <span>Y</span>
+          <input type="range" min="0" max="3.6" step="0.05" data-transform-field="position-y" disabled />
+          <output data-transform-output="position-y">--</output>
+        </label>
+        <label>
+          <span>${t('Rotation', '회전')}</span>
+          <input type="range" min="0" max="345" step="15" data-transform-field="rotation" disabled />
+          <output data-transform-output="rotation">--</output>
+        </label>
+        <label>
+          <span>${t('Width', '너비')}</span>
+          <input type="range" min="0.2" max="3" step="0.05" data-transform-field="width" disabled />
+          <output data-transform-output="width">--</output>
+        </label>
+        <label>
+          <span>${t('Depth', '깊이')}</span>
+          <input type="range" min="0.2" max="3" step="0.05" data-transform-field="depth" disabled />
+          <output data-transform-output="depth">--</output>
+        </label>
+        <label>
+          <span>${t('Height', '높이')}</span>
+          <input type="range" min="0.2" max="2.7" step="0.05" data-transform-field="height" disabled />
+          <output data-transform-output="height">--</output>
+        </label>
+      </div>
+      <div class="placement-warning-card" id="furniture-placement-warning" role="status" aria-live="polite">
+        <span class="state-pill confirmed">${t('clear', '정상')}</span>
+        <span>${t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음')}</span>
       </div>
       <div class="furniture-edit-controls" aria-label="${t('Selected furniture editing controls', '선택 가구 편집 컨트롤')}">
         <button type="button" data-furniture-edit="move-up">${t('Move up', '위로 이동')}</button>
@@ -413,9 +506,17 @@ const floorArtifactGrid = document.querySelector<HTMLElement>('#floor-artifact-g
 const reviewCandidatesButton = document.querySelector<HTMLButtonElement>('#review-candidates')
 const returnCorrectionButton = document.querySelector<HTMLButtonElement>('#return-correction')
 const proceedEditorButton = document.querySelector<HTMLButtonElement>('#proceed-editor')
+const furnitureObjectList = document.querySelector<HTMLElement>('#furniture-object-list')
 const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
 const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-catalog-status')
 const selectionState = document.querySelector<HTMLElement>('#selection-state')
+const selectedObjectTitle = document.querySelector<HTMLElement>('#selected-object-title')
+const selectedObjectSource = document.querySelector<HTMLElement>('#selected-object-source')
+const transformXReadout = document.querySelector<HTMLElement>('#transform-x-readout')
+const transformYReadout = document.querySelector<HTMLElement>('#transform-y-readout')
+const transformRotationReadout = document.querySelector<HTMLElement>('#transform-rotation-readout')
+const transformSizeReadout = document.querySelector<HTMLElement>('#transform-size-readout')
+const furniturePlacementWarning = document.querySelector<HTMLElement>('#furniture-placement-warning')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
 const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
 const viewSplitButton = document.querySelector<HTMLButtonElement>('#view-split')
@@ -444,6 +545,12 @@ const furnitureCategoryButtons = Array.from(
 )
 const furnitureEditButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-furniture-edit]'),
+)
+const transformInputs = Array.from(
+  document.querySelectorAll<HTMLInputElement>('[data-transform-field]'),
+)
+const transformOutputs = Array.from(
+  document.querySelectorAll<HTMLOutputElement>('[data-transform-output]'),
 )
 const fixtureEditButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-fixture-edit]'),
@@ -488,9 +595,17 @@ if (
   !reviewCandidatesButton ||
   !returnCorrectionButton ||
   !proceedEditorButton ||
+  !furnitureObjectList ||
   !furnitureCount ||
   !furnitureCatalogStatus ||
   !selectionState ||
+  !selectedObjectTitle ||
+  !selectedObjectSource ||
+  !transformXReadout ||
+  !transformYReadout ||
+  !transformRotationReadout ||
+  !transformSizeReadout ||
+  !furniturePlacementWarning ||
   !view2dButton ||
   !view3dButton ||
   !viewSplitButton ||
@@ -508,6 +623,8 @@ if (
   cameraActionButtons.length === 0 ||
   furnitureCategoryButtons.length === 0 ||
   furnitureEditButtons.length === 0 ||
+  transformInputs.length === 0 ||
+  transformOutputs.length === 0 ||
   fixtureEditButtons.length === 0
 ) {
   throw new Error('Missing editor UI element.')
@@ -551,9 +668,17 @@ const floorArtifactGridElement = floorArtifactGrid
 const reviewCandidatesButtonElement = reviewCandidatesButton
 const returnCorrectionButtonElement = returnCorrectionButton
 const proceedEditorButtonElement = proceedEditorButton
+const furnitureObjectListElement = furnitureObjectList
 const furnitureCountElement = furnitureCount
 const furnitureCatalogStatusElement = furnitureCatalogStatus
 const selectionStateElement = selectionState
+const selectedObjectTitleElement = selectedObjectTitle
+const selectedObjectSourceElement = selectedObjectSource
+const transformXReadoutElement = transformXReadout
+const transformYReadoutElement = transformYReadout
+const transformRotationReadoutElement = transformRotationReadout
+const transformSizeReadoutElement = transformSizeReadout
+const furniturePlacementWarningElement = furniturePlacementWarning
 const view2dButtonElement = view2dButton
 const view3dButtonElement = view3dButton
 const viewSplitButtonElement = viewSplitButton
@@ -568,6 +693,9 @@ const cursorCoordsElement = cursorCoords
 const toolRailButtonElements = toolRailButtons
 const canvasToggleButtonElements = canvasToggleButtons
 const layerToggleButtonElements = layerToggleButtons
+const transformInputElements = transformInputs
+const transformOutputElements = transformOutputs
+const fixtureEditButtonElements = fixtureEditButtons
 
 const renderer = new THREE.WebGLRenderer({ canvas: editorCanvas, antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
@@ -702,6 +830,14 @@ type CameraTransition = {
 }
 
 type CandidateLayer = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
+
+type TransformField =
+  | 'position-x'
+  | 'position-y'
+  | 'rotation'
+  | 'width'
+  | 'depth'
+  | 'height'
 
 type OutlineValidity = {
   state: 'calibrating' | 'invalid' | 'valid'
@@ -905,7 +1041,22 @@ for (const button of furnitureEditButtons) {
     }
   })
 }
-for (const button of fixtureEditButtons) {
+furnitureObjectListElement.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const button = target?.closest<HTMLButtonElement>('[data-furniture-select]')
+  if (button?.dataset.furnitureSelect) {
+    selectFurniture(button.dataset.furnitureSelect)
+  }
+})
+for (const input of transformInputElements) {
+  input.addEventListener('input', () => {
+    const field = input.dataset.transformField
+    if (isTransformField(field)) {
+      updateSelectedFurnitureTransform(field, input.valueAsNumber)
+    }
+  })
+}
+for (const button of fixtureEditButtonElements) {
   button.addEventListener('click', () => {
     const action = button.dataset.fixtureEdit
     if (isFixtureEditAction(action)) {
@@ -2077,6 +2228,14 @@ function updateSpatialStatus(): void {
     : fixture
       ? t('Fixture', '고정 요소')
     : t('Room', '방')
+  selectionStateElement.className = selected
+    ? selected.locked
+      ? 'state-pill warning'
+      : 'state-pill selected'
+    : fixture
+      ? 'state-pill measurement'
+      : 'state-pill confirmed'
+  updateFurnitureInspector(selected, fixture, warning)
   for (const button of furnitureEditButtons) {
     const action = button.dataset.furnitureEdit
     const locked = selected?.locked === true
@@ -2086,9 +2245,139 @@ function updateSpatialStatus(): void {
       button.textContent = locked ? t('Unlock object', '객체 잠금 해제') : t('Lock object', '객체 잠금')
     }
   }
-  for (const button of fixtureEditButtons) {
+  for (const button of fixtureEditButtonElements) {
     button.disabled = !fixtureSelected
   }
+}
+
+function updateFurnitureInspector(
+  selected: FurnitureObject | null,
+  fixture: StructuralFixtureObject | null,
+  warning: string | null,
+): void {
+  furnitureObjectListElement.innerHTML = furnitureObjectListMarkup()
+  updateTransformControls(selected)
+
+  if (selected) {
+    selectedObjectTitleElement.textContent = localizedFurnitureLabel(selected)
+    selectedObjectSourceElement.textContent =
+      selected.source === 'cv_candidate'
+        ? t('CV candidate proxy', 'CV 후보 프록시')
+        : t('catalog proxy', '카탈로그 프록시')
+  } else if (fixture) {
+    selectedObjectTitleElement.textContent = localizedFixtureLabel(fixture)
+    selectedObjectSourceElement.textContent = t('structural fixture', '구조 고정 요소')
+  } else {
+    selectedObjectTitleElement.textContent = t('Room shell', '방 외곽')
+    selectedObjectSourceElement.textContent = t('meters coordinate space', 'meters 좌표계')
+  }
+
+  const selectedOutside = selected ? furnitureOutsideRoom(selected, roomBounds(spatialModel)) : false
+  const warningMessage = selectedOutside
+    ? t(
+        `${selected?.label ?? 'Object'} is outside room bounds. Move or resize it before saving.`,
+        `${selected ? localizedFurnitureLabel(selected) : '오브젝트'}이(가) 방 경계 밖에 있습니다. 저장 전에 이동하거나 크기를 조정하세요.`,
+      )
+    : warning && usesKorean
+      ? '배치 경고가 있습니다. 저장 전에 모든 오브젝트를 방 경계 안으로 이동하거나 크기를 조정하세요.'
+      : warning
+  const stateClass = warningMessage ? 'collision' : 'confirmed'
+  const stateLabel = warningMessage ? t('collision', '충돌') : t('clear', '정상')
+  furniturePlacementWarningElement.innerHTML = `<span class="state-pill ${stateClass}">${stateLabel}</span><span>${escapeHtml(
+    warningMessage ?? t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음'),
+  )}</span>`
+}
+
+function furnitureObjectListMarkup(): string {
+  if (spatialModel.furniture.length === 0) {
+    return `<p class="object-list-empty">${t(
+      'No furniture proxies placed yet.',
+      '아직 배치된 가구 프록시가 없습니다.',
+    )}</p>`
+  }
+
+  const bounds = roomBounds(spatialModel)
+  return spatialModel.furniture
+    .map((item) => {
+      const selected = spatialModel.selected?.objectId === item.objectId
+      const state = furnitureObjectState(item, selected, bounds)
+      return `<button class="object-chip${selected ? ' is-selected' : ''}${
+        state.className === 'collision' ? ' is-collision' : ''
+      }" type="button" role="listitem" data-furniture-select="${escapeAttribute(item.objectId)}">
+        <strong>${escapeHtml(localizedFurnitureLabel(item))}</strong>
+        <span class="state-pill ${state.className}">${state.label}</span>
+        <small>${item.size.widthMeters.toFixed(2)} x ${item.size.depthMeters.toFixed(
+          2,
+        )} m · x ${item.position.x.toFixed(2)} · y ${item.position.y.toFixed(2)}</small>
+      </button>`
+    })
+    .join('')
+}
+
+function furnitureObjectState(
+  item: FurnitureObject,
+  selected: boolean,
+  bounds: ReturnType<typeof roomBounds>,
+): { className: string; label: string } {
+  if (furnitureOutsideRoom(item, bounds)) {
+    return { className: 'collision', label: t('collision', '충돌') }
+  }
+  if (selected) {
+    return { className: 'selected', label: t('selected', '선택됨') }
+  }
+  if (item.source === 'cv_candidate') {
+    return { className: 'candidate', label: t('candidate', '후보') }
+  }
+  return { className: 'confirmed', label: t('confirmed', '확정') }
+}
+
+function updateTransformControls(selected: FurnitureObject | null): void {
+  if (!selected) {
+    transformXReadoutElement.textContent = '--'
+    transformYReadoutElement.textContent = '--'
+    transformRotationReadoutElement.textContent = '--'
+    transformSizeReadoutElement.textContent = '--'
+    for (const input of transformInputElements) {
+      input.disabled = true
+    }
+    for (const output of transformOutputElements) {
+      output.textContent = '--'
+    }
+    return
+  }
+
+  const bounds = roomBounds(spatialModel)
+  transformXReadoutElement.textContent = `${selected.position.x.toFixed(2)} m`
+  transformYReadoutElement.textContent = `${selected.position.y.toFixed(2)} m`
+  transformRotationReadoutElement.textContent = `${selected.rotationDegrees.toFixed(0)} deg`
+  transformSizeReadoutElement.textContent = `${selected.size.widthMeters.toFixed(
+    2,
+  )} x ${selected.size.depthMeters.toFixed(2)} x ${selected.size.heightMeters.toFixed(2)} m`
+  setTransformControl('position-x', selected.position.x, 0, bounds.widthMeters, false)
+  setTransformControl('position-y', selected.position.y, 0, bounds.depthMeters, false)
+  setTransformControl('rotation', selected.rotationDegrees, 0, 345, false)
+  setTransformControl('width', selected.size.widthMeters, 0.2, Math.max(bounds.widthMeters, 0.2), false)
+  setTransformControl('depth', selected.size.depthMeters, 0.2, Math.max(bounds.depthMeters, 0.2), false)
+  setTransformControl('height', selected.size.heightMeters, 0.2, Math.max(spatialModel.room.heightMeters, 0.2), false)
+}
+
+function setTransformControl(
+  field: TransformField,
+  value: number,
+  min: number,
+  max: number,
+  disabled: boolean,
+): void {
+  const input = transformInputElements.find((item) => item.dataset.transformField === field)
+  const output = transformOutputElements.find((item) => item.dataset.transformOutput === field)
+  if (!input || !output) {
+    return
+  }
+  input.disabled = disabled
+  input.min = String(min)
+  input.max = String(max)
+  input.value = String(value)
+  output.textContent = field === 'rotation' ? `${Math.round(value)} deg` : `${value.toFixed(2)} m`
 }
 
 function updateCandidateTray(): void {
@@ -2408,6 +2697,86 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
   emitSceneState('roomforge.scene.updated')
 }
 
+function updateSelectedFurnitureTransform(field: TransformField, value: number): void {
+  const selected = selectedFurniture()
+  if (!selected || !Number.isFinite(value)) {
+    return
+  }
+  if (selected.locked) {
+    geometryStatusElement.textContent = t(
+      `${selected.label} is locked. Unlock it before editing.`,
+      `${localizedFurnitureLabel(selected)}은 잠겨 있습니다. 편집 전에 잠금을 해제하세요.`,
+    )
+    updateSpatialStatus()
+    return
+  }
+
+  const bounds = roomBounds(spatialModel)
+  const nextItem = transformFurnitureObject(selected, field, value, bounds)
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    furniture: spatialModel.furniture.map((item) =>
+      item.objectId === selected.objectId ? nextItem : item,
+    ),
+  }
+  rebuildFurniture()
+  geometryStatusElement.textContent = t(
+    `Updated ${selected.label} transform.`,
+    `${localizedFurnitureLabel(selected)} 변환 값을 업데이트했습니다.`,
+  )
+  updateSpatialStatus()
+  emitSceneState('roomforge.scene.updated')
+}
+
+function transformFurnitureObject(
+  item: FurnitureObject,
+  field: TransformField,
+  value: number,
+  bounds: ReturnType<typeof roomBounds>,
+): FurnitureObject {
+  if (field === 'position-x') {
+    return {
+      ...item,
+      position: { ...item.position, x: Number(clampNumber(value, 0, bounds.widthMeters).toFixed(2)) },
+    }
+  }
+  if (field === 'position-y') {
+    return {
+      ...item,
+      position: { ...item.position, y: Number(clampNumber(value, 0, bounds.depthMeters).toFixed(2)) },
+    }
+  }
+  if (field === 'rotation') {
+    return { ...item, rotationDegrees: Math.round(clampNumber(value, 0, 345)) }
+  }
+  if (field === 'width') {
+    return {
+      ...item,
+      size: {
+        ...item.size,
+        widthMeters: Number(clampNumber(value, 0.2, Math.max(bounds.widthMeters, 0.2)).toFixed(2)),
+      },
+    }
+  }
+  if (field === 'depth') {
+    return {
+      ...item,
+      size: {
+        ...item.size,
+        depthMeters: Number(clampNumber(value, 0.2, Math.max(bounds.depthMeters, 0.2)).toFixed(2)),
+      },
+    }
+  }
+  return {
+    ...item,
+    size: {
+      ...item.size,
+      heightMeters: Number(clampNumber(value, 0.2, Math.max(spatialModel.room.heightMeters, 0.2)).toFixed(2)),
+    },
+  }
+}
+
 function editSelectedFixture(action: FixtureEditAction): void {
   const result = editSelectedFixtureInModel(spatialModel, action)
   const selected = result.selected
@@ -2438,14 +2807,29 @@ function localizedFurnitureLabel(item: FurnitureObject): string {
   if (!usesKorean) {
     return item.label
   }
+  if (item.category === 'bed') {
+    return '침대'
+  }
+  if (item.category === 'desk') {
+    return '책상'
+  }
   if (item.category === 'chair') {
     return '의자'
+  }
+  if (item.category === 'wardrobe') {
+    return '수납장'
   }
   if (item.category === 'table') {
     return '테이블'
   }
   if (item.category === 'sofa') {
     return '소파'
+  }
+  if (item.category === 'shelf') {
+    return '선반'
+  }
+  if (item.category === 'cabinet') {
+    return '캐비닛'
   }
   return item.label
 }
@@ -3035,7 +3419,28 @@ function inspectorSummary(model: SpatialModel): string {
 }
 
 function isFurnitureCategory(value: string | undefined): value is FurnitureCategory {
-  return value === 'chair' || value === 'table' || value === 'sofa'
+  return (
+    value === 'bed' ||
+    value === 'desk' ||
+    value === 'chair' ||
+    value === 'wardrobe' ||
+    value === 'sofa' ||
+    value === 'table' ||
+    value === 'shelf' ||
+    value === 'cabinet' ||
+    value === 'custom'
+  )
+}
+
+function isTransformField(value: string | undefined): value is TransformField {
+  return (
+    value === 'position-x' ||
+    value === 'position-y' ||
+    value === 'rotation' ||
+    value === 'width' ||
+    value === 'depth' ||
+    value === 'height'
+  )
 }
 
 function measurementSummary(model: SpatialModel): string {
@@ -3049,10 +3454,21 @@ function measurementSummary(model: SpatialModel): string {
 }
 
 function placementWarning(model: SpatialModel): string | null {
-  return placementWarningForModel({
+  const warning = placementWarningForModel({
     model,
     labelFor: localizedFurnitureLabel,
   })
+  if (!warning || !usesKorean) {
+    return warning
+  }
+  const bounds = roomBounds(model)
+  const outside = model.furniture.find((item) => furnitureOutsideRoom(item, bounds))
+  if (!outside) {
+    return '배치 경고가 있습니다. 저장 전에 모든 오브젝트를 확인하세요.'
+  }
+  return `${localizedFurnitureLabel(outside)}이(가) ${bounds.widthMeters.toFixed(
+    2,
+  )} m x ${bounds.depthMeters.toFixed(2)} m 방 경계 밖에 있습니다. 저장 전에 이동하거나 크기를 조정하세요.`
 }
 
 function isFurnitureEditAction(value: string | undefined): value is FurnitureEditAction {

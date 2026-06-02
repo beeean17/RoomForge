@@ -477,6 +477,18 @@ dd {
   color: #c7e4ce;
 }
 
+.state-pill.selected {
+  border-color: rgba(244, 241, 234, 0.62);
+  background: rgba(244, 241, 234, 0.14);
+  color: var(--rf-ink);
+}
+
+.state-pill.collision {
+  border-color: rgba(223, 143, 127, 0.6);
+  background: rgba(223, 143, 127, 0.14);
+  color: #f1b6aa;
+}
+
 .state-pill.error {
   border-color: rgba(223, 143, 127, 0.52);
   background: rgba(223, 143, 127, 0.12);
@@ -790,10 +802,178 @@ dd {
   line-height: 1.4;
 }
 
+.object-state-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.object-catalog,
 .furniture-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.obj-tile {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-height: 88px;
+  padding: 12px;
+  text-align: left;
+}
+
+.obj-tile strong {
+  color: var(--rf-ink);
+  font-size: 14px;
+}
+
+.obj-tile span,
+.obj-tile small {
+  color: var(--rf-muted);
+  font-size: 12px;
+}
+
+.obj-tile:hover {
+  border-color: rgba(244, 241, 234, 0.52);
+}
+
+.furniture-object-list {
+  display: grid;
+  gap: 8px;
+}
+
+.object-list-empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--rf-border);
+  color: var(--rf-muted);
+  font-size: 13px;
+}
+
+.object-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 70px;
+  padding: 10px;
+  text-align: left;
+}
+
+.object-chip strong,
+.object-chip small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.object-chip small {
+  grid-column: 1 / -1;
+  color: var(--rf-muted);
+  font-size: 12px;
+}
+
+.object-chip.is-selected {
+  border-color: rgba(244, 241, 234, 0.6);
+  background: rgba(244, 241, 234, 0.08);
+}
+
+.object-chip.is-collision {
+  border-style: dashed;
+  border-color: rgba(223, 143, 127, 0.6);
+}
+
+.selected-object-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--rf-border);
+  background: var(--rf-panel-strong);
+}
+
+.selected-object-header {
+  display: grid;
+  gap: 3px;
+}
+
+.selected-object-header strong {
+  color: var(--rf-ink);
+  font-size: 15px;
+}
+
+.selected-object-header span {
+  color: var(--rf-muted);
+  font-size: 12px;
+}
+
+.transform-readout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.transform-readout div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.transform-readout dd {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    monospace;
+  font-size: 12px;
+}
+
+.transform-slider-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.transform-slider-grid label {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--rf-muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.transform-slider-grid input[type='range'] {
+  width: 100%;
+  accent-color: var(--rf-candidate);
+}
+
+.transform-slider-grid input:disabled {
+  opacity: 0.46;
+}
+
+.transform-slider-grid output {
+  color: var(--rf-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    monospace;
+  font-size: 12px;
+  text-align: right;
+  text-transform: none;
+}
+
+.placement-warning-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--rf-border);
+  background: #0d0f12;
+  color: var(--rf-muted);
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .furniture-edit-controls,
@@ -1078,10 +1258,21 @@ button:focus-visible {
   .warning-row,
   .artifact-row,
   .proceed-controls,
+  .object-catalog,
+  .transform-readout,
+  .placement-warning-card,
   .furniture-edit-controls,
   .fixture-edit-controls,
   .camera-controls {
     grid-template-columns: 1fr;
+  }
+
+  .transform-slider-grid label {
+    grid-template-columns: 1fr;
+  }
+
+  .transform-slider-grid output {
+    text-align: left;
   }
 }
 

@@ -34,15 +34,21 @@ import 'src/projects/project_api.dart';
 import 'src/projects/source_image_upload_recovery_controls.dart';
 import 'src/projects/source_image_upload_status.dart';
 
-const _roomForgeInk = Color(0xFF172033);
-const _roomForgeMuted = Color(0xFF5B667A);
-const _roomForgeBorder = Color(0xFFD9E2EF);
-const _roomForgePanel = Color(0xFFFFFFFF);
-const _roomForgeCanvas = Color(0xFFF7F8FB);
-const _roomForgePrimary = Color(0xFF2563EB);
-const _roomForgeSuccess = Color(0xFF16A34A);
-const _roomForgeWarning = Color(0xFFD97706);
-const _roomForgeError = Color(0xFFDC2626);
+const _roomForgeInk = Color(0xFFF8F8F5);
+const _roomForgeInkSoft = Color(0xFFDEDED8);
+const _roomForgeMuted = Color(0xFFA7ADB0);
+const _roomForgeSubtle = Color(0xFF777D80);
+const _roomForgeBorder = Color(0x244B6277);
+const _roomForgeBorderStrong = Color(0x4D7992A8);
+const _roomForgePaper = Color(0xFF050505);
+const _roomForgePanel = Color(0xFF0B0D0F);
+const _roomForgePrimary = Color(0xFF8FB4FF);
+const _roomForgeSuccess = Color(0xFF8BC3A7);
+const _roomForgeSelected = Color(0xFFD8B46A);
+const _roomForgeWarning = Color(0xFFD49A5C);
+const _roomForgeError = Color(0xFFE08B82);
+const _roomForgeSave = Color(0xFF80C7C2);
+const _roomForgeLightSurface = Color(0xFFEAF0FF);
 const _roomForgeLocaleOverride = String.fromEnvironment('ROOMFORGE_LOCALE');
 
 bool get _roomForgeUsesKorean {
@@ -193,14 +199,20 @@ class RoomForgeApp extends StatelessWidget {
     return MaterialApp(
       title: 'RoomForge',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: _roomForgePrimary,
-          surface: _roomForgeCanvas,
+        colorScheme: const ColorScheme.dark(
+          primary: _roomForgePrimary,
+          onPrimary: _roomForgePaper,
+          secondary: _roomForgeSave,
+          onSecondary: _roomForgePaper,
+          surface: _roomForgePanel,
+          onSurface: _roomForgeInk,
+          error: _roomForgeError,
+          onError: _roomForgePaper,
         ),
-        scaffoldBackgroundColor: _roomForgeCanvas,
+        scaffoldBackgroundColor: _roomForgePaper,
         useMaterial3: true,
         appBarTheme: const AppBarTheme(
-          backgroundColor: _roomForgePanel,
+          backgroundColor: _roomForgePaper,
           foregroundColor: _roomForgeInk,
           centerTitle: false,
           elevation: 0,
@@ -217,13 +229,28 @@ class RoomForgeApp extends StatelessWidget {
         ),
         dividerTheme: const DividerThemeData(color: _roomForgeBorder, space: 1),
         inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
+          border: OutlineInputBorder(
+            borderSide: BorderSide(color: _roomForgeBorder),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: _roomForgeBorder),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: _roomForgePrimary),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
           filled: true,
           fillColor: _roomForgePanel,
+          labelStyle: TextStyle(color: _roomForgeInkSoft),
+          hintStyle: TextStyle(color: _roomForgeSubtle),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             minimumSize: const Size(0, 44),
+            backgroundColor: _roomForgePrimary,
+            foregroundColor: _roomForgePaper,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -233,6 +260,7 @@ class RoomForgeApp extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(0, 44),
             side: const BorderSide(color: _roomForgeBorder),
+            foregroundColor: _roomForgeInk,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -241,6 +269,7 @@ class RoomForgeApp extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             minimumSize: const Size(0, 44),
+            foregroundColor: _roomForgeInkSoft,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -471,39 +500,45 @@ class _SignInScreenState extends State<SignInScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1000),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 760;
-                  final intro = _SignInIntro(theme: theme);
-                  final panel = _SignInPanel(
-                    isSigningIn: _isSigningIn,
-                    authSetupMessage: widget.authSetupMessage,
-                    errorMessage: _errorMessage,
-                    onSignIn: _signIn,
-                  );
-
-                  if (compact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [intro, const SizedBox(height: 24), panel],
+      body: _RoomForgeAppBackground(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1080),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 860;
+                    final intro = _SignInIntro(theme: theme);
+                    final panel = _SignInPanel(
+                      isSigningIn: _isSigningIn,
+                      authSetupMessage: widget.authSetupMessage,
+                      errorMessage: _errorMessage,
+                      onSignIn: _signIn,
                     );
-                  }
 
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(flex: 5, child: intro),
-                      const SizedBox(width: 32),
-                      Expanded(flex: 4, child: panel),
-                    ],
-                  );
-                },
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [intro, const SizedBox(height: 16), panel],
+                      );
+                    }
+
+                    return RoomForgePanel(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: _roomForgePanel,
+                      borderColor: _roomForgeBorderStrong,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(flex: 5, child: intro),
+                          Expanded(flex: 4, child: panel),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -522,51 +557,136 @@ class _SignInIntro extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       header: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 520),
+        padding: const EdgeInsets.all(30),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_roomForgePaper, Color(0xFF172235), Color(0xFF294642)],
+          ),
+          borderRadius: BorderRadius.all(Radius.circular(8)),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(painter: _RoomForgeGridPainter()),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _RoomForgeWordmark(),
+                const SizedBox(height: 28),
+                Text(
+                  rf(
+                    'Start room planning from one photo.',
+                    '사진 한 장으로 시작하는 방 설계',
+                  ),
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: _roomForgeInk,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  rf(
+                    'Capture dimensions, review CV candidates, and continue into an editable room layout.',
+                    '치수 입력, CV 후보 검토, 편집 가능한 방 배치까지 한 흐름으로 이어집니다.',
+                  ),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: _roomForgeInkSoft,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 26),
+                const _SignInMiniPlanPreview(),
+                const SizedBox(height: 26),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    RoomForgeStatusPill(
+                      icon: Icons.lock_outline,
+                      label: rf('Secure login', '보안 로그인'),
+                      color: _roomForgeSave,
+                    ),
+                    RoomForgeStatusPill(
+                      icon: Icons.auto_awesome_outlined,
+                      label: rf('Auto reconstruction', '자동 재구성'),
+                      color: _roomForgePrimary,
+                    ),
+                    RoomForgeStatusPill(
+                      icon: Icons.edit_location_alt_outlined,
+                      label: rf('Manual fallback', '수동 보정'),
+                      color: _roomForgeSelected,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SignInMiniPlanPreview extends StatelessWidget {
+  const _SignInMiniPlanPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 196,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .12),
+        border: Border.all(color: Colors.white.withValues(alpha: .30)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Stack(
         children: [
-          const _RoomForgeWordmark(),
-          const SizedBox(height: 28),
-          Text(
-            rf(
-              'Turn room photos into measured planning layouts.',
-              '방 사진을 측정 가능한 배치 도면으로 바꿉니다.',
-            ),
-            style: theme.textTheme.headlineLarge?.copyWith(
-              color: _roomForgeInk,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0,
+          Positioned.fill(child: CustomPaint(painter: _RoomForgeGridPainter())),
+          Positioned(
+            left: 26,
+            right: 26,
+            top: 26,
+            bottom: 26,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _roomForgeLightSurface.withValues(alpha: .18),
+                border: Border.all(color: _roomForgeLightSurface, width: 2.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            rf(
-              'Sign in to reopen projects, review reconstruction results, and save room layouts across sessions.',
-              '로그인하면 프로젝트를 다시 열고, 재구성 결과를 검토하고, 방 배치를 저장할 수 있습니다.',
-            ),
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: _roomForgeMuted,
-              height: 1.45,
+          Positioned(
+            left: 84,
+            top: 58,
+            width: 112,
+            height: 62,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _roomForgePrimary.withValues(alpha: .26),
+                border: Border.all(color: _roomForgePrimary, width: 2),
+                borderRadius: BorderRadius.circular(5),
+              ),
             ),
           ),
-          const SizedBox(height: 28),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              RoomForgeStatusPill(
-                icon: Icons.photo_camera_outlined,
-                label: rf('Photo intake', '사진 업로드'),
+          Positioned(
+            right: 58,
+            bottom: 42,
+            width: 82,
+            height: 38,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _roomForgeSave.withValues(alpha: .20),
+                border: Border.all(color: _roomForgeSave, width: 2),
+                borderRadius: BorderRadius.circular(5),
               ),
-              RoomForgeStatusPill(
-                icon: Icons.architecture_outlined,
-                label: rf('Measured floor plan', '측정된 평면도'),
-              ),
-              RoomForgeStatusPill(
-                icon: Icons.chair_outlined,
-                label: rf('Saved furniture layouts', '저장된 가구 배치'),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -592,7 +712,9 @@ class _SignInPanel extends StatelessWidget {
     final theme = Theme.of(context);
 
     return RoomForgePanel(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(28),
+      backgroundColor: _roomForgePanel,
+      borderColor: _roomForgeBorder,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -600,6 +722,7 @@ class _SignInPanel extends StatelessWidget {
           Text(
             rf('Sign in', '로그인'),
             style: theme.textTheme.headlineSmall?.copyWith(
+              color: _roomForgeInk,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -609,22 +732,59 @@ class _SignInPanel extends StatelessWidget {
               'Use Google sign-in to access RoomForge workspace data.',
               'Google 계정으로 RoomForge 작업공간에 접근합니다.',
             ),
-            style: theme.textTheme.bodyMedium?.copyWith(color: _roomForgeMuted),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: _roomForgeMuted,
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              backgroundColor: _isProviderBusySurface
+                  ? _roomForgePrimary
+                  : _roomForgeLightSurface,
+              foregroundColor: _roomForgePaper,
+              side: const BorderSide(color: Color(0x6EDCE8FF)),
+            ),
             onPressed: isSigningIn ? null : onSignIn,
             icon: isSigningIn
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _roomForgePaper,
+                    ),
                   )
-                : const Icon(Icons.login),
+                : const _GoogleGlyph(),
             label: Text(
               isSigningIn
                   ? rf('Signing in...', '로그인 중...')
-                  : rf('Sign in with Google', 'Google로 로그인'),
+                  : rf('Continue with Google', 'Google 계정으로 계속하기'),
             ),
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              RoomForgeStatusPill(
+                label: 'idle',
+                color: _roomForgePrimary,
+                dense: true,
+              ),
+              RoomForgeStatusPill(
+                label: 'signing in',
+                color: _roomForgeSave,
+                dense: true,
+              ),
+              RoomForgeStatusPill(
+                label: 'failed',
+                color: _roomForgeError,
+                dense: true,
+              ),
+            ],
           ),
           if (authSetupMessage != null) ...[
             const SizedBox(height: 16),
@@ -651,6 +811,44 @@ class _SignInPanel extends StatelessWidget {
       ),
     );
   }
+
+  bool get _isProviderBusySurface => isSigningIn;
+}
+
+class _GoogleGlyph extends StatelessWidget {
+  const _GoogleGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Stack(
+        children: const [
+          Positioned(
+            left: 1,
+            top: 1,
+            child: Icon(Icons.circle, size: 9, color: Color(0xFFEA4335)),
+          ),
+          Positioned(
+            right: 1,
+            top: 1,
+            child: Icon(Icons.circle, size: 9, color: Color(0xFF4285F4)),
+          ),
+          Positioned(
+            left: 1,
+            bottom: 1,
+            child: Icon(Icons.circle, size: 9, color: Color(0xFFFBBC05)),
+          ),
+          Positioned(
+            right: 1,
+            bottom: 1,
+            child: Icon(Icons.circle, size: 9, color: Color(0xFF34A853)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _RoomForgeWordmark extends StatelessWidget {
@@ -661,16 +859,7 @@ class _RoomForgeWordmark extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _roomForgeInk,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.view_in_ar_outlined, color: _roomForgePanel),
-        ),
+        const _RoomForgeBrandMark(size: 44),
         const SizedBox(width: 12),
         Text(
           'RoomForge',
@@ -683,6 +872,92 @@ class _RoomForgeWordmark extends StatelessWidget {
       ],
     );
   }
+}
+
+class _RoomForgeBrandMark extends StatelessWidget {
+  const _RoomForgeBrandMark({this.size = 30});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _roomForgePaper,
+            Color(0xFF172235),
+            Color(0xFF294642),
+            _roomForgeSelected,
+          ],
+          stops: [0, .46, .74, 1],
+        ),
+        border: Border.all(color: Color(0x5CDCE8FF)),
+      ),
+      child: SizedBox(width: size, height: size),
+    );
+  }
+}
+
+class _RoomForgeAppBackground extends StatelessWidget {
+  const _RoomForgeAppBackground({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: _roomForgePaper,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x140F3D82),
+            _roomForgePaper,
+            _roomForgePaper,
+            Color(0x0E2A6A66),
+          ],
+          stops: [0, .24, .76, 1],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [const _RoomForgeGridBackdrop(), child],
+      ),
+    );
+  }
+}
+
+class _RoomForgeGridBackdrop extends StatelessWidget {
+  const _RoomForgeGridBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(child: CustomPaint(painter: _RoomForgeGridPainter()));
+  }
+}
+
+class _RoomForgeGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0x145E7A92)
+      ..strokeWidth = 1;
+    const step = 92.0;
+    for (var x = 0.0; x <= size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (var y = 0.0; y <= size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class RoomForgePanel extends StatelessWidget {
@@ -706,6 +981,13 @@ class RoomForgePanel extends StatelessWidget {
         color: backgroundColor,
         border: Border.all(color: borderColor),
         borderRadius: BorderRadius.circular(8),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x52000000),
+            blurRadius: 34,
+            offset: Offset(0, 18),
+          ),
+        ],
       ),
       child: Padding(padding: padding, child: child),
     );
@@ -739,17 +1021,24 @@ class RoomForgeStatusPill extends StatelessWidget {
         vertical: dense ? 5 : 7,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
+        color: color.withValues(alpha: 0.13),
+        border: Border.all(color: color.withValues(alpha: 0.34)),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-          ],
+          icon == null
+              ? Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                )
+              : Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
           Flexible(child: Text(label, style: textStyle)),
         ],
       ),

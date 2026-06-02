@@ -243,6 +243,32 @@ app.innerHTML = `
       <p class="helper-text" id="scale-status">${t('Use the longest trusted wall to anchor image pixels into meters.', '가장 신뢰할 수 있는 긴 벽을 기준으로 이미지 픽셀을 미터로 보정하세요.')}</p>
       <button id="generate-floor-plan" type="button">${t('Apply scale', '스케일 적용')}</button>
     </section>
+    <section class="panel-section" aria-labelledby="floor-plan-review-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">${t('Plan review', '평면도 검토')}</p>
+          <h2 id="floor-plan-review-title">${t('Floor plan review', '평면도 검토')}</h2>
+        </div>
+        <span class="state-pill confirmed" id="floor-plan-state">${t('metric ready', '미터 평면도 준비됨')}</span>
+      </div>
+      <div class="review-metrics-grid" aria-label="${t('Metric floor plan summary', '미터 평면도 요약')}">
+        <div>
+          <strong id="review-room-size">4.20 x 3.60 m</strong>
+          <span>${t('room size', '방 크기')}</span>
+        </div>
+        <div>
+          <strong id="review-coordinate-space">meters</strong>
+          <span>${t('coordinate space', '좌표계')}</span>
+        </div>
+      </div>
+      <div class="warning-rail" id="floor-warning-rail" role="list" aria-label="${t('Floor plan warnings', '평면도 경고')}"></div>
+      <div class="artifact-grid" id="floor-artifact-grid" aria-label="${t('Generated artifacts', '생성 아티팩트')}"></div>
+      <div class="proceed-controls" aria-label="${t('Floor plan proceed controls', '평면도 진행 컨트롤')}">
+        <button id="review-candidates" type="button">${t('Review candidates', '후보 재검토')}</button>
+        <button id="return-correction" type="button">${t('Manual correction', '수동 보정')}</button>
+        <button id="proceed-editor" type="button">${t('Proceed to editor', '편집기로 이동')}</button>
+      </div>
+    </section>
     <section class="panel-section" aria-labelledby="furniture-catalog-title">
       <div class="panel-section-header">
         <div>
@@ -345,6 +371,14 @@ const referenceLineList = document.querySelector<HTMLElement>('#reference-line-l
 const scaleRatio = document.querySelector<HTMLElement>('#scale-ratio')
 const scaleError = document.querySelector<HTMLElement>('#scale-error')
 const scaleRecalculateNotice = document.querySelector<HTMLElement>('#scale-recalculate-notice')
+const floorPlanState = document.querySelector<HTMLElement>('#floor-plan-state')
+const reviewRoomSize = document.querySelector<HTMLElement>('#review-room-size')
+const reviewCoordinateSpace = document.querySelector<HTMLElement>('#review-coordinate-space')
+const floorWarningRail = document.querySelector<HTMLElement>('#floor-warning-rail')
+const floorArtifactGrid = document.querySelector<HTMLElement>('#floor-artifact-grid')
+const reviewCandidatesButton = document.querySelector<HTMLButtonElement>('#review-candidates')
+const returnCorrectionButton = document.querySelector<HTMLButtonElement>('#return-correction')
+const proceedEditorButton = document.querySelector<HTMLButtonElement>('#proceed-editor')
 const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
 const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-catalog-status')
 const selectionState = document.querySelector<HTMLElement>('#selection-state')
@@ -397,6 +431,14 @@ if (
   !scaleRatio ||
   !scaleError ||
   !scaleRecalculateNotice ||
+  !floorPlanState ||
+  !reviewRoomSize ||
+  !reviewCoordinateSpace ||
+  !floorWarningRail ||
+  !floorArtifactGrid ||
+  !reviewCandidatesButton ||
+  !returnCorrectionButton ||
+  !proceedEditorButton ||
   !furnitureCount ||
   !furnitureCatalogStatus ||
   !selectionState ||
@@ -441,6 +483,14 @@ const referenceLineListElement = referenceLineList
 const scaleRatioElement = scaleRatio
 const scaleErrorElement = scaleError
 const scaleRecalculateNoticeElement = scaleRecalculateNotice
+const floorPlanStateElement = floorPlanState
+const reviewRoomSizeElement = reviewRoomSize
+const reviewCoordinateSpaceElement = reviewCoordinateSpace
+const floorWarningRailElement = floorWarningRail
+const floorArtifactGridElement = floorArtifactGrid
+const reviewCandidatesButtonElement = reviewCandidatesButton
+const returnCorrectionButtonElement = returnCorrectionButton
+const proceedEditorButtonElement = proceedEditorButton
 const furnitureCountElement = furnitureCount
 const furnitureCatalogStatusElement = furnitureCatalogStatus
 const selectionStateElement = selectionState
@@ -847,6 +897,29 @@ referenceLineListElement.addEventListener('click', (event) => {
 knownWallLengthInputElement.addEventListener('input', () => {
   scaleNeedsRecalculation = true
   updateScaleCalibrationPanel()
+})
+
+reviewCandidatesButtonElement.addEventListener('click', () => {
+  candidateTrayStatusElement.textContent = t(
+    'Return to the candidate tray and resolve warnings before proceeding.',
+    '후보 트레이로 돌아가 경고를 해결한 뒤 진행하세요.',
+  )
+})
+
+returnCorrectionButtonElement.addEventListener('click', () => {
+  geometryStatusElement.textContent = t(
+    'Manual correction controls are ready.',
+    '수동 보정 컨트롤을 사용할 수 있습니다.',
+  )
+  editorCanvas.focus()
+})
+
+proceedEditorButtonElement.addEventListener('click', () => {
+  setViewMode('3d')
+  sceneStatusElement.textContent = t(
+    'Metric floor plan handed off to the layout editor.',
+    '미터 평면도를 배치 편집기로 넘겼습니다.',
+  )
 })
 
 document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
@@ -1539,6 +1612,93 @@ function referenceMetricLength(edge: { start: THREE.Vector3; end: THREE.Vector3 
   return Math.hypot(end.x - start.x, end.y - start.y)
 }
 
+function updateFloorPlanReviewPanel(): void {
+  const bounds = roomBounds(spatialModel)
+  const coordinateSpace = spatialModel.room.floorPlan.metricGeometry.coordinateSpace
+  const lowConfidenceCandidates = spatialModel.candidateObjects.filter(
+    (candidate) => typeof candidate.confidenceScore === 'number' && candidate.confidenceScore < 0.7,
+  )
+  const lowConfidenceFixtures = spatialModel.structuralFixtures.filter(
+    (fixture) => typeof fixture.confidenceScore === 'number' && fixture.confidenceScore < 0.7,
+  )
+  const warnings = [
+    ...lowConfidenceCandidates.map((candidate) =>
+      t(
+        `${candidate.category} confidence ${Math.round((candidate.confidenceScore ?? 0) * 100)}%`,
+        `${candidate.category} confidence ${Math.round((candidate.confidenceScore ?? 0) * 100)}%`,
+      ),
+    ),
+    ...lowConfidenceFixtures.map((fixture) =>
+      t(
+        `${fixture.category} fixture confidence ${Math.round((fixture.confidenceScore ?? 0) * 100)}%`,
+        `${fixture.category} 고정 요소 confidence ${Math.round((fixture.confidenceScore ?? 0) * 100)}%`,
+      ),
+    ),
+  ]
+  const placement = placementWarning(spatialModel)
+  if (placement) {
+    warnings.push(placement)
+  }
+  if (scaleNeedsRecalculation) {
+    warnings.push(t('Scale should be recalculated after outline edits.', '윤곽 수정 후 스케일 재계산이 필요합니다.'))
+  }
+
+  reviewRoomSizeElement.textContent = `${bounds.widthMeters.toFixed(2)} x ${bounds.depthMeters.toFixed(2)} m`
+  reviewCoordinateSpaceElement.textContent = coordinateSpace
+  const hasMetricPlan = coordinateSpace === 'meters' && confirmedPoints.length >= 3
+  floorPlanStateElement.className = hasMetricPlan
+    ? warnings.length > 0
+      ? 'state-pill warning'
+      : 'state-pill confirmed'
+    : 'state-pill error'
+  floorPlanStateElement.textContent = hasMetricPlan
+    ? warnings.length > 0
+      ? t('warning', '경고')
+      : t('metric ready', '미터 평면도 준비됨')
+    : t('artifact missing', '아티팩트 누락')
+  floorWarningRailElement.innerHTML =
+    warnings.length === 0
+      ? warningRailRowMarkup('confirmed', t('No blocking warnings.', '차단 경고 없음'))
+      : warnings.map((warning) => warningRailRowMarkup('warning', warning)).join('')
+  floorArtifactGridElement.innerHTML = floorPlanArtifactRows()
+}
+
+function warningRailRowMarkup(state: 'confirmed' | 'warning' | 'error', message: string): string {
+  const label = state === 'confirmed' ? t('ready', '준비됨') : state === 'warning' ? t('warning', '경고') : t('missing', '누락')
+  return `<div class="warning-row" role="listitem"><span class="state-pill ${state}">${label}</span><span>${escapeHtml(message)}</span></div>`
+}
+
+function floorPlanArtifactRows(): string {
+  const artifacts = [
+    {
+      label: 'overlay',
+      ready: latestCandidateGeometry !== null || confirmedPoints.length >= 3,
+      detail: t('candidate and confirmed outline', '후보 및 확정 윤곽'),
+    },
+    {
+      label: 'mask',
+      ready: latestCandidateGeometry !== null,
+      detail: t('OpenCV segmentation artifact', 'OpenCV segmentation 아티팩트'),
+    },
+    {
+      label: 'depth.json',
+      ready: (captureSessionForSceneUnderstanding?.images ?? []).some(
+        (image) => (image.depthArtifactRefs ?? []).length > 0 || image.cameraPose?.depthEstimateMeters,
+      ),
+      detail: t('ARCore depth metadata', 'ARCore depth 메타데이터'),
+    },
+  ]
+  return artifacts
+    .map((artifact) => {
+      const state = artifact.ready ? 'confirmed' : 'error'
+      const label = artifact.ready ? t('ready', '준비됨') : t('missing', '누락')
+      return `<div class="artifact-row"><strong>${escapeHtml(artifact.label)}</strong><span>${escapeHtml(
+        artifact.detail,
+      )}</span><span class="state-pill ${state}">${label}</span></div>`
+    })
+    .join('')
+}
+
 function rebuildWalls(): void {
   for (const child of [...wallGroup.children]) {
     wallGroup.remove(child)
@@ -1719,6 +1879,7 @@ function updateSpatialStatus(): void {
   applyLayerVisibility()
   updateOutlineValidityPanel()
   updateScaleCalibrationPanel()
+  updateFloorPlanReviewPanel()
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()

@@ -5579,66 +5579,101 @@ class RoomDimensionsSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              RoomForgeStatusPill(
+                label: rf('meters locked', 'meters 고정'),
+                color: _roomForgeMeasure,
+                dense: true,
+              ),
+              RoomForgeStatusPill(
+                label: rf('default height 2.40 m', '기본 높이 2.40 m'),
+                color: _roomForgeWarning,
+                dense: true,
+              ),
+              RoomForgeStatusPill(
+                label: rf('positive values only', '양수만 입력'),
+                color: _roomForgeError,
+                dense: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
-              final compact = constraints.maxWidth < 520;
-              final fields = [
-                TextFormField(
-                  controller: widthController,
-                  decoration: InputDecoration(
-                    labelText: rf('Width', '너비'),
-                    suffixText: 'm',
-                    helperText: rf('Wall to wall', '벽에서 벽까지'),
+              final compact = constraints.maxWidth < 680;
+              final fields = _dimensionFields(context);
+              final formFields = Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final field in fields) ...[
+                    field,
+                    if (field != fields.last) const SizedBox(height: 10),
+                  ],
+                  const SizedBox(height: 12),
+                  RoomForgeNotice(
+                    title: rf('Default height available', '기본 높이를 사용할 수 있습니다'),
+                    message: rf(
+                      'If you do not know the measured height, leave it blank or apply 2.40 m before saving.',
+                      '실측 높이를 모르면 비워 두거나 저장 전에 2.40 m 기본 높이를 적용하세요.',
+                    ),
+                    severity: NoticeSeverity.warning,
+                    icon: Icons.height_outlined,
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: _positiveDimensionValidator,
-                ),
-                TextFormField(
-                  controller: depthController,
-                  decoration: InputDecoration(
-                    labelText: rf('Depth', '깊이'),
-                    suffixText: 'm',
-                    helperText: rf('Front to back', '앞에서 뒤까지'),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: isSaving
+                          ? null
+                          : () {
+                              heightController.text = '2.40';
+                            },
+                      icon: const Icon(Icons.vertical_align_top_outlined),
+                      label: Text(rf('Apply default height', '기본 높이 적용')),
+                    ),
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: _positiveDimensionValidator,
-                ),
-                TextFormField(
-                  controller: heightController,
-                  decoration: InputDecoration(
-                    labelText: rf('Height', '높이'),
-                    helperText: rf('Blank uses default', '비워두면 기본값 사용'),
-                    suffixText: 'm',
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return null;
-                    }
-                    return _positiveDimensionValidator(value);
-                  },
-                ),
-              ];
+                ],
+              );
+              final preview = _RoomDimensionPreview(
+                widthController: widthController,
+                depthController: depthController,
+                heightController: heightController,
+                dimensions: dimensions,
+              );
 
               if (compact) {
-                return Column(
-                  children: [
-                    for (final field in fields) ...[
-                      field,
-                      if (field != fields.last) const SizedBox(height: 10),
-                    ],
-                  ],
+                return DecoratedBox(
+                  decoration: _dimensionSceneDecoration,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        formFields,
+                        const SizedBox(height: 14),
+                        preview,
+                      ],
+                    ),
+                  ),
                 );
               }
 
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final field in fields) ...[
-                    Expanded(child: field),
-                    if (field != fields.last) const SizedBox(width: 10),
-                  ],
-                ],
+              return DecoratedBox(
+                decoration: _dimensionSceneDecoration,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 5, child: formFields),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 4, child: preview),
+                    ],
+                  ),
+                ),
               );
             },
           ),
@@ -5697,12 +5732,256 @@ class RoomDimensionsSection extends StatelessWidget {
     );
   }
 
-  static String? _positiveDimensionValidator(String? value) {
-    final parsed = double.tryParse(value?.trim() ?? '');
+  Decoration get _dimensionSceneDecoration {
+    return BoxDecoration(
+      color: _roomForgeCanvas,
+      border: Border.all(color: _roomForgeBorder),
+      borderRadius: BorderRadius.circular(8),
+    );
+  }
+
+  List<Widget> _dimensionFields(BuildContext context) {
+    return [
+      TextFormField(
+        controller: widthController,
+        decoration: InputDecoration(
+          labelText: rf('Width', '가로'),
+          suffixText: 'm',
+          helperText: rf('Wall to wall', '벽에서 벽까지'),
+        ),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        validator: (value) => _dimensionValidator(value, maxMeters: 50),
+      ),
+      TextFormField(
+        controller: depthController,
+        decoration: InputDecoration(
+          labelText: rf('Depth', '세로'),
+          suffixText: 'm',
+          helperText: rf('Front to back', '앞에서 뒤까지'),
+        ),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        validator: (value) => _dimensionValidator(value, maxMeters: 50),
+      ),
+      TextFormField(
+        controller: heightController,
+        decoration: InputDecoration(
+          labelText: rf('Height', '높이'),
+          helperText: rf('Blank uses default', '비워두면 기본값 사용'),
+          suffixText: 'm',
+        ),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        validator: (value) =>
+            _dimensionValidator(value, maxMeters: 15, allowBlank: true),
+      ),
+    ];
+  }
+
+  static String? _dimensionValidator(
+    String? value, {
+    required double maxMeters,
+    bool allowBlank = false,
+  }) {
+    final trimmed = value?.trim() ?? '';
+    if (allowBlank && trimmed.isEmpty) {
+      return null;
+    }
+    final parsed = double.tryParse(trimmed);
     if (parsed == null || parsed <= 0) {
       return rf('Enter a positive number.', '양수를 입력하세요.');
     }
+    if (parsed > maxMeters) {
+      return rf('Enter a realistic meter value.', '현실적인 미터 값을 입력하세요.');
+    }
     return null;
+  }
+}
+
+class _RoomDimensionPreview extends StatelessWidget {
+  const _RoomDimensionPreview({
+    required this.widthController,
+    required this.depthController,
+    required this.heightController,
+    required this.dimensions,
+  });
+
+  final TextEditingController widthController;
+  final TextEditingController depthController;
+  final TextEditingController heightController;
+  final RoomDimensions? dimensions;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        widthController,
+        depthController,
+        heightController,
+      ]),
+      builder: (context, _) {
+        final width = _value(widthController.text, dimensions?.widthValue, 3.6);
+        final depth = _value(depthController.text, dimensions?.depthValue, 4.2);
+        final heightText = heightController.text.trim();
+        final height = _value(heightText, dimensions?.heightValue, 2.4);
+        final usesDefaultHeight =
+            heightText.isEmpty || dimensions?.usesDefaultHeight == true;
+
+        return Semantics(
+          label: rf(
+            'Metric room preview. Width ${width.toStringAsFixed(2)} meters, depth ${depth.toStringAsFixed(2)} meters, height ${height.toStringAsFixed(2)} meters.',
+            '미터 기반 방 미리보기. 가로 ${width.toStringAsFixed(2)}미터, 세로 ${depth.toStringAsFixed(2)}미터, 높이 ${height.toStringAsFixed(2)}미터.',
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _roomForgePanel,
+              border: Border.all(color: _roomForgeBorder),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      RoomForgeStatusPill(
+                        label: rf('metric preview', '미터 프리뷰'),
+                        color: _roomForgeMeasure,
+                        dense: true,
+                      ),
+                      const Spacer(),
+                      RoomForgeStatusPill(
+                        label: usesDefaultHeight
+                            ? rf('default height', '기본 높이')
+                            : rf('measured height', '실측 높이'),
+                        color: usesDefaultHeight
+                            ? _roomForgeWarning
+                            : _roomForgeSuccess,
+                        dense: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: 190,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final safeWidth = width.clamp(0.8, 50.0);
+                        final safeDepth = depth.clamp(0.8, 50.0);
+                        final scale = [
+                          (constraints.maxWidth - 34) / safeWidth,
+                          136 / safeDepth,
+                        ].reduce((a, b) => a < b ? a : b);
+                        final roomWidth = (safeWidth * scale).clamp(
+                          112.0,
+                          constraints.maxWidth - 28,
+                        );
+                        final roomDepth = (safeDepth * scale).clamp(
+                          86.0,
+                          136.0,
+                        );
+
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            const Positioned.fill(
+                              child: _RoomForgeGridBackdrop(),
+                            ),
+                            SizedBox(
+                              width: roomWidth,
+                              height: roomDepth,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: _roomForgeLightSurface.withValues(
+                                    alpha: .22,
+                                  ),
+                                  border: Border.all(
+                                    color: _roomForgeInk,
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Positioned(
+                                      left: roomWidth * .25,
+                                      top: roomDepth * .24,
+                                      width: roomWidth * .30,
+                                      height: roomDepth * .28,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          color: _roomForgePrimary.withValues(
+                                            alpha: .22,
+                                          ),
+                                          border: Border.all(
+                                            color: _roomForgePrimary,
+                                            width: 1.5,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              child: Text(
+                                '${width.toStringAsFixed(2)} m',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: _roomForgeMeasure,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              child: RotatedBox(
+                                quarterTurns: 1,
+                                child: Text(
+                                  '${depth.toStringAsFixed(2)} m',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: _roomForgeMeasure,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    rf(
+                      'Height ${height.toStringAsFixed(2)} m - saved as meters',
+                      '높이 ${height.toStringAsFixed(2)} m - meters로 저장',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _roomForgeMuted,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static double _value(String input, double? saved, double fallback) {
+    final parsed = double.tryParse(input.trim());
+    if (parsed != null && parsed > 0) {
+      return parsed;
+    }
+    return saved ?? fallback;
   }
 }
 

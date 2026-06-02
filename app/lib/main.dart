@@ -2819,71 +2819,7 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _FirebaseAdminSection(
-            title: rf('Job detail', '작업 상세'),
-            semanticsLabel:
-                FirebaseAdminDiagnosticsUiText.jobDetailSemanticsLabel,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  RoomForgeStatusPill(
-                    label: _adminStatusLabel(job.status.wireValue),
-                    color: _adminStatusColor(job.status.wireValue),
-                  ),
-                  RoomForgeStatusPill(
-                    label: '${rf('Retry', '재시도')} ${job.retryCount}',
-                    icon: Icons.refresh,
-                    color: _roomForgeMuted,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text('${rf('Owner', '소유자')}: ${job.ownerUid}'),
-              Text('${rf('Project', '프로젝트')}: ${job.projectId}'),
-              Text('${rf('Job', '작업')}: ${job.jobId}'),
-              Text('${rf('Source image', '소스 이미지')}: ${job.sourceImageId}'),
-              Text('${rf('Provider', '제공자')}: ${job.providerType}'),
-              if (job.providerId != null)
-                Text('${rf('Provider ID', '제공자 ID')}: ${job.providerId}'),
-              if (job.algorithmId != null)
-                Text('${rf('Algorithm', '알고리즘')}: ${job.algorithmId}'),
-              if (job.openCvVersion != null)
-                Text('${rf('OpenCV', 'OpenCV')}: ${job.openCvVersion}'),
-              if (job.qualityStatus != null)
-                Text(
-                  '${rf('Quality', '품질')}: ${job.qualityStatus!.displayLabel}',
-                ),
-              Text('${rf('Retry count', '재시도 횟수')}: ${job.retryCount}'),
-              if (job.latestTransitionId != null)
-                Text(
-                  '${rf('Latest transition', '최근 전환')}: ${job.latestTransitionId}',
-                ),
-              if (job.retryOfJobId != null)
-                Text('${rf('Retry of', '원본 재시도 작업')}: ${job.retryOfJobId}'),
-              if (job.rootJobId != null)
-                Text('${rf('Root job', '루트 작업')}: ${job.rootJobId}'),
-              if (job.failureReasonCode != null)
-                Text('${rf('Failure', '실패 사유')}: ${job.failureReasonCode}'),
-              if (job.failureReason != null) Text(job.failureReason!),
-              if (job.startedAt != null)
-                Text('${rf('Started at', '시작 시각')}: ${job.startedAt}'),
-              if (job.completedAt != null)
-                Text('${rf('Completed at', '완료 시각')}: ${job.completedAt}'),
-              if (job.timeoutAt != null)
-                Text('${rf('Timeout at', '시간 초과 시각')}: ${job.timeoutAt}'),
-              Text(
-                '${rf('Latest result', '최근 결과')}: ${job.latestResultId ?? 'not_generated'}',
-              ),
-              Text(
-                '${rf('Latest geometry', '최근 지오메트리')}: ${job.latestConfirmedGeometryId ?? 'not_generated'}',
-              ),
-              Text(
-                '${rf('Latest floor plan', '최근 평면도')}: ${job.latestFloorPlanId ?? 'not_generated'}',
-              ),
-            ],
-          ),
+          _FirebaseAdminMetadataHeader(job: job),
           const SizedBox(height: 12),
           _FirebaseAdminRetryAction(
             job: job,
@@ -2904,6 +2840,267 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
           _FirebaseAdminLayouts(
             jobId: job.jobId,
             stream: adminRepository.watchLayoutsForJob(jobId: job.jobId),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminMetadataHeader extends StatelessWidget {
+  const _FirebaseAdminMetadataHeader({required this.job});
+
+  final FirebaseReconstructionJob job;
+
+  @override
+  Widget build(BuildContext context) {
+    final refs = [
+      _FirebaseAdminMetadataCell(
+        label: rf('Owner', '소유자'),
+        value: job.ownerUid,
+        icon: Icons.person_outline,
+      ),
+      _FirebaseAdminMetadataCell(
+        label: rf('Project', '프로젝트'),
+        value: job.projectId,
+        icon: Icons.folder_outlined,
+      ),
+      _FirebaseAdminMetadataCell(
+        label: rf('Job', '작업'),
+        value: job.jobId,
+        icon: Icons.work_outline,
+      ),
+      _FirebaseAdminMetadataCell(
+        label: rf('Provider', '제공자'),
+        value: job.providerType,
+        icon: Icons.memory_outlined,
+      ),
+      _FirebaseAdminMetadataCell(
+        label: rf('Attempt', '시도'),
+        value: '${job.retryCount + 1}',
+        icon: Icons.refresh_outlined,
+      ),
+      _FirebaseAdminMetadataCell(
+        label: rf('Source image', '소스 이미지'),
+        value: job.sourceImageId,
+        icon: Icons.image_outlined,
+      ),
+    ];
+    final additionalRefs = [
+      if (job.providerId != null)
+        _FirebaseAdminDetailLine(
+          label: rf('Provider ID', '제공자 ID'),
+          value: job.providerId!,
+        ),
+      if (job.algorithmId != null)
+        _FirebaseAdminDetailLine(
+          label: rf('Algorithm', '알고리즘'),
+          value: job.algorithmId!,
+        ),
+      if (job.openCvVersion != null)
+        _FirebaseAdminDetailLine(
+          label: rf('OpenCV', 'OpenCV'),
+          value: job.openCvVersion!,
+        ),
+      if (job.qualityStatus != null)
+        _FirebaseAdminDetailLine(
+          label: rf('Quality', '품질'),
+          value: job.qualityStatus!.displayLabel,
+        ),
+      if (job.latestTransitionId != null)
+        _FirebaseAdminDetailLine(
+          label: rf('Latest transition', '최근 전환'),
+          value: job.latestTransitionId!,
+        ),
+      _FirebaseAdminDetailLine(
+        label: rf('Latest result', '최근 결과'),
+        value: job.latestResultId ?? 'not_generated',
+      ),
+      _FirebaseAdminDetailLine(
+        label: rf('Latest geometry', '최근 지오메트리'),
+        value: job.latestConfirmedGeometryId ?? 'not_generated',
+      ),
+      _FirebaseAdminDetailLine(
+        label: rf('Latest floor plan', '최근 평면도'),
+        value: job.latestFloorPlanId ?? 'not_generated',
+      ),
+      if (job.failureReasonCode != null)
+        _FirebaseAdminDetailLine(
+          label: rf('Failure', '실패 사유'),
+          value: job.failureReasonCode!,
+          color: _roomForgeError,
+        ),
+      if (job.failureReason != null)
+        _FirebaseAdminDetailLine(
+          label: rf('Failure detail', '실패 상세'),
+          value: job.failureReason!,
+          color: _roomForgeError,
+        ),
+    ];
+
+    return _FirebaseAdminSection(
+      title: rf('Metadata header', '메타데이터 헤더'),
+      semanticsLabel: FirebaseAdminDiagnosticsUiText.jobDetailSemanticsLabel,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            RoomForgeStatusPill(
+              label: _adminStatusLabel(job.status.wireValue),
+              color: _adminStatusColor(job.status.wireValue),
+            ),
+            RoomForgeStatusPill(
+              label: '${rf('Attempt', '시도')} ${job.retryCount + 1}',
+              icon: Icons.refresh,
+              color: _roomForgeAdmin,
+            ),
+            if (job.retryOfJobId != null)
+              RoomForgeStatusPill(
+                label: '${rf('Retry of', '원본 작업')} ${job.retryOfJobId}',
+                icon: Icons.account_tree_outlined,
+                color: _roomForgeWarning,
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 620;
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final ref in refs) ...[
+                    ref,
+                    if (ref != refs.last) const SizedBox(height: 8),
+                  ],
+                ],
+              );
+            }
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final ref in refs)
+                  SizedBox(width: (constraints.maxWidth - 16) / 3, child: ref),
+              ],
+            );
+          },
+        ),
+        if (additionalRefs.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _roomForgeCanvas,
+              border: Border.all(color: _roomForgeBorder),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: additionalRefs,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FirebaseAdminMetadataCell extends StatelessWidget {
+  const _FirebaseAdminMetadataCell({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: _roomForgeBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: _roomForgeAdmin),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: _roomForgeMuted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _roomForgeInk,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminDetailLine extends StatelessWidget {
+  const _FirebaseAdminDetailLine({
+    required this.label,
+    required this.value,
+    this.color = _roomForgeMuted,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: _roomForgeMuted,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
           ),
         ],
       ),
@@ -2987,43 +3184,59 @@ class _FirebaseAdminArtifactRefsPanelState
   Widget build(BuildContext context) {
     if (widget.artifactRefs.isEmpty) {
       return _FirebaseAdminSection(
-        title: rf('Artifact access', '아티팩트 접근'),
+        title: rf('Artifact panels', '아티팩트 패널'),
         semanticsLabel:
             FirebaseAdminDiagnosticsUiText.artifactAccessSemanticsLabel,
         children: [
-          Text(
-            rf(
+          RoomForgeStatusPill(
+            label: _adminArtifactStateLabel(
               FirebaseAdminArtifactReadState.notGenerated.wireValue,
-              '생성되지 않음',
             ),
+            color: _adminArtifactStateColor(
+              FirebaseAdminArtifactReadState.notGenerated,
+            ),
+            icon: Icons.inventory_2_outlined,
           ),
         ],
       );
     }
     return _FirebaseAdminSection(
-      title: rf('Artifact access', '아티팩트 접근'),
+      title: rf('Artifact panels', '아티팩트 패널'),
       semanticsLabel:
           FirebaseAdminDiagnosticsUiText.artifactAccessSemanticsLabel,
       children: [
-        for (final ref in widget.artifactRefs)
-          FutureBuilder<FirebaseAdminArtifactReadState>(
-            future: _artifactStateFuture(ref),
-            builder: (context, snapshot) {
-              final state =
-                  snapshot.data ??
-                  (snapshot.connectionState == ConnectionState.waiting
-                      ? null
-                      : FirebaseAdminArtifactReadState.failedToLoad);
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(ref.artifactType),
-                subtitle: Text(ref.storagePath),
-                trailing: Text(
-                  _adminArtifactStateLabel(state?.wireValue ?? 'checking'),
-                ),
-              );
-            },
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 640;
+            final width = compact
+                ? constraints.maxWidth
+                : constraints.maxWidth / 2 - 6;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final ref in widget.artifactRefs)
+                  SizedBox(
+                    width: width,
+                    child: FutureBuilder<FirebaseAdminArtifactReadState>(
+                      future: _artifactStateFuture(ref),
+                      builder: (context, snapshot) {
+                        final state =
+                            snapshot.data ??
+                            (snapshot.connectionState == ConnectionState.waiting
+                                ? null
+                                : FirebaseAdminArtifactReadState.failedToLoad);
+                        return _FirebaseAdminArtifactCard(
+                          ref: ref,
+                          state: state,
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -3052,6 +3265,91 @@ class _FirebaseAdminArtifactRefsPanelState
         readError: error,
       );
     }
+  }
+}
+
+class _FirebaseAdminArtifactCard extends StatelessWidget {
+  const _FirebaseAdminArtifactCard({required this.ref, required this.state});
+
+  final FirebaseArtifactRef ref;
+  final FirebaseAdminArtifactReadState? state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final readState = state;
+    final color = readState == null
+        ? _roomForgeSave
+        : _adminArtifactStateColor(readState);
+    final label = readState == null
+        ? rf('checking', '확인 중')
+        : _adminArtifactStateLabel(readState.wireValue);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: color.withValues(alpha: 0.34)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ref.artifactType,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: _roomForgeInk,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                RoomForgeStatusPill(label: label, color: color, dense: true),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              ref.storagePath,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _roomForgeMuted,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                RoomForgeStatusPill(
+                  label: ref.contentType.wireValue,
+                  color: _roomForgeAdmin,
+                  dense: true,
+                ),
+                if (ref.byteSize != null)
+                  RoomForgeStatusPill(
+                    label: '${ref.byteSize} b',
+                    color: _roomForgeMuted,
+                    dense: true,
+                  ),
+                if (ref.widthPx != null && ref.heightPx != null)
+                  RoomForgeStatusPill(
+                    label: '${ref.widthPx}x${ref.heightPx}',
+                    color: _roomForgeMuted,
+                    dense: true,
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -3186,31 +3484,107 @@ class _FirebaseAdminTransitions extends StatelessWidget {
         }
         final transitions = snapshot.data ?? const [];
         return _FirebaseAdminSection(
-          title: rf('Transition history', '상태 전환 이력'),
+          title: rf('Transition timeline', '상태 전환 타임라인'),
           semanticsLabel:
               FirebaseAdminDiagnosticsUiText.transitionHistorySemanticsLabel,
           children: transitions.isEmpty
               ? [Text(rf('No transitions found.', '상태 전환 이력이 없습니다.'))]
               : [
                   for (final transition in transitions)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        _adminStatusLabel(transition.toStatus.wireValue),
-                      ),
-                      subtitle: Text(
-                        [
-                          transition.actorType.wireValue,
-                          if (transition.reasonCode != null)
-                            transition.reasonCode!,
-                          if (transition.reasonMessage != null)
-                            transition.reasonMessage!,
-                        ].join(' | '),
-                      ),
-                    ),
+                    _FirebaseAdminTimelineRow(transition: transition),
                 ],
         );
       },
+    );
+  }
+}
+
+class _FirebaseAdminTimelineRow extends StatelessWidget {
+  const _FirebaseAdminTimelineRow({required this.transition});
+
+  final FirebaseJobStatusTransition transition;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = _adminStatusColor(transition.toStatus.wireValue);
+    final fromLabel = transition.fromStatus == null
+        ? rf('start', '시작')
+        : _adminStatusLabel(transition.fromStatus!.wireValue);
+    final toLabel = _adminStatusLabel(transition.toStatus.wireValue);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _roomForgeCanvas,
+          border: Border.all(color: color.withValues(alpha: 0.28)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  Icon(Icons.circle, color: color, size: 12),
+                  const SizedBox(height: 4),
+                  Container(width: 1, height: 34, color: _roomForgeBorder),
+                ],
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        RoomForgeStatusPill(
+                          label: '$fromLabel -> $toLabel',
+                          color: color,
+                          dense: true,
+                        ),
+                        Text(
+                          _adminTimestampLabel(transition.occurredAt),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: _roomForgeMuted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      [
+                        transition.actorType.wireValue,
+                        if (transition.actorUid != null) transition.actorUid!,
+                        if (transition.reasonCode != null)
+                          transition.reasonCode!,
+                      ].join(' | '),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _roomForgeInkSoft,
+                      ),
+                    ),
+                    if (transition.reasonMessage != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        transition.reasonMessage!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _roomForgeMuted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -3233,25 +3607,170 @@ class _FirebaseAdminResults extends StatelessWidget {
         }
         final results = snapshot.data ?? const [];
         return _FirebaseAdminSection(
-          title: rf('OpenCV results', 'OpenCV 결과'),
+          title: rf('OpenCV summary', 'OpenCV 요약'),
           semanticsLabel:
               FirebaseAdminDiagnosticsUiText.opencvResultsSemanticsLabel,
           children: results.isEmpty
               ? [Text(rf('No OpenCV result found.', 'OpenCV 결과가 없습니다.'))]
               : [
                   for (final result in results)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(result.resultId),
-                      subtitle: Text(
-                        '${result.coordinateSpace.wireValue} | ${result.qualityStatus.displayLabel}',
-                      ),
-                    ),
+                    _FirebaseAdminOpenCvCard(result: result),
                 ],
         );
       },
     );
   }
+}
+
+class _FirebaseAdminOpenCvCard extends StatelessWidget {
+  const _FirebaseAdminOpenCvCard({required this.result});
+
+  final FirebaseOpenCvResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final candidateCount =
+        result.candidateEdges.length +
+        result.candidateLines.length +
+        result.candidateCorners.length;
+    final runtimeLabel = _opencvRuntimeLabel(result);
+    final confidenceLabel = result.confidenceScore == null
+        ? rf('n/a', '없음')
+        : '${(result.confidenceScore! * 100).toStringAsFixed(0)}%';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _roomForgeCanvas,
+          border: Border.all(color: _roomForgeBorder),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      result.resultId,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: _roomForgeInk,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  RoomForgeStatusPill(
+                    label: result.qualityStatus.displayLabel,
+                    color: result.failureReasonCode == null
+                        ? _roomForgeSuccess
+                        : _roomForgeWarning,
+                    dense: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _FirebaseAdminMiniMetric(
+                    label: rf('candidates', '후보'),
+                    value: candidateCount.toString(),
+                  ),
+                  _FirebaseAdminMiniMetric(
+                    label: rf('runtime', '실행 시간'),
+                    value: runtimeLabel,
+                  ),
+                  _FirebaseAdminMiniMetric(
+                    label: rf('confidence', '신뢰도'),
+                    value: confidenceLabel,
+                  ),
+                  _FirebaseAdminMiniMetric(
+                    label: rf('space', '좌표계'),
+                    value: result.coordinateSpace.wireValue,
+                  ),
+                ],
+              ),
+              if (result.failureReasonCode != null ||
+                  result.failureReason != null) ...[
+                const SizedBox(height: 10),
+                RoomForgeNotice(
+                  title: rf('Failure reason', '실패 사유'),
+                  message: [
+                    if (result.failureReasonCode != null)
+                      result.failureReasonCode!,
+                    if (result.failureReason != null) result.failureReason!,
+                  ].join(' | '),
+                  severity: NoticeSeverity.warning,
+                  icon: Icons.warning_amber_outlined,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminMiniMetric extends StatelessWidget {
+  const _FirebaseAdminMiniMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: _roomForgeBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: _roomForgeInk,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: _roomForgeMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _opencvRuntimeLabel(FirebaseOpenCvResult result) {
+  final started = result.processingStartedAt;
+  final completed = result.processingCompletedAt;
+  if (started == null || completed == null) {
+    return rf('n/a', '없음');
+  }
+  final milliseconds = completed.difference(started).inMilliseconds;
+  if (milliseconds < 1000) {
+    return '${milliseconds}ms';
+  }
+  return '${(milliseconds / 1000).toStringAsFixed(1)}s';
 }
 
 class _FirebaseAdminLayouts extends StatelessWidget {
@@ -3289,16 +3808,82 @@ class _FirebaseAdminLayouts extends StatelessWidget {
                 ]
               : [
                   for (final layout in layouts)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(layout.layoutId),
-                      subtitle: Text(
-                        '${layout.coordinateSpace.wireValue} | ${_adminStatusLabel(layout.reconstructionStatus.wireValue)}',
-                      ),
-                    ),
+                    _FirebaseAdminLayoutRefCard(layout: layout),
                 ],
         );
       },
+    );
+  }
+}
+
+class _FirebaseAdminLayoutRefCard extends StatelessWidget {
+  const _FirebaseAdminLayoutRefCard({required this.layout});
+
+  final FirebaseSavedLayout layout;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _roomForgeCanvas,
+          border: Border.all(
+            color: _adminStatusColor(
+              layout.reconstructionStatus.wireValue,
+            ).withValues(alpha: 0.32),
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      layout.layoutId,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: _roomForgeInk,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  RoomForgeStatusPill(
+                    label: _adminStatusLabel(
+                      layout.reconstructionStatus.wireValue,
+                    ),
+                    color: _adminStatusColor(
+                      layout.reconstructionStatus.wireValue,
+                    ),
+                    dense: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _FirebaseAdminMiniMetric(
+                    label: rf('space', '좌표계'),
+                    value: layout.coordinateSpace.wireValue,
+                  ),
+                  _FirebaseAdminMiniMetric(
+                    label: rf('updated', '수정'),
+                    value: _adminTimestampLabel(layout.updatedAt),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -4034,6 +4619,16 @@ String _adminArtifactStateLabel(String state) {
     'not_generated' => rf('not_generated', '생성되지 않음'),
     'checking' => rf('checking', '확인 중'),
     _ => state,
+  };
+}
+
+Color _adminArtifactStateColor(FirebaseAdminArtifactReadState state) {
+  return switch (state) {
+    FirebaseAdminArtifactReadState.available => _roomForgeSuccess,
+    FirebaseAdminArtifactReadState.restricted ||
+    FirebaseAdminArtifactReadState.failedToLoad => _roomForgeError,
+    FirebaseAdminArtifactReadState.missing ||
+    FirebaseAdminArtifactReadState.notGenerated => _roomForgeWarning,
   };
 }
 

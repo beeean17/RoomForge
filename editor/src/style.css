@@ -501,6 +501,12 @@ dd {
   color: #c7d7e9;
 }
 
+.state-pill.save {
+  border-color: rgba(154, 179, 209, 0.5);
+  background: rgba(154, 179, 209, 0.14);
+  color: #d6e4f4;
+}
+
 .compact-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -976,6 +982,90 @@ dd {
   line-height: 1.35;
 }
 
+.persistence-panel {
+  gap: 14px;
+}
+
+.save-board {
+  display: grid;
+  gap: 8px;
+}
+
+.save-board div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
+  padding: 10px;
+  border: 1px solid var(--rf-border);
+  background: var(--rf-panel-strong);
+}
+
+.save-board b,
+.save-board span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.save-board b {
+  color: var(--rf-ink);
+  font-size: 13px;
+}
+
+.save-board span:last-child {
+  grid-column: 2;
+  color: var(--rf-muted);
+  font-size: 12px;
+}
+
+.load-selector,
+.persistence-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.load-selector button {
+  min-height: 40px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.load-selector button.is-active,
+.load-selector button[aria-pressed='true'] {
+  border-color: rgba(244, 241, 234, 0.58);
+  background: rgba(244, 241, 234, 0.1);
+  color: var(--rf-ink);
+}
+
+.json-preview {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--rf-border);
+  background: #090a0c;
+  color: #d9d4ca;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.round-trip-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--rf-border);
+  background: #0d0f12;
+  color: var(--rf-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .furniture-edit-controls,
 .fixture-edit-controls {
   display: grid;
@@ -1261,6 +1351,9 @@ button:focus-visible {
   .object-catalog,
   .transform-readout,
   .placement-warning-card,
+  .load-selector,
+  .round-trip-notice,
+  .persistence-actions,
   .furniture-edit-controls,
   .fixture-edit-controls,
   .camera-controls {

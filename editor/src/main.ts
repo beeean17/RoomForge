@@ -114,6 +114,7 @@ app.innerHTML = `
     <div class="editor-top-actions">
       <button id="top-undo" type="button" aria-label="${t('Undo geometry edit', '지오메트리 편집 되돌리기')}">${t('Undo', '되돌리기')}</button>
       <button id="top-redo" type="button" aria-label="${t('Redo geometry edit', '지오메트리 편집 다시 실행')}">${t('Redo', '다시 실행')}</button>
+      <button id="save-layout" type="button">${t('Save', '저장')}</button>
       <span class="state-pill confirmed" id="editor-save-state">${t('saved', '저장됨')}</span>
       <button id="export-layout" type="button">${t('Export', '내보내기')}</button>
     </div>
@@ -439,6 +440,31 @@ app.innerHTML = `
         <button type="button" data-fixture-edit="delete">${t('Delete fixture', '고정 요소 삭제')}</button>
       </div>
     </section>
+    <section class="panel-section persistence-panel" aria-labelledby="persistence-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">${t('Persistence', '저장')}</p>
+          <h2 id="persistence-title">${t('Save / load / export', '저장 / 로드 / 내보내기')}</h2>
+        </div>
+        <span class="state-pill confirmed" id="persistence-state">${t('saved', '저장됨')}</span>
+      </div>
+      <div class="save-board" id="save-board" aria-label="${t('Save targets', '저장 대상')}"></div>
+      <div class="load-selector" id="layout-load-selector" aria-label="${t('Load source selector', '로드 소스 선택')}">
+        <button type="button" data-load-source="latest" aria-pressed="true">${t('Latest cloud', '최신 클라우드')}</button>
+        <button type="button" data-load-source="draft" aria-pressed="false">${t('Local draft', '로컬 draft')}</button>
+        <button type="button" data-load-source="export" aria-pressed="false">${t('Previous export', '이전 export')}</button>
+      </div>
+      <pre class="json-preview" id="layout-export-preview" aria-label="${t('JSON export preview', 'JSON 내보내기 미리보기')}"></pre>
+      <div class="round-trip-notice" id="round-trip-notice" role="status" aria-live="polite">
+        <span class="state-pill confirmed">${t('verified', '검증됨')}</span>
+        <span>${t('Save, load, and export fields match.', '저장, 로드, 내보내기 필드가 일치합니다.')}</span>
+      </div>
+      <div class="persistence-actions" aria-label="${t('Persistence actions', '저장 작업')}">
+        <button type="button" data-persistence-action="load">${t('Open selected', '선택 저장본 열기')}</button>
+        <button type="button" data-persistence-action="save">${t('Save layout', '레이아웃 저장')}</button>
+        <button type="button" data-persistence-action="export">${t('Export JSON', 'JSON 내보내기')}</button>
+      </div>
+    </section>
     <section class="panel-section" aria-labelledby="camera-title">
       <div class="panel-section-header">
         <div>
@@ -522,8 +548,14 @@ const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
 const viewSplitButton = document.querySelector<HTMLButtonElement>('#view-split')
 const topUndoButton = document.querySelector<HTMLButtonElement>('#top-undo')
 const topRedoButton = document.querySelector<HTMLButtonElement>('#top-redo')
+const saveLayoutButton = document.querySelector<HTMLButtonElement>('#save-layout')
 const editorSaveState = document.querySelector<HTMLElement>('#editor-save-state')
 const exportLayoutButton = document.querySelector<HTMLButtonElement>('#export-layout')
+const persistenceState = document.querySelector<HTMLElement>('#persistence-state')
+const saveBoard = document.querySelector<HTMLElement>('#save-board')
+const layoutLoadSelector = document.querySelector<HTMLElement>('#layout-load-selector')
+const layoutExportPreview = document.querySelector<HTMLElement>('#layout-export-preview')
+const roundTripNotice = document.querySelector<HTMLElement>('#round-trip-notice')
 const layoutValidity = document.querySelector<HTMLElement>('#layout-validity')
 const layoutCounts = document.querySelector<HTMLElement>('#layout-counts')
 const layoutArea = document.querySelector<HTMLElement>('#layout-area')
@@ -551,6 +583,12 @@ const transformInputs = Array.from(
 )
 const transformOutputs = Array.from(
   document.querySelectorAll<HTMLOutputElement>('[data-transform-output]'),
+)
+const persistenceActionButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-persistence-action]'),
+)
+const layoutLoadSourceButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-load-source]'),
 )
 const fixtureEditButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-fixture-edit]'),
@@ -611,8 +649,14 @@ if (
   !viewSplitButton ||
   !topUndoButton ||
   !topRedoButton ||
+  !saveLayoutButton ||
   !editorSaveState ||
   !exportLayoutButton ||
+  !persistenceState ||
+  !saveBoard ||
+  !layoutLoadSelector ||
+  !layoutExportPreview ||
+  !roundTripNotice ||
   !layoutValidity ||
   !layoutCounts ||
   !layoutArea ||
@@ -625,6 +669,8 @@ if (
   furnitureEditButtons.length === 0 ||
   transformInputs.length === 0 ||
   transformOutputs.length === 0 ||
+  persistenceActionButtons.length === 0 ||
+  layoutLoadSourceButtons.length === 0 ||
   fixtureEditButtons.length === 0
 ) {
   throw new Error('Missing editor UI element.')
@@ -684,8 +730,14 @@ const view3dButtonElement = view3dButton
 const viewSplitButtonElement = viewSplitButton
 const topUndoButtonElement = topUndoButton
 const topRedoButtonElement = topRedoButton
+const saveLayoutButtonElement = saveLayoutButton
 const editorSaveStateElement = editorSaveState
 const exportLayoutButtonElement = exportLayoutButton
+const persistenceStateElement = persistenceState
+const saveBoardElement = saveBoard
+const layoutLoadSelectorElement = layoutLoadSelector
+const layoutExportPreviewElement = layoutExportPreview
+const roundTripNoticeElement = roundTripNotice
 const layoutValidityElement = layoutValidity
 const layoutCountsElement = layoutCounts
 const layoutAreaElement = layoutArea
@@ -695,6 +747,8 @@ const canvasToggleButtonElements = canvasToggleButtons
 const layerToggleButtonElements = layerToggleButtons
 const transformInputElements = transformInputs
 const transformOutputElements = transformOutputs
+const persistenceActionButtonElements = persistenceActionButtons
+const layoutLoadSourceButtonElements = layoutLoadSourceButtons
 const fixtureEditButtonElements = fixtureEditButtons
 
 const renderer = new THREE.WebGLRenderer({ canvas: editorCanvas, antialias: true })
@@ -831,6 +885,10 @@ type CameraTransition = {
 
 type CandidateLayer = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
 
+type PersistenceState = 'saved' | 'saving' | 'exportFailed'
+
+type LoadSource = 'latest' | 'draft' | 'export'
+
 type TransformField =
   | 'position-x'
   | 'position-y'
@@ -859,6 +917,8 @@ let furnitureIdCounter = 0
 let selectedReferenceEdgeIndex = 0
 let scaleNeedsRecalculation = false
 let splitViewActive = false
+let persistenceStateValue: PersistenceState = 'saved'
+let selectedLoadSource: LoadSource = 'latest'
 const canvasToggleState: Record<'grid' | 'snap', boolean> = {
   grid: true,
   snap: true,
@@ -973,14 +1033,30 @@ view3dButtonElement.addEventListener('click', () => setViewMode('3d'))
 viewSplitButtonElement.addEventListener('click', () => setSplitViewMode())
 topUndoButtonElement.addEventListener('click', () => restoreGeometryHistory('undo'))
 topRedoButtonElement.addEventListener('click', () => restoreGeometryHistory('redo'))
-exportLayoutButtonElement.addEventListener('click', () => {
-  editorSaveStateElement.className = 'state-pill confirmed'
-  editorSaveStateElement.textContent = t('export ready', '내보내기 준비됨')
-  sceneStatusElement.textContent = t(
-    'Layout export is ready from the editor shell.',
-    '편집기 shell에서 레이아웃 내보내기를 준비했습니다.',
-  )
+saveLayoutButtonElement.addEventListener('click', () => saveLayoutFromEditor())
+exportLayoutButtonElement.addEventListener('click', () => prepareLayoutExport())
+layoutLoadSelectorElement.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const button = target?.closest<HTMLButtonElement>('[data-load-source]')
+  const source = button?.dataset.loadSource
+  if (isLoadSource(source)) {
+    selectedLoadSource = source
+    updatePersistencePanel()
+  }
 })
+for (const button of persistenceActionButtonElements) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.persistenceAction
+    if (action === 'save') {
+      saveLayoutFromEditor()
+    } else if (action === 'export') {
+      prepareLayoutExport()
+    } else if (action === 'load') {
+      sceneStatusElement.textContent = localizedLoadSourceMessage(selectedLoadSource)
+      updatePersistencePanel()
+    }
+  })
+}
 for (const button of toolRailButtonElements) {
   button.addEventListener('click', () => {
     for (const item of toolRailButtonElements) {
@@ -1993,12 +2069,9 @@ function floorPlanArtifactRows(): string {
 function updateEditorStatusBar(): void {
   const area = polygonAreaSquareMeters()
   const warning = placementWarning(spatialModel)
-  editorSaveStateElement.className = spatialModel.hasUnsavedChanges
-    ? 'state-pill warning'
-    : 'state-pill confirmed'
-  editorSaveStateElement.textContent = spatialModel.hasUnsavedChanges
-    ? t('unsaved', '저장 안 됨')
-    : t('saved', '저장됨')
+  const saveState = saveStateDisplay()
+  editorSaveStateElement.className = `state-pill ${saveState.className}`
+  editorSaveStateElement.textContent = saveState.label
   layoutValidityElement.className = warning ? 'state-pill warning' : 'state-pill confirmed'
   layoutValidityElement.textContent = warning
     ? t('warning layout', '경고 레이아웃')
@@ -2007,6 +2080,174 @@ function updateEditorStatusBar(): void {
     ? `가구 ${spatialModel.furniture.length}개 · 고정 요소 ${spatialModel.structuralFixtures.length}개`
     : `${spatialModel.furniture.length} objects · ${spatialModel.structuralFixtures.length} fixtures`
   layoutAreaElement.textContent = `${area.toFixed(1)} m²`
+}
+
+function saveStateDisplay(): { className: string; label: string } {
+  if (persistenceStateValue === 'saving') {
+    return { className: 'save', label: t('saving', '저장 중') }
+  }
+  if (persistenceStateValue === 'exportFailed') {
+    return { className: 'error', label: t('export failed', '내보내기 실패') }
+  }
+  if (spatialModel.hasUnsavedChanges) {
+    return { className: 'warning', label: t('unsaved', '저장 안 됨') }
+  }
+  return { className: 'confirmed', label: t('saved', '저장됨') }
+}
+
+function saveLayoutFromEditor(): void {
+  persistenceStateValue = 'saving'
+  updateEditorStatusBar()
+  updatePersistencePanel()
+  sceneStatusElement.textContent = t('Saving layout draft.', '레이아웃 draft 저장 중입니다.')
+  window.setTimeout(() => {
+    spatialModel = { ...spatialModel, hasUnsavedChanges: false }
+    persistenceStateValue = 'saved'
+    updateSpatialStatus()
+    sceneStatusElement.textContent = t('Layout saved and ready to reload.', '레이아웃이 저장되어 다시 로드할 수 있습니다.')
+    emitSceneState('roomforge.layout.saved')
+  }, 180)
+}
+
+function prepareLayoutExport(): void {
+  const warning = placementWarning(spatialModel)
+  persistenceStateValue = warning ? 'exportFailed' : 'saved'
+  updateEditorStatusBar()
+  updatePersistencePanel()
+  sceneStatusElement.textContent = warning
+    ? t(
+        'Export preview has placement warnings. Resolve them before downloading JSON.',
+        '내보내기 미리보기에 배치 경고가 있습니다. JSON 다운로드 전에 해결하세요.',
+      )
+    : t(
+        'Layout JSON export preview is ready.',
+        '레이아웃 JSON 내보내기 미리보기가 준비되었습니다.',
+      )
+  postToParent({
+    type: 'roomforge.layout.exportPreviewed',
+    version: BRIDGE_VERSION,
+    payload: layoutExportPayload(),
+  })
+}
+
+function updatePersistencePanel(): void {
+  const saveState = saveStateDisplay()
+  persistenceStateElement.className = `state-pill ${saveState.className}`
+  persistenceStateElement.textContent = saveState.label
+  saveBoardElement.innerHTML = saveBoardMarkup()
+  layoutExportPreviewElement.textContent = JSON.stringify(layoutExportPayload(), null, 2)
+  for (const button of layoutLoadSourceButtonElements) {
+    const active = button.dataset.loadSource === selectedLoadSource
+    button.setAttribute('aria-pressed', String(active))
+    button.classList.toggle('is-active', active)
+  }
+  const warning = placementWarning(spatialModel)
+  const roundTripClass = warning || spatialModel.hasUnsavedChanges ? 'warning' : 'confirmed'
+  const roundTripLabel = warning
+    ? t('review', '검토 필요')
+    : spatialModel.hasUnsavedChanges
+      ? t('draft', 'draft')
+      : t('verified', '검증됨')
+  const roundTripMessage = warning
+    ? t(
+        'Round-trip preview includes placement warnings.',
+        'Round-trip 미리보기에 배치 경고가 포함되어 있습니다.',
+      )
+    : spatialModel.hasUnsavedChanges
+      ? t(
+          'Local draft differs from the last saved cloud layout.',
+          '로컬 draft가 마지막 클라우드 저장본과 다릅니다.',
+        )
+      : t(
+          'Save, load, and export fields match.',
+          '저장, 로드, 내보내기 필드가 일치합니다.',
+        )
+  roundTripNoticeElement.innerHTML = `<span class="state-pill ${roundTripClass}">${roundTripLabel}</span><span>${escapeHtml(
+    roundTripMessage,
+  )}</span>`
+}
+
+function saveBoardMarkup(): string {
+  const saveState = saveStateDisplay()
+  const warning = placementWarning(spatialModel)
+  const cloudLabel = spatialModel.hasUnsavedChanges ? t('previous cloud layout', '이전 클라우드 저장본') : t('cloud layout', '클라우드 저장본')
+  return [
+    {
+      chipClass: saveState.className,
+      chipLabel: saveState.label,
+      title: cloudLabel,
+      detail: usesKorean
+        ? `${spatialModel.furniture.length}개 객체 · ${spatialModel.coordinateSpace} · ${spatialModel.viewMode.toUpperCase()}`
+        : `${spatialModel.furniture.length} objects · ${spatialModel.coordinateSpace} · ${spatialModel.viewMode.toUpperCase()}`,
+    },
+    {
+      chipClass: spatialModel.hasUnsavedChanges ? 'warning' : 'confirmed',
+      chipLabel: spatialModel.hasUnsavedChanges ? t('local draft', '로컬 draft') : t('synced', '동기화됨'),
+      title: t('local draft', '로컬 draft'),
+      detail: warning ?? t('No placement warnings.', '배치 경고 없음.'),
+    },
+    {
+      chipClass: persistenceStateValue === 'exportFailed' ? 'error' : 'measurement',
+      chipLabel: persistenceStateValue === 'exportFailed' ? t('export failed', '내보내기 실패') : t('export', '내보내기'),
+      title: 'layout-export.json',
+      detail: t('room, furniture, camera, meta', 'room, furniture, camera, meta 포함'),
+    },
+  ]
+    .map(
+      (item) => `<div>
+        <span class="state-pill ${item.chipClass}">${item.chipLabel}</span>
+        <b>${escapeHtml(item.title)}</b>
+        <span>${escapeHtml(item.detail)}</span>
+      </div>`,
+    )
+    .join('')
+}
+
+function layoutExportPayload(): Record<string, unknown> {
+  const bounds = roomBounds(spatialModel)
+  return {
+    export_format: 'roomforge_layout_json',
+    export_version: 1,
+    coordinate_space: spatialModel.coordinateSpace,
+    unit: spatialModel.unit,
+    scene_id: spatialModel.sceneId,
+    room: {
+      room_id: spatialModel.room.objectId,
+      width_m: Number(bounds.widthMeters.toFixed(2)),
+      depth_m: Number(bounds.depthMeters.toFixed(2)),
+      height_m: spatialModel.room.heightMeters,
+      floor_plan: spatialModel.room.floorPlan,
+    },
+    furniture_objects: spatialModel.furniture.map((item) => ({
+      furniture_id: item.objectId,
+      category: item.category,
+      label: item.label,
+      position_m: item.position,
+      size_m: item.size,
+      rotation_deg: item.rotationDegrees,
+      locked: item.locked === true,
+      source: item.source ?? 'catalog',
+    })),
+    editor_scene: {
+      view_mode: spatialModel.viewMode,
+      selected: spatialModel.selected,
+      has_unsaved_changes: spatialModel.hasUnsavedChanges,
+    },
+    meta: {
+      review_required: placementWarning(spatialModel) !== null,
+      selected_load_source: selectedLoadSource,
+    },
+  }
+}
+
+function localizedLoadSourceMessage(source: LoadSource): string {
+  if (source === 'draft') {
+    return t('Local draft selected for load preview.', '로컬 draft를 로드 미리보기로 선택했습니다.')
+  }
+  if (source === 'export') {
+    return t('Previous export selected for load preview.', '이전 export를 로드 미리보기로 선택했습니다.')
+  }
+  return t('Latest cloud layout selected for load preview.', '최신 클라우드 저장본을 로드 미리보기로 선택했습니다.')
 }
 
 function updateCursorCoordinates(event: PointerEvent): void {
@@ -2204,6 +2445,7 @@ function updateSpatialStatus(): void {
   updateScaleCalibrationPanel()
   updateFloorPlanReviewPanel()
   updateEditorStatusBar()
+  updatePersistencePanel()
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()
@@ -3441,6 +3683,10 @@ function isTransformField(value: string | undefined): value is TransformField {
     value === 'depth' ||
     value === 'height'
   )
+}
+
+function isLoadSource(value: string | undefined): value is LoadSource {
+  return value === 'latest' || value === 'draft' || value === 'export'
 }
 
 function measurementSummary(model: SpatialModel): string {

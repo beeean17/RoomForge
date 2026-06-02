@@ -78,10 +78,37 @@ const t = (english: string, korean: string): string => (usesKorean ? korean : en
 
 app.innerHTML = `
 <section class="editor-shell">
+  <header class="editor-topbar" aria-label="${t('Editor top bar', '편집기 상단 바')}">
+    <div class="editor-project">
+      <strong>${t('Bedroom remodel', '침실 리모델링')}</strong>
+      <span>${t('meters coordinate space · autosave on', 'meters 좌표계 · 자동 저장 켜짐')}</span>
+    </div>
+    <div class="editor-top-actions">
+      <button id="top-undo" type="button" aria-label="${t('Undo geometry edit', '지오메트리 편집 되돌리기')}">${t('Undo', '되돌리기')}</button>
+      <button id="top-redo" type="button" aria-label="${t('Redo geometry edit', '지오메트리 편집 다시 실행')}">${t('Redo', '다시 실행')}</button>
+      <span class="state-pill confirmed" id="editor-save-state">${t('saved', '저장됨')}</span>
+      <button id="export-layout" type="button">${t('Export', '내보내기')}</button>
+    </div>
+  </header>
+  <div class="editor-stage">
+  <nav class="tool-rail" aria-label="${t('Editor tools', '편집 도구')}">
+    <button type="button" data-editor-tool="select" aria-pressed="true" title="${t('Select', '선택')}" aria-label="${t('Select', '선택')}">S</button>
+    <button type="button" data-editor-tool="move" aria-pressed="false" title="${t('Move', '이동')}" aria-label="${t('Move', '이동')}">M</button>
+    <button type="button" data-editor-tool="furniture" aria-pressed="false" title="${t('Add furniture', '가구 추가')}" aria-label="${t('Add furniture', '가구 추가')}">F</button>
+    <button type="button" data-editor-tool="measure" aria-pressed="false" title="${t('Measure', '측정')}" aria-label="${t('Measure', '측정')}">R</button>
+    <button type="button" data-editor-tool="layers" aria-pressed="false" title="${t('Layers', '레이어')}" aria-label="${t('Layers', '레이어')}">L</button>
+  </nav>
   <div class="viewport" aria-label="${t('RoomForge editor viewport', 'RoomForge 편집기 뷰포트')}">
     <div class="viewport-toolbar" aria-label="${t('Planning view controls', '배치 보기 컨트롤')}">
       <button id="view-2d" type="button" aria-label="${t('Show 2D planning view', '2D 배치 보기 표시')}" aria-pressed="true">2D</button>
       <button id="view-3d" type="button" aria-label="${t('Show 3D inspection view', '3D 검사 보기 표시')}" aria-pressed="false">3D</button>
+      <button id="view-split" type="button" aria-label="${t('Show split planning view', 'Split 배치 보기 표시')}" aria-pressed="false">Split</button>
+    </div>
+    <div class="canvas-toolbar" role="toolbar" aria-label="${t('Canvas tools', '캔버스 도구')}">
+      <button type="button" data-camera-action="fit">${t('Fit', '맞춤')}</button>
+      <button type="button" data-camera-action="reset">${t('Reset', '초기화')}</button>
+      <button type="button" data-canvas-toggle="snap" aria-pressed="true">${t('Snap', '스냅')}</button>
+      <button type="button" data-canvas-toggle="grid" aria-pressed="true">${t('Grid', '그리드')}</button>
     </div>
     <div class="viewport-layer-controls" aria-label="${t('Candidate layer visibility', '후보 레이어 표시')}">
       <button type="button" data-layer-toggle="furniture" aria-pressed="true">
@@ -338,6 +365,13 @@ app.innerHTML = `
       <p class="camera-status" id="camera-status">${t('Camera ready', '카메라 준비됨')}</p>
     </section>
   </aside>
+  </div>
+  <footer class="editor-statusbar" aria-label="${t('Editor status bar', '편집기 상태 바')}">
+    <span class="state-pill confirmed" id="layout-validity">${t('valid layout', '유효한 레이아웃')}</span>
+    <span id="layout-counts">${t('0 objects · 0 fixtures', '객체 0개 · 고정 요소 0개')}</span>
+    <span id="layout-area">15.1 m²</span>
+    <span class="editor-cursor-coords" id="cursor-coords">x 0.00 · y 0.00</span>
+  </footer>
 </section>
 `
 
@@ -384,6 +418,21 @@ const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-c
 const selectionState = document.querySelector<HTMLElement>('#selection-state')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
 const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
+const viewSplitButton = document.querySelector<HTMLButtonElement>('#view-split')
+const topUndoButton = document.querySelector<HTMLButtonElement>('#top-undo')
+const topRedoButton = document.querySelector<HTMLButtonElement>('#top-redo')
+const editorSaveState = document.querySelector<HTMLElement>('#editor-save-state')
+const exportLayoutButton = document.querySelector<HTMLButtonElement>('#export-layout')
+const layoutValidity = document.querySelector<HTMLElement>('#layout-validity')
+const layoutCounts = document.querySelector<HTMLElement>('#layout-counts')
+const layoutArea = document.querySelector<HTMLElement>('#layout-area')
+const cursorCoords = document.querySelector<HTMLElement>('#cursor-coords')
+const toolRailButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-editor-tool]'),
+)
+const canvasToggleButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-canvas-toggle]'),
+)
 const layerToggleButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-layer-toggle]'),
 )
@@ -444,6 +493,17 @@ if (
   !selectionState ||
   !view2dButton ||
   !view3dButton ||
+  !viewSplitButton ||
+  !topUndoButton ||
+  !topRedoButton ||
+  !editorSaveState ||
+  !exportLayoutButton ||
+  !layoutValidity ||
+  !layoutCounts ||
+  !layoutArea ||
+  !cursorCoords ||
+  toolRailButtons.length === 0 ||
+  canvasToggleButtons.length === 0 ||
   layerToggleButtons.length === 0 ||
   cameraActionButtons.length === 0 ||
   furnitureCategoryButtons.length === 0 ||
@@ -496,6 +556,17 @@ const furnitureCatalogStatusElement = furnitureCatalogStatus
 const selectionStateElement = selectionState
 const view2dButtonElement = view2dButton
 const view3dButtonElement = view3dButton
+const viewSplitButtonElement = viewSplitButton
+const topUndoButtonElement = topUndoButton
+const topRedoButtonElement = topRedoButton
+const editorSaveStateElement = editorSaveState
+const exportLayoutButtonElement = exportLayoutButton
+const layoutValidityElement = layoutValidity
+const layoutCountsElement = layoutCounts
+const layoutAreaElement = layoutArea
+const cursorCoordsElement = cursorCoords
+const toolRailButtonElements = toolRailButtons
+const canvasToggleButtonElements = canvasToggleButtons
 const layerToggleButtonElements = layerToggleButtons
 
 const renderer = new THREE.WebGLRenderer({ canvas: editorCanvas, antialias: true })
@@ -651,6 +722,11 @@ let cameraTransition: CameraTransition | null = null
 let furnitureIdCounter = 0
 let selectedReferenceEdgeIndex = 0
 let scaleNeedsRecalculation = false
+let splitViewActive = false
+const canvasToggleState: Record<'grid' | 'snap', boolean> = {
+  grid: true,
+  snap: true,
+}
 const geometryUndoStack: THREE.Vector3[][] = []
 const geometryRedoStack: THREE.Vector3[][] = []
 const layerVisibility: Record<CandidateLayer, boolean> = {
@@ -758,6 +834,39 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
 
 view2dButtonElement.addEventListener('click', () => setViewMode('2d'))
 view3dButtonElement.addEventListener('click', () => setViewMode('3d'))
+viewSplitButtonElement.addEventListener('click', () => setSplitViewMode())
+topUndoButtonElement.addEventListener('click', () => restoreGeometryHistory('undo'))
+topRedoButtonElement.addEventListener('click', () => restoreGeometryHistory('redo'))
+exportLayoutButtonElement.addEventListener('click', () => {
+  editorSaveStateElement.className = 'state-pill confirmed'
+  editorSaveStateElement.textContent = t('export ready', '내보내기 준비됨')
+  sceneStatusElement.textContent = t(
+    'Layout export is ready from the editor shell.',
+    '편집기 shell에서 레이아웃 내보내기를 준비했습니다.',
+  )
+})
+for (const button of toolRailButtonElements) {
+  button.addEventListener('click', () => {
+    for (const item of toolRailButtonElements) {
+      item.setAttribute('aria-pressed', String(item === button))
+      item.classList.toggle('is-active', item === button)
+    }
+    sceneStatusElement.textContent = `${button.textContent?.trim() ?? ''} ${t('tool selected', '도구 선택됨')}`
+  })
+}
+for (const button of canvasToggleButtonElements) {
+  button.addEventListener('click', () => {
+    const key = button.dataset.canvasToggle
+    if (key !== 'grid' && key !== 'snap') {
+      return
+    }
+    canvasToggleState[key] = !canvasToggleState[key]
+    syncCanvasToggleButtons()
+    sceneStatusElement.textContent = usesKorean
+      ? `${key === 'grid' ? '그리드' : '스냅'} ${canvasToggleState[key] ? '켜짐' : '꺼짐'}`
+      : `${key} ${canvasToggleState[key] ? 'on' : 'off'}`
+  })
+}
 for (const button of layerToggleButtonElements) {
   button.addEventListener('click', () => {
     const layer = button.dataset.layerToggle
@@ -1056,6 +1165,7 @@ editorCanvas.addEventListener('pointerdown', (event) => {
 })
 
 editorCanvas.addEventListener('pointermove', (event) => {
+  updateCursorCoordinates(event)
   if (activeCameraDrag) {
     const deltaX = event.clientX - activeCameraDrag.lastX
     const deltaY = event.clientY - activeCameraDrag.lastY
@@ -1252,6 +1362,7 @@ function recalculateCandidatePlacements(model: SpatialModel): SpatialModel {
 }
 
 syncLayerToggleButtons()
+syncCanvasToggleButtons()
 applySpatialModel()
 window.addEventListener('resize', resizeRenderer)
 resizeRenderer()
@@ -1289,6 +1400,7 @@ function applySpatialModel(): void {
 }
 
 function setViewMode(viewMode: ViewMode): void {
+  splitViewActive = false
   spatialModel = { ...spatialModel, viewMode }
   rebuildStructuralFixtures()
   rebuildFurniture()
@@ -1297,9 +1409,22 @@ function setViewMode(viewMode: ViewMode): void {
   emitSceneState('roomforge.view.changed')
 }
 
+function setSplitViewMode(): void {
+  splitViewActive = true
+  spatialModel = { ...spatialModel, viewMode: '3d' }
+  rebuildStructuralFixtures()
+  rebuildFurniture()
+  queueCameraSnapshot(cameraSnapshotFor('corner'), 'Split inspection view', true)
+  applyLayerVisibility()
+  updateSpatialStatus()
+  emitSceneState('roomforge.view.changed')
+}
+
 function applyViewModeCamera(): void {
   if (spatialModel.viewMode === '2d') {
     queueCameraSnapshot(cameraSnapshotFor('top'), '2D top view', false)
+  } else if (splitViewActive) {
+    queueCameraSnapshot(cameraSnapshotFor('corner'), 'Split inspection view', true)
   } else {
     queueCameraSnapshot(cameraSnapshotFor('corner'), '3D corner view', true)
   }
@@ -1385,6 +1510,8 @@ function restoreGeometryHistory(direction: 'undo' | 'redo'): void {
 function updateGeometryUndoRedoControls(): void {
   undoGeometryButtonElement.disabled = geometryUndoStack.length === 0
   redoGeometryButtonElement.disabled = geometryRedoStack.length === 0
+  topUndoButtonElement.disabled = geometryUndoStack.length === 0
+  topRedoButtonElement.disabled = geometryRedoStack.length === 0
 }
 
 function orthogonalizedOutlinePoints(): THREE.Vector3[] {
@@ -1523,6 +1650,19 @@ function syncCornerHandleStyles(): void {
   for (const [index, corner] of cornerMeshes.entries()) {
     corner.scale.setScalar(index === activeCornerIndex ? 1.55 : 1)
   }
+}
+
+function syncCanvasToggleButtons(): void {
+  for (const button of canvasToggleButtonElements) {
+    const key = button.dataset.canvasToggle
+    if (key !== 'grid' && key !== 'snap') {
+      continue
+    }
+    const active = canvasToggleState[key]
+    button.setAttribute('aria-pressed', String(active))
+    button.classList.toggle('is-active', active)
+  }
+  document.querySelector('.viewport')?.classList.toggle('is-grid-hidden', !canvasToggleState.grid)
 }
 
 function updateScaleCalibrationPanel(): void {
@@ -1699,6 +1839,36 @@ function floorPlanArtifactRows(): string {
     .join('')
 }
 
+function updateEditorStatusBar(): void {
+  const area = polygonAreaSquareMeters()
+  const warning = placementWarning(spatialModel)
+  editorSaveStateElement.className = spatialModel.hasUnsavedChanges
+    ? 'state-pill warning'
+    : 'state-pill confirmed'
+  editorSaveStateElement.textContent = spatialModel.hasUnsavedChanges
+    ? t('unsaved', '저장 안 됨')
+    : t('saved', '저장됨')
+  layoutValidityElement.className = warning ? 'state-pill warning' : 'state-pill confirmed'
+  layoutValidityElement.textContent = warning
+    ? t('warning layout', '경고 레이아웃')
+    : t('valid layout', '유효한 레이아웃')
+  layoutCountsElement.textContent = usesKorean
+    ? `가구 ${spatialModel.furniture.length}개 · 고정 요소 ${spatialModel.structuralFixtures.length}개`
+    : `${spatialModel.furniture.length} objects · ${spatialModel.structuralFixtures.length} fixtures`
+  layoutAreaElement.textContent = `${area.toFixed(1)} m²`
+}
+
+function updateCursorCoordinates(event: PointerEvent): void {
+  setPointerFromEvent(event)
+  raycaster.setFromCamera(pointer, camera)
+  const target = new THREE.Vector3()
+  if (!raycaster.ray.intersectPlane(dragPlane, target)) {
+    return
+  }
+  const metric = scenePointToMetric(target)
+  cursorCoordsElement.textContent = `x ${metric.x.toFixed(2)} · y ${metric.y.toFixed(2)}`
+}
+
 function rebuildWalls(): void {
   for (const child of [...wallGroup.children]) {
     wallGroup.remove(child)
@@ -1872,14 +2042,17 @@ function updateSpatialStatus(): void {
   placementStatusElement.hidden = warning === null
   placementStatusElement.textContent = warning ?? ''
   placementSummaryElement.textContent = warning ?? t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음')
-  view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d'))
-  view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d'))
-  view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
-  view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
+  view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d' && !splitViewActive))
+  view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d' && !splitViewActive))
+  viewSplitButtonElement.setAttribute('aria-pressed', String(splitViewActive))
+  view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d' && !splitViewActive)
+  view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d' && !splitViewActive)
+  viewSplitButtonElement.classList.toggle('is-active', splitViewActive)
   applyLayerVisibility()
   updateOutlineValidityPanel()
   updateScaleCalibrationPanel()
   updateFloorPlanReviewPanel()
+  updateEditorStatusBar()
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()

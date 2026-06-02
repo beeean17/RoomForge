@@ -6211,119 +6211,142 @@ class ReconstructionJobSection extends StatelessWidget {
         const SizedBox(height: 12),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.06),
+            color: _roomForgeCanvas,
             border: Border.all(color: statusColor.withValues(alpha: 0.35)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  job == null
-                      ? Icons.pending_actions_outlined
-                      : _reconstructionStatusIcon(job!.status),
-                  color: statusColor,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        job == null
-                            ? rf('Ready after setup', '설정 후 준비됨')
-                            : _localizedReconstructionStatusLabel(job!.status),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: _roomForgeInk,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        message ??
-                            rf(
-                              'Submit after source image and dimensions are saved.',
-                              '소스 이미지와 치수가 저장된 뒤 제출하세요.',
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      job == null
+                          ? Icons.pending_actions_outlined
+                          : _reconstructionStatusIcon(job!.status),
+                      color: statusColor,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            job == null
+                                ? rf('Ready after setup', '설정 후 준비됨')
+                                : _localizedReconstructionStatusLabel(
+                                    job!.status,
+                                  ),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: _roomForgeInk,
+                              fontWeight: FontWeight.w800,
                             ),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: _roomForgeMuted,
-                          height: 1.35,
-                        ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            message ??
+                                rf(
+                                  'Submit after source image and dimensions are saved.',
+                                  '소스 이미지와 치수가 저장된 뒤 제출하세요.',
+                                ),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: _roomForgeMuted,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 8),
+                    RoomForgeStatusPill(
+                      label: job == null
+                          ? rf('Not submitted', '미제출')
+                          : _localizedReconstructionStatusLabel(job!.status),
+                      icon: job == null
+                          ? Icons.schedule_outlined
+                          : _reconstructionStatusIcon(job!.status),
+                      color: statusColor,
+                      dense: true,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _ReconstructionTimeline(
+                  status: job?.status,
+                  statusColorFor: _reconstructionStatusColor,
+                  statusIconFor: _reconstructionStatusIcon,
+                ),
+                if (job != null) ...[
+                  const SizedBox(height: 14),
+                  _ReconstructionJobStrip(job: job!),
+                  const SizedBox(height: 10),
+                  Text(
+                    _reconstructionStatusGuidance(job!.status),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _roomForgeMuted,
+                      height: 1.35,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                RoomForgeStatusPill(
-                  label: job == null
-                      ? rf('Not submitted', '미제출')
-                      : _localizedReconstructionStatusLabel(job!.status),
-                  icon: job == null
-                      ? Icons.schedule_outlined
-                      : _reconstructionStatusIcon(job!.status),
-                  color: statusColor,
-                  dense: true,
-                ),
+                  if (hasProblem) ...[
+                    const SizedBox(height: 12),
+                    RoomForgeNotice(
+                      title: job!.status == 'review_required'
+                          ? rf('Needs review', '검토 필요')
+                          : rf('Reconstruction needs attention', '재구성 확인 필요'),
+                      message:
+                          job!.failureReasonMessage ??
+                          rf(
+                            'Check blur, lighting, hidden boundaries, occlusion, distortion, unsupported image, OpenCV failure, invalid geometry, or calibration failure.',
+                            '흐림, 조명, 숨겨진 경계, 가림, 왜곡, 지원되지 않는 이미지, OpenCV 실패, 잘못된 지오메트리, 보정 실패를 확인하세요.',
+                          ),
+                      severity: job!.status == 'review_required'
+                          ? NoticeSeverity.warning
+                          : NoticeSeverity.error,
+                      icon: job!.status == 'review_required'
+                          ? Icons.rate_review_outlined
+                          : Icons.error_outline,
+                    ),
+                  ],
+                ],
               ],
             ),
           ),
         ),
-        if (job != null) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              RoomForgeStatusPill(
-                icon: Icons.memory_outlined,
-                label: '${rf('Provider', '제공자')} ${job!.provider}',
-                color: _roomForgeMuted,
-              ),
-              RoomForgeStatusPill(
-                icon: Icons.update_outlined,
-                label:
-                    '${rf('Updated', '수정됨')} ${_compactDateLabel(job!.updatedAt)}',
-                color: _roomForgeMuted,
-              ),
-              if (job!.retryOfJobId != null)
-                RoomForgeStatusPill(
-                  icon: Icons.replay_outlined,
-                  label: '${rf('Retry of', '재시도 원본')} ${job!.retryOfJobId}',
-                  color: _roomForgeWarning,
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            _reconstructionStatusGuidance(job!.status),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: _roomForgeMuted,
-              height: 1.35,
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            RoomForgeStatusPill(
+              label: 'created',
+              color: _roomForgeAdmin,
+              dense: true,
             ),
-          ),
-          if (hasProblem) ...[
-            const SizedBox(height: 12),
-            RoomForgeNotice(
-              title: job!.status == 'review_required'
-                  ? rf('Needs review', '검토 필요')
-                  : rf('Reconstruction needs attention', '재구성 확인 필요'),
-              message:
-                  job!.failureReasonMessage ??
-                  rf(
-                    'Check blur, lighting, hidden boundaries, occlusion, distortion, unsupported image, OpenCV failure, invalid geometry, or calibration failure.',
-                    '흐림, 조명, 숨겨진 경계, 가림, 왜곡, 지원되지 않는 이미지, OpenCV 실패, 잘못된 지오메트리, 보정 실패를 확인하세요.',
-                  ),
-              severity: job!.status == 'review_required'
-                  ? NoticeSeverity.warning
-                  : NoticeSeverity.error,
-              icon: job!.status == 'review_required'
-                  ? Icons.rate_review_outlined
-                  : Icons.error_outline,
+            RoomForgeStatusPill(
+              label: 'processing',
+              color: _roomForgeSave,
+              dense: true,
+            ),
+            RoomForgeStatusPill(
+              label: rf('Needs review', '검토 필요'),
+              color: _roomForgeWarning,
+              dense: true,
+            ),
+            RoomForgeStatusPill(
+              label: 'succeeded',
+              color: _roomForgeSuccess,
+              dense: true,
+            ),
+            RoomForgeStatusPill(
+              label: 'failed',
+              color: _roomForgeError,
+              dense: true,
             ),
           ],
-        ],
+        ),
         const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: isSubmitting ? null : onSubmit,
@@ -6419,6 +6442,270 @@ class ReconstructionJobSection extends StatelessWidget {
         '편집기를 열기 전에 최신 재구성 상태를 확인하세요.',
       ),
     };
+  }
+}
+
+class _ReconstructionTimeline extends StatelessWidget {
+  const _ReconstructionTimeline({
+    required this.status,
+    required this.statusColorFor,
+    required this.statusIconFor,
+  });
+
+  final String? status;
+  final Color Function(String status) statusColorFor;
+  final IconData Function(String status) statusIconFor;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = status ?? 'created';
+    final finalStatus = switch (current) {
+      'succeeded' => 'succeeded',
+      'failed' => 'failed',
+      'timeout' => 'timeout',
+      'cancelled' => 'cancelled',
+      _ => 'review_required',
+    };
+    final steps = [
+      _ReconstructionStepSpec(
+        status: 'created',
+        title: 'created',
+        description: rf('Job record created', '작업 레코드 생성'),
+      ),
+      _ReconstructionStepSpec(
+        status: 'uploading',
+        title: 'uploading',
+        description: rf('Source image stored', '소스 이미지 저장'),
+      ),
+      _ReconstructionStepSpec(
+        status: current == 'retrying' ? 'retrying' : 'processing',
+        title: current == 'retrying' ? 'retrying' : 'processing',
+        description: current == 'retrying'
+            ? rf('Linked retry preparing', '연결된 재시도 준비')
+            : rf('OpenCV worker extracting candidates', 'OpenCV 후보 추출 중'),
+      ),
+      _ReconstructionStepSpec(
+        status: finalStatus,
+        title: finalStatus == 'review_required'
+            ? rf('Needs review', '검토 필요')
+            : _localizedReconstructionStatusLabel(finalStatus),
+        description: finalStatus == 'review_required'
+            ? rf(
+                'Manual review opens when candidates are ready',
+                '후보가 준비되면 수동 검토로 이동',
+              )
+            : rf('Terminal job state', '최종 작업 상태'),
+      ),
+    ];
+    final activeIndex = _activeIndexFor(current);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < steps.length; index++) ...[
+          _ReconstructionTimelineRow(
+            index: index + 1,
+            spec: steps[index],
+            done: index < activeIndex || current == 'succeeded',
+            active: index == activeIndex,
+            color: statusColorFor(steps[index].status),
+            icon: statusIconFor(steps[index].status),
+          ),
+          if (index != steps.length - 1)
+            const Padding(
+              padding: EdgeInsets.only(left: 14),
+              child: SizedBox(
+                width: 30,
+                height: 12,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: 2,
+                    height: 12,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: _roomForgeBorder),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  static int _activeIndexFor(String status) {
+    return switch (status) {
+      'created' => 0,
+      'uploading' => 1,
+      'processing' || 'retrying' => 2,
+      _ => 3,
+    };
+  }
+}
+
+class _ReconstructionStepSpec {
+  const _ReconstructionStepSpec({
+    required this.status,
+    required this.title,
+    required this.description,
+  });
+
+  final String status;
+  final String title;
+  final String description;
+}
+
+class _ReconstructionTimelineRow extends StatelessWidget {
+  const _ReconstructionTimelineRow({
+    required this.index,
+    required this.spec,
+    required this.done,
+    required this.active,
+    required this.color,
+    required this.icon,
+  });
+
+  final int index;
+  final _ReconstructionStepSpec spec;
+  final bool done;
+  final bool active;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final nodeColor = done || active ? color : _roomForgeSubtle;
+
+    return Semantics(
+      label:
+          '${spec.title}. ${spec.description}. ${active
+              ? rf('Current step', '현재 단계')
+              : done
+              ? rf('Done', '완료')
+              : rf('Pending', '대기')}.',
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: nodeColor.withValues(alpha: .14),
+              border: Border.all(color: nodeColor.withValues(alpha: .48)),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: done
+                ? Icon(Icons.check, color: nodeColor, size: 16)
+                : active
+                ? Icon(icon, color: nodeColor, size: 16)
+                : Text(
+                    '$index',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: nodeColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    spec.title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: _roomForgeInk,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    spec.description,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _roomForgeMuted,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          RoomForgeStatusPill(
+            label: active
+                ? rf('active', '진행 중')
+                : done
+                ? rf('done', '완료')
+                : rf('pending', '대기'),
+            color: nodeColor,
+            dense: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReconstructionJobStrip extends StatelessWidget {
+  const _ReconstructionJobStrip({required this.job});
+
+  final ReconstructionJob job;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgePanel,
+        border: Border.all(color: _roomForgeBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            RoomForgeStatusPill(
+              icon: Icons.tag_outlined,
+              label: job.id,
+              color: _roomForgeAdmin,
+              dense: true,
+            ),
+            RoomForgeStatusPill(
+              icon: Icons.memory_outlined,
+              label: '${rf('Provider', '제공자')} ${job.provider}',
+              color: _roomForgeAdmin,
+              dense: true,
+            ),
+            RoomForgeStatusPill(
+              icon: Icons.image_outlined,
+              label: '${rf('Source image', '소스 이미지')} ${job.sourceImageId}',
+              color: _roomForgeAdmin,
+              dense: true,
+            ),
+            RoomForgeStatusPill(
+              icon: Icons.update_outlined,
+              label:
+                  '${rf('Updated', '수정됨')} ${_compactDateLabel(job.updatedAt)}',
+              color: _roomForgeAdmin,
+              dense: true,
+            ),
+            if (job.retryOfJobId != null)
+              RoomForgeStatusPill(
+                icon: Icons.replay_outlined,
+                label: '${rf('Retry of', '재시도 원본')} ${job.retryOfJobId}',
+                color: _roomForgeWarning,
+                dense: true,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

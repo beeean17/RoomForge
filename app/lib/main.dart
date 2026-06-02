@@ -42,12 +42,15 @@ const _roomForgeBorder = Color(0x244B6277);
 const _roomForgeBorderStrong = Color(0x4D7992A8);
 const _roomForgePaper = Color(0xFF050505);
 const _roomForgePanel = Color(0xFF0B0D0F);
+const _roomForgeCanvas = Color(0xFF101419);
 const _roomForgePrimary = Color(0xFF8FB4FF);
 const _roomForgeSuccess = Color(0xFF8BC3A7);
 const _roomForgeSelected = Color(0xFFD8B46A);
 const _roomForgeWarning = Color(0xFFD49A5C);
 const _roomForgeError = Color(0xFFE08B82);
+const _roomForgeMeasure = Color(0xFFB9A7E8);
 const _roomForgeSave = Color(0xFF80C7C2);
+const _roomForgeAdmin = Color(0xFF9BA7B4);
 const _roomForgeLightSurface = Color(0xFFEAF0FF);
 const _roomForgeLocaleOverride = String.fromEnvironment('ROOMFORGE_LOCALE');
 
@@ -874,6 +877,29 @@ class _RoomForgeWordmark extends StatelessWidget {
   }
 }
 
+class _RoomForgeTopbarBrand extends StatelessWidget {
+  const _RoomForgeTopbarBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _RoomForgeBrandMark(size: 30),
+        const SizedBox(width: 10),
+        Text(
+          'RoomForge',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: _roomForgeInk,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RoomForgeBrandMark extends StatelessWidget {
   const _RoomForgeBrandMark({this.size = 30});
 
@@ -1297,7 +1323,11 @@ class ProjectWorkspaceScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RoomForge'),
+        title: const _RoomForgeTopbarBrand(),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: _roomForgeBorder),
+        ),
         actions: [
           AdminRouteGuardButton(
             session: session,
@@ -1311,9 +1341,11 @@ class ProjectWorkspaceScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: ProjectWorkspaceBody(
-        displayName: displayName,
-        projectApi: projectApi,
+      body: _RoomForgeAppBackground(
+        child: ProjectWorkspaceBody(
+          displayName: displayName,
+          projectApi: projectApi,
+        ),
       ),
     );
   }
@@ -3507,13 +3539,13 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1180),
+            constraints: const BoxConstraints(maxWidth: 1440),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 820;
+                final compact = constraints.maxWidth < 980;
                 if (compact) {
                   return SingleChildScrollView(
                     child: Column(
@@ -3533,7 +3565,7 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     header,
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Expanded(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3582,17 +3614,35 @@ class _WorkspaceHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      RoomForgeStatusPill(
+                        label: rf('My projects', '내 프로젝트'),
+                        color: _roomForgeAdmin,
+                        dense: true,
+                      ),
+                      RoomForgeStatusPill(
+                        label: rf('Cloud workspace', '클라우드 작업공간'),
+                        color: _roomForgeSave,
+                        dense: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     rf('Project workspace', '프로젝트 작업공간'),
-                    style: theme.textTheme.headlineSmall?.copyWith(
+                    style: theme.textTheme.displaySmall?.copyWith(
                       color: _roomForgeInk,
                       fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
                     '${rf('Signed in as', '로그인 계정')}: $displayName',
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: theme.textTheme.titleSmall?.copyWith(
                       color: _roomForgeMuted,
                     ),
                   ),
@@ -3646,6 +3696,8 @@ class _ProjectListPanel extends StatelessWidget {
 
     return RoomForgePanel(
       padding: EdgeInsets.zero,
+      backgroundColor: _roomForgePanel,
+      borderColor: _roomForgeBorder,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -3654,8 +3706,9 @@ class _ProjectListPanel extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  rf('Rooms', '방 프로젝트'),
+                  rf('Projects', '프로젝트'),
                   style: theme.textTheme.titleMedium?.copyWith(
+                    color: _roomForgeInk,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -3664,6 +3717,48 @@ class _ProjectListPanel extends StatelessWidget {
                   label: rf('Cloud saved', '클라우드 저장'),
                   icon: Icons.cloud_done_outlined,
                   dense: true,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    hintText: rf('Search by name or state', '이름·상태로 검색'),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    RoomForgeStatusPill(
+                      label: rf('All', '전체'),
+                      color: _roomForgePrimary,
+                      dense: true,
+                    ),
+                    RoomForgeStatusPill(
+                      label: rf('Processing', '처리 중'),
+                      color: _roomForgeSave,
+                      dense: true,
+                    ),
+                    RoomForgeStatusPill(
+                      label: rf('Needs review', '검토 필요'),
+                      color: _roomForgeWarning,
+                      dense: true,
+                    ),
+                    RoomForgeStatusPill(
+                      label: rf('Complete', '완료'),
+                      color: _roomForgeSuccess,
+                      dense: true,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -3761,7 +3856,7 @@ class _ProjectListTile extends StatelessWidget {
 
     return Material(
       color: selected
-          ? _roomForgePrimary.withValues(alpha: 0.08)
+          ? _roomForgePrimary.withValues(alpha: 0.12)
           : _roomForgePanel,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
@@ -3776,11 +3871,8 @@ class _ProjectListTile extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              Icon(
-                Icons.meeting_room_outlined,
-                color: selected ? _roomForgePrimary : _roomForgeMuted,
-              ),
-              const SizedBox(width: 12),
+              _ProjectThumbnail(selected: selected),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -3790,6 +3882,7 @@ class _ProjectListTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
+                        color: _roomForgeInk,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -3823,6 +3916,125 @@ class _ProjectListTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ProjectThumbnail extends StatelessWidget {
+  const _ProjectThumbnail({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = selected ? _roomForgePrimary : _roomForgeAdmin;
+    return Container(
+      width: 92,
+      height: 70,
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: _roomForgeBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Stack(
+        children: [
+          const Positioned.fill(child: _RoomForgeGridBackdrop()),
+          Positioned(
+            left: 14,
+            right: 14,
+            top: 14,
+            bottom: 14,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _roomForgeLightSurface.withValues(alpha: .28),
+                border: Border.all(color: _roomForgeInk, width: 1.5),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 28,
+            top: 24,
+            width: 28,
+            height: 24,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: .18),
+                border: Border.all(color: accent, width: 1.5),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectDetailPreview extends StatelessWidget {
+  const _ProjectDetailPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: _roomForgeCanvas,
+        border: Border.all(color: _roomForgeBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Stack(
+        children: [
+          const Positioned.fill(child: _RoomForgeGridBackdrop()),
+          Positioned(
+            left: 36,
+            right: 36,
+            top: 48,
+            bottom: 32,
+            child: Transform(
+              alignment: Alignment.bottomCenter,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, .0012)
+                ..rotateX(.78),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _roomForgeLightSurface.withValues(alpha: .30),
+                  border: Border.all(color: _roomForgeInk, width: 2.5),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 116,
+            top: 82,
+            width: 86,
+            height: 54,
+            child: Transform(
+              alignment: Alignment.bottomCenter,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, .0012)
+                ..rotateX(.78),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _roomForgePrimary.withValues(alpha: .18),
+                  border: Border.all(color: _roomForgePrimary, width: 2),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            top: 14,
+            child: RoomForgeStatusPill(
+              label: rf('meters', 'meters'),
+              color: _roomForgeMeasure,
+              dense: true,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4673,6 +4885,8 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
 
     return RoomForgePanel(
       padding: EdgeInsets.zero,
+      backgroundColor: _roomForgePanel,
+      borderColor: _roomForgeBorder,
       child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(18),
@@ -4714,6 +4928,8 @@ class _ProjectDetailPanelState extends State<ProjectDetailPanel> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              const _ProjectDetailPreview(),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 10,

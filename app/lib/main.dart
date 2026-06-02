@@ -1163,33 +1163,138 @@ class RoomForgeEmptyState extends StatelessWidget {
     final theme = Theme.of(context);
 
     return RoomForgePanel(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      child: Semantics(
+        container: true,
+        label: '$title. $message',
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RoomForgeStatusPill(
+                  label: rf('empty', 'empty'),
+                  color: _roomForgeAdmin,
+                  icon: Icons.info_outline,
+                  dense: true,
+                ),
+                const SizedBox(height: 12),
+                Icon(icon, size: 36, color: _roomForgeMuted),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: _roomForgeMuted,
+                  ),
+                ),
+                if (action != null) ...[const SizedBox(height: 16), action!],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RoomForgeLoadingState extends StatelessWidget {
+  const RoomForgeLoadingState({
+    required this.title,
+    required this.message,
+    this.panel = true,
+    super.key,
+  });
+
+  final String title;
+  final String message;
+  final bool panel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final content = Semantics(
+      container: true,
+      liveRegion: true,
+      label: '$title. $message',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Icon(icon, size: 36, color: _roomForgeMuted),
-              const SizedBox(height: 12),
+              RoomForgeStatusPill(
+                label: rf('loading', 'loading'),
+                color: _roomForgeSave,
+                icon: Icons.hourglass_top_outlined,
+                dense: true,
+              ),
+              const Spacer(),
               Text(
-                title,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleMedium?.copyWith(
+                rf('please wait', '잠시만 기다려 주세요'),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: _roomForgeMuted,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: _roomForgeMuted,
-                ),
-              ),
-              if (action != null) ...[const SizedBox(height: 16), action!],
             ],
           ),
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: _roomForgeInk,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            message,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: _roomForgeMuted,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const _RoomForgeSkeletonLine(widthFactor: .82),
+          const SizedBox(height: 8),
+          const _RoomForgeSkeletonLine(widthFactor: .56),
+        ],
+      ),
+    );
+
+    if (!panel) {
+      return content;
+    }
+    return RoomForgePanel(child: content);
+  }
+}
+
+class _RoomForgeSkeletonLine extends StatelessWidget {
+  const _RoomForgeSkeletonLine({required this.widthFactor});
+
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      alignment: Alignment.centerLeft,
+      widthFactor: widthFactor,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _roomForgeBorderStrong.withValues(alpha: 0.74),
+          borderRadius: BorderRadius.circular(99),
         ),
+        child: const SizedBox(height: 12),
       ),
     );
   }
@@ -2166,20 +2271,12 @@ class _FirebaseAdminDiagnosticsScreenState
                     stream: _jobsStream,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return RoomForgePanel(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const LinearProgressIndicator(),
-                              const SizedBox(height: 12),
-                              Text(
-                                rf(
-                                  FirebaseAdminDiagnosticsUiText
-                                      .protectedLoadingMessage,
-                                  '보호된 작업 진단 정보를 불러오는 중...',
-                                ),
-                              ),
-                            ],
+                        return RoomForgeLoadingState(
+                          title: rf('Loading protected jobs', '보호된 작업을 불러오는 중'),
+                          message: rf(
+                            FirebaseAdminDiagnosticsUiText
+                                .protectedLoadingMessage,
+                            '보호된 작업 진단 정보를 불러오는 중...',
                           ),
                         );
                       }
@@ -3796,7 +3893,21 @@ class _FirebaseAdminTransitions extends StatelessWidget {
       stream: stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LinearProgressIndicator();
+          return _FirebaseAdminSection(
+            title: rf('Transition timeline', '상태 전환 타임라인'),
+            semanticsLabel:
+                FirebaseAdminDiagnosticsUiText.transitionHistorySemanticsLabel,
+            children: [
+              RoomForgeLoadingState(
+                title: rf('Loading transitions', '상태 전환을 불러오는 중'),
+                message: rf(
+                  'Status changes, actor, and reason details will appear here.',
+                  '상태 변화, actor, 사유 정보가 여기에 표시됩니다.',
+                ),
+                panel: false,
+              ),
+            ],
+          );
         }
         if (snapshot.hasError) {
           return Text(firebaseAdminSafeErrorMessage(snapshot.error!));
@@ -3919,7 +4030,21 @@ class _FirebaseAdminResults extends StatelessWidget {
       stream: stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LinearProgressIndicator();
+          return _FirebaseAdminSection(
+            title: rf('OpenCV summary', 'OpenCV 요약'),
+            semanticsLabel:
+                FirebaseAdminDiagnosticsUiText.opencvResultsSemanticsLabel,
+            children: [
+              RoomForgeLoadingState(
+                title: rf('Loading OpenCV results', 'OpenCV 결과를 불러오는 중'),
+                message: rf(
+                  'Candidate count, runtime, confidence, and failure reason will appear here.',
+                  '후보 수, 실행 시간, 신뢰도, 실패 사유가 여기에 표시됩니다.',
+                ),
+                panel: false,
+              ),
+            ],
+          );
         }
         if (snapshot.hasError) {
           return Text(firebaseAdminSafeErrorMessage(snapshot.error!));
@@ -4104,7 +4229,21 @@ class _FirebaseAdminLayouts extends StatelessWidget {
       stream: stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LinearProgressIndicator();
+          return _FirebaseAdminSection(
+            title: rf('Layout references', '레이아웃 참조'),
+            semanticsLabel:
+                FirebaseAdminDiagnosticsUiText.layoutReferencesSemanticsLabel,
+            children: [
+              RoomForgeLoadingState(
+                title: rf('Loading layout references', '레이아웃 참조를 불러오는 중'),
+                message: rf(
+                  'Saved layout references for this reconstruction job will appear here.',
+                  '이 재구성 작업의 저장된 레이아웃 참조가 여기에 표시됩니다.',
+                ),
+                panel: false,
+              ),
+            ],
+          );
         }
         if (snapshot.hasError) {
           return Text(firebaseAdminSafeErrorMessage(snapshot.error!));
@@ -5731,13 +5870,13 @@ class _ProjectListLoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const LinearProgressIndicator(),
-          const SizedBox(height: 16),
-          Text(rf('Loading saved room projects...', '저장된 방 프로젝트를 불러오는 중...')),
-        ],
+      child: RoomForgeLoadingState(
+        title: rf('Loading saved room projects', '저장된 방 프로젝트를 불러오는 중'),
+        message: rf(
+          'Saved projects, latest room status, and cloud metadata will appear here.',
+          '저장된 프로젝트, 최신 방 상태, 클라우드 메타데이터가 여기에 표시됩니다.',
+        ),
+        panel: false,
       ),
     );
   }

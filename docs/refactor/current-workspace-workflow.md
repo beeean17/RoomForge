@@ -1,22 +1,34 @@
-# Current Workspace Refactor Workflow
+# Current Workspace Design Workflow
 
 This workflow governs the current `codex/refactoring-architecture` workspace
 while RoomForge moves from the old Flutter-web screen catalog toward the
 route-driven React web / native mobile architecture.
 
-It is intentionally narrower than the older story queue. The current work is a
-refactor-planning and design-surface migration workflow, not feature
-implementation.
+It is intentionally narrower than the older story queue. The current work is
+screen design for the route table, not product feature implementation and not
+route-table redesign.
 
 ## Operating Rule
 
+Default rule for mockups:
+
 ```text
-1 route group = 1 goal = 1 validation loop = 1 local commit
+1 route page = 1 goal = 1 validation loop = 1 local commit
+```
+
+Shared foundation work, such as route mockup CSS or the design index, may use:
+
+```text
+1 shared design group = 1 goal = 1 validation loop = 1 local commit
 ```
 
 Do not push or create a PR without explicit user approval. Keep `private`
 submodule changes out of root commits unless the user explicitly asks to update
 that submodule pointer.
+
+Do not edit `docs/refactor/routing-page-definition.md` during page design. If a
+page appears missing or a route seems wrong, stop and ask before changing the
+route table.
 
 ## Source Of Truth Order
 
@@ -32,6 +44,10 @@ Use this order when a document or mockup disagrees:
 Older documents that say Flutter owns desktop routing, admin UI, or all product
 screens are historical for this refactor. Preserve their useful state lists, but
 do not let them override the route ownership table.
+
+During the current design pass, `routing-page-definition.md` is read-only route
+inventory. `current-workspace-workflow.md` may be edited to clarify process,
+file layout, validation, or WIP handling.
 
 ## Current Worktree Policy
 
@@ -94,7 +110,51 @@ docs/design/
 screen-catalog locations during this refactor. They should not be the final
 source of truth for route pages.
 
+Each route page gets one canonical HTML mockup under `docs/design/routes/`.
+Responsive desktop/mobile states should live in that route file instead of
+creating parallel `desktop` and `mobile` page trees. Use explicit in-page states
+for mobile-web locked/handoff behavior when the route is available on desktop
+but restricted on mobile.
+
+## Page Design Loop
+
+Use this loop for every route page:
+
+1. Select exactly one route from `routing-page-definition.md`.
+2. Write a short goal for that route page:
+   - canonical URL;
+   - page purpose;
+   - required states;
+   - desktop behavior;
+   - mobile-web behavior;
+   - native app handoff, if any.
+3. Create or update one file under `docs/design/routes/`.
+4. Use shared `tokens.css`, `base.css`, and `motion.js` first.
+5. Add route-specific CSS only when the shared system cannot express the page.
+6. Verify links:
+   - no final `/app/**`;
+   - no final `/m/app/**`;
+   - no final `/m/projects/**`;
+   - product links go to `/projects/**`;
+   - admin links go to `/admin/**`;
+   - legacy links are clearly labeled migration-only.
+7. Validate and commit only that page, unless the goal is a shared system group.
+
+The page file should include at least these design states when relevant:
+
+| State type | Examples |
+|---|---|
+| Empty | No projects, no uploads, no jobs. |
+| Loading | Auth, project fetch, job status, admin lookup. |
+| Ready | Normal usable route state. |
+| Error | Permission, network, missing data, sync failure. |
+| Mobile limited | Locked editor/admin/upload, desktop or native-app handoff. |
+| Accessibility | Focus, keyboard target, non-color-only status. |
+
 ## Route Groups
+
+Route groups define sequence only. Actual mockup commits should normally be
+page-level.
 
 ### Group 0 - Workspace Audit
 
@@ -118,7 +178,7 @@ rg --files docs/design docs/refactor
 Commit:
 
 ```text
-docs(refactor): define current workspace workflow
+design(routes): audit current design workspace
 ```
 
 ### Group 1 - Design System Base
@@ -173,7 +233,7 @@ Validation:
 Commit:
 
 ```text
-design(routes): define public and auth pages
+design(routes): define <page-name>
 ```
 
 ### Group 3 - Project Entry Routes
@@ -199,7 +259,7 @@ Validation:
 Commit:
 
 ```text
-design(routes): define project entry pages
+design(routes): define <page-name>
 ```
 
 ### Group 4 - Core Project Workflow Routes
@@ -227,7 +287,7 @@ Validation:
 Commit:
 
 ```text
-design(routes): define core project workflow pages
+design(routes): define <page-name>
 ```
 
 ### Group 5 - CV And Editor Routes
@@ -255,7 +315,7 @@ Validation:
 Commit:
 
 ```text
-design(routes): define cv and editor pages
+design(routes): define <page-name>
 ```
 
 ### Group 6 - Layout And Recovery Routes
@@ -281,7 +341,7 @@ Validation:
 Commit:
 
 ```text
-design(routes): define layout and recovery pages
+design(routes): define <page-name>
 ```
 
 ### Group 7 - Admin Routes
@@ -316,12 +376,12 @@ Validation:
 Commit:
 
 ```text
-design(routes): define admin pages
+design(routes): define <page-name>
 ```
 
 ## Validation Loop
 
-For each group:
+For each route page or shared design group:
 
 1. Run static checks:
 
@@ -347,7 +407,7 @@ For each group:
    - `/admin/**` is separate;
    - `/legacy/**` is migration-only.
 
-4. Commit only the current group.
+4. Commit only the current route page or shared design group.
 
 ## Stop Conditions
 

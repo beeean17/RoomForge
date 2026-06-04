@@ -138,6 +138,140 @@ String _localizedProfileSyncExceptionMessage(
   };
 }
 
+enum _RoomForgeRouteShell { desktopApp, mobileApp, admin }
+
+class _RoomForgeRouteSpec {
+  const _RoomForgeRouteSpec._({
+    required this.location,
+    required this.shell,
+    required this.section,
+    this.projectId,
+    this.childRoute,
+  });
+
+  static const appHome = _RoomForgeRouteSpec._(
+    location: '/app',
+    shell: _RoomForgeRouteShell.desktopApp,
+    section: 'home',
+  );
+
+  final String location;
+  final _RoomForgeRouteShell shell;
+  final String section;
+  final String? projectId;
+  final String? childRoute;
+
+  bool get isAdmin => shell == _RoomForgeRouteShell.admin;
+  bool get isMobile => shell == _RoomForgeRouteShell.mobileApp;
+
+  static _RoomForgeRouteSpec fromLocation(String? location) {
+    final normalized = _normalizeLocation(location);
+    final segments = normalized
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+
+    if (segments.isEmpty) {
+      return appHome;
+    }
+
+    if (segments.first == 'admin') {
+      return _RoomForgeRouteSpec._(
+        location: normalized,
+        shell: _RoomForgeRouteShell.admin,
+        section: segments.length > 1 ? segments[1] : 'dashboard',
+        childRoute: segments.length > 2 ? segments.sublist(2).join('/') : null,
+      );
+    }
+
+    if (segments.length >= 2 && segments[0] == 'm' && segments[1] == 'app') {
+      return _productRoute(
+        normalized: normalized,
+        shell: _RoomForgeRouteShell.mobileApp,
+        productSegments: segments.sublist(2),
+      );
+    }
+
+    if (segments.first == 'app') {
+      return _productRoute(
+        normalized: normalized,
+        shell: _RoomForgeRouteShell.desktopApp,
+        productSegments: segments.sublist(1),
+      );
+    }
+
+    return appHome;
+  }
+
+  static _RoomForgeRouteSpec _productRoute({
+    required String normalized,
+    required _RoomForgeRouteShell shell,
+    required List<String> productSegments,
+  }) {
+    if (productSegments.isEmpty) {
+      return _RoomForgeRouteSpec._(
+        location: normalized,
+        shell: shell,
+        section: 'home',
+      );
+    }
+
+    if (productSegments.first == 'projects') {
+      return _RoomForgeRouteSpec._(
+        location: normalized,
+        shell: shell,
+        section: 'projects',
+      );
+    }
+
+    if (productSegments.length >= 2 && productSegments.first == 'workspaces') {
+      return _RoomForgeRouteSpec._(
+        location: normalized,
+        shell: shell,
+        section: productSegments.length > 2 ? productSegments[2] : 'workspace',
+        projectId: productSegments[1],
+        childRoute: productSegments.length > 2
+            ? productSegments.sublist(2).join('/')
+            : null,
+      );
+    }
+
+    return _RoomForgeRouteSpec._(
+      location: normalized,
+      shell: shell,
+      section: productSegments.first,
+      childRoute: productSegments.length > 1
+          ? productSegments.sublist(1).join('/')
+          : null,
+    );
+  }
+
+  static String _normalizeLocation(String? location) {
+    final currentPath = html.window.location.pathname ?? '/app';
+    final raw = (location == null || location.trim().isEmpty)
+        ? currentPath
+        : location.trim();
+    final uri = Uri.tryParse(raw);
+    var path = uri?.path.isNotEmpty == true ? uri!.path : raw;
+    if (!path.startsWith('/')) {
+      path = '/$path';
+    }
+    while (path.length > 1 && path.endsWith('/')) {
+      path = path.substring(0, path.length - 1);
+    }
+    return path;
+  }
+}
+
+String _initialRoomForgeRouteName() {
+  final path = html.window.location.pathname;
+  final normalized = _RoomForgeRouteSpec._normalizeLocation(path);
+  if (normalized == '/' || normalized == '/m') {
+    return '/app';
+  }
+  return normalized;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -197,6 +331,30 @@ class RoomForgeApp extends StatelessWidget {
   final FirebaseUserRepository userRepository;
   final BackendMode backendMode;
   final String? authSetupMessage;
+
+  Route<void> _buildRoute(RouteSettings settings) {
+    final routeSpec = _RoomForgeRouteSpec.fromLocation(settings.name);
+    return MaterialPageRoute<void>(
+      settings: RouteSettings(name: routeSpec.location),
+      builder: (context) => AuthGate(
+        routeLocation: routeSpec.location,
+        authRepository: authRepository,
+        adminRepository: adminRepository,
+        floorPlanRepository: floorPlanRepository,
+        geometryRepository: geometryRepository,
+        layoutRepository: layoutRepository,
+        projectRepository: projectRepository,
+        reconstructionRepository: reconstructionRepository,
+        roomDimensionsRepository: roomDimensionsRepository,
+        sceneUnderstandingRepository: sceneUnderstandingRepository,
+        sourceImageRepository: sourceImageRepository,
+        sourceImageUploader: sourceImageUploader,
+        userRepository: userRepository,
+        backendMode: backendMode,
+        authSetupMessage: authSetupMessage,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -280,21 +438,16 @@ class RoomForgeApp extends StatelessWidget {
           ),
         ),
       ),
-      home: AuthGate(
-        authRepository: authRepository,
-        adminRepository: adminRepository,
-        floorPlanRepository: floorPlanRepository,
-        geometryRepository: geometryRepository,
-        layoutRepository: layoutRepository,
-        projectRepository: projectRepository,
-        reconstructionRepository: reconstructionRepository,
-        roomDimensionsRepository: roomDimensionsRepository,
-        sceneUnderstandingRepository: sceneUnderstandingRepository,
-        sourceImageRepository: sourceImageRepository,
-        sourceImageUploader: sourceImageUploader,
-        userRepository: userRepository,
-        backendMode: backendMode,
-        authSetupMessage: authSetupMessage,
+      initialRoute: _initialRoomForgeRouteName(),
+      onGenerateInitialRoutes: (initialRouteName) => [
+        _buildRoute(RouteSettings(name: initialRouteName)),
+      ],
+      onGenerateRoute: _buildRoute,
+      onUnknownRoute: (settings) => _buildRoute(
+        RouteSettings(
+          name: _RoomForgeRouteSpec.appHome.location,
+          arguments: settings.arguments,
+        ),
       ),
     );
   }
@@ -302,6 +455,7 @@ class RoomForgeApp extends StatelessWidget {
 
 class AuthGate extends StatelessWidget {
   const AuthGate({
+    this.routeLocation = '/app',
     required this.authRepository,
     required this.adminRepository,
     required this.floorPlanRepository,
@@ -319,6 +473,7 @@ class AuthGate extends StatelessWidget {
     super.key,
   });
 
+  final String routeLocation;
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
   final FirebaseFloorPlanRepository floorPlanRepository;
@@ -336,6 +491,7 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final routeSpec = _RoomForgeRouteSpec.fromLocation(routeLocation);
     return StreamBuilder<AuthSession?>(
       stream: authRepository.authStateChanges(),
       builder: (context, snapshot) {
@@ -347,33 +503,46 @@ class AuthGate extends StatelessWidget {
           );
         }
 
+        final legacyAdminApi = RoomForgeBackendBindings.legacyAdminApi(
+          backendMode: backendMode,
+          authRepository: authRepository,
+        );
+        final projectApi = RoomForgeBackendBindings.projectApi(
+          backendMode: backendMode,
+          authRepository: authRepository,
+          session: session,
+          floorPlanRepository: floorPlanRepository,
+          geometryRepository: geometryRepository,
+          layoutRepository: layoutRepository,
+          projectRepository: projectRepository,
+          reconstructionRepository: reconstructionRepository,
+          roomDimensionsRepository: roomDimensionsRepository,
+          sceneUnderstandingRepository: sceneUnderstandingRepository,
+          sourceImageRepository: sourceImageRepository,
+          sourceImageUploader: sourceImageUploader,
+        );
+
+        final child = routeSpec.isAdmin
+            ? AdminRouteGate(
+                session: session,
+                adminRepository: adminRepository,
+                legacyAdminApi: legacyAdminApi,
+                backendMode: backendMode,
+                onSwitchAccount: authRepository.signOut,
+              )
+            : ProjectWorkspaceScreen(
+                authRepository: authRepository,
+                adminRepository: adminRepository,
+                session: session,
+                legacyAdminApi: legacyAdminApi,
+                backendMode: backendMode,
+                projectApi: projectApi,
+              );
+
         return UserProfileSyncGate(
           userRepository: userRepository,
           session: session,
-          child: ProjectWorkspaceScreen(
-            authRepository: authRepository,
-            adminRepository: adminRepository,
-            session: session,
-            legacyAdminApi: RoomForgeBackendBindings.legacyAdminApi(
-              backendMode: backendMode,
-              authRepository: authRepository,
-            ),
-            backendMode: backendMode,
-            projectApi: RoomForgeBackendBindings.projectApi(
-              backendMode: backendMode,
-              authRepository: authRepository,
-              session: session,
-              floorPlanRepository: floorPlanRepository,
-              geometryRepository: geometryRepository,
-              layoutRepository: layoutRepository,
-              projectRepository: projectRepository,
-              reconstructionRepository: reconstructionRepository,
-              roomDimensionsRepository: roomDimensionsRepository,
-              sceneUnderstandingRepository: sceneUnderstandingRepository,
-              sourceImageRepository: sourceImageRepository,
-              sourceImageUploader: sourceImageUploader,
-            ),
-          ),
+          child: child,
         );
       },
     );
@@ -452,6 +621,207 @@ class _UserProfileSyncGateState extends State<UserProfileSyncGate> {
 
         return widget.child;
       },
+    );
+  }
+}
+
+class AdminRouteGate extends StatelessWidget {
+  const AdminRouteGate({
+    required this.session,
+    required this.adminRepository,
+    required this.legacyAdminApi,
+    required this.backendMode,
+    required this.onSwitchAccount,
+    super.key,
+  });
+
+  final AuthSession session;
+  final FirebaseAdminRepository adminRepository;
+  final AdminApi? legacyAdminApi;
+  final BackendMode backendMode;
+  final Future<void> Function() onSwitchAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    if (backendMode == BackendMode.legacyApi) {
+      return _LegacyAdminRouteGate(adminApi: legacyAdminApi);
+    }
+
+    return FutureBuilder<bool>(
+      future: adminRepository.isCurrentUserAdmin(session),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _AdminRouteLoadingScreen();
+        }
+        if (snapshot.hasError || snapshot.data != true) {
+          return _AdminRouteDeniedScreen(
+            accountLabel:
+                session.email ??
+                session.displayName ??
+                rf('signed-in account', '로그인 계정'),
+            onSwitchAccount: onSwitchAccount,
+          );
+        }
+        return FirebaseAdminDiagnosticsScreen(
+          session: session,
+          adminRepository: adminRepository,
+        );
+      },
+    );
+  }
+}
+
+class _LegacyAdminRouteGate extends StatefulWidget {
+  const _LegacyAdminRouteGate({required this.adminApi});
+
+  final AdminApi? adminApi;
+
+  @override
+  State<_LegacyAdminRouteGate> createState() => _LegacyAdminRouteGateState();
+}
+
+class _LegacyAdminRouteGateState extends State<_LegacyAdminRouteGate> {
+  late final Future<AdminSession> _sessionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final adminApi = widget.adminApi;
+    _sessionFuture = adminApi == null
+        ? Future<AdminSession>.error(
+            rf(
+              'Legacy admin API is not configured.',
+              '레거시 관리자 API가 설정되지 않았습니다.',
+            ),
+          )
+        : adminApi.loadSession();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final adminApi = widget.adminApi;
+    if (adminApi == null) {
+      return _AdminRouteUnavailableScreen(
+        message: rf(
+          'Legacy admin API is not configured.',
+          '레거시 관리자 API가 설정되지 않았습니다.',
+        ),
+      );
+    }
+
+    return FutureBuilder<AdminSession>(
+      future: _sessionFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _AdminRouteLoadingScreen();
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return _AdminRouteUnavailableScreen(
+            message:
+                '${rf('Admin session could not be loaded.', '관리자 세션을 불러오지 못했습니다.')}: ${snapshot.error ?? 'unknown'}',
+          );
+        }
+        return AdminShellScreen(session: snapshot.data!, adminApi: adminApi);
+      },
+    );
+  }
+}
+
+class _AdminRouteLoadingScreen extends StatelessWidget {
+  const _AdminRouteLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(rf('Admin', '관리자'))),
+      body: const _RoomForgeAppBackground(
+        child: Center(
+          child: RoomForgePanel(
+            child: SizedBox.square(
+              dimension: 28,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminRouteDeniedScreen extends StatelessWidget {
+  const _AdminRouteDeniedScreen({
+    required this.accountLabel,
+    required this.onSwitchAccount,
+  });
+
+  final String accountLabel;
+  final Future<void> Function() onSwitchAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(rf('Admin', '관리자'))),
+      body: _RoomForgeAppBackground(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: RoomForgePanel(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  RoomForgeNotice(
+                    title: rf('Admin access denied', '관리자 접근 권한이 없습니다'),
+                    message:
+                        '${rf('The current account cannot open the operations console.', '현재 계정은 운영 콘솔을 열 수 없습니다')} $accountLabel',
+                    severity: NoticeSeverity.error,
+                    icon: Icons.admin_panel_settings_outlined,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(
+                          context,
+                        ).pushNamed(_RoomForgeRouteSpec.appHome.location),
+                        icon: const Icon(Icons.arrow_back_outlined),
+                        label: Text(rf('Back to app', '앱으로 돌아가기')),
+                      ),
+                      FilledButton.icon(
+                        onPressed: onSwitchAccount,
+                        icon: const Icon(Icons.logout_outlined),
+                        label: Text(rf('Switch account', '계정 전환')),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminRouteUnavailableScreen extends StatelessWidget {
+  const _AdminRouteUnavailableScreen({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(rf('Admin', '관리자'))),
+      body: _RoomForgeAppBackground(
+        child: ProjectErrorView(
+          message: message,
+          onRetry: () => Navigator.of(context).pushNamed('/admin'),
+        ),
+      ),
     );
   }
 }

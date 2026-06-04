@@ -9,6 +9,12 @@ import 'dart:ui_web' as ui_web;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart'
+    show
+        BrowserPlatformLocation,
+        HashUrlStrategy,
+        PlatformLocation,
+        setUrlStrategy;
 
 import 'src/admin/admin_api.dart';
 import 'src/admin/firebase_admin_access_repository.dart';
@@ -140,6 +146,33 @@ String _localizedProfileSyncExceptionMessage(
 
 enum _RoomForgeRouteShell { desktopApp, mobileApp, admin }
 
+class _RoomForgePathUrlStrategy extends HashUrlStrategy {
+  _RoomForgePathUrlStrategy([PlatformLocation? platformLocation])
+    : this._(platformLocation ?? BrowserPlatformLocation());
+
+  _RoomForgePathUrlStrategy._(this._platformLocation)
+    : super(_platformLocation);
+
+  final PlatformLocation _platformLocation;
+
+  @override
+  String getPath() {
+    final path = '${_platformLocation.pathname}${_platformLocation.search}';
+    if (path.isEmpty) {
+      return '/';
+    }
+    return path.startsWith('/') ? path : '/$path';
+  }
+
+  @override
+  String prepareExternalUrl(String internalUrl) {
+    if (internalUrl.isEmpty) {
+      return '/';
+    }
+    return internalUrl.startsWith('/') ? internalUrl : '/$internalUrl';
+  }
+}
+
 class _RoomForgeRouteSpec {
   const _RoomForgeRouteSpec._({
     required this.location,
@@ -163,6 +196,22 @@ class _RoomForgeRouteSpec {
 
   bool get isAdmin => shell == _RoomForgeRouteShell.admin;
   bool get isMobile => shell == _RoomForgeRouteShell.mobileApp;
+  bool get isWorkspace => projectId != null;
+  bool get isProjects => !isWorkspace && section == 'projects';
+  bool get isHome => !isWorkspace && section == 'home';
+
+  String get productRootPath => isMobile ? '/m/app' : '/app';
+  String get projectsPath => '$productRootPath/projects';
+
+  String workspacePath(String projectId, {String? childRoute}) {
+    final encodedProjectId = Uri.encodeComponent(projectId);
+    final basePath = '$productRootPath/workspaces/$encodedProjectId';
+    final child = childRoute?.trim();
+    if (child == null || child.isEmpty) {
+      return basePath;
+    }
+    return '$basePath/$child';
+  }
 
   static _RoomForgeRouteSpec fromLocation(String? location) {
     final normalized = _normalizeLocation(location);
@@ -229,7 +278,7 @@ class _RoomForgeRouteSpec {
         location: normalized,
         shell: shell,
         section: productSegments.length > 2 ? productSegments[2] : 'workspace',
-        projectId: productSegments[1],
+        projectId: Uri.decodeComponent(productSegments[1]),
         childRoute: productSegments.length > 2
             ? productSegments.sublist(2).join('/')
             : null,
@@ -274,6 +323,7 @@ String _initialRoomForgeRouteName() {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setUrlStrategy(_RoomForgePathUrlStrategy());
 
   final firebaseBootstrap = await FirebaseAppBootstrap.initialize();
 
@@ -530,7 +580,8 @@ class AuthGate extends StatelessWidget {
                 backendMode: backendMode,
                 onSwitchAccount: authRepository.signOut,
               )
-            : ProjectWorkspaceScreen(
+            : _ProjectWorkspaceScreen(
+                routeSpec: routeSpec,
                 authRepository: authRepository,
                 adminRepository: adminRepository,
                 session: session,
@@ -1774,17 +1825,18 @@ class RoomForgeSectionHeader extends StatelessWidget {
   }
 }
 
-class ProjectWorkspaceScreen extends StatelessWidget {
-  const ProjectWorkspaceScreen({
+class _ProjectWorkspaceScreen extends StatelessWidget {
+  const _ProjectWorkspaceScreen({
+    required this.routeSpec,
     required this.authRepository,
     required this.adminRepository,
     required this.session,
     required this.legacyAdminApi,
     required this.backendMode,
     required this.projectApi,
-    super.key,
   });
 
+  final _RoomForgeRouteSpec routeSpec;
   final AuthRepository authRepository;
   final FirebaseAdminRepository adminRepository;
   final AuthSession session;
@@ -1806,6 +1858,7 @@ class ProjectWorkspaceScreen extends StatelessWidget {
           child: Divider(height: 1, color: _roomForgeBorder),
         ),
         actions: [
+          _ProductRouteNavActions(routeSpec: routeSpec, compact: compactTopbar),
           AdminRouteGuardButton(
             session: session,
             adminRepository: adminRepository,
@@ -1828,11 +1881,196 @@ class ProjectWorkspaceScreen extends StatelessWidget {
         ],
       ),
       body: _RoomForgeAppBackground(
-        child: ProjectWorkspaceBody(
+        child: _RoomForgeProductRouteScreen(
+          routeSpec: routeSpec,
           displayName: displayName,
           projectApi: projectApi,
         ),
       ),
+    );
+  }
+}
+
+class _ProductRouteNavActions extends StatelessWidget {
+  const _ProductRouteNavActions({
+    required this.routeSpec,
+    required this.compact,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final bool compact;
+
+  void _go(BuildContext context, String route) {
+    if (routeSpec.location == route) {
+      return;
+    }
+    Navigator.of(context).pushNamed(route);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: rf('Home', '메인'),
+            onPressed: () => _go(context, routeSpec.productRootPath),
+            icon: Icon(
+              Icons.dashboard_outlined,
+              color: routeSpec.isHome ? _roomForgePrimary : null,
+            ),
+          ),
+          IconButton(
+            tooltip: rf('Projects', '프로젝트'),
+            onPressed: () => _go(context, routeSpec.projectsPath),
+            icon: Icon(
+              Icons.folder_copy_outlined,
+              color: routeSpec.isProjects ? _roomForgePrimary : null,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton.icon(
+          onPressed: () => _go(context, routeSpec.productRootPath),
+          icon: const Icon(Icons.dashboard_outlined),
+          label: Text(rf('Main', '메인')),
+          style: TextButton.styleFrom(
+            foregroundColor: routeSpec.isHome
+                ? _roomForgePrimary
+                : _roomForgeInkSoft,
+          ),
+        ),
+        TextButton.icon(
+          onPressed: () => _go(context, routeSpec.projectsPath),
+          icon: const Icon(Icons.folder_copy_outlined),
+          label: Text(rf('Projects', '프로젝트')),
+          style: TextButton.styleFrom(
+            foregroundColor: routeSpec.isProjects
+                ? _roomForgePrimary
+                : _roomForgeInkSoft,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomForgeProductRouteScreen extends StatelessWidget {
+  const _RoomForgeProductRouteScreen({
+    required this.routeSpec,
+    required this.displayName,
+    required this.projectApi,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final String displayName;
+  final ProjectApi projectApi;
+
+  @override
+  Widget build(BuildContext context) {
+    final projectId = routeSpec.projectId;
+    if (projectId != null) {
+      return _WorkspaceScreen(
+        routeSpec: routeSpec,
+        displayName: displayName,
+        projectApi: projectApi,
+        projectId: projectId,
+      );
+    }
+
+    if (routeSpec.isProjects) {
+      return _ProjectsScreen(
+        routeSpec: routeSpec,
+        displayName: displayName,
+        projectApi: projectApi,
+      );
+    }
+
+    return _AppHomeScreen(
+      routeSpec: routeSpec,
+      displayName: displayName,
+      projectApi: projectApi,
+    );
+  }
+}
+
+class _AppHomeScreen extends StatelessWidget {
+  const _AppHomeScreen({
+    required this.routeSpec,
+    required this.displayName,
+    required this.projectApi,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final String displayName;
+  final ProjectApi projectApi;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProjectWorkspaceBody(
+      routeSpec: routeSpec,
+      routeMode: _ProjectWorkspaceRouteMode.home,
+      title: rf('Main workspace', '메인 작업공간'),
+      routeLabel: rf('Main', '메인'),
+      displayName: displayName,
+      projectApi: projectApi,
+    );
+  }
+}
+
+class _ProjectsScreen extends StatelessWidget {
+  const _ProjectsScreen({
+    required this.routeSpec,
+    required this.displayName,
+    required this.projectApi,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final String displayName;
+  final ProjectApi projectApi;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProjectWorkspaceBody(
+      routeSpec: routeSpec,
+      routeMode: _ProjectWorkspaceRouteMode.projects,
+      title: rf('My projects', '내 프로젝트'),
+      routeLabel: rf('Projects', '프로젝트'),
+      displayName: displayName,
+      projectApi: projectApi,
+    );
+  }
+}
+
+class _WorkspaceScreen extends StatelessWidget {
+  const _WorkspaceScreen({
+    required this.routeSpec,
+    required this.displayName,
+    required this.projectApi,
+    required this.projectId,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final String displayName;
+  final ProjectApi projectApi;
+  final String projectId;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProjectWorkspaceBody(
+      routeSpec: routeSpec,
+      routeMode: _ProjectWorkspaceRouteMode.workspace,
+      initialProjectId: projectId,
+      title: rf('Workspace', '워크스페이스'),
+      routeLabel: rf('Workspace', '워크스페이스'),
+      displayName: displayName,
+      projectApi: projectApi,
     );
   }
 }
@@ -5651,23 +5889,35 @@ String _localizedEditorObjectLabel(String? label) {
   };
 }
 
-class ProjectWorkspaceBody extends StatefulWidget {
-  const ProjectWorkspaceBody({
+enum _ProjectWorkspaceRouteMode { home, projects, workspace }
+
+class _ProjectWorkspaceBody extends StatefulWidget {
+  const _ProjectWorkspaceBody({
+    required this.routeSpec,
+    required this.routeMode,
+    required this.title,
+    required this.routeLabel,
     required this.displayName,
     required this.projectApi,
-    super.key,
+    this.initialProjectId,
   });
 
+  final _RoomForgeRouteSpec routeSpec;
+  final _ProjectWorkspaceRouteMode routeMode;
+  final String title;
+  final String routeLabel;
   final String displayName;
   final ProjectApi projectApi;
+  final String? initialProjectId;
 
   @override
-  State<ProjectWorkspaceBody> createState() => _ProjectWorkspaceBodyState();
+  State<_ProjectWorkspaceBody> createState() => _ProjectWorkspaceBodyState();
 }
 
-class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
+class _ProjectWorkspaceBodyState extends State<_ProjectWorkspaceBody> {
   late Future<List<RoomProject>> _projectsFuture;
   RoomProject? _selectedProject;
+  String? _loadingProjectId;
   String? _workspaceMessage;
   NoticeSeverity _workspaceSeverity = NoticeSeverity.info;
 
@@ -5675,12 +5925,80 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   void initState() {
     super.initState();
     _projectsFuture = widget.projectApi.listProjects();
+    final initialProjectId = widget.initialProjectId;
+    if (initialProjectId != null) {
+      _loadingProjectId = initialProjectId;
+      unawaited(_loadRouteProject(initialProjectId));
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ProjectWorkspaceBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.projectApi != widget.projectApi) {
+      _projectsFuture = widget.projectApi.listProjects();
+    }
+    if (oldWidget.initialProjectId != widget.initialProjectId) {
+      final initialProjectId = widget.initialProjectId;
+      setState(() {
+        _selectedProject = null;
+        _loadingProjectId = initialProjectId;
+        _workspaceMessage = null;
+      });
+      if (initialProjectId != null) {
+        unawaited(_loadRouteProject(initialProjectId));
+      }
+    }
   }
 
   void _reload() {
     setState(() {
       _projectsFuture = widget.projectApi.listProjects();
     });
+  }
+
+  Future<void> _loadRouteProject(String projectId) async {
+    try {
+      final detail = await widget.projectApi.getProject(projectId);
+      if (!mounted || widget.initialProjectId != projectId) {
+        return;
+      }
+      setState(() {
+        _selectedProject = detail;
+        _loadingProjectId = null;
+        _workspaceMessage = null;
+      });
+    } on ProjectApiException catch (error) {
+      if (!mounted || widget.initialProjectId != projectId) {
+        return;
+      }
+      setState(() {
+        _selectedProject = null;
+        _loadingProjectId = null;
+        _workspaceMessage =
+            '${rf('Workspace could not be loaded', '워크스페이스를 불러오지 못했습니다')}: ${error.message}';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    } catch (error) {
+      if (!mounted || widget.initialProjectId != projectId) {
+        return;
+      }
+      setState(() {
+        _selectedProject = null;
+        _loadingProjectId = null;
+        _workspaceMessage =
+            '${rf('Workspace could not be loaded', '워크스페이스를 불러오지 못했습니다')}: $error';
+        _workspaceSeverity = NoticeSeverity.error;
+      });
+    }
+  }
+
+  void _navigateToWorkspace(String projectId) {
+    final route = widget.routeSpec.workspacePath(projectId);
+    if (widget.routeSpec.location == route) {
+      return;
+    }
+    Navigator.of(context).pushNamed(route);
   }
 
   Future<void> _createProject() async {
@@ -5703,6 +6021,9 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
         _workspaceSeverity = NoticeSeverity.success;
       });
       _reload();
+      if (mounted) {
+        _navigateToWorkspace(created.id);
+      }
     } on ProjectApiException catch (error) {
       setState(() {
         _workspaceMessage = '${rf('Create failed', '생성 실패')}: ${error.message}';
@@ -5717,6 +6038,12 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   }
 
   Future<void> _openProject(RoomProject project) async {
+    if (widget.initialProjectId != project.id ||
+        widget.routeMode != _ProjectWorkspaceRouteMode.workspace) {
+      _navigateToWorkspace(project.id);
+      return;
+    }
+
     final detail = await widget.projectApi.getProject(project.id);
     setState(() {
       _selectedProject = detail;
@@ -5800,6 +6127,9 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
         _workspaceSeverity = NoticeSeverity.success;
       });
       _reload();
+      if (mounted && widget.routeMode == _ProjectWorkspaceRouteMode.workspace) {
+        Navigator.of(context).pushNamed(widget.routeSpec.projectsPath);
+      }
     } on ProjectApiException catch (error) {
       setState(() {
         _workspaceMessage = '${rf('Delete failed', '삭제 실패')}: ${error.message}';
@@ -5816,6 +6146,8 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
   @override
   Widget build(BuildContext context) {
     final header = _WorkspaceHeader(
+      title: widget.title,
+      routeLabel: widget.routeLabel,
       displayName: widget.displayName,
       message: _workspaceMessage,
       severity: _workspaceSeverity,
@@ -5828,12 +6160,23 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
       onCreateProject: _createProject,
       onRetry: _reload,
     );
-    final detail = ProjectDetailPanel(
-      project: _selectedProject,
-      projectApi: widget.projectApi,
-      onEdit: _editSelectedProject,
-      onDelete: _deleteSelectedProject,
-    );
+    final detail = _loadingProjectId != null && _selectedProject == null
+        ? RoomForgePanel(
+            child: RoomForgeLoadingState(
+              title: rf('Loading workspace', '워크스페이스를 불러오는 중'),
+              message: rf(
+                'Project data, room inputs, and reconstruction status will appear here.',
+                '프로젝트 데이터, 방 입력값, 재구성 상태가 여기에 표시됩니다.',
+              ),
+              panel: false,
+            ),
+          )
+        : ProjectDetailPanel(
+            project: _selectedProject,
+            projectApi: widget.projectApi,
+            onEdit: _editSelectedProject,
+            onDelete: _deleteSelectedProject,
+          );
 
     return SafeArea(
       child: Padding(
@@ -5844,6 +6187,17 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 980;
+                if (widget.routeMode == _ProjectWorkspaceRouteMode.projects) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      header,
+                      const SizedBox(height: 20),
+                      Expanded(child: projectList),
+                    ],
+                  );
+                }
+
                 if (compact) {
                   return SingleChildScrollView(
                     child: Column(
@@ -5887,12 +6241,16 @@ class _ProjectWorkspaceBodyState extends State<ProjectWorkspaceBody> {
 
 class _WorkspaceHeader extends StatelessWidget {
   const _WorkspaceHeader({
+    required this.title,
+    required this.routeLabel,
     required this.displayName,
     required this.severity,
     required this.onCreateProject,
     this.message,
   });
 
+  final String title;
+  final String routeLabel;
   final String displayName;
   final NoticeSeverity severity;
   final VoidCallback onCreateProject;
@@ -5921,7 +6279,7 @@ class _WorkspaceHeader extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     RoomForgeStatusPill(
-                      label: rf('My projects', '내 프로젝트'),
+                      label: routeLabel,
                       color: _roomForgeAdmin,
                       dense: true,
                     ),
@@ -5934,7 +6292,7 @@ class _WorkspaceHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  rf('Project workspace', '프로젝트 작업공간'),
+                  title,
                   style: theme.textTheme.displaySmall?.copyWith(
                     color: _roomForgeInk,
                     fontWeight: FontWeight.w800,

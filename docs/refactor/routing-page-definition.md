@@ -40,6 +40,53 @@ product implementation; it is the same route family with capability gates.
 `/app/**` and `/m/app/**` should exist only as temporary redirects or legacy
 fallbacks during migration.
 
+## Host And Runtime Surface Routing
+
+`www` and `m` hosts may exist, but they must not create separate route tables.
+They serve the same React web build and preserve the same path structure.
+
+| Host | Canonical role | Route table | Runtime surface | Notes |
+|---|---|---|---|---|
+| `roomforge.com` | Apex redirect | Same as `www` | Determined after redirect | Prefer redirect to `www.roomforge.com`. |
+| `www.roomforge.com` | Canonical web | `/`, `/projects/**`, `/admin/**` | Desktop web unless mobile detected | Primary SEO/canonical host. |
+| `m.roomforge.com` | Mobile alias | Same paths as `www` | Mobile web | Capability gates are active by default. |
+| Preview/local hosts | Development | Same paths as `www` | Derived from viewport/override | Used for local validation and Firebase preview channels. |
+
+Examples:
+
+```text
+https://www.roomforge.com/projects/demo/status
+https://m.roomforge.com/projects/demo/status
+```
+
+Both URLs resolve to the same route and page model. The second one runs in
+mobile-web mode. Do not create path variants such as `/m/projects/...` or
+`/m/app/...` for final routes.
+
+Runtime surface selection:
+
+```text
+if host starts with "m.":
+  surface = mobile-web
+else if viewport/user-agent is mobile:
+  surface = mobile-web
+else:
+  surface = desktop-web
+```
+
+Host detection is a default, not a security boundary. Authorization and data
+access must come from Firebase Auth, Firestore Rules, Storage Rules, and
+Callable Function checks. Mobile locks are UX capability gates only.
+
+Canonical URL policy:
+
+- canonical product URLs use `www.roomforge.com`;
+- `m.roomforge.com` keeps the same path and may set canonical metadata pointing
+  to `www`;
+- `/app/**`, `/m/app/**`, and `/m/projects/**` are migration-only redirects;
+- admin routes should prefer `www`; mobile admin access renders a locked
+  desktop-guidance page instead of a second admin UI.
+
 ## Public And Auth Routes
 
 | Route | Page | Owner | Auth | Mobile web policy |

@@ -2067,12 +2067,36 @@ class _WorkspaceScreen extends StatelessWidget {
       routeSpec: routeSpec,
       routeMode: _ProjectWorkspaceRouteMode.workspace,
       initialProjectId: projectId,
-      title: rf('Workspace', '워크스페이스'),
-      routeLabel: rf('Workspace', '워크스페이스'),
+      title: _workspaceRouteTitle(routeSpec),
+      routeLabel: _workspaceRouteLabel(routeSpec),
       displayName: displayName,
       projectApi: projectApi,
     );
   }
+}
+
+String _workspaceRouteTitle(_RoomForgeRouteSpec routeSpec) {
+  if (!routeSpec.isMobile) {
+    return rf('Workspace', '워크스페이스');
+  }
+  return switch (routeSpec.section) {
+    'capture' => rf('Capture workspace', '촬영 워크스페이스'),
+    'status' => rf('Reconstruction status', '재구성 상태'),
+    'review' => rf('Review handoff', '검토 핸드오프'),
+    _ => rf('Mobile workspace', '모바일 워크스페이스'),
+  };
+}
+
+String _workspaceRouteLabel(_RoomForgeRouteSpec routeSpec) {
+  if (!routeSpec.isMobile) {
+    return rf('Workspace', '워크스페이스');
+  }
+  return switch (routeSpec.section) {
+    'capture' => rf('Capture', '촬영'),
+    'status' => rf('Status', '상태'),
+    'review' => rf('Review', '검토'),
+    _ => rf('Mobile', '모바일'),
+  };
 }
 
 class AdminRouteGuardButton extends StatefulWidget {
@@ -6177,6 +6201,16 @@ class _ProjectWorkspaceBodyState extends State<_ProjectWorkspaceBody> {
             onEdit: _editSelectedProject,
             onDelete: _deleteSelectedProject,
           );
+    final mobileWorkspaceRoute =
+        widget.routeSpec.isMobile &&
+        widget.routeMode == _ProjectWorkspaceRouteMode.workspace &&
+        widget.initialProjectId != null;
+    final mobileRouteActions = mobileWorkspaceRoute
+        ? _MobileWorkspaceRouteActions(
+            routeSpec: widget.routeSpec,
+            projectId: widget.initialProjectId!,
+          )
+        : null;
 
     return SafeArea(
       child: Padding(
@@ -6195,6 +6229,21 @@ class _ProjectWorkspaceBodyState extends State<_ProjectWorkspaceBody> {
                       const SizedBox(height: 20),
                       Expanded(child: projectList),
                     ],
+                  );
+                }
+
+                if (mobileWorkspaceRoute) {
+                  return SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        header,
+                        const SizedBox(height: 12),
+                        mobileRouteActions!,
+                        const SizedBox(height: 16),
+                        detail,
+                      ],
+                    ),
                   );
                 }
 
@@ -6351,6 +6400,95 @@ class _WorkspaceHeader extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _MobileWorkspaceRouteActions extends StatelessWidget {
+  const _MobileWorkspaceRouteActions({
+    required this.routeSpec,
+    required this.projectId,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final String projectId;
+
+  @override
+  Widget build(BuildContext context) {
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(10),
+      backgroundColor: _roomForgePanel,
+      borderColor: _roomForgeBorder,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _MobileWorkspaceRouteButton(
+            label: rf('Overview', '개요'),
+            icon: Icons.view_agenda_outlined,
+            active: routeSpec.section == 'workspace',
+            route: routeSpec.workspacePath(projectId),
+          ),
+          _MobileWorkspaceRouteButton(
+            label: rf('Capture', '촬영'),
+            icon: Icons.add_a_photo_outlined,
+            active: routeSpec.section == 'capture',
+            route: routeSpec.workspacePath(projectId, childRoute: 'capture'),
+          ),
+          _MobileWorkspaceRouteButton(
+            label: rf('Status', '상태'),
+            icon: Icons.timeline_outlined,
+            active: routeSpec.section == 'status',
+            route: routeSpec.workspacePath(projectId, childRoute: 'status'),
+          ),
+          _MobileWorkspaceRouteButton(
+            label: rf('Review', '검토'),
+            icon: Icons.rate_review_outlined,
+            active: routeSpec.section == 'review',
+            route: routeSpec.workspacePath(projectId, childRoute: 'review'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileWorkspaceRouteButton extends StatelessWidget {
+  const _MobileWorkspaceRouteButton({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.route,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool active;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [Icon(icon, size: 18), const SizedBox(width: 7), Text(label)],
+    );
+
+    if (active) {
+      return FilledButton(
+        onPressed: null,
+        style: FilledButton.styleFrom(
+          disabledBackgroundColor: _roomForgePrimary.withValues(alpha: .22),
+          disabledForegroundColor: _roomForgeInk,
+          minimumSize: const Size(0, 46),
+        ),
+        child: content,
+      );
+    }
+
+    return OutlinedButton(
+      onPressed: () => Navigator.of(context).pushNamed(route),
+      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 46)),
+      child: content,
     );
   }
 }

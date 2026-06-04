@@ -15,11 +15,23 @@
         ],
         "rewrites": [
             {
+                "source": "/app",
+                "destination": "/app/index.html"
+            },
+            {
                 "source": "/app/**",
                 "destination": "/app/index.html"
             },
             {
+                "source": "/m/app",
+                "destination": "/app/index.html"
+            },
+            {
                 "source": "/m/app/**",
+                "destination": "/app/index.html"
+            },
+            {
+                "source": "/admin",
                 "destination": "/app/index.html"
             },
             {

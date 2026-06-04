@@ -179,6 +179,7 @@ class _RoomForgeRouteSpec {
     required this.shell,
     required this.section,
     this.projectId,
+    this.adminJobId,
     this.childRoute,
   });
 
@@ -192,6 +193,7 @@ class _RoomForgeRouteSpec {
   final _RoomForgeRouteShell shell;
   final String section;
   final String? projectId;
+  final String? adminJobId;
   final String? childRoute;
 
   bool get isAdmin => shell == _RoomForgeRouteShell.admin;
@@ -199,13 +201,34 @@ class _RoomForgeRouteSpec {
   bool get isWorkspace => projectId != null;
   bool get isProjects => !isWorkspace && section == 'projects';
   bool get isHome => !isWorkspace && section == 'home';
+  bool get isAdminDashboard => isAdmin && section == 'dashboard';
+  bool get isAdminJobs => isAdmin && section == 'jobs';
+  bool get isAdminJobDetail => isAdmin && section == 'job';
+  bool get isAdminRetries =>
+      isAdmin && (section == 'retries' || childRoute == 'retry');
+  bool get isAdminAudit =>
+      isAdmin && (section == 'audit' || childRoute == 'audit');
 
   String get productRootPath => isMobile ? '/m/app' : '/app';
   String get projectsPath => '$productRootPath/projects';
+  String get adminRootPath => '/admin';
+  String get adminJobsPath => '$adminRootPath/jobs';
+  String get adminRetriesPath => '$adminRootPath/retries';
+  String get adminAuditPath => '$adminRootPath/audit';
 
   String workspacePath(String projectId, {String? childRoute}) {
     final encodedProjectId = Uri.encodeComponent(projectId);
     final basePath = '$productRootPath/workspaces/$encodedProjectId';
+    final child = childRoute?.trim();
+    if (child == null || child.isEmpty) {
+      return basePath;
+    }
+    return '$basePath/$child';
+  }
+
+  String adminJobPath(String jobId, {String? childRoute}) {
+    final encodedJobId = Uri.encodeComponent(jobId);
+    final basePath = '$adminJobsPath/$encodedJobId';
     final child = childRoute?.trim();
     if (child == null || child.isEmpty) {
       return basePath;
@@ -225,11 +248,9 @@ class _RoomForgeRouteSpec {
     }
 
     if (segments.first == 'admin') {
-      return _RoomForgeRouteSpec._(
-        location: normalized,
-        shell: _RoomForgeRouteShell.admin,
-        section: segments.length > 1 ? segments[1] : 'dashboard',
-        childRoute: segments.length > 2 ? segments.sublist(2).join('/') : null,
+      return _adminRoute(
+        normalized: normalized,
+        adminSegments: segments.sublist(1),
       );
     }
 
@@ -250,6 +271,50 @@ class _RoomForgeRouteSpec {
     }
 
     return appHome;
+  }
+
+  static _RoomForgeRouteSpec _adminRoute({
+    required String normalized,
+    required List<String> adminSegments,
+  }) {
+    if (adminSegments.isEmpty) {
+      return _RoomForgeRouteSpec._(
+        location: normalized,
+        shell: _RoomForgeRouteShell.admin,
+        section: 'dashboard',
+      );
+    }
+
+    if (adminSegments.first == 'jobs') {
+      if (adminSegments.length >= 2) {
+        return _RoomForgeRouteSpec._(
+          location: normalized,
+          shell: _RoomForgeRouteShell.admin,
+          section: 'job',
+          adminJobId: Uri.decodeComponent(adminSegments[1]),
+          childRoute: adminSegments.length > 2
+              ? adminSegments.sublist(2).join('/')
+              : null,
+        );
+      }
+      return _RoomForgeRouteSpec._(
+        location: normalized,
+        shell: _RoomForgeRouteShell.admin,
+        section: 'jobs',
+      );
+    }
+
+    return _RoomForgeRouteSpec._(
+      location: normalized,
+      shell: _RoomForgeRouteShell.admin,
+      section: adminSegments.first,
+      adminJobId: adminSegments.length > 1
+          ? Uri.decodeComponent(adminSegments[1])
+          : null,
+      childRoute: adminSegments.length > 1
+          ? adminSegments.sublist(1).join('/')
+          : null,
+    );
   }
 
   static _RoomForgeRouteSpec _productRoute({
@@ -573,7 +638,8 @@ class AuthGate extends StatelessWidget {
         );
 
         final child = routeSpec.isAdmin
-            ? AdminRouteGate(
+            ? _AdminRouteGate(
+                routeSpec: routeSpec,
                 session: session,
                 adminRepository: adminRepository,
                 legacyAdminApi: legacyAdminApi,
@@ -676,16 +742,17 @@ class _UserProfileSyncGateState extends State<UserProfileSyncGate> {
   }
 }
 
-class AdminRouteGate extends StatelessWidget {
-  const AdminRouteGate({
+class _AdminRouteGate extends StatelessWidget {
+  const _AdminRouteGate({
+    required this.routeSpec,
     required this.session,
     required this.adminRepository,
     required this.legacyAdminApi,
     required this.backendMode,
     required this.onSwitchAccount,
-    super.key,
   });
 
+  final _RoomForgeRouteSpec routeSpec;
   final AuthSession session;
   final FirebaseAdminRepository adminRepository;
   final AdminApi? legacyAdminApi;
@@ -713,7 +780,8 @@ class AdminRouteGate extends StatelessWidget {
             onSwitchAccount: onSwitchAccount,
           );
         }
-        return FirebaseAdminDiagnosticsScreen(
+        return _FirebaseAdminDiagnosticsScreen(
+          routeSpec: routeSpec,
           session: session,
           adminRepository: adminRepository,
         );
@@ -2190,7 +2258,8 @@ class _AdminRouteGuardButtonState extends State<AdminRouteGuardButton> {
     if (shouldOpenAdmin) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (context) => FirebaseAdminDiagnosticsScreen(
+          builder: (context) => _FirebaseAdminDiagnosticsScreen(
+            routeSpec: _RoomForgeRouteSpec.fromLocation('/admin'),
             session: widget.session,
             adminRepository: widget.adminRepository,
           ),
@@ -2628,23 +2697,24 @@ class _AdminRouteGuardSkeletonLine extends StatelessWidget {
   }
 }
 
-class FirebaseAdminDiagnosticsScreen extends StatefulWidget {
-  const FirebaseAdminDiagnosticsScreen({
+class _FirebaseAdminDiagnosticsScreen extends StatefulWidget {
+  const _FirebaseAdminDiagnosticsScreen({
+    required this.routeSpec,
     required this.session,
     required this.adminRepository,
-    super.key,
   });
 
+  final _RoomForgeRouteSpec routeSpec;
   final AuthSession session;
   final FirebaseAdminRepository adminRepository;
 
   @override
-  State<FirebaseAdminDiagnosticsScreen> createState() =>
+  State<_FirebaseAdminDiagnosticsScreen> createState() =>
       _FirebaseAdminDiagnosticsScreenState();
 }
 
 class _FirebaseAdminDiagnosticsScreenState
-    extends State<FirebaseAdminDiagnosticsScreen> {
+    extends State<_FirebaseAdminDiagnosticsScreen> {
   final _adminSearchController = TextEditingController();
   FirebaseJobStatus _statusFilter = FirebaseJobStatus.failed;
   FirebaseReconstructionJob? _selectedJob;
@@ -2656,7 +2726,42 @@ class _FirebaseAdminDiagnosticsScreenState
   @override
   void initState() {
     super.initState();
+    _configureRouteState(resetSelection: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FirebaseAdminDiagnosticsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routeSpec.location != widget.routeSpec.location) {
+      _configureRouteState(resetSelection: true);
+    }
+  }
+
+  void _configureRouteState({required bool resetSelection}) {
+    final routeJobId = widget.routeSpec.adminJobId;
+    if (routeJobId != null) {
+      _adminSearchController.text = routeJobId;
+      _adminSearchField = FirebaseAdminDiagnosticsSearchField.jobId;
+      _activeSearchLabel =
+          '${_localizedAdminSearchFieldLabel(_adminSearchField)}: $routeJobId';
+      _jobsStream = widget.adminRepository.watchJobs(
+        FirebaseAdminJobQuery(jobId: routeJobId, limit: 1),
+      );
+      if (resetSelection) {
+        _selectedJob = null;
+      }
+      return;
+    }
+
+    _adminSearchController.clear();
+    _activeSearchLabel = null;
+    _statusFilter = widget.routeSpec.isAdminRetries
+        ? FirebaseJobStatus.failed
+        : _statusFilter;
     _jobsStream = widget.adminRepository.watchJobsByStatus(_statusFilter);
+    if (resetSelection) {
+      _selectedJob = null;
+    }
   }
 
   void _setStatusFilter(FirebaseJobStatus? status) {
@@ -2669,6 +2774,9 @@ class _FirebaseAdminDiagnosticsScreenState
       _activeSearchLabel = null;
       _jobsStream = widget.adminRepository.watchJobsByStatus(status);
     });
+    if (widget.routeSpec.adminJobId != null) {
+      _goToAdminRoute(widget.routeSpec.adminJobsPath);
+    }
   }
 
   void _setAdminSearchField(FirebaseAdminDiagnosticsSearchField? field) {
@@ -2697,6 +2805,11 @@ class _FirebaseAdminDiagnosticsScreenState
       _activeSearchLabel = '${_adminSearchField.label}: $value';
       _jobsStream = widget.adminRepository.watchJobs(query);
     });
+    if (_adminSearchField == FirebaseAdminDiagnosticsSearchField.jobId) {
+      _goToAdminRoute(widget.routeSpec.adminJobPath(value));
+    } else if (!widget.routeSpec.isAdminJobs) {
+      _goToAdminRoute(widget.routeSpec.adminJobsPath);
+    }
   }
 
   void _clearAdminSearch() {
@@ -2706,6 +2819,37 @@ class _FirebaseAdminDiagnosticsScreenState
       _activeSearchLabel = null;
       _jobsStream = widget.adminRepository.watchJobsByStatus(_statusFilter);
     });
+    if (widget.routeSpec.adminJobId != null || widget.routeSpec.isAdminAudit) {
+      _goToAdminRoute(widget.routeSpec.adminJobsPath);
+    }
+  }
+
+  void _selectAdminJob(FirebaseReconstructionJob job) {
+    setState(() => _selectedJob = job);
+    _goToAdminRoute(widget.routeSpec.adminJobPath(job.jobId));
+  }
+
+  void _goToAdminRoute(String route) {
+    if (route == widget.routeSpec.location) {
+      return;
+    }
+    Navigator.of(context).pushNamed(route);
+  }
+
+  FirebaseReconstructionJob? _selectedJobForRoute(
+    List<FirebaseReconstructionJob> jobs,
+    _RoomForgeRouteSpec routeSpec,
+  ) {
+    final routeJobId = routeSpec.adminJobId;
+    if (routeJobId != null) {
+      for (final job in jobs) {
+        if (job.jobId == routeJobId) {
+          return job;
+        }
+      }
+      return null;
+    }
+    return _selectedJob;
   }
 
   @override
@@ -2722,7 +2866,7 @@ class _FirebaseAdminDiagnosticsScreenState
         widget.session.uid;
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(rf('Admin diagnostics', '관리자 진단'))),
+      appBar: AppBar(title: Text(_adminRouteTitle(widget.routeSpec))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
@@ -2765,6 +2909,12 @@ class _FirebaseAdminDiagnosticsScreenState
                     ],
                   ),
                   const SizedBox(height: 16),
+                  _FirebaseAdminRouteActions(
+                    routeSpec: widget.routeSpec,
+                    activeJobId: widget.routeSpec.adminJobId,
+                    onNavigate: _goToAdminRoute,
+                  ),
+                  const SizedBox(height: 12),
                   _FirebaseAdminStatusFilters(
                     selectedStatus: _statusFilter,
                     onChanged: _setStatusFilter,
@@ -2918,6 +3068,10 @@ class _FirebaseAdminDiagnosticsScreenState
                         );
                       }
                       final jobs = snapshot.data ?? const [];
+                      final selectedJob = _selectedJobForRoute(
+                        jobs,
+                        widget.routeSpec,
+                      );
                       final metrics = _FirebaseAdminDashboardMetrics(
                         jobs: jobs,
                         statusFilter: _statusFilter,
@@ -2925,17 +3079,21 @@ class _FirebaseAdminDiagnosticsScreenState
                       );
                       final jobList = _FirebaseAdminJobList(
                         jobs: jobs,
-                        selectedJobId: _selectedJob?.jobId,
-                        onSelect: (job) {
-                          setState(() => _selectedJob = job);
-                        },
+                        selectedJobId:
+                            widget.routeSpec.adminJobId ?? _selectedJob?.jobId,
+                        onSelect: _selectAdminJob,
                       );
-                      final detail = _selectedJob == null
-                          ? const _FirebaseAdminEmptyDetail()
+                      final detail = selectedJob == null
+                          ? _FirebaseAdminRouteEmptyDetail(
+                              routeSpec: widget.routeSpec,
+                            )
                           : _FirebaseAdminJobDetailPanel(
-                              job: _selectedJob!,
+                              job: selectedJob,
                               adminRepository: widget.adminRepository,
                               session: widget.session,
+                              focus: _adminDetailFocusForRoute(
+                                widget.routeSpec,
+                              ),
                             );
                       return LayoutBuilder(
                         builder: (context, constraints) {
@@ -2982,6 +3140,140 @@ class _FirebaseAdminDiagnosticsScreenState
           ),
         ),
       ),
+    );
+  }
+}
+
+enum _FirebaseAdminDetailFocus { overview, retry, audit }
+
+String _adminRouteTitle(_RoomForgeRouteSpec routeSpec) {
+  if (routeSpec.isAdminAudit) {
+    return rf('Admin audit', '관리자 감사');
+  }
+  if (routeSpec.isAdminRetries) {
+    return rf('Admin retries', '관리자 재시도');
+  }
+  if (routeSpec.isAdminJobDetail) {
+    return rf('Admin job detail', '관리자 작업 상세');
+  }
+  if (routeSpec.isAdminJobs) {
+    return rf('Admin jobs', '관리자 작업');
+  }
+  return rf('Admin dashboard', '관리자 대시보드');
+}
+
+_FirebaseAdminDetailFocus _adminDetailFocusForRoute(
+  _RoomForgeRouteSpec routeSpec,
+) {
+  if (routeSpec.isAdminAudit) {
+    return _FirebaseAdminDetailFocus.audit;
+  }
+  if (routeSpec.isAdminRetries) {
+    return _FirebaseAdminDetailFocus.retry;
+  }
+  return _FirebaseAdminDetailFocus.overview;
+}
+
+class _FirebaseAdminRouteActions extends StatelessWidget {
+  const _FirebaseAdminRouteActions({
+    required this.routeSpec,
+    required this.onNavigate,
+    this.activeJobId,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final String? activeJobId;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final auditRoute = activeJobId == null
+        ? routeSpec.adminAuditPath
+        : routeSpec.adminJobPath(activeJobId!, childRoute: 'audit');
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(10),
+      backgroundColor: _roomForgePanel,
+      borderColor: _roomForgeBorder,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _FirebaseAdminRouteButton(
+            label: rf('Dashboard', '대시보드'),
+            icon: Icons.dashboard_outlined,
+            active: routeSpec.isAdminDashboard,
+            route: routeSpec.adminRootPath,
+            onNavigate: onNavigate,
+          ),
+          _FirebaseAdminRouteButton(
+            label: rf('Jobs', '작업'),
+            icon: Icons.view_list_outlined,
+            active:
+                routeSpec.isAdminJobs ||
+                (routeSpec.isAdminJobDetail &&
+                    !routeSpec.isAdminRetries &&
+                    !routeSpec.isAdminAudit),
+            route: routeSpec.adminJobsPath,
+            onNavigate: onNavigate,
+          ),
+          _FirebaseAdminRouteButton(
+            label: rf('Retries', '재시도'),
+            icon: Icons.replay_outlined,
+            active: routeSpec.isAdminRetries,
+            route: activeJobId == null
+                ? routeSpec.adminRetriesPath
+                : routeSpec.adminJobPath(activeJobId!, childRoute: 'retry'),
+            onNavigate: onNavigate,
+          ),
+          _FirebaseAdminRouteButton(
+            label: rf('Audit', '감사'),
+            icon: Icons.fact_check_outlined,
+            active: routeSpec.isAdminAudit,
+            route: auditRoute,
+            onNavigate: onNavigate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminRouteButton extends StatelessWidget {
+  const _FirebaseAdminRouteButton({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.route,
+    required this.onNavigate,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool active;
+  final String route;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [Icon(icon, size: 18), const SizedBox(width: 7), Text(label)],
+    );
+    if (active) {
+      return FilledButton(
+        onPressed: null,
+        style: FilledButton.styleFrom(
+          disabledBackgroundColor: _roomForgeAdmin.withValues(alpha: .24),
+          disabledForegroundColor: _roomForgeInk,
+          minimumSize: const Size(0, 42),
+        ),
+        child: content,
+      );
+    }
+    return OutlinedButton(
+      onPressed: () => onNavigate(route),
+      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42)),
+      child: content,
     );
   }
 }
@@ -3540,11 +3832,31 @@ class _FirebaseAdminJobCompactCard extends StatelessWidget {
   }
 }
 
-class _FirebaseAdminEmptyDetail extends StatelessWidget {
-  const _FirebaseAdminEmptyDetail();
+class _FirebaseAdminRouteEmptyDetail extends StatelessWidget {
+  const _FirebaseAdminRouteEmptyDetail({required this.routeSpec});
+
+  final _RoomForgeRouteSpec routeSpec;
 
   @override
   Widget build(BuildContext context) {
+    if (routeSpec.adminJobId != null) {
+      return RoomForgeEmptyState(
+        icon: Icons.search_off_outlined,
+        title: rf('Job not found', '작업을 찾을 수 없습니다'),
+        message:
+            '${rf('No protected reconstruction job matched this route', '이 route와 일치하는 보호된 재구성 작업이 없습니다')}: ${routeSpec.adminJobId}',
+      );
+    }
+    if (routeSpec.isAdminAudit) {
+      return RoomForgeEmptyState(
+        icon: Icons.fact_check_outlined,
+        title: rf('Select an audit target', '감사 대상을 선택하세요'),
+        message: rf(
+          'Choose a job first to inspect admin action receipts for that reconstruction job.',
+          '재구성 작업의 관리자 action receipt를 확인하려면 먼저 작업을 선택하세요.',
+        ),
+      );
+    }
     return RoomForgeEmptyState(
       icon: Icons.manage_search_outlined,
       title: rf('Select a job', '작업 선택'),
@@ -3561,14 +3873,66 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
     required this.job,
     required this.adminRepository,
     required this.session,
+    required this.focus,
   });
 
   final FirebaseReconstructionJob job;
   final FirebaseAdminRepository adminRepository;
   final AuthSession session;
+  final _FirebaseAdminDetailFocus focus;
 
   @override
   Widget build(BuildContext context) {
+    final retryAction = _FirebaseAdminRetryAction(
+      job: job,
+      adminRepository: adminRepository,
+      session: session,
+    );
+    final auditActions = _FirebaseAdminAuditActions(
+      stream: adminRepository.watchAdminActionsForTarget(
+        targetType: 'reconstruction_job',
+        targetId: job.jobId,
+      ),
+    );
+    final artifactRefs = _FirebaseAdminArtifactRefs(
+      artifactRefs: job.artifactRefs,
+    );
+    final transitions = _FirebaseAdminTransitions(
+      stream: adminRepository.watchTransitionsForJob(jobId: job.jobId),
+    );
+    final results = _FirebaseAdminResults(
+      stream: adminRepository.watchResultsForJob(jobId: job.jobId),
+    );
+    final layouts = _FirebaseAdminLayouts(
+      jobId: job.jobId,
+      stream: adminRepository.watchLayoutsForJob(jobId: job.jobId),
+    );
+    final sections = switch (focus) {
+      _FirebaseAdminDetailFocus.audit => [
+        auditActions,
+        retryAction,
+        transitions,
+        results,
+        layouts,
+        artifactRefs,
+      ],
+      _FirebaseAdminDetailFocus.retry => [
+        retryAction,
+        auditActions,
+        transitions,
+        results,
+        layouts,
+        artifactRefs,
+      ],
+      _FirebaseAdminDetailFocus.overview => [
+        retryAction,
+        auditActions,
+        artifactRefs,
+        transitions,
+        results,
+        layouts,
+      ],
+    };
     return Semantics(
       container: true,
       label: FirebaseAdminDiagnosticsUiText.jobDetailAccessibilitySummary(job),
@@ -3576,27 +3940,10 @@ class _FirebaseAdminJobDetailPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _FirebaseAdminMetadataHeader(job: job),
-          const SizedBox(height: 12),
-          _FirebaseAdminRetryAction(
-            job: job,
-            adminRepository: adminRepository,
-            session: session,
-          ),
-          const SizedBox(height: 12),
-          _FirebaseAdminArtifactRefs(artifactRefs: job.artifactRefs),
-          const SizedBox(height: 12),
-          _FirebaseAdminTransitions(
-            stream: adminRepository.watchTransitionsForJob(jobId: job.jobId),
-          ),
-          const SizedBox(height: 12),
-          _FirebaseAdminResults(
-            stream: adminRepository.watchResultsForJob(jobId: job.jobId),
-          ),
-          const SizedBox(height: 12),
-          _FirebaseAdminLayouts(
-            jobId: job.jobId,
-            stream: adminRepository.watchLayoutsForJob(jobId: job.jobId),
-          ),
+          for (final section in sections) ...[
+            const SizedBox(height: 12),
+            section,
+          ],
         ],
       ),
     );
@@ -4489,6 +4836,149 @@ class _FirebaseAdminAuditReceiptCard extends StatelessWidget {
               color: _roomForgeInk,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirebaseAdminAuditActions extends StatelessWidget {
+  const _FirebaseAdminAuditActions({required this.stream});
+
+  final Stream<List<FirebaseAdminAction>> stream;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<FirebaseAdminAction>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _FirebaseAdminSection(
+            title: rf('Admin audit', '관리자 감사'),
+            children: [
+              RoomForgeLoadingState(
+                title: rf('Loading audit receipts', '감사 receipt를 불러오는 중'),
+                message: rf(
+                  'Admin actions for this reconstruction job will appear here.',
+                  '이 재구성 작업에 대한 관리자 action이 여기에 표시됩니다.',
+                ),
+                panel: false,
+              ),
+            ],
+          );
+        }
+        if (snapshot.hasError) {
+          return _FirebaseAdminSection(
+            title: rf('Admin audit', '관리자 감사'),
+            children: [
+              RoomForgeNotice(
+                title: rf('Audit query failed', '감사 조회 실패'),
+                message: firebaseAdminSafeErrorMessage(snapshot.error!),
+                severity: NoticeSeverity.error,
+                icon: Icons.lock_outline,
+              ),
+            ],
+          );
+        }
+        final actions = snapshot.data ?? const [];
+        return _FirebaseAdminSection(
+          title: rf('Admin audit', '관리자 감사'),
+          children: actions.isEmpty
+              ? [
+                  Text(
+                    rf(
+                      'No admin action receipts have been recorded for this job.',
+                      '이 작업에 기록된 관리자 action receipt가 없습니다.',
+                    ),
+                  ),
+                ]
+              : [
+                  for (final action in actions)
+                    _FirebaseAdminAuditActionRow(action: action),
+                ],
+        );
+      },
+    );
+  }
+}
+
+class _FirebaseAdminAuditActionRow extends StatelessWidget {
+  const _FirebaseAdminAuditActionRow({required this.action});
+
+  final FirebaseAdminAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _roomForgeCanvas,
+          border: Border.all(color: _roomForgeAdmin.withValues(alpha: .30)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  RoomForgeStatusPill(
+                    label: action.actionType,
+                    color: _roomForgeAdmin,
+                    icon: Icons.fact_check_outlined,
+                    dense: true,
+                  ),
+                  Text(
+                    _adminTimestampLabel(action.createdAt),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: _roomForgeMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _FirebaseAdminDetailLine(
+                label: rf('Action ID', 'Action ID'),
+                value: action.actionId,
+                color: _roomForgeInk,
+              ),
+              _FirebaseAdminDetailLine(
+                label: rf('Target', '대상'),
+                value: '${action.targetType}:${action.targetId}',
+                color: _roomForgeInk,
+              ),
+              _FirebaseAdminDetailLine(
+                label: rf('Created by', '생성자'),
+                value:
+                    '${action.createdByRole.wireValue}:${action.createdByUid}',
+                color: _roomForgeInk,
+              ),
+              if (action.retryJobId != null)
+                _FirebaseAdminDetailLine(
+                  label: rf('Retry job', '재시도 작업'),
+                  value: action.retryJobId!,
+                  color: _roomForgeInk,
+                ),
+              if (action.reasonCode != null)
+                _FirebaseAdminDetailLine(
+                  label: rf('Reason', '사유'),
+                  value: action.reasonCode!,
+                  color: _roomForgeInkSoft,
+                ),
+              if (action.reasonMessage != null)
+                _FirebaseAdminDetailLine(
+                  label: rf('Message', '메시지'),
+                  value: action.reasonMessage!,
+                  color: _roomForgeMuted,
+                ),
+            ],
+          ),
         ),
       ),
     );

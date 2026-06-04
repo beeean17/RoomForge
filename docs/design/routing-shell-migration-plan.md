@@ -1,5 +1,9 @@
 # RoomForge Routing And Shell Migration Plan
 
+> Superseded for the React/native refactor by
+> `docs/refactor/routing-page-definition.md`. Keep this document as historical
+> context for the earlier Flutter-web shell migration plan.
+
 This plan restructures RoomForge around the approved HTML landing page while
 keeping the product application in Flutter Web. It supersedes the earlier
 single-entry `MaterialApp(home: AuthGate)` routing shape for production UI work,

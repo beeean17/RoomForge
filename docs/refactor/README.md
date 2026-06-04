@@ -8,6 +8,12 @@ Security Rules, and local IndexedDB draft/cache support. The legacy FastAPI and
 Oracle path remains reference code only and must be selected explicitly with
 `legacy_api`.
 
+The current routing refactor moves desktop web workspace/editor/admin ownership
+toward React web surfaces while preserving Flutter web as temporary legacy and
+Flutter mobile as the future native camera/capture app. Use
+[Routing Page Definition](routing-page-definition.md) as the current route
+ownership source of truth before applying older Flutter-web shell assumptions.
+
 Legacy API response envelopes using `data`, `error`, and `meta.request_id`
 apply only to the legacy FastAPI API. Direct Firebase repository calls do not
 use that envelope.
@@ -22,6 +28,7 @@ Use this order when starting a Firebase refactor story:
    - [Product UX Specification](../product/ux-design-specification.md)
    - [Product UX Directions](../product/ux-design-directions.html)
 2. Firebase refactor direction:
+   - [Routing Page Definition](routing-page-definition.md)
    - [Firebase Backend Refactor Plan](firebase-backend-refactor-plan.md)
    - [Firebase UX Design Specification](firebase-ux-design-specification.md)
 3. Technical source of truth:

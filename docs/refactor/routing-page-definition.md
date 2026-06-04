@@ -27,47 +27,46 @@ a mobile browser reaches a locked workflow, it should show a clear handoff:
 
 | URL family | Owner after refactor | Phase | Notes |
 |---|---|---:|---|
-| `/` | Static landing | 0 | Approved HTML landing remains the public first paint. |
-| `/m` | Static landing alias | 0 | Optional mobile landing alias; may redirect to `/`. |
-| `/app/**` | React web app | 0-1 | Authenticated product shell. Mobile viewport renders limited mode. |
-| `/admin/**` | React admin app | 2 | Admin is outside `/app` and uses separate authorization. |
+| `/` | Static/React landing | 0 | Approved landing remains the public first paint and homepage. |
+| `/projects/**` | React web app | 0-1 | Authenticated product workspace. Mobile viewport renders limited mode. |
+| `/admin/**` | React admin app | 2 | Admin is outside the product workspace and uses separate authorization. |
 | `/legacy/**` | Flutter web legacy | 0-4 | Temporary fallback for existing Flutter web routes. |
 | Native deep links | Flutter mobile app | 3 | Capture-first app routes, not Firebase Hosting routes. |
 
-`/app/**` is a single responsive React router. Mobile web is not a separate
-full product implementation; it is the same route family with capability gates.
-`/m/**` should be used only for the landing alias or temporary compatibility
-redirects, not as a second complete product route tree.
+Product routes intentionally do not use an `/app` prefix after the refactor.
+The root route stays the landing page, and signed-in calls to action continue
+into `/projects` or a specific project route. Mobile web is not a separate full
+product implementation; it is the same route family with capability gates.
+`/app/**` and `/m/app/**` should exist only as temporary redirects or legacy
+fallbacks during migration.
 
 ## Public And Auth Routes
 
 | Route | Page | Owner | Auth | Mobile web policy |
 |---|---|---|---|---|
-| `/` | Public landing | Static HTML | Public | Allowed |
-| `/m` | Mobile landing alias | Static HTML | Public | Allowed |
+| `/` | Public landing | Static/React landing | Public | Allowed |
 | `/login` | Auth callback / explicit sign-in | React web | Public -> auth | Allowed |
-| `/app` | Signed-in main landing | React web | Required | Allowed |
-| `/app/projects` | My projects | React web | Required | Allowed |
-| `/app/projects/new` | Create project modal route | React web | Required | Allowed |
-| `/app/projects/:projectId` | Project overview | React web | Required + owner/admin | Allowed |
+| `/projects` | My projects | React web | Required | Allowed |
+| `/projects/new` | Create project modal route | React web | Required | Allowed |
+| `/projects/:projectId` | Project overview | React web | Required + owner/admin | Allowed |
 
-The main logged-in route is `/app`, not `/app/projects`. `/app/projects` is the
-project list and lookup space.
+There is no final `/app` route. The homepage remains `/`, and the authenticated
+product entry is `/projects`.
 
 ## Project Workflow Routes
 
 | Route | Page | Owner | Desktop web | Mobile web | Native mobile |
 |---|---|---|---|---|---|
-| `/app/projects/:projectId/workspace` | Project workspace | React web | Full | Limited summary | Lightweight project shell |
-| `/app/projects/:projectId/room` | Room dimensions | React web | Full | View-only or locked edit | Optional later |
-| `/app/projects/:projectId/source` | Source images / upload status | React web | Upload/select | View-only, app handoff | Guided upload |
-| `/app/projects/:projectId/status` | Reconstruction status | React web | Full | Full status | Full status |
-| `/app/projects/:projectId/review` | CV candidate review | React web + editor bridge | Full | Locked, desktop handoff | Partial/later |
-| `/app/projects/:projectId/floor-plan` | Floor plan review | React web + editor bridge | Full | Preview only | Preview only |
-| `/app/projects/:projectId/editor` | 2D/3D editor | React editor | Full | Locked, desktop handoff | Viewer only |
-| `/app/projects/:projectId/layouts` | Save/load layout | React web | Full | Preview/recent only | Preview/recent only |
-| `/app/projects/:projectId/export` | Export JSON | React web | Full | Locked or download-only | Locked |
-| `/app/projects/:projectId/recovery` | Draft/sync recovery | React web | Full | Limited recovery notices | Native draft handling |
+| `/projects/:projectId/workspace` | Project workspace | React web | Full | Limited summary | Lightweight project shell |
+| `/projects/:projectId/room` | Room dimensions | React web | Full | View-only or locked edit | Optional later |
+| `/projects/:projectId/source` | Source images / upload status | React web | Upload/select | View-only, app handoff | Guided upload |
+| `/projects/:projectId/status` | Reconstruction status | React web | Full | Full status | Full status |
+| `/projects/:projectId/review` | CV candidate review | React web + editor bridge | Full | Locked, desktop handoff | Partial/later |
+| `/projects/:projectId/floor-plan` | Floor plan review | React web + editor bridge | Full | Preview only | Preview only |
+| `/projects/:projectId/editor` | 2D/3D editor | React editor | Full | Locked, desktop handoff | Viewer only |
+| `/projects/:projectId/layouts` | Save/load layout | React web | Full | Preview/recent only | Preview/recent only |
+| `/projects/:projectId/export` | Export JSON | React web | Full | Locked or download-only | Locked |
+| `/projects/:projectId/recovery` | Draft/sync recovery | React web | Full | Limited recovery notices | Native draft handling |
 
 Route names use `projects/:projectId` instead of the current
 `workspaces/:projectId` path. "Workspace" becomes a page under a project, not
@@ -77,9 +76,9 @@ the primary entity path.
 
 | Route | Page | Owner | Notes |
 |---|---|---|---|
-| `/app/projects/:projectId/review` | CV candidate review | React web + React editor shell | Uses existing postMessage bridge contract. |
-| `/app/projects/:projectId/floor-plan` | Metric floor plan review | React web + React editor shell | Shows confirmed meter-space model. |
-| `/app/projects/:projectId/editor` | Precision 2D/3D editor | React editor | React + react-three-fiber target. |
+| `/projects/:projectId/review` | CV candidate review | React web + React editor shell | Uses existing postMessage bridge contract. |
+| `/projects/:projectId/floor-plan` | Metric floor plan review | React web + React editor shell | Shows confirmed meter-space model. |
+| `/projects/:projectId/editor` | Precision 2D/3D editor | React editor | React + react-three-fiber target. |
 | `/legacy/editor/:projectId` | Legacy editor fallback | Flutter web legacy | Temporary only. |
 
 The editor must not import Firebase SDKs or own persistence. It receives project
@@ -123,11 +122,11 @@ During the migration, Flutter web remains available under `/legacy/**`.
 
 | Current route | New route | Legacy fallback |
 |---|---|---|
-| `/app` | `/app` | `/legacy/app` |
-| `/app/projects` | `/app/projects` | `/legacy/app/projects` |
-| `/app/workspaces/:projectId` | `/app/projects/:projectId/workspace` | `/legacy/app/workspaces/:projectId` |
-| `/app/workspaces/:projectId/editor` | `/app/projects/:projectId/editor` | `/legacy/app/workspaces/:projectId/editor` |
-| `/m/app/**` | `/app/**` limited mobile mode | `/legacy/m/app/**` |
+| `/app` | `/projects` | `/legacy/app` |
+| `/app/projects` | `/projects` | `/legacy/app/projects` |
+| `/app/workspaces/:projectId` | `/projects/:projectId/workspace` | `/legacy/app/workspaces/:projectId` |
+| `/app/workspaces/:projectId/editor` | `/projects/:projectId/editor` | `/legacy/app/workspaces/:projectId/editor` |
+| `/m/app/**` | Matching unprefixed route with mobile gates | `/legacy/m/app/**` |
 | `/admin/**` | `/admin/**` | `/legacy/admin/**` |
 
 Redirects should be explicit and tracked. Do not silently map old workspace
@@ -168,11 +167,10 @@ Minimum validation URLs for Phase 0/1:
 
 ```text
 /
-/app
-/app/projects
-/app/projects/demo-project
-/app/projects/demo-project/workspace
-/app/projects/demo-project/editor
+/projects
+/projects/demo-project
+/projects/demo-project/workspace
+/projects/demo-project/editor
 /admin
 /legacy/app
 ```

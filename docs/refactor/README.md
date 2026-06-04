@@ -13,6 +13,9 @@ toward React web surfaces while preserving Flutter web as temporary legacy and
 Flutter mobile as the future native camera/capture app. Use
 [Routing Page Definition](routing-page-definition.md) as the current route
 ownership source of truth before applying older Flutter-web shell assumptions.
+Use [Current Workspace Refactor Workflow](current-workspace-workflow.md) for the
+current design-folder migration sequence, WIP handling, validation loop, and
+commit boundaries.
 
 Legacy API response envelopes using `data`, `error`, and `meta.request_id`
 apply only to the legacy FastAPI API. Direct Firebase repository calls do not
@@ -29,6 +32,7 @@ Use this order when starting a Firebase refactor story:
    - [Product UX Directions](../product/ux-design-directions.html)
 2. Firebase refactor direction:
    - [Routing Page Definition](routing-page-definition.md)
+   - [Current Workspace Refactor Workflow](current-workspace-workflow.md)
    - [Firebase Backend Refactor Plan](firebase-backend-refactor-plan.md)
    - [Firebase UX Design Specification](firebase-ux-design-specification.md)
 3. Technical source of truth:

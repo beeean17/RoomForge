@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>08 · Geometry Correction — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>08</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">CV Review &amp; Editor</span>
+          <h1>Geometry Correction</h1>
+          <p>방 윤곽 꼭짓점과 벽 세그먼트를 조정해 저장 가능한 폐곡선을 만듭니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="geometry-scene">
+          <div class="poly-canvas">
+            <svg viewBox="0 0 520 360" role="img" aria-label="방 윤곽 보정">
+              <polygon points="90,70 420,48 458,280 116,310" fill="rgba(220,232,255,.22)" stroke="#8fb4ff" stroke-width="4"/>
+              <polyline points="90,70 420,48 458,280 116,310 90,70" fill="none" stroke="#d8b46a" stroke-width="2" stroke-dasharray="8 8"/>
+            </svg>
+            <span class="handle h1"></span><span class="handle h2"></span><span class="handle h3 selected"></span><span class="handle h4"></span>
+          </div>
+          <div class="validity"><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>valid polygon</span><span>4 points · 15.1 m² · image pixels</span></div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--measure"><span class="dot"></span>calibrating</span><span class="rf-chip rf-chip--error"><span class="dot"></span>invalid polygon</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>valid</span></div>
+          <ul class="component-list">
+            <li><strong>Corner handles</strong><span>방 윤곽 꼭짓점을 드래그. 선택 핸들은 크기와 outline으로 구분.</span></li><li><strong>Edge controls</strong><span>벽 세그먼트 추가/삭제, 직각 보정, undo/redo.</span></li><li><strong>Validity panel</strong><span>닫히지 않은 윤곽, self-intersection, 3점 미만을 저장 전 차단.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">윤곽 확정</button>
+        <button class="rf-btn rf-btn--block">직각 보정</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

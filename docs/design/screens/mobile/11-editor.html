@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>11 · 2D/3D Editor — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+    .device { width: 390px; max-width: 100%; height: 844px; max-height: 92vh; border-radius: 46px; padding: 12px; background: #050505; box-shadow: var(--rf-shadow-pop); }
+    .screen { position: relative; width: 100%; height: 100%; border-radius: 36px; overflow: hidden; background: var(--rf-canvas); display: flex; flex-direction: column; }
+    .statusbar { height: 44px; flex: none; background: var(--rf-glass); backdrop-filter: var(--rf-glass-blur); }
+
+    /* top bar */
+    .mtop { display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: var(--rf-glass); backdrop-filter: var(--rf-glass-blur); border-bottom: 1px solid var(--rf-line); }
+    .mtop .name { font-weight: 800; font-size: 14px; flex: 1; }
+    .mtop .name small { display: block; font-weight: 600; font-size: 10px; color: var(--rf-subtle); }
+
+    /* canvas */
+    .mcanvas { position: relative; flex: 1; overflow: hidden; background:
+      linear-gradient(90deg, var(--rf-grid) 1px, transparent 1px),
+      linear-gradient(180deg, var(--rf-grid) 1px, transparent 1px), var(--rf-canvas); background-size: 26px 26px; }
+    .vsw { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+    .scene { position: absolute; inset: 0; display: grid; place-items: center; }
+    .room { position: relative; width: 240px; height: 290px; border: 3px solid var(--rf-ink); border-radius: 6px; background: rgba(220,232,255,0.30); box-shadow: var(--rf-shadow-md); transition: transform var(--rf-dur-3) var(--rf-ease-out); }
+    .fxt { position: absolute; background: #eaf0ff; border: 2px solid var(--rf-save); }
+    .fxt.window { top: -5px; left: 38%; width: 26%; height: 7px; }
+    .fxt.door { bottom: 26px; left: -5px; width: 7px; height: 46px; }
+    .obj { position: absolute; border-radius: 5px; border: 2px solid; display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+    .obj.bed { left: 22%; top: 22%; width: 38%; height: 34%; background: var(--rf-candidate-tint); border-color: var(--rf-candidate); color: var(--rf-candidate); }
+    .obj.bed.selected { outline: 2px solid var(--rf-selected); outline-offset: 4px; box-shadow: 0 0 0 4px var(--rf-selected-tint); }
+    .obj.desk { right: 12%; bottom: 14%; width: 28%; height: 17%; background: var(--rf-confirmed-tint); border-color: var(--rf-confirmed); color: var(--rf-confirmed); }
+
+    /* floating round buttons */
+    .fabs { position: absolute; right: 12px; top: 60px; z-index: 5; display: grid; gap: 8px; }
+    .fabs .rf-icon-btn { background: var(--rf-glass-strong); backdrop-filter: var(--rf-glass-blur); box-shadow: var(--rf-shadow-sm); }
+
+    /* bottom inspector sheet — draggable feel */
+    .isheet {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
+      background: var(--rf-surface); border-radius: 8px 8px 28px 28px;
+      box-shadow: 0 -10px 36px rgba(0,0,0,0.18);
+      padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+      transform: translateY(0); transition: transform var(--rf-dur-3) var(--rf-ease-spring);
+    }
+    .isheet.collapsed { transform: translateY(calc(100% - 88px)); }
+    .grab { width: 40px; height: 4px; border-radius: 999px; background: var(--rf-line-strong); margin: 4px auto 12px; }
+    .ihead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .ihead h2 { font-size: 17px; }
+    .grp { display: grid; gap: 9px; margin-bottom: 16px; }
+    .gt { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rf-subtle); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ctrl { display: grid; gap: 5px; }
+    .ctrl label { font-size: 12px; font-weight: 600; color: var(--rf-ink-soft); }
+    .ctrl .rf-stepper { width: 100%; } .ctrl .rf-stepper input { flex: 1; width: auto; }
+
+    /* bottom tool dock (when sheet collapsed) */
+    .tooldock { display: flex; gap: 6px; justify-content: space-around; }
+    .tooldock .tool { flex: 1; height: 44px; border-radius: 8px; border: 1px solid transparent; background: var(--rf-paper); color: var(--rf-muted); display: grid; place-items: center; }
+    .tooldock .tool[aria-pressed="true"] { background: var(--rf-candidate-tint); color: var(--rf-candidate); }
+    .tooldock .tool svg { width: 20px; height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="device">
+    <main class="screen">
+      <div class="statusbar"></div>
+      <header class="mtop">
+        <button class="rf-icon-btn" style="width:36px;height:36px" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="name">침실 — A안<small>meters · 자동 저장</small></div>
+        <span class="rf-chip rf-chip--confirmed" style="min-height:26px"><span class="dot"></span>저장됨</span>
+      </header>
+
+      <div class="mcanvas">
+        <div class="vsw rf-segment" role="tablist" aria-label="보기">
+          <span class="thumb"></span>
+          <button data-value="2d" aria-selected="true">2D</button>
+          <button data-value="3d" aria-selected="false">3D</button>
+        </div>
+        <div class="fabs">
+          <button class="rf-icon-btn" aria-label="방에 맞추기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
+          <button class="rf-icon-btn" aria-label="실행 취소"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>
+        </div>
+        <div class="scene">
+          <div class="room" id="room">
+            <span class="fxt window"></span><span class="fxt door"></span>
+            <div class="obj bed selected" id="bed">침대</div>
+            <div class="obj desk" id="desk">책상</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inspector sheet -->
+      <section class="isheet" id="sheet" aria-label="속성">
+        <div class="grab" id="grab" role="button" tabindex="0" aria-label="검사기 펼치기/접기"></div>
+        <div class="ihead">
+          <h2 id="iname">침대</h2>
+          <span class="rf-chip rf-chip--selected"><span class="dot"></span>선택됨</span>
+        </div>
+
+        <div class="grp">
+          <span class="gt">크기 (m)</span>
+          <div class="row2">
+            <div class="ctrl"><label>가로</label><div class="rf-stepper"><button>−</button><input value="1.40" /><button>+</button></div></div>
+            <div class="ctrl"><label>세로</label><div class="rf-stepper"><button>−</button><input value="2.00" /><button>+</button></div></div>
+          </div>
+        </div>
+        <div class="grp">
+          <span class="gt">회전</span>
+          <input class="rf-slider" type="range" min="0" max="360" value="0" aria-label="회전" />
+        </div>
+        <div class="rf-notice rf-notice--warning" style="margin-bottom:14px">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+          <div><strong>창문과 가까움</strong>12cm 거리. 저장은 가능합니다.</div>
+        </div>
+
+        <div class="tooldock" role="toolbar" aria-label="도구">
+          <button class="tool" aria-pressed="true" aria-label="선택"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 7.5 18 2.5-7 7-2.5z"/></svg></button>
+          <button class="tool" aria-label="가구 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="18" height="8" rx="1"/><path d="M5 10V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+          <button class="tool" aria-label="측정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m2 12 5-5 15 15-5 5z"/></svg></button>
+          <button class="tool" aria-label="레이어"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/></svg></button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="../../system/motion.js"></script>
+  <script>
+    var sheet = document.getElementById('sheet'), grab = document.getElementById('grab');
+    function toggle(){ sheet.classList.toggle('collapsed'); }
+    grab.addEventListener('click', toggle);
+    grab.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
+
+    document.querySelectorAll('.obj').forEach(function(o){ o.addEventListener('click', function(){
+      document.querySelectorAll('.obj').forEach(function(x){ x.classList.remove('selected'); });
+      o.classList.add('selected');
+      document.getElementById('iname').textContent = o.id === 'bed' ? '침대' : '책상';
+    });});
+    document.querySelectorAll('.tooldock .tool').forEach(function(t){ t.addEventListener('click', function(){
+      document.querySelectorAll('.tooldock .tool').forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+      t.setAttribute('aria-pressed','true');
+    });});
+    document.querySelector('.vsw').addEventListener('rf:segment', function(e){
+      var room = document.getElementById('room');
+      room.style.transform = e.detail.value === '3d' ? 'perspective(700px) rotateX(46deg) scale(0.9)' : 'none';
+    });
+  </script>
+</body>
+</html>

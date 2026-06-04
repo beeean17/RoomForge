@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>04 · Room Dimensions — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--measure"><span class="dot"></span>measure</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/04-room-dimensions.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">04 · P0 Core Flow</span>
+            <h1>Room Dimensions</h1>
+            <p>방의 실제 가로, 세로, 높이를 meters 기준으로 입력하고 비율을 즉시 확인합니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">기본 높이 적용</button>
+            <button class="rf-btn rf-btn--primary">치수 저장</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="dimension-scene">
+          <div class="dimension-form">
+            <label class="rf-field"><span class="rf-label">가로</span><span class="rf-input-unit"><input class="rf-input" value="3.60" /><span class="unit">m</span></span></label>
+            <label class="rf-field"><span class="rf-label">세로</span><span class="rf-input-unit"><input class="rf-input" value="4.20" /><span class="unit">m</span></span></label>
+            <label class="rf-field"><span class="rf-label">높이</span><span class="rf-input-unit"><input class="rf-input" value="2.40" /><span class="unit">m</span></span></label>
+            <div class="rf-notice rf-notice--warning"><span class="ic">!</span><div><strong>기본 높이 사용</strong>실측 높이를 모르면 2.40m로 시작할 수 있습니다.</div></div>
+          </div>
+          <div class="metric-plan wide"><span class="room-shape"></span><span class="measure-x">3.60 m</span><span class="measure-y">4.20 m</span><span class="mini-bed"></span></div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--measure"><span class="dot"></span>metric</span><span class="rf-chip rf-chip--warning"><span class="dot"></span>default height</span><span class="rf-chip rf-chip--error"><span class="dot"></span>invalid</span></div>
+        <ul class="component-list">
+          <li><strong>Dimension inputs</strong><span>가로, 세로, 높이를 meters 기준으로 입력. 높이는 MVP 기본값을 명확히 표시.</span></li><li><strong>Unit lock</strong><span>현재 MVP는 meters 중심. 단위 선택이 생겨도 저장 스키마는 meter로 변환.</span></li><li><strong>Room preview</strong><span>입력값에 따라 비율이 바뀌는 미니 평면도.</span></li><li><strong>Validation copy</strong><span>0 이하 값, 비현실적 치수, 누락 값을 입력 바로 아래에서 표시.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

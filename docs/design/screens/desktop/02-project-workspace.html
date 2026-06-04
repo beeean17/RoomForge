@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>02 · Project Workspace — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <style>
+    .work { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr); gap: 20px; padding: 24px; max-width: var(--rf-max-w); margin: 0 auto; }
+    @media (max-width: 1000px) { .work { grid-template-columns: 1fr; } }
+
+    .col-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .col-head h1 { font-size: 22px; letter-spacing: 0; }
+    .searchbar { position: relative; flex: 1; max-width: 320px; }
+    .searchbar svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--rf-subtle); }
+    .searchbar input { padding-left: 34px; min-height: 38px; }
+
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .fchip { cursor: pointer; user-select: none; transition: transform var(--rf-dur-1) var(--rf-ease-spring); }
+    .fchip:hover { transform: translateY(-1px); }
+    .fchip[aria-pressed="true"] { background: var(--rf-candidate); color: #050505; border-color: var(--rf-candidate); }
+
+    .plist { display: grid; gap: 12px; }
+    .pcard { display: grid; grid-template-columns: 92px 1fr auto; gap: 16px; padding: 14px; align-items: center; }
+    .thumb { width: 92px; height: 70px; border-radius: var(--rf-radius-sm); overflow: hidden; position: relative; background: var(--rf-canvas); border: 1px solid var(--rf-line); }
+    .thumb .grid { position: absolute; inset: 0; background-image: linear-gradient(var(--rf-grid) 1px, transparent 1px), linear-gradient(90deg, var(--rf-grid) 1px, transparent 1px); background-size: 12px 12px; }
+    .thumb .out { position: absolute; inset: 14px; border: 2px solid var(--rf-ink); border-radius: 3px; background: rgba(220,232,255,0.28); }
+    .thumb .bd { position: absolute; left: 28%; top: 30%; width: 30%; height: 32%; background: var(--rf-candidate-tint); border: 1.5px solid var(--rf-candidate); border-radius: 2px; }
+    .pmeta h3 { font-size: 15px; margin-bottom: 4px; }
+    .pmeta .sub { color: var(--rf-muted); font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .pmeta .sub b { color: var(--rf-ink-soft); font-weight: 600; }
+
+    /* Detail panel */
+    .detail { position: sticky; top: 24px; align-self: start; padding: 0; overflow: hidden; }
+    .detail .head { padding: 18px 18px 14px; border-bottom: 1px solid var(--rf-line); background: var(--rf-surface-raised); }
+    .detail .head h2 { font-size: 18px; }
+    .detail .head .sub { color: var(--rf-muted); font-size: 12px; margin-top: 4px; }
+    .preview3d { height: 200px; position: relative; background:
+        linear-gradient(135deg, rgba(143,180,255,0.08), transparent 42%), var(--rf-canvas);
+      border-bottom: 1px solid var(--rf-line); overflow: hidden; }
+    .preview3d .floor { position: absolute; inset: 40px 36px 30px; border: 2.5px solid var(--rf-ink); border-radius: 5px; transform: perspective(700px) rotateX(46deg); transform-origin: bottom; background: rgba(220,232,255,0.30); box-shadow: var(--rf-shadow-sm); }
+    .preview3d .bed { position: absolute; left: 32%; top: 36%; width: 26%; height: 26%; background: var(--rf-candidate-tint); border: 2px solid var(--rf-candidate); border-radius: 3px; transform: perspective(700px) rotateX(46deg); }
+    .detail .body { padding: 16px 18px; display: grid; gap: 14px; }
+    .kv { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .kv .cell { padding: 10px 12px; border: 1px solid var(--rf-line); border-radius: var(--rf-radius-sm); background: var(--rf-surface); }
+    .kv .cell span { display: block; font-size: 11px; color: var(--rf-subtle); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .kv .cell b { font-size: 16px; }
+    .acts { display: grid; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="rf-shell">
+    <!-- App shell top bar -->
+    <header class="rf-topbar">
+      <div class="rf-brand"><span class="rf-brand-mark"></span> RoomForge</div>
+      <span class="rf-chip rf-chip--admin" style="margin-left:8px"><span class="dot"></span>내 프로젝트</span>
+      <div class="rf-spacer"></div>
+      <button class="rf-icon-btn" data-tip="알림" aria-label="알림"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+      <button class="rf-btn rf-btn--primary" id="new"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>새 프로젝트</button>
+      <div class="rf-avatar" data-tip="계정" aria-label="계정 메뉴">SY</div>
+    </header>
+
+    <div class="work">
+      <!-- List column -->
+      <section aria-label="프로젝트 목록">
+        <div class="col-head">
+          <h1>프로젝트</h1>
+          <div class="searchbar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input class="rf-input" type="search" placeholder="이름·상태로 검색" aria-label="프로젝트 검색" />
+          </div>
+        </div>
+
+        <div class="filters" role="group" aria-label="상태 필터">
+          <button class="rf-chip fchip" aria-pressed="true">전체</button>
+          <button class="rf-chip fchip rf-chip--save"><span class="dot"></span>처리 중</button>
+          <button class="rf-chip fchip rf-chip--warning"><span class="dot"></span>검토 필요</button>
+          <button class="rf-chip fchip rf-chip--confirmed"><span class="dot"></span>완료</button>
+        </div>
+
+        <div class="plist" data-stagger>
+          <!-- selected -->
+          <article class="rf-card rf-card--interactive rf-card--selected pcard" tabindex="0" aria-current="true">
+            <div class="thumb"><span class="grid"></span><span class="out"></span><span class="bd"></span></div>
+            <div class="pmeta">
+              <h3>침실 — 리모델링 A안</h3>
+              <div class="sub"><span>3.6 × 4.2 m</span><span>가구 <b>5</b></span><span>방금 저장됨</span></div>
+            </div>
+            <span class="rf-chip rf-chip--confirmed"><span class="dot"></span>완료</span>
+          </article>
+
+          <article class="rf-card rf-card--interactive pcard" tabindex="0">
+            <div class="thumb"><span class="grid"></span><span class="out"></span></div>
+            <div class="pmeta">
+              <h3>거실 — 소파 배치 테스트</h3>
+              <div class="sub"><span>5.1 × 3.8 m</span><span>가구 <b>3</b></span><span>12분 전</span></div>
+            </div>
+            <span class="rf-chip rf-chip--save rf-chip--live"><span class="dot"></span>처리 중</span>
+          </article>
+
+          <article class="rf-card rf-card--interactive pcard" tabindex="0">
+            <div class="thumb"><span class="grid"></span><span class="out"></span><span class="bd" style="background:var(--rf-warning-tint);border-color:var(--rf-warning)"></span></div>
+            <div class="pmeta">
+              <h3>작업실 — 책상 2개</h3>
+              <div class="sub"><span>2.8 × 3.0 m</span><span>가구 <b>2</b></span><span>어제</span></div>
+            </div>
+            <span class="rf-chip rf-chip--warning"><span class="dot"></span>검토 필요</span>
+          </article>
+
+          <article class="rf-card rf-card--interactive pcard" tabindex="0">
+            <div class="thumb"><span class="grid"></span><span class="out"></span></div>
+            <div class="pmeta">
+              <h3>현관 수납 정리</h3>
+              <div class="sub"><span>1.6 × 2.2 m</span><span>가구 <b>1</b></span><span>3일 전</span></div>
+            </div>
+            <span class="rf-chip"><span class="dot"></span>초안</span>
+          </article>
+        </div>
+      </section>
+
+      <!-- Detail panel -->
+      <aside class="rf-panel detail" aria-label="선택한 프로젝트 상세" data-reveal>
+        <div class="head">
+          <div class="rf-between">
+            <h2>침실 — 리모델링 A안</h2>
+            <span class="rf-chip rf-chip--confirmed"><span class="dot"></span>완료</span>
+          </div>
+          <p class="sub">마지막 저장 · 방금 전 · 좌표계 meters</p>
+        </div>
+        <div class="preview3d" aria-hidden="true">
+          <span class="floor"></span><span class="bed"></span>
+        </div>
+        <div class="body">
+          <div class="kv">
+            <div class="cell"><span>가로</span><b>3.6 m</b></div>
+            <div class="cell"><span>세로</span><b>4.2 m</b></div>
+            <div class="cell"><span>높이</span><b>2.4 m</b></div>
+          </div>
+          <div class="rf-notice rf-notice--success">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            <div><strong>저장 완료</strong>최신 레이아웃이 클라우드에 안전하게 저장되었습니다.</div>
+          </div>
+          <div class="acts">
+            <button class="rf-btn rf-btn--primary rf-btn--block rf-btn--lg">에디터에서 이어서 작업</button>
+            <div class="rf-row" style="gap:8px">
+              <button class="rf-btn" style="flex:1">이미지 다시 업로드</button>
+              <button class="rf-btn" style="flex:1">내보내기</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.getElementById('new').addEventListener('click', function(){ rfToast('새 프로젝트 만들기 — 다이얼로그(03)로 이동'); });
+    document.querySelectorAll('.fchip').forEach(function(c){ c.addEventListener('click', function(){
+      document.querySelectorAll('.fchip').forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+      c.setAttribute('aria-pressed','true');
+    });});
+  </script>
+</body>
+</html>

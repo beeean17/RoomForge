@@ -127,6 +127,20 @@
       ]
     },
     {
+      "collectionGroup": "capture_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "owner_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updated_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "admin_actions",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

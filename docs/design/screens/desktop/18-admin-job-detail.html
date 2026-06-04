@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>18 · Admin Job Detail — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--admin"><span class="dot"></span>diagnostics</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/18-admin-job-detail.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">18 · Admin &amp; Support</span>
+            <h1>Admin Job Detail</h1>
+            <p>단일 재구성 job의 메타데이터, 상태 전환, artifact, CV 요약을 조사합니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">재시도 검토</button>
+            <button class="rf-btn rf-btn--primary">artifact 열기</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="admin-detail-scene">
+          <div class="meta-grid"><div><span>job</span><b>job_9b2f</b></div><div><span>provider</span><b>opencv-worker</b></div><div><span>attempt</span><b>01</b></div></div>
+          <div class="artifact-grid"><div><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>source</span>image.jpg</div><div><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>overlay</span>overlay.png</div><div><span class="rf-chip rf-chip--warning"><span class="dot"></span>depth</span>missing</div><div><span class="rf-chip rf-chip--admin"><span class="dot"></span>layout</span>floor.json</div></div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>available</span><span class="rf-chip rf-chip--warning"><span class="dot"></span>missing</span><span class="rf-chip rf-chip--error"><span class="dot"></span>restricted</span></div>
+        <ul class="component-list">
+          <li><strong>Metadata header</strong><span>owner, project, job, provider, attempt, status를 고정 영역에 표시.</span></li><li><strong>Transition timeline</strong><span>상태 변화와 발생 시간을 줄 단위로 스캔 가능하게 표시.</span></li><li><strong>Artifact panels</strong><span>source, overlay, mask, depth, floor plan, layout refs의 존재/접근/실패 상태.</span></li><li><strong>OpenCV summary</strong><span>candidate count, runtime, confidence, failure reason.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

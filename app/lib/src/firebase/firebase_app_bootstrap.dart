@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -47,72 +49,96 @@ class FirebaseAppBootstrapResult {
 }
 
 class FirebaseAppBootstrap {
+  static const _bootstrapTimeout = Duration(seconds: 5);
+
   static Future<FirebaseAppBootstrapResult> initialize() async {
     final backendMode = BackendModeConfig.current;
 
     if (!FirebaseOptionsFromEnv.isConfigured) {
-      return FirebaseAppBootstrapResult(
-        authRepository: DisabledAuthRepository(),
-        adminRepository: const DisabledFirebaseAdminRepository(),
-        floorPlanRepository: const DisabledFirebaseFloorPlanRepository(),
-        geometryRepository: const DisabledFirebaseGeometryRepository(),
-        layoutRepository: const DisabledFirebaseLayoutRepository(),
-        projectRepository: const DisabledFirebaseProjectRepository(),
-        reconstructionRepository:
-            const DisabledFirebaseReconstructionRepository(),
-        roomDimensionsRepository:
-            const DisabledFirebaseRoomDimensionsRepository(),
-        sceneUnderstandingRepository:
-            const DisabledFirebaseSceneUnderstandingRepository(),
-        sourceImageRepository: const DisabledFirebaseSourceImageRepository(),
-        sourceImageUploader: const DisabledFirebaseSourceImageUploader(),
-        userRepository: DisabledFirebaseUserRepository(),
-        backendMode: backendMode,
-        authSetupMessage:
-            'Firebase web configuration is missing. Provide ROOMFORGE_FIREBASE_* dart defines to enable Google sign-in.',
+      return _disabledResult(
+        backendMode,
+        'Firebase web configuration is missing. Provide ROOMFORGE_FIREBASE_* dart defines to enable Google sign-in.',
       );
     }
 
-    await Firebase.initializeApp(
-      options: FirebaseOptionsFromEnv.currentPlatform,
-    );
+    try {
+      await Firebase.initializeApp(
+        options: FirebaseOptionsFromEnv.currentPlatform,
+      ).timeout(_bootstrapTimeout);
 
-    final firebaseAuth = FirebaseAuth.instance;
-    final firestore = FirebaseFirestore.instance;
-    final storage = FirebaseStorage.instance;
-    if (FirebaseOptionsFromEnv.useAuthEmulator) {
-      await firebaseAuth.useAuthEmulator('localhost', 9099);
-      firestore.useFirestoreEmulator('localhost', 8080);
-      storage.useStorageEmulator('localhost', 9199);
+      final firebaseAuth = FirebaseAuth.instance;
+      final firestore = FirebaseFirestore.instance;
+      final storage = FirebaseStorage.instance;
+      if (FirebaseOptionsFromEnv.useAuthEmulator) {
+        await firebaseAuth
+            .useAuthEmulator('localhost', 9099)
+            .timeout(_bootstrapTimeout);
+        firestore.useFirestoreEmulator('localhost', 8080);
+        storage.useStorageEmulator('localhost', 9199);
+      }
+
+      return FirebaseAppBootstrapResult(
+        authRepository: FirebaseAuthRepository(firebaseAuth),
+        adminRepository: FirebaseAdminAccessRepository(firestore: firestore),
+        floorPlanRepository: FirebaseFirestoreFloorPlanRepository(
+          firestore: firestore,
+        ),
+        geometryRepository: FirebaseFirestoreGeometryRepository(
+          firestore: firestore,
+        ),
+        layoutRepository: FirebaseFirestoreLayoutRepository(
+          firestore: firestore,
+        ),
+        projectRepository: FirebaseFirestoreProjectRepository(
+          firestore: firestore,
+        ),
+        reconstructionRepository: FirebaseFirestoreReconstructionRepository(
+          firestore: firestore,
+        ),
+        roomDimensionsRepository: FirebaseFirestoreRoomDimensionsRepository(
+          firestore: firestore,
+        ),
+        sceneUnderstandingRepository:
+            FirebaseFirestoreSceneUnderstandingRepository(firestore: firestore),
+        sourceImageRepository: FirebaseFirestoreSourceImageRepository(
+          firestore: firestore,
+        ),
+        sourceImageUploader: FirebaseStorageSourceImageUploader(
+          storage: storage,
+        ),
+        userRepository: FirebaseUserProfileRepository(firestore: firestore),
+        backendMode: backendMode,
+      );
+    } catch (error) {
+      return _disabledResult(
+        backendMode,
+        'Firebase initialization failed. Check Firebase dart defines, network, emulator settings, and browser console. Error: $error',
+      );
     }
+  }
 
+  static FirebaseAppBootstrapResult _disabledResult(
+    BackendMode backendMode,
+    String message,
+  ) {
     return FirebaseAppBootstrapResult(
-      authRepository: FirebaseAuthRepository(firebaseAuth),
-      adminRepository: FirebaseAdminAccessRepository(firestore: firestore),
-      floorPlanRepository: FirebaseFirestoreFloorPlanRepository(
-        firestore: firestore,
-      ),
-      geometryRepository: FirebaseFirestoreGeometryRepository(
-        firestore: firestore,
-      ),
-      layoutRepository: FirebaseFirestoreLayoutRepository(firestore: firestore),
-      projectRepository: FirebaseFirestoreProjectRepository(
-        firestore: firestore,
-      ),
-      reconstructionRepository: FirebaseFirestoreReconstructionRepository(
-        firestore: firestore,
-      ),
-      roomDimensionsRepository: FirebaseFirestoreRoomDimensionsRepository(
-        firestore: firestore,
-      ),
+      authRepository: DisabledAuthRepository(),
+      adminRepository: const DisabledFirebaseAdminRepository(),
+      floorPlanRepository: const DisabledFirebaseFloorPlanRepository(),
+      geometryRepository: const DisabledFirebaseGeometryRepository(),
+      layoutRepository: const DisabledFirebaseLayoutRepository(),
+      projectRepository: const DisabledFirebaseProjectRepository(),
+      reconstructionRepository:
+          const DisabledFirebaseReconstructionRepository(),
+      roomDimensionsRepository:
+          const DisabledFirebaseRoomDimensionsRepository(),
       sceneUnderstandingRepository:
-          FirebaseFirestoreSceneUnderstandingRepository(firestore: firestore),
-      sourceImageRepository: FirebaseFirestoreSourceImageRepository(
-        firestore: firestore,
-      ),
-      sourceImageUploader: FirebaseStorageSourceImageUploader(storage: storage),
-      userRepository: FirebaseUserProfileRepository(firestore: firestore),
+          const DisabledFirebaseSceneUnderstandingRepository(),
+      sourceImageRepository: const DisabledFirebaseSourceImageRepository(),
+      sourceImageUploader: const DisabledFirebaseSourceImageUploader(),
+      userRepository: DisabledFirebaseUserRepository(),
       backendMode: backendMode,
+      authSetupMessage: message,
     );
   }
 }

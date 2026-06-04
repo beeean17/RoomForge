@@ -14,6 +14,8 @@ dependencies:
   firebase_storage: ^13.4.1
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   http: ^1.6.0
 
 dev_dependencies:
@@ -23,3 +25,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/design/room.png

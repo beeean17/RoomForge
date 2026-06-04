@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>03 · Project Dialog — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>03</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">P0 Core Flow</span>
+          <h1>Project Dialog</h1>
+          <p>프로젝트 생성, 편집, 삭제 확인을 한 흐름 안에서 처리합니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="dialog-scene">
+          <div class="mock-dialog">
+            <div class="dialog-top"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>create</span><span class="rf-muted">새 프로젝트</span></div>
+            <label class="rf-field"><span class="rf-label">프로젝트 이름</span><input class="rf-input" value="침실 - 리모델링 A안" /></label>
+            <label class="rf-field"><span class="rf-label">설명</span><textarea class="rf-textarea">붙박이장 교체 전 침대, 책상 배치 확인</textarea></label>
+            <div class="danger-zone"><span class="rf-chip rf-chip--error"><span class="dot"></span>delete confirm</span><p>삭제는 프로젝트 이미지와 layout draft를 함께 제거합니다.</p></div>
+            <div class="dialog-actions"><button class="rf-btn">취소</button><button class="rf-btn rf-btn--primary">저장</button></div>
+          </div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>create</span><span class="rf-chip rf-chip--save"><span class="dot"></span>edit</span><span class="rf-chip rf-chip--error"><span class="dot"></span>delete confirm</span></div>
+          <ul class="component-list">
+            <li><strong>Name field</strong><span>필수 입력, 글자 수, 중복 또는 빈 값 검증.</span></li><li><strong>Description</strong><span>선택 입력. 방 이름만으로 부족할 때 메모를 남김.</span></li><li><strong>Danger zone</strong><span>삭제 확인은 별도 강조 영역과 최종 확인 버튼.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">프로젝트 저장</button>
+        <button class="rf-btn rf-btn--block">삭제 확인</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

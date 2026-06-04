@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>17 · Admin Dashboard And Search — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--admin"><span class="dot"></span>ops</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/17-admin-dashboard.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">17 · Admin &amp; Support</span>
+            <h1>Admin Dashboard And Search</h1>
+            <p>운영자가 job을 검색, 필터, 스캔하고 실패 상태를 빠르게 찾는 화면입니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">CSV 내보내기</button>
+            <button class="rf-btn rf-btn--primary">필터 적용</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="admin-scene">
+          <div class="admin-metrics"><div><b>128</b><span>jobs</span></div><div><b>17</b><span>Needs review</span></div><div><b>9</b><span>failed</span></div></div>
+          <table class="job-table"><thead><tr><th>Job</th><th>Status</th><th>Owner</th><th>Updated</th></tr></thead><tbody><tr><td>job_9b2f</td><td><span class="rf-chip rf-chip--save"><span class="dot"></span>processing</span></td><td>user_342</td><td>2m</td></tr><tr><td>job_82ac</td><td><span class="rf-chip rf-chip--warning"><span class="dot"></span>Needs review</span></td><td>user_118</td><td>8m</td></tr><tr><td>job_77cd</td><td><span class="rf-chip rf-chip--error"><span class="dot"></span>failed</span></td><td>user_029</td><td>13m</td></tr></tbody></table>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--admin"><span class="dot"></span>empty</span><span class="rf-chip rf-chip--candidate"><span class="dot"></span>filtered</span><span class="rf-chip rf-chip--error"><span class="dot"></span>permission denied</span></div>
+        <ul class="component-list">
+          <li><strong>Status filters</strong><span>created, processing, Needs review, failed, timeout 등을 빠르게 필터.</span></li><li><strong>Job table</strong><span>job id, user, project, status, provider, updated time, action.</span></li><li><strong>Global search</strong><span>user id, project id, job id, status 검색과 no results 상태.</span></li><li><strong>Permission row</strong><span>권한 실패는 데이터 누출 없이 행 단위 상태로 표시.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

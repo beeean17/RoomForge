@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>12 · Furniture And Inspector — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>12</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">CV Review &amp; Editor</span>
+          <h1>Furniture And Inspector</h1>
+          <p>가구 프록시를 추가하고 위치, 회전, 크기, 충돌 상태를 편집합니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="furniture-scene">
+          <div class="metric-plan editor"><span class="room-shape"></span><span class="mini-bed selected"></span><span class="desk collision"></span><span class="window"></span></div>
+          <div class="object-catalog">
+            <button class="obj-tile active">Bed<span>1.6 × 2.0</span></button><button class="obj-tile">Desk<span>1.2 × 0.7</span></button><button class="obj-tile">Chair<span>0.5 × 0.5</span></button>
+          </div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>candidate</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>confirmed</span><span class="rf-chip rf-chip--selected"><span class="dot"></span>selected</span><span class="rf-chip rf-chip--error"><span class="dot"></span>collision</span></div>
+          <ul class="component-list">
+            <li><strong>Furniture catalog</strong><span>침대, 책상, 의자, 수납장 등 대표 프록시 오브젝트를 크기 prior와 함께 제공.</span></li><li><strong>Object chip</strong><span>후보/확정/선택/잠금 상태를 텍스트와 outline으로 구분.</span></li><li><strong>Transform controls</strong><span>x/y 위치, 회전, width/depth/height, stepper와 slider 조합.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">선택 객체 저장</button>
+        <button class="rf-btn rf-btn--block">가구 추가</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

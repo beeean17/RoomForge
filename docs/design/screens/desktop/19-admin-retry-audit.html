@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>19 · Admin Retry And Audit — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>action</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/19-admin-retry-audit.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">19 · Admin &amp; Support</span>
+            <h1>Admin Retry And Audit</h1>
+            <p>재시도 가능 조건을 확인하고 관리자 action receipt를 남깁니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">감사 로그 보기</button>
+            <button class="rf-btn rf-btn--primary">재시도 실행</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="retry-scene">
+          <div class="mock-dialog compact">
+            <span class="rf-chip rf-chip--warning"><span class="dot"></span>confirm retry</span><h2>job_77cd 재시도</h2><p>원본 artifact를 사용해 새 attempt를 생성합니다.</p>
+            <label class="rf-toggle"><input type="checkbox" checked /><span class="track"></span><span>관리자 감사 로그 남기기</span></label>
+            <div class="dialog-actions"><button class="rf-btn">취소</button><button class="rf-btn rf-btn--primary">재시도 실행</button></div>
+          </div>
+          <div class="audit-card"><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>audited</span>action_44fa · SY · 10:44</div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--warning"><span class="dot"></span>confirm</span><span class="rf-chip rf-chip--error"><span class="dot"></span>unavailable</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>audited</span></div>
+        <ul class="component-list">
+          <li><strong>Retry dialog</strong><span>원본 job, 새 job, 재시도 가능 조건을 확인한 뒤 실행.</span></li><li><strong>Unavailable state</strong><span>이미 처리 중, 권한 없음, artifact 없음 등 재시도 불가 사유.</span></li><li><strong>Audit receipt</strong><span>관리자 action id, 시간, 대상, 결과를 저장 후 표시.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

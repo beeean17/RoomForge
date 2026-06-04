@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>18 · Admin Job Detail — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>18</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">Admin &amp; Support</span>
+          <h1>Admin Job Detail</h1>
+          <p>단일 재구성 job의 메타데이터, 상태 전환, artifact, CV 요약을 조사합니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="admin-detail-scene">
+          <div class="meta-grid"><div><span>job</span><b>job_9b2f</b></div><div><span>provider</span><b>opencv-worker</b></div><div><span>attempt</span><b>01</b></div></div>
+          <div class="artifact-grid"><div><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>source</span>image.jpg</div><div><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>overlay</span>overlay.png</div><div><span class="rf-chip rf-chip--warning"><span class="dot"></span>depth</span>missing</div><div><span class="rf-chip rf-chip--admin"><span class="dot"></span>layout</span>floor.json</div></div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>available</span><span class="rf-chip rf-chip--warning"><span class="dot"></span>missing</span><span class="rf-chip rf-chip--error"><span class="dot"></span>restricted</span></div>
+          <ul class="component-list">
+            <li><strong>Metadata header</strong><span>owner, project, job, provider, attempt, status를 고정 영역에 표시.</span></li><li><strong>Transition timeline</strong><span>상태 변화와 발생 시간을 줄 단위로 스캔 가능하게 표시.</span></li><li><strong>Artifact panels</strong><span>source, overlay, mask, depth, floor plan, layout refs의 존재/접근/실패 상태.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">artifact 열기</button>
+        <button class="rf-btn rf-btn--block">재시도 검토</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

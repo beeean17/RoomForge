@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>08 · Geometry Correction — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>outline</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/08-geometry-correction.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">08 · CV Review &amp; Editor</span>
+            <h1>Geometry Correction</h1>
+            <p>방 윤곽 꼭짓점과 벽 세그먼트를 조정해 저장 가능한 폐곡선을 만듭니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">직각 보정</button>
+            <button class="rf-btn rf-btn--primary">윤곽 확정</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="geometry-scene">
+          <div class="poly-canvas">
+            <svg viewBox="0 0 520 360" role="img" aria-label="방 윤곽 보정">
+              <polygon points="90,70 420,48 458,280 116,310" fill="rgba(220,232,255,.22)" stroke="#8fb4ff" stroke-width="4"/>
+              <polyline points="90,70 420,48 458,280 116,310 90,70" fill="none" stroke="#d8b46a" stroke-width="2" stroke-dasharray="8 8"/>
+            </svg>
+            <span class="handle h1"></span><span class="handle h2"></span><span class="handle h3 selected"></span><span class="handle h4"></span>
+          </div>
+          <div class="validity"><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>valid polygon</span><span>4 points · 15.1 m² · image pixels</span></div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--measure"><span class="dot"></span>calibrating</span><span class="rf-chip rf-chip--error"><span class="dot"></span>invalid polygon</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>valid</span></div>
+        <ul class="component-list">
+          <li><strong>Corner handles</strong><span>방 윤곽 꼭짓점을 드래그. 선택 핸들은 크기와 outline으로 구분.</span></li><li><strong>Edge controls</strong><span>벽 세그먼트 추가/삭제, 직각 보정, undo/redo.</span></li><li><strong>Validity panel</strong><span>닫히지 않은 윤곽, self-intersection, 3점 미만을 저장 전 차단.</span></li><li><strong>Summary</strong><span>현재 점 개수, 면적, 좌표계가 image pixels인지 meters인지 명시.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

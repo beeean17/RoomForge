@@ -46,6 +46,7 @@ import {
   type FixtureEditAction,
 } from './fixtureModel'
 import {
+  furnitureOutsideRoom,
   measurementSummaryForModel,
   placementWarningForModel,
 } from './measurementGuidance'
@@ -65,6 +66,7 @@ import {
   type StructuralFixtureObject,
   type ViewMode,
 } from './spatialModel'
+import { furnitureSizePriorForCategory } from './sizePriors.ts'
 
 const app = document.querySelector<HTMLDivElement>('#app')
 
@@ -76,12 +78,80 @@ const localeOverride = new URLSearchParams(window.location.search).get('locale')
 const usesKorean = localeOverride.startsWith('ko') || navigator.language.toLowerCase().startsWith('ko')
 const t = (english: string, korean: string): string => (usesKorean ? korean : english)
 
+const catalogFurnitureItems: Array<{
+  category: FurnitureCategory
+  label: string
+  labelKo: string
+  note: string
+  noteKo: string
+}> = [
+  { category: 'bed', label: 'Bed', labelKo: '침대', note: 'sleep zone', noteKo: '수면 영역' },
+  { category: 'desk', label: 'Desk', labelKo: '책상', note: 'work surface', noteKo: '작업면' },
+  { category: 'chair', label: 'Chair', labelKo: '의자', note: 'seating', noteKo: '좌석' },
+  { category: 'wardrobe', label: 'Storage', labelKo: '수납장', note: 'wall aligned', noteKo: '벽면 정렬' },
+]
+
+const furnitureCatalogMarkup = catalogFurnitureItems
+  .map((item) => {
+    const prior = furnitureSizePriorForCategory(item.category)
+    const label = t(item.label, item.labelKo)
+    const note = t(item.note, item.noteKo)
+    return `<button class="obj-tile" type="button" data-furniture-category="${item.category}">
+      <strong>${label}</strong>
+      <span>${prior.size.widthMeters.toFixed(1)} x ${prior.size.depthMeters.toFixed(1)} m</span>
+      <small>${note}</small>
+    </button>`
+  })
+  .join('')
+
 app.innerHTML = `
 <section class="editor-shell">
+  <header class="editor-topbar" aria-label="${t('Editor top bar', '편집기 상단 바')}">
+    <div class="editor-project">
+      <strong>${t('Bedroom remodel', '침실 리모델링')}</strong>
+      <span>${t('meters coordinate space · autosave on', 'meters 좌표계 · 자동 저장 켜짐')}</span>
+    </div>
+    <div class="editor-top-actions">
+      <button id="top-undo" type="button" aria-label="${t('Undo geometry edit', '지오메트리 편집 되돌리기')}">${t('Undo', '되돌리기')}</button>
+      <button id="top-redo" type="button" aria-label="${t('Redo geometry edit', '지오메트리 편집 다시 실행')}">${t('Redo', '다시 실행')}</button>
+      <button id="save-layout" type="button">${t('Save', '저장')}</button>
+      <span class="state-pill confirmed" id="editor-save-state">${t('saved', '저장됨')}</span>
+      <button id="export-layout" type="button">${t('Export', '내보내기')}</button>
+    </div>
+  </header>
+  <div class="editor-stage">
+  <nav class="tool-rail" aria-label="${t('Editor tools', '편집 도구')}">
+    <button type="button" data-editor-tool="select" aria-pressed="true" title="${t('Select', '선택')}" aria-label="${t('Select', '선택')}">S</button>
+    <button type="button" data-editor-tool="move" aria-pressed="false" title="${t('Move', '이동')}" aria-label="${t('Move', '이동')}">M</button>
+    <button type="button" data-editor-tool="furniture" aria-pressed="false" title="${t('Add furniture', '가구 추가')}" aria-label="${t('Add furniture', '가구 추가')}">F</button>
+    <button type="button" data-editor-tool="measure" aria-pressed="false" title="${t('Measure', '측정')}" aria-label="${t('Measure', '측정')}">R</button>
+    <button type="button" data-editor-tool="layers" aria-pressed="false" title="${t('Layers', '레이어')}" aria-label="${t('Layers', '레이어')}">L</button>
+  </nav>
   <div class="viewport" aria-label="${t('RoomForge editor viewport', 'RoomForge 편집기 뷰포트')}">
     <div class="viewport-toolbar" aria-label="${t('Planning view controls', '배치 보기 컨트롤')}">
       <button id="view-2d" type="button" aria-label="${t('Show 2D planning view', '2D 배치 보기 표시')}" aria-pressed="true">2D</button>
       <button id="view-3d" type="button" aria-label="${t('Show 3D inspection view', '3D 검사 보기 표시')}" aria-pressed="false">3D</button>
+      <button id="view-split" type="button" aria-label="${t('Show split planning view', 'Split 배치 보기 표시')}" aria-pressed="false">Split</button>
+    </div>
+    <div class="canvas-toolbar" role="toolbar" aria-label="${t('Canvas tools', '캔버스 도구')}">
+      <button type="button" data-camera-action="fit">${t('Fit', '맞춤')}</button>
+      <button type="button" data-camera-action="reset">${t('Reset', '초기화')}</button>
+      <button type="button" data-canvas-toggle="snap" aria-pressed="true">${t('Snap', '스냅')}</button>
+      <button type="button" data-canvas-toggle="grid" aria-pressed="true">${t('Grid', '그리드')}</button>
+    </div>
+    <div class="viewport-layer-controls" aria-label="${t('Candidate layer visibility', '후보 레이어 표시')}">
+      <button type="button" data-layer-toggle="furniture" aria-pressed="true">
+        <span class="layer-dot furniture" aria-hidden="true"></span>${t('Furniture', '가구')}
+      </button>
+      <button type="button" data-layer-toggle="fixtures" aria-pressed="true">
+        <span class="layer-dot fixtures" aria-hidden="true"></span>${t('Fixtures', '고정 요소')}
+      </button>
+      <button type="button" data-layer-toggle="boundaries" aria-pressed="true">
+        <span class="layer-dot boundaries" aria-hidden="true"></span>${t('Boundaries', '경계선')}
+      </button>
+      <button type="button" data-layer-toggle="lowConfidence" aria-pressed="true">
+        <span class="layer-dot low-confidence" aria-hidden="true"></span>${t('Low confidence', '낮은 신뢰도')}
+      </button>
     </div>
     <div class="viewport-measurements" id="measurement-status" role="status" aria-live="polite">
       ${t('Room 4.20 m x 3.60 m', '방 4.20 m x 3.60 m')}
@@ -98,6 +168,10 @@ app.innerHTML = `
     ></canvas>
     <div class="viewport-status-strip" id="scene-status" role="status" aria-live="polite">
       ${t('Initializing metric room scene', '미터 단위 방 장면 초기화 중')}
+    </div>
+    <div class="viewport-cv-readout" aria-hidden="true">
+      <span>${t('source image canvas', '소스 이미지 캔버스')}</span>
+      <strong>${t('CV overlay active', 'CV 오버레이 활성')}</strong>
     </div>
   </div>
   <aside class="status-panel" aria-label="${t('Inspector and status', '인스펙터 및 상태')}">
@@ -155,11 +229,24 @@ app.innerHTML = `
           <dd id="candidate-confidence">0.72</dd>
         </div>
       </dl>
+      <div class="candidate-state-row" aria-label="${t('Candidate review states', '후보 검토 상태')}">
+        <span class="state-pill candidate">${t('candidate', '후보')}</span>
+        <span class="state-pill warning">${t('low confidence', '낮은 신뢰도')}</span>
+        <span class="state-pill confirmed">${t('accepted', '적용됨')}</span>
+      </div>
+      <div class="outline-validity-panel" id="outline-validity-panel" role="status" aria-live="polite">
+        <span class="state-pill confirmed" id="outline-validity-state">${t('valid polygon', '유효한 폴리곤')}</span>
+        <span id="outline-summary">${t('4 points · 15.1 m² · image pixels', '4점 · 15.1 m² · image pixels')}</span>
+      </div>
       <div class="geometry-controls" aria-label="${t('Geometry correction controls', '지오메트리 보정 컨트롤')}">
         <button id="accept-candidate" type="button">${t('Accept candidate', '후보 적용')}</button>
+        <button id="confirm-outline" type="button">${t('Confirm outline', '윤곽 확정')}</button>
         <button id="manual-outline" type="button">${t('Manual rectangle', '수동 사각형')}</button>
+        <button id="orthogonalize-outline" type="button">${t('Right angle', '직각 보정')}</button>
         <button id="add-corner" type="button">${t('Add corner', '꼭짓점 추가')}</button>
         <button id="delete-corner" type="button">${t('Delete corner', '꼭짓점 삭제')}</button>
+        <button id="undo-geometry" type="button">${t('Undo', '되돌리기')}</button>
+        <button id="redo-geometry" type="button">${t('Redo', '다시 실행')}</button>
         <button id="reset-candidate" type="button">${t('Reset', '초기화')}</button>
       </div>
     </section>
@@ -180,8 +267,9 @@ app.innerHTML = `
           <p class="eyebrow">${t('Scale', '스케일')}</p>
           <h2 id="scale-title">${t('Metric floor plan', '미터 평면도')}</h2>
         </div>
-        <span class="state-pill measurement">${t('Meters', '미터')}</span>
+        <span class="state-pill measurement" id="scale-state">${t('reference selected', '기준선 선택됨')}</span>
       </div>
+      <div class="reference-line-list" id="reference-line-list" aria-label="${t('Reference wall segment', '기준 벽 세그먼트')}"></div>
       <label class="field-label" for="known-wall-length">${t('Known wall length', '알려진 벽 길이')}</label>
       <div class="scale-input-row">
         <input
@@ -195,23 +283,67 @@ app.innerHTML = `
         />
         <span aria-hidden="true">m</span>
       </div>
+      <div class="scale-summary-grid" aria-label="${t('Scale calibration summary', '스케일 보정 요약')}">
+        <div>
+          <strong id="scale-ratio">142 px/m</strong>
+          <span>${t('conversion ratio', '변환 비율')}</span>
+        </div>
+        <div>
+          <strong id="scale-error">±0.0%</strong>
+          <span>${t('estimated error', '예상 오차')}</span>
+        </div>
+      </div>
+      <div class="scale-recalculate-notice" id="scale-recalculate-notice" hidden>
+        ${t('Outline changed. Recalculate scale before exporting.', '윤곽이 변경되었습니다. 내보내기 전에 스케일을 다시 계산하세요.')}
+      </div>
       <p class="helper-text" id="scale-status">${t('Use the longest trusted wall to anchor image pixels into meters.', '가장 신뢰할 수 있는 긴 벽을 기준으로 이미지 픽셀을 미터로 보정하세요.')}</p>
-      <button id="generate-floor-plan" type="button">${t('Generate floor plan', '평면도 생성')}</button>
+      <button id="generate-floor-plan" type="button">${t('Apply scale', '스케일 적용')}</button>
+    </section>
+    <section class="panel-section" aria-labelledby="floor-plan-review-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">${t('Plan review', '평면도 검토')}</p>
+          <h2 id="floor-plan-review-title">${t('Floor plan review', '평면도 검토')}</h2>
+        </div>
+        <span class="state-pill confirmed" id="floor-plan-state">${t('metric ready', '미터 평면도 준비됨')}</span>
+      </div>
+      <div class="review-metrics-grid" aria-label="${t('Metric floor plan summary', '미터 평면도 요약')}">
+        <div>
+          <strong id="review-room-size">4.20 x 3.60 m</strong>
+          <span>${t('room size', '방 크기')}</span>
+        </div>
+        <div>
+          <strong id="review-coordinate-space">meters</strong>
+          <span>${t('coordinate space', '좌표계')}</span>
+        </div>
+      </div>
+      <div class="warning-rail" id="floor-warning-rail" role="list" aria-label="${t('Floor plan warnings', '평면도 경고')}"></div>
+      <div class="artifact-grid" id="floor-artifact-grid" aria-label="${t('Generated artifacts', '생성 아티팩트')}"></div>
+      <div class="proceed-controls" aria-label="${t('Floor plan proceed controls', '평면도 진행 컨트롤')}">
+        <button id="review-candidates" type="button">${t('Review candidates', '후보 재검토')}</button>
+        <button id="return-correction" type="button">${t('Manual correction', '수동 보정')}</button>
+        <button id="proceed-editor" type="button">${t('Proceed to editor', '편집기로 이동')}</button>
+      </div>
     </section>
     <section class="panel-section" aria-labelledby="furniture-catalog-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">${t('Furniture', '가구')}</p>
-          <h2 id="furniture-catalog-title">${t('Add preset object', '프리셋 객체 추가')}</h2>
+          <p class="eyebrow">${t('Objects', '오브젝트')}</p>
+          <h2 id="furniture-catalog-title">${t('Furniture catalog', '가구 카탈로그')}</h2>
         </div>
         <span class="state-pill" id="furniture-count">${t('0 objects', '객체 0개')}</span>
       </div>
       <p class="helper-text" id="furniture-catalog-status">${t('Choose a preset to place it inside the measured room.', '측정된 방 안에 배치할 프리셋을 선택하세요.')}</p>
-      <div class="furniture-controls" aria-label="${t('Furniture catalog', '가구 카탈로그')}">
-        <button type="button" data-furniture-category="chair">${t('Add chair', '의자 추가')}</button>
-        <button type="button" data-furniture-category="table">${t('Add table', '테이블 추가')}</button>
-        <button type="button" data-furniture-category="sofa">${t('Add sofa', '소파 추가')}</button>
+      <div class="object-state-row" aria-label="${t('Object state legend', '오브젝트 상태 범례')}">
+        <span class="state-pill candidate">${t('candidate', '후보')}</span>
+        <span class="state-pill confirmed">${t('confirmed', '확정')}</span>
+        <span class="state-pill selected">${t('selected', '선택됨')}</span>
+        <span class="state-pill collision">${t('collision', '충돌')}</span>
       </div>
+      <div class="object-catalog furniture-controls" aria-label="${t('Furniture catalog', '가구 카탈로그')}">
+        ${furnitureCatalogMarkup}
+      </div>
+      <div class="furniture-object-list" id="furniture-object-list" role="list" aria-label="${t('Placed furniture objects', '배치된 가구 오브젝트')}"></div>
     </section>
     <section class="panel-section" aria-labelledby="selection-inspector-title">
       <div class="panel-section-header">
@@ -220,6 +352,66 @@ app.innerHTML = `
           <h2 id="selection-inspector-title">${t('Selected object', '선택된 객체')}</h2>
         </div>
         <span class="state-pill" id="selection-state">${t('Room', '방')}</span>
+      </div>
+      <div class="selected-object-card" id="selected-object-card" aria-label="${t('Selected object summary', '선택 객체 요약')}">
+        <div class="selected-object-header">
+          <strong id="selected-object-title">${t('Room shell', '방 외곽')}</strong>
+          <span id="selected-object-source">${t('meters coordinate space', 'meters 좌표계')}</span>
+        </div>
+        <dl class="transform-readout" aria-label="${t('Selected transform readout', '선택 객체 변환 값')}">
+          <div>
+            <dt>X</dt>
+            <dd id="transform-x-readout">--</dd>
+          </div>
+          <div>
+            <dt>Y</dt>
+            <dd id="transform-y-readout">--</dd>
+          </div>
+          <div>
+            <dt>${t('Rotate', '회전')}</dt>
+            <dd id="transform-rotation-readout">--</dd>
+          </div>
+          <div>
+            <dt>${t('Size', '크기')}</dt>
+            <dd id="transform-size-readout">--</dd>
+          </div>
+        </dl>
+      </div>
+      <div class="transform-slider-grid" aria-label="${t('Transform sliders', '변환 슬라이더')}">
+        <label>
+          <span>X</span>
+          <input type="range" min="0" max="4.2" step="0.05" data-transform-field="position-x" disabled />
+          <output data-transform-output="position-x">--</output>
+        </label>
+        <label>
+          <span>Y</span>
+          <input type="range" min="0" max="3.6" step="0.05" data-transform-field="position-y" disabled />
+          <output data-transform-output="position-y">--</output>
+        </label>
+        <label>
+          <span>${t('Rotation', '회전')}</span>
+          <input type="range" min="0" max="345" step="15" data-transform-field="rotation" disabled />
+          <output data-transform-output="rotation">--</output>
+        </label>
+        <label>
+          <span>${t('Width', '너비')}</span>
+          <input type="range" min="0.2" max="3" step="0.05" data-transform-field="width" disabled />
+          <output data-transform-output="width">--</output>
+        </label>
+        <label>
+          <span>${t('Depth', '깊이')}</span>
+          <input type="range" min="0.2" max="3" step="0.05" data-transform-field="depth" disabled />
+          <output data-transform-output="depth">--</output>
+        </label>
+        <label>
+          <span>${t('Height', '높이')}</span>
+          <input type="range" min="0.2" max="2.7" step="0.05" data-transform-field="height" disabled />
+          <output data-transform-output="height">--</output>
+        </label>
+      </div>
+      <div class="placement-warning-card" id="furniture-placement-warning" role="status" aria-live="polite">
+        <span class="state-pill confirmed">${t('clear', '정상')}</span>
+        <span>${t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음')}</span>
       </div>
       <div class="furniture-edit-controls" aria-label="${t('Selected furniture editing controls', '선택 가구 편집 컨트롤')}">
         <button type="button" data-furniture-edit="move-up">${t('Move up', '위로 이동')}</button>
@@ -248,6 +440,31 @@ app.innerHTML = `
         <button type="button" data-fixture-edit="delete">${t('Delete fixture', '고정 요소 삭제')}</button>
       </div>
     </section>
+    <section class="panel-section persistence-panel" aria-labelledby="persistence-title">
+      <div class="panel-section-header">
+        <div>
+          <p class="eyebrow">${t('Persistence', '저장')}</p>
+          <h2 id="persistence-title">${t('Save / load / export', '저장 / 로드 / 내보내기')}</h2>
+        </div>
+        <span class="state-pill confirmed" id="persistence-state">${t('saved', '저장됨')}</span>
+      </div>
+      <div class="save-board" id="save-board" aria-label="${t('Save targets', '저장 대상')}"></div>
+      <div class="load-selector" id="layout-load-selector" aria-label="${t('Load source selector', '로드 소스 선택')}">
+        <button type="button" data-load-source="latest" aria-pressed="true">${t('Latest cloud', '최신 클라우드')}</button>
+        <button type="button" data-load-source="draft" aria-pressed="false">${t('Local draft', '로컬 draft')}</button>
+        <button type="button" data-load-source="export" aria-pressed="false">${t('Previous export', '이전 export')}</button>
+      </div>
+      <pre class="json-preview" id="layout-export-preview" aria-label="${t('JSON export preview', 'JSON 내보내기 미리보기')}"></pre>
+      <div class="round-trip-notice" id="round-trip-notice" role="status" aria-live="polite">
+        <span class="state-pill confirmed">${t('verified', '검증됨')}</span>
+        <span>${t('Save, load, and export fields match.', '저장, 로드, 내보내기 필드가 일치합니다.')}</span>
+      </div>
+      <div class="persistence-actions" aria-label="${t('Persistence actions', '저장 작업')}">
+        <button type="button" data-persistence-action="load">${t('Open selected', '선택 저장본 열기')}</button>
+        <button type="button" data-persistence-action="save">${t('Save layout', '레이아웃 저장')}</button>
+        <button type="button" data-persistence-action="export">${t('Export JSON', 'JSON 내보내기')}</button>
+      </div>
+    </section>
     <section class="panel-section" aria-labelledby="camera-title">
       <div class="panel-section-header">
         <div>
@@ -267,6 +484,13 @@ app.innerHTML = `
       <p class="camera-status" id="camera-status">${t('Camera ready', '카메라 준비됨')}</p>
     </section>
   </aside>
+  </div>
+  <footer class="editor-statusbar" aria-label="${t('Editor status bar', '편집기 상태 바')}">
+    <span class="state-pill confirmed" id="layout-validity">${t('valid layout', '유효한 레이아웃')}</span>
+    <span id="layout-counts">${t('0 objects · 0 fixtures', '객체 0개 · 고정 요소 0개')}</span>
+    <span id="layout-area">15.1 m²</span>
+    <span class="editor-cursor-coords" id="cursor-coords">x 0.00 · y 0.00</span>
+  </footer>
 </section>
 `
 
@@ -288,13 +512,63 @@ const candidateConfidence = document.querySelector<HTMLElement>('#candidate-conf
 const candidateTrayCount = document.querySelector<HTMLElement>('#candidate-tray-count')
 const candidateTrayStatus = document.querySelector<HTMLElement>('#candidate-tray-status')
 const candidateTrayList = document.querySelector<HTMLElement>('#candidate-tray-list')
+const outlineValidityState = document.querySelector<HTMLElement>('#outline-validity-state')
+const outlineSummary = document.querySelector<HTMLElement>('#outline-summary')
+const undoGeometryButton = document.querySelector<HTMLButtonElement>('#undo-geometry')
+const redoGeometryButton = document.querySelector<HTMLButtonElement>('#redo-geometry')
+const confirmOutlineButton = document.querySelector<HTMLButtonElement>('#confirm-outline')
 const knownWallLengthInput = document.querySelector<HTMLInputElement>('#known-wall-length')
 const scaleStatus = document.querySelector<HTMLElement>('#scale-status')
+const scaleState = document.querySelector<HTMLElement>('#scale-state')
+const referenceLineList = document.querySelector<HTMLElement>('#reference-line-list')
+const scaleRatio = document.querySelector<HTMLElement>('#scale-ratio')
+const scaleError = document.querySelector<HTMLElement>('#scale-error')
+const scaleRecalculateNotice = document.querySelector<HTMLElement>('#scale-recalculate-notice')
+const floorPlanState = document.querySelector<HTMLElement>('#floor-plan-state')
+const reviewRoomSize = document.querySelector<HTMLElement>('#review-room-size')
+const reviewCoordinateSpace = document.querySelector<HTMLElement>('#review-coordinate-space')
+const floorWarningRail = document.querySelector<HTMLElement>('#floor-warning-rail')
+const floorArtifactGrid = document.querySelector<HTMLElement>('#floor-artifact-grid')
+const reviewCandidatesButton = document.querySelector<HTMLButtonElement>('#review-candidates')
+const returnCorrectionButton = document.querySelector<HTMLButtonElement>('#return-correction')
+const proceedEditorButton = document.querySelector<HTMLButtonElement>('#proceed-editor')
+const furnitureObjectList = document.querySelector<HTMLElement>('#furniture-object-list')
 const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
 const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-catalog-status')
 const selectionState = document.querySelector<HTMLElement>('#selection-state')
+const selectedObjectTitle = document.querySelector<HTMLElement>('#selected-object-title')
+const selectedObjectSource = document.querySelector<HTMLElement>('#selected-object-source')
+const transformXReadout = document.querySelector<HTMLElement>('#transform-x-readout')
+const transformYReadout = document.querySelector<HTMLElement>('#transform-y-readout')
+const transformRotationReadout = document.querySelector<HTMLElement>('#transform-rotation-readout')
+const transformSizeReadout = document.querySelector<HTMLElement>('#transform-size-readout')
+const furniturePlacementWarning = document.querySelector<HTMLElement>('#furniture-placement-warning')
 const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
 const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
+const viewSplitButton = document.querySelector<HTMLButtonElement>('#view-split')
+const topUndoButton = document.querySelector<HTMLButtonElement>('#top-undo')
+const topRedoButton = document.querySelector<HTMLButtonElement>('#top-redo')
+const saveLayoutButton = document.querySelector<HTMLButtonElement>('#save-layout')
+const editorSaveState = document.querySelector<HTMLElement>('#editor-save-state')
+const exportLayoutButton = document.querySelector<HTMLButtonElement>('#export-layout')
+const persistenceState = document.querySelector<HTMLElement>('#persistence-state')
+const saveBoard = document.querySelector<HTMLElement>('#save-board')
+const layoutLoadSelector = document.querySelector<HTMLElement>('#layout-load-selector')
+const layoutExportPreview = document.querySelector<HTMLElement>('#layout-export-preview')
+const roundTripNotice = document.querySelector<HTMLElement>('#round-trip-notice')
+const layoutValidity = document.querySelector<HTMLElement>('#layout-validity')
+const layoutCounts = document.querySelector<HTMLElement>('#layout-counts')
+const layoutArea = document.querySelector<HTMLElement>('#layout-area')
+const cursorCoords = document.querySelector<HTMLElement>('#cursor-coords')
+const toolRailButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-editor-tool]'),
+)
+const canvasToggleButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-canvas-toggle]'),
+)
+const layerToggleButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-layer-toggle]'),
+)
 const cameraActionButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-camera-action]'),
 )
@@ -303,6 +577,18 @@ const furnitureCategoryButtons = Array.from(
 )
 const furnitureEditButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-furniture-edit]'),
+)
+const transformInputs = Array.from(
+  document.querySelectorAll<HTMLInputElement>('[data-transform-field]'),
+)
+const transformOutputs = Array.from(
+  document.querySelectorAll<HTMLOutputElement>('[data-transform-output]'),
+)
+const persistenceActionButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-persistence-action]'),
+)
+const layoutLoadSourceButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-load-source]'),
 )
 const fixtureEditButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-fixture-edit]'),
@@ -327,16 +613,64 @@ if (
   !candidateTrayCount ||
   !candidateTrayStatus ||
   !candidateTrayList ||
+  !outlineValidityState ||
+  !outlineSummary ||
+  !undoGeometryButton ||
+  !redoGeometryButton ||
+  !confirmOutlineButton ||
   !knownWallLengthInput ||
   !scaleStatus ||
+  !scaleState ||
+  !referenceLineList ||
+  !scaleRatio ||
+  !scaleError ||
+  !scaleRecalculateNotice ||
+  !floorPlanState ||
+  !reviewRoomSize ||
+  !reviewCoordinateSpace ||
+  !floorWarningRail ||
+  !floorArtifactGrid ||
+  !reviewCandidatesButton ||
+  !returnCorrectionButton ||
+  !proceedEditorButton ||
+  !furnitureObjectList ||
   !furnitureCount ||
   !furnitureCatalogStatus ||
   !selectionState ||
+  !selectedObjectTitle ||
+  !selectedObjectSource ||
+  !transformXReadout ||
+  !transformYReadout ||
+  !transformRotationReadout ||
+  !transformSizeReadout ||
+  !furniturePlacementWarning ||
   !view2dButton ||
   !view3dButton ||
+  !viewSplitButton ||
+  !topUndoButton ||
+  !topRedoButton ||
+  !saveLayoutButton ||
+  !editorSaveState ||
+  !exportLayoutButton ||
+  !persistenceState ||
+  !saveBoard ||
+  !layoutLoadSelector ||
+  !layoutExportPreview ||
+  !roundTripNotice ||
+  !layoutValidity ||
+  !layoutCounts ||
+  !layoutArea ||
+  !cursorCoords ||
+  toolRailButtons.length === 0 ||
+  canvasToggleButtons.length === 0 ||
+  layerToggleButtons.length === 0 ||
   cameraActionButtons.length === 0 ||
   furnitureCategoryButtons.length === 0 ||
   furnitureEditButtons.length === 0 ||
+  transformInputs.length === 0 ||
+  transformOutputs.length === 0 ||
+  persistenceActionButtons.length === 0 ||
+  layoutLoadSourceButtons.length === 0 ||
   fixtureEditButtons.length === 0
 ) {
   throw new Error('Missing editor UI element.')
@@ -360,17 +694,66 @@ const candidateConfidenceElement = candidateConfidence
 const candidateTrayCountElement = candidateTrayCount
 const candidateTrayStatusElement = candidateTrayStatus
 const candidateTrayListElement = candidateTrayList
+const outlineValidityStateElement = outlineValidityState
+const outlineSummaryElement = outlineSummary
+const undoGeometryButtonElement = undoGeometryButton
+const redoGeometryButtonElement = redoGeometryButton
+const confirmOutlineButtonElement = confirmOutlineButton
 const knownWallLengthInputElement = knownWallLengthInput
 const scaleStatusElement = scaleStatus
+const scaleStateElement = scaleState
+const referenceLineListElement = referenceLineList
+const scaleRatioElement = scaleRatio
+const scaleErrorElement = scaleError
+const scaleRecalculateNoticeElement = scaleRecalculateNotice
+const floorPlanStateElement = floorPlanState
+const reviewRoomSizeElement = reviewRoomSize
+const reviewCoordinateSpaceElement = reviewCoordinateSpace
+const floorWarningRailElement = floorWarningRail
+const floorArtifactGridElement = floorArtifactGrid
+const reviewCandidatesButtonElement = reviewCandidatesButton
+const returnCorrectionButtonElement = returnCorrectionButton
+const proceedEditorButtonElement = proceedEditorButton
+const furnitureObjectListElement = furnitureObjectList
 const furnitureCountElement = furnitureCount
 const furnitureCatalogStatusElement = furnitureCatalogStatus
 const selectionStateElement = selectionState
+const selectedObjectTitleElement = selectedObjectTitle
+const selectedObjectSourceElement = selectedObjectSource
+const transformXReadoutElement = transformXReadout
+const transformYReadoutElement = transformYReadout
+const transformRotationReadoutElement = transformRotationReadout
+const transformSizeReadoutElement = transformSizeReadout
+const furniturePlacementWarningElement = furniturePlacementWarning
 const view2dButtonElement = view2dButton
 const view3dButtonElement = view3dButton
+const viewSplitButtonElement = viewSplitButton
+const topUndoButtonElement = topUndoButton
+const topRedoButtonElement = topRedoButton
+const saveLayoutButtonElement = saveLayoutButton
+const editorSaveStateElement = editorSaveState
+const exportLayoutButtonElement = exportLayoutButton
+const persistenceStateElement = persistenceState
+const saveBoardElement = saveBoard
+const layoutLoadSelectorElement = layoutLoadSelector
+const layoutExportPreviewElement = layoutExportPreview
+const roundTripNoticeElement = roundTripNotice
+const layoutValidityElement = layoutValidity
+const layoutCountsElement = layoutCounts
+const layoutAreaElement = layoutArea
+const cursorCoordsElement = cursorCoords
+const toolRailButtonElements = toolRailButtons
+const canvasToggleButtonElements = canvasToggleButtons
+const layerToggleButtonElements = layerToggleButtons
+const transformInputElements = transformInputs
+const transformOutputElements = transformOutputs
+const persistenceActionButtonElements = persistenceActionButtons
+const layoutLoadSourceButtonElements = layoutLoadSourceButtons
+const fixtureEditButtonElements = fixtureEditButtons
 
 const renderer = new THREE.WebGLRenderer({ canvas: editorCanvas, antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
-renderer.setClearColor(0xeef2f7)
+renderer.setClearColor(0x090a0c)
 
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
@@ -383,9 +766,9 @@ const room = new THREE.Group()
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(4, 3),
   new THREE.MeshBasicMaterial({
-    color: 0x2563eb,
+    color: 0xd8c7a3,
     transparent: true,
-    opacity: 0.16,
+    opacity: 0.14,
     side: THREE.DoubleSide,
   }),
 )
@@ -393,7 +776,7 @@ floor.rotation.x = -Math.PI / 2
 floor.userData.objectId = spatialModel.room.objectId
 room.add(floor)
 
-const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x2563eb })
+const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xf4f1ea })
 const outlinePoints = [
   new THREE.Vector3(-2, 0.02, -1.5),
   new THREE.Vector3(2, 0.02, -1.5),
@@ -409,9 +792,9 @@ const confirmedLine = new THREE.Line(
 room.add(confirmedLine)
 
 const wallMaterial = new THREE.MeshBasicMaterial({
-  color: 0x94a3b8,
+  color: 0x5d6673,
   transparent: true,
-  opacity: 0.28,
+  opacity: 0.24,
   side: THREE.DoubleSide,
 })
 const wallGroup = new THREE.Group()
@@ -423,18 +806,18 @@ room.add(furnitureGroup)
 const fixtureGroup = new THREE.Group()
 room.add(fixtureGroup)
 
-const selectionMaterial = new THREE.LineBasicMaterial({ color: 0x0f172a })
+const selectionMaterial = new THREE.LineBasicMaterial({ color: 0xd6a75b })
 const selectionLine = new THREE.Line(new THREE.BufferGeometry(), selectionMaterial)
 selectionLine.visible = true
 room.add(selectionLine)
 
-const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0x111827 })
+const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0xf4f1ea })
 const furnitureMeshes = new Map<string, THREE.Mesh>()
 const furnitureOutlineObjects: THREE.LineSegments[] = []
 const fixtureMeshes = new Map<string, THREE.Mesh>()
 const fixtureOutlineObjects: THREE.LineSegments[] = []
 
-const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0x0f172a })
+const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0xd6a75b })
 const cornerMeshes: THREE.Mesh[] = []
 for (const point of confirmedPoints) {
   const corner = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), cornerMaterial)
@@ -445,11 +828,11 @@ for (const point of confirmedPoints) {
 scene.add(room)
 
 const candidateMaterial = new THREE.LineDashedMaterial({
-  color: 0x7c3aed,
+  color: 0xd6a75b,
   dashSize: 0.12,
   gapSize: 0.08,
   transparent: true,
-  opacity: 0.48,
+  opacity: 0.58,
 })
 let candidatePoints = [
   new THREE.Vector3(-1.85, 0.06, -1.34),
@@ -500,6 +883,27 @@ type CameraTransition = {
   durationMs: number
 }
 
+type CandidateLayer = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
+
+type PersistenceState = 'saved' | 'saving' | 'exportFailed'
+
+type LoadSource = 'latest' | 'draft' | 'export'
+
+type TransformField =
+  | 'position-x'
+  | 'position-y'
+  | 'rotation'
+  | 'width'
+  | 'depth'
+  | 'height'
+
+type OutlineValidity = {
+  state: 'calibrating' | 'invalid' | 'valid'
+  label: string
+  detail: string
+  areaSquareMeters: number
+}
+
 let activeCameraDrag:
   | {
       pointerId: number
@@ -510,6 +914,23 @@ let activeCameraDrag:
   | null = null
 let cameraTransition: CameraTransition | null = null
 let furnitureIdCounter = 0
+let selectedReferenceEdgeIndex = 0
+let scaleNeedsRecalculation = false
+let splitViewActive = false
+let persistenceStateValue: PersistenceState = 'saved'
+let selectedLoadSource: LoadSource = 'latest'
+const canvasToggleState: Record<'grid' | 'snap', boolean> = {
+  grid: true,
+  snap: true,
+}
+const geometryUndoStack: THREE.Vector3[][] = []
+const geometryRedoStack: THREE.Vector3[][] = []
+const layerVisibility: Record<CandidateLayer, boolean> = {
+  furniture: true,
+  fixtures: true,
+  boundaries: true,
+  lowConfidence: true,
+}
 
 function resizeRenderer(): void {
   const parent = editorCanvas.parentElement
@@ -609,6 +1030,69 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
 
 view2dButtonElement.addEventListener('click', () => setViewMode('2d'))
 view3dButtonElement.addEventListener('click', () => setViewMode('3d'))
+viewSplitButtonElement.addEventListener('click', () => setSplitViewMode())
+topUndoButtonElement.addEventListener('click', () => restoreGeometryHistory('undo'))
+topRedoButtonElement.addEventListener('click', () => restoreGeometryHistory('redo'))
+saveLayoutButtonElement.addEventListener('click', () => saveLayoutFromEditor())
+exportLayoutButtonElement.addEventListener('click', () => prepareLayoutExport())
+layoutLoadSelectorElement.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const button = target?.closest<HTMLButtonElement>('[data-load-source]')
+  const source = button?.dataset.loadSource
+  if (isLoadSource(source)) {
+    selectedLoadSource = source
+    updatePersistencePanel()
+  }
+})
+for (const button of persistenceActionButtonElements) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.persistenceAction
+    if (action === 'save') {
+      saveLayoutFromEditor()
+    } else if (action === 'export') {
+      prepareLayoutExport()
+    } else if (action === 'load') {
+      sceneStatusElement.textContent = localizedLoadSourceMessage(selectedLoadSource)
+      updatePersistencePanel()
+    }
+  })
+}
+for (const button of toolRailButtonElements) {
+  button.addEventListener('click', () => {
+    for (const item of toolRailButtonElements) {
+      item.setAttribute('aria-pressed', String(item === button))
+      item.classList.toggle('is-active', item === button)
+    }
+    sceneStatusElement.textContent = `${button.textContent?.trim() ?? ''} ${t('tool selected', '도구 선택됨')}`
+  })
+}
+for (const button of canvasToggleButtonElements) {
+  button.addEventListener('click', () => {
+    const key = button.dataset.canvasToggle
+    if (key !== 'grid' && key !== 'snap') {
+      return
+    }
+    canvasToggleState[key] = !canvasToggleState[key]
+    syncCanvasToggleButtons()
+    sceneStatusElement.textContent = usesKorean
+      ? `${key === 'grid' ? '그리드' : '스냅'} ${canvasToggleState[key] ? '켜짐' : '꺼짐'}`
+      : `${key} ${canvasToggleState[key] ? 'on' : 'off'}`
+  })
+}
+for (const button of layerToggleButtonElements) {
+  button.addEventListener('click', () => {
+    const layer = button.dataset.layerToggle
+    if (!isCandidateLayer(layer)) {
+      return
+    }
+    layerVisibility[layer] = !layerVisibility[layer]
+    syncLayerToggleButtons()
+    applyLayerVisibility()
+    geometryStatusElement.textContent = usesKorean
+      ? `${localizedLayerLabel(layer)} 레이어 ${layerVisibility[layer] ? '표시' : '숨김'}`
+      : `${localizedLayerLabel(layer)} layer ${layerVisibility[layer] ? 'shown' : 'hidden'}`
+  })
+}
 for (const button of cameraActionButtons) {
   button.addEventListener('click', () => {
     const action = button.dataset.cameraAction
@@ -633,7 +1117,22 @@ for (const button of furnitureEditButtons) {
     }
   })
 }
-for (const button of fixtureEditButtons) {
+furnitureObjectListElement.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const button = target?.closest<HTMLButtonElement>('[data-furniture-select]')
+  if (button?.dataset.furnitureSelect) {
+    selectFurniture(button.dataset.furnitureSelect)
+  }
+})
+for (const input of transformInputElements) {
+  input.addEventListener('input', () => {
+    const field = input.dataset.transformField
+    if (isTransformField(field)) {
+      updateSelectedFurnitureTransform(field, input.valueAsNumber)
+    }
+  })
+}
+for (const button of fixtureEditButtonElements) {
   button.addEventListener('click', () => {
     const action = button.dataset.fixtureEdit
     if (isFixtureEditAction(action)) {
@@ -665,16 +1164,40 @@ candidateTrayListElement.addEventListener('change', (event) => {
 })
 
 document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Accepted OpenCV candidate.', 'OpenCV 후보를 적용했습니다.'))
 })
 
+confirmOutlineButtonElement.addEventListener('click', () => {
+  const validity = outlineValidity()
+  if (validity.state === 'invalid') {
+    geometryStatusElement.textContent = validity.detail
+    updateOutlineValidityPanel()
+    return
+  }
+  updateConfirmedGeometry(t('Confirmed corrected room outline.', '보정된 방 윤곽을 확정했습니다.'))
+})
+
 document.querySelector<HTMLButtonElement>('#manual-outline')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   confirmedPoints = outlinePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Started from manual rectangle.', '수동 사각형에서 시작했습니다.'))
 })
 
+document.querySelector<HTMLButtonElement>('#orthogonalize-outline')?.addEventListener('click', () => {
+  if (confirmedPoints.length < 3) {
+    geometryStatusElement.textContent = t('At least three corners are required.', '최소 3개 꼭짓점이 필요합니다.')
+    updateOutlineValidityPanel()
+    return
+  }
+  pushGeometryUndoState()
+  confirmedPoints = orthogonalizedOutlinePoints()
+  updateConfirmedGeometry(t('Orthogonalized the room outline.', '방 윤곽을 직각으로 보정했습니다.'))
+})
+
 document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   const lastPoint = confirmedPoints[confirmedPoints.length - 1]
   const firstPoint = confirmedPoints[0]
   confirmedPoints.push(lastPoint.clone().lerp(firstPoint, 0.5))
@@ -684,13 +1207,59 @@ document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('clic
 document.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('click', () => {
   if (confirmedPoints.length <= 3) {
     geometryStatusElement.textContent = t('At least three corners are required.', '최소 3개 꼭짓점이 필요합니다.')
+    updateOutlineValidityPanel()
     return
   }
+  pushGeometryUndoState()
   confirmedPoints.pop()
   updateConfirmedGeometry(t('Deleted the last boundary corner.', '마지막 경계 꼭짓점을 삭제했습니다.'))
 })
 
+undoGeometryButtonElement.addEventListener('click', () => restoreGeometryHistory('undo'))
+redoGeometryButtonElement.addEventListener('click', () => restoreGeometryHistory('redo'))
+
+referenceLineListElement.addEventListener('click', (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const button = target?.closest<HTMLButtonElement>('[data-reference-edge]')
+  const index = Number.parseInt(button?.dataset.referenceEdge ?? '', 10)
+  if (!Number.isInteger(index) || index < 0 || index >= confirmedPoints.length) {
+    return
+  }
+  selectedReferenceEdgeIndex = index
+  scaleNeedsRecalculation = true
+  updateScaleCalibrationPanel()
+})
+
+knownWallLengthInputElement.addEventListener('input', () => {
+  scaleNeedsRecalculation = true
+  updateScaleCalibrationPanel()
+})
+
+reviewCandidatesButtonElement.addEventListener('click', () => {
+  candidateTrayStatusElement.textContent = t(
+    'Return to the candidate tray and resolve warnings before proceeding.',
+    '후보 트레이로 돌아가 경고를 해결한 뒤 진행하세요.',
+  )
+})
+
+returnCorrectionButtonElement.addEventListener('click', () => {
+  geometryStatusElement.textContent = t(
+    'Manual correction controls are ready.',
+    '수동 보정 컨트롤을 사용할 수 있습니다.',
+  )
+  editorCanvas.focus()
+})
+
+proceedEditorButtonElement.addEventListener('click', () => {
+  setViewMode('3d')
+  sceneStatusElement.textContent = t(
+    'Metric floor plan handed off to the layout editor.',
+    '미터 평면도를 배치 편집기로 넘겼습니다.',
+  )
+})
+
 document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
+  pushGeometryUndoState()
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Reset to OpenCV candidate.', 'OpenCV 후보로 초기화했습니다.'))
 })
@@ -704,12 +1273,13 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     return
   }
   const knownLength = Number.parseFloat(knownWallLengthInputElement.value)
-  if (!Number.isFinite(knownLength) || knownLength <= 0) {
+  if (!Number.isFinite(knownLength) || knownLength <= 0 || knownLength > 50) {
     scaleStatusElement.textContent = t(
       'Enter a positive known wall length before generating a floor plan.',
       '평면도를 생성하기 전에 양수 벽 길이를 입력하세요.',
     )
     geometryStatusElement.textContent = t('Invalid calibration length.', '잘못된 보정 길이입니다.')
+    updateScaleCalibrationPanel()
     return
   }
   const depth = roomBounds(spatialModel).depthMeters
@@ -721,6 +1291,7 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
     `Calibrated with ${knownLength.toFixed(2)} m known wall length.`,
     `알려진 벽 길이 ${knownLength.toFixed(2)} m로 보정했습니다.`,
   )
+  scaleNeedsRecalculation = false
   const imageGeometryBeforeCalibration = confirmedGeometryPayload()
   const metricGeometry = {
     coordinateSpace: 'meters' as const,
@@ -744,6 +1315,7 @@ document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListe
   }
   spatialModel = recalculateCandidatePlacements(spatialModel)
   applySpatialModel()
+  updateScaleCalibrationPanel()
   postToParent({
     type: 'roomforge.calibration.floorPlanGenerated',
     version: BRIDGE_VERSION,
@@ -772,7 +1344,9 @@ editorCanvas.addEventListener('pointerdown', (event) => {
     if (cornerIndex < 0) {
       return
     }
+    pushGeometryUndoState()
     activeCornerIndex = cornerIndex
+    syncCornerHandleStyles()
     editorCanvas.setPointerCapture(event.pointerId)
     return
   }
@@ -818,6 +1392,7 @@ editorCanvas.addEventListener('pointerdown', (event) => {
 })
 
 editorCanvas.addEventListener('pointermove', (event) => {
+  updateCursorCoordinates(event)
   if (activeCameraDrag) {
     const deltaX = event.clientX - activeCameraDrag.lastX
     const deltaY = event.clientY - activeCameraDrag.lastY
@@ -862,6 +1437,7 @@ editorCanvas.addEventListener('pointerup', (event) => {
     }
   }
   activeCornerIndex = null
+  syncCornerHandleStyles()
 })
 
 editorCanvas.addEventListener('pointercancel', (event) => {
@@ -869,6 +1445,7 @@ editorCanvas.addEventListener('pointercancel', (event) => {
     activeCameraDrag = null
   }
   activeCornerIndex = null
+  syncCornerHandleStyles()
 })
 
 editorCanvas.addEventListener(
@@ -1011,6 +1588,8 @@ function recalculateCandidatePlacements(model: SpatialModel): SpatialModel {
   })
 }
 
+syncLayerToggleButtons()
+syncCanvasToggleButtons()
 applySpatialModel()
 window.addEventListener('resize', resizeRenderer)
 resizeRenderer()
@@ -1048,6 +1627,7 @@ function applySpatialModel(): void {
 }
 
 function setViewMode(viewMode: ViewMode): void {
+  splitViewActive = false
   spatialModel = { ...spatialModel, viewMode }
   rebuildStructuralFixtures()
   rebuildFurniture()
@@ -1056,14 +1636,629 @@ function setViewMode(viewMode: ViewMode): void {
   emitSceneState('roomforge.view.changed')
 }
 
+function setSplitViewMode(): void {
+  splitViewActive = true
+  spatialModel = { ...spatialModel, viewMode: '3d' }
+  rebuildStructuralFixtures()
+  rebuildFurniture()
+  queueCameraSnapshot(cameraSnapshotFor('corner'), 'Split inspection view', true)
+  applyLayerVisibility()
+  updateSpatialStatus()
+  emitSceneState('roomforge.view.changed')
+}
+
 function applyViewModeCamera(): void {
   if (spatialModel.viewMode === '2d') {
-    wallGroup.visible = false
     queueCameraSnapshot(cameraSnapshotFor('top'), '2D top view', false)
+  } else if (splitViewActive) {
+    queueCameraSnapshot(cameraSnapshotFor('corner'), 'Split inspection view', true)
   } else {
-    wallGroup.visible = true
     queueCameraSnapshot(cameraSnapshotFor('corner'), '3D corner view', true)
   }
+  applyLayerVisibility()
+}
+
+function isCandidateLayer(value: string | undefined): value is CandidateLayer {
+  return value === 'furniture' || value === 'fixtures' || value === 'boundaries' || value === 'lowConfidence'
+}
+
+function syncLayerToggleButtons(): void {
+  for (const button of layerToggleButtonElements) {
+    const layer = button.dataset.layerToggle
+    if (!isCandidateLayer(layer)) {
+      continue
+    }
+    const isVisible = layerVisibility[layer]
+    button.setAttribute('aria-pressed', String(isVisible))
+    button.classList.toggle('is-active', isVisible)
+  }
+}
+
+function applyLayerVisibility(): void {
+  furnitureGroup.visible = layerVisibility.furniture
+  fixtureGroup.visible = layerVisibility.fixtures
+  candidateLine.visible = layerVisibility.lowConfidence
+  confirmedLine.visible = layerVisibility.boundaries
+  for (const corner of cornerMeshes) {
+    corner.visible = layerVisibility.boundaries
+  }
+  selectionLine.visible =
+    layerVisibility.boundaries && spatialModel.selected?.objectId === spatialModel.room.objectId
+  wallGroup.visible = layerVisibility.boundaries && spatialModel.viewMode === '3d'
+}
+
+function localizedLayerLabel(layer: CandidateLayer): string {
+  if (usesKorean) {
+    return {
+      furniture: '가구',
+      fixtures: '고정 요소',
+      boundaries: '경계선',
+      lowConfidence: '낮은 신뢰도',
+    }[layer]
+  }
+  return {
+    furniture: 'Furniture',
+    fixtures: 'Fixtures',
+    boundaries: 'Boundaries',
+    lowConfidence: 'Low confidence',
+  }[layer]
+}
+
+function cloneConfirmedPoints(): THREE.Vector3[] {
+  return confirmedPoints.map((point) => point.clone())
+}
+
+function pushGeometryUndoState(): void {
+  geometryUndoStack.push(cloneConfirmedPoints())
+  if (geometryUndoStack.length > 24) {
+    geometryUndoStack.shift()
+  }
+  geometryRedoStack.length = 0
+  updateGeometryUndoRedoControls()
+}
+
+function restoreGeometryHistory(direction: 'undo' | 'redo'): void {
+  const sourceStack = direction === 'undo' ? geometryUndoStack : geometryRedoStack
+  const targetStack = direction === 'undo' ? geometryRedoStack : geometryUndoStack
+  const nextPoints = sourceStack.pop()
+  if (!nextPoints) {
+    updateGeometryUndoRedoControls()
+    return
+  }
+  targetStack.push(cloneConfirmedPoints())
+  confirmedPoints = nextPoints.map((point) => point.clone())
+  updateConfirmedGeometry(
+    direction === 'undo'
+      ? t('Reverted the previous geometry edit.', '이전 지오메트리 편집을 되돌렸습니다.')
+      : t('Reapplied the geometry edit.', '지오메트리 편집을 다시 적용했습니다.'),
+  )
+}
+
+function updateGeometryUndoRedoControls(): void {
+  undoGeometryButtonElement.disabled = geometryUndoStack.length === 0
+  redoGeometryButtonElement.disabled = geometryRedoStack.length === 0
+  topUndoButtonElement.disabled = geometryUndoStack.length === 0
+  topRedoButtonElement.disabled = geometryRedoStack.length === 0
+}
+
+function orthogonalizedOutlinePoints(): THREE.Vector3[] {
+  const xs = confirmedPoints.map((point) => point.x)
+  const zs = confirmedPoints.map((point) => point.z)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+  return [
+    new THREE.Vector3(minX, 0.02, minZ),
+    new THREE.Vector3(maxX, 0.02, minZ),
+    new THREE.Vector3(maxX, 0.02, maxZ),
+    new THREE.Vector3(minX, 0.02, maxZ),
+  ]
+}
+
+function updateOutlineValidityPanel(): void {
+  const validity = outlineValidity()
+  const stateClass =
+    validity.state === 'valid'
+      ? 'confirmed'
+      : validity.state === 'calibrating'
+        ? 'measurement'
+        : 'error'
+  outlineValidityStateElement.className = `state-pill ${stateClass}`
+  outlineValidityStateElement.textContent = validity.label
+  outlineSummaryElement.textContent = validity.detail
+  confirmOutlineButtonElement.disabled = validity.state === 'invalid'
+  updateGeometryUndoRedoControls()
+}
+
+function outlineValidity(): OutlineValidity {
+  const area = polygonAreaSquareMeters()
+  const coordinateSpace = String(confirmedGeometryPayload().coordinateSpace)
+  const pointSummary = usesKorean
+    ? `${confirmedPoints.length}점 · ${area.toFixed(1)} m² · ${coordinateSpace}`
+    : `${confirmedPoints.length} points · ${area.toFixed(1)} m² · ${coordinateSpace}`
+  if (confirmedPoints.length < 3) {
+    return {
+      state: 'invalid',
+      label: t('invalid polygon', '잘못된 폴리곤'),
+      detail: t(
+        `${pointSummary} · at least three points required`,
+        `${pointSummary} · 최소 3개 점 필요`,
+      ),
+      areaSquareMeters: area,
+    }
+  }
+  if (outlineHasSelfIntersection()) {
+    return {
+      state: 'invalid',
+      label: t('invalid polygon', '잘못된 폴리곤'),
+      detail: t(`${pointSummary} · self-intersection`, `${pointSummary} · 자체 교차`),
+      areaSquareMeters: area,
+    }
+  }
+  if (area < 0.1) {
+    return {
+      state: 'calibrating',
+      label: t('calibrating', '보정 중'),
+      detail: t(`${pointSummary} · area too small`, `${pointSummary} · 면적이 너무 작음`),
+      areaSquareMeters: area,
+    }
+  }
+  return {
+    state: 'valid',
+    label: t('valid polygon', '유효한 폴리곤'),
+    detail: pointSummary,
+    areaSquareMeters: area,
+  }
+}
+
+function polygonAreaSquareMeters(): number {
+  if (confirmedPoints.length < 3) {
+    return 0
+  }
+  const points = confirmedPoints.map(scenePointToMetric)
+  let sum = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]
+    const next = points[(index + 1) % points.length]
+    sum += current.x * next.y - next.x * current.y
+  }
+  return Math.abs(sum / 2)
+}
+
+function outlineHasSelfIntersection(): boolean {
+  if (confirmedPoints.length < 4) {
+    return false
+  }
+  for (let first = 0; first < confirmedPoints.length; first += 1) {
+    const firstNext = (first + 1) % confirmedPoints.length
+    for (let second = first + 1; second < confirmedPoints.length; second += 1) {
+      const secondNext = (second + 1) % confirmedPoints.length
+      const adjacent =
+        first === second ||
+        firstNext === second ||
+        secondNext === first
+      if (adjacent) {
+        continue
+      }
+      if (
+        segmentsIntersect(
+          confirmedPoints[first],
+          confirmedPoints[firstNext],
+          confirmedPoints[second],
+          confirmedPoints[secondNext],
+        )
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function segmentsIntersect(
+  aStart: THREE.Vector3,
+  aEnd: THREE.Vector3,
+  bStart: THREE.Vector3,
+  bEnd: THREE.Vector3,
+): boolean {
+  const d1 = orientation(aStart, aEnd, bStart)
+  const d2 = orientation(aStart, aEnd, bEnd)
+  const d3 = orientation(bStart, bEnd, aStart)
+  const d4 = orientation(bStart, bEnd, aEnd)
+  return d1 * d2 < 0 && d3 * d4 < 0
+}
+
+function orientation(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number {
+  return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x)
+}
+
+function syncCornerHandleStyles(): void {
+  for (const [index, corner] of cornerMeshes.entries()) {
+    corner.scale.setScalar(index === activeCornerIndex ? 1.55 : 1)
+  }
+}
+
+function syncCanvasToggleButtons(): void {
+  for (const button of canvasToggleButtonElements) {
+    const key = button.dataset.canvasToggle
+    if (key !== 'grid' && key !== 'snap') {
+      continue
+    }
+    const active = canvasToggleState[key]
+    button.setAttribute('aria-pressed', String(active))
+    button.classList.toggle('is-active', active)
+  }
+  document.querySelector('.viewport')?.classList.toggle('is-grid-hidden', !canvasToggleState.grid)
+}
+
+function updateScaleCalibrationPanel(): void {
+  if (confirmedPoints.length < 2) {
+    referenceLineListElement.innerHTML = ''
+    scaleStateElement.className = 'state-pill error'
+    scaleStateElement.textContent = t('invalid length', '잘못된 길이')
+    scaleRatioElement.textContent = 'n/a'
+    scaleErrorElement.textContent = 'n/a'
+    scaleRecalculateNoticeElement.hidden = false
+    return
+  }
+  if (selectedReferenceEdgeIndex >= confirmedPoints.length) {
+    selectedReferenceEdgeIndex = 0
+  }
+  renderReferenceLineButtons()
+  const knownLength = Number.parseFloat(knownWallLengthInputElement.value)
+  const edge = selectedReferenceEdge()
+  const pixelLength = referencePixelLength(edge)
+  const currentMeters = referenceMetricLength(edge)
+  if (!Number.isFinite(knownLength) || knownLength <= 0 || knownLength > 50) {
+    scaleStateElement.className = 'state-pill error'
+    scaleStateElement.textContent = t('invalid length', '잘못된 길이')
+    scaleRatioElement.textContent = 'n/a'
+    scaleErrorElement.textContent = 'n/a'
+    scaleRecalculateNoticeElement.hidden = false
+    scaleStatusElement.textContent = t(
+      'Enter a wall length between 0.10 m and 50.00 m.',
+      '0.10 m에서 50.00 m 사이의 벽 길이를 입력하세요.',
+    )
+    return
+  }
+  const pixelsPerMeter = pixelLength / knownLength
+  const errorPercent =
+    currentMeters > 0 ? (Math.abs(currentMeters - knownLength) / knownLength) * 100 : 0
+  scaleRatioElement.textContent = `${Math.round(pixelsPerMeter)} px/m`
+  scaleErrorElement.textContent = `±${errorPercent.toFixed(1)}%`
+  scaleStateElement.className = scaleNeedsRecalculation
+    ? 'state-pill warning'
+    : 'state-pill measurement'
+  scaleStateElement.textContent = scaleNeedsRecalculation
+    ? t('recalculate', '재계산 필요')
+    : t('reference selected', '기준선 선택됨')
+  scaleRecalculateNoticeElement.hidden = !scaleNeedsRecalculation
+  if (!scaleNeedsRecalculation) {
+    scaleStatusElement.textContent = t(
+      `Reference wall ${selectedReferenceEdgeIndex + 1} maps ${Math.round(
+        pixelLength,
+      )} px to ${knownLength.toFixed(2)} m.`,
+      `기준 벽 ${selectedReferenceEdgeIndex + 1}: ${Math.round(
+        pixelLength,
+      )} px를 ${knownLength.toFixed(2)} m로 매핑했습니다.`,
+    )
+  }
+}
+
+function renderReferenceLineButtons(): void {
+  referenceLineListElement.innerHTML = confirmedPoints
+    .map((_, index) => {
+      const selected = index === selectedReferenceEdgeIndex
+      const next = (index + 1) % confirmedPoints.length
+      const label = usesKorean
+        ? `벽 ${index + 1}-${next + 1}`
+        : `Wall ${index + 1}-${next + 1}`
+      return `<button type="button" data-reference-edge="${index}" aria-pressed="${selected}" class="${
+        selected ? 'is-active' : ''
+      }">${label}</button>`
+    })
+    .join('')
+}
+
+function selectedReferenceEdge(): { start: THREE.Vector3; end: THREE.Vector3 } {
+  const start = confirmedPoints[selectedReferenceEdgeIndex]
+  const end = confirmedPoints[(selectedReferenceEdgeIndex + 1) % confirmedPoints.length]
+  return { start, end }
+}
+
+function referencePixelLength(edge: { start: THREE.Vector3; end: THREE.Vector3 }): number {
+  const start = scenePointToImage(edge.start)
+  const end = scenePointToImage(edge.end)
+  return Math.hypot(end.x - start.x, end.y - start.y)
+}
+
+function referenceMetricLength(edge: { start: THREE.Vector3; end: THREE.Vector3 }): number {
+  const start = scenePointToMetric(edge.start)
+  const end = scenePointToMetric(edge.end)
+  return Math.hypot(end.x - start.x, end.y - start.y)
+}
+
+function updateFloorPlanReviewPanel(): void {
+  const bounds = roomBounds(spatialModel)
+  const coordinateSpace = spatialModel.room.floorPlan.metricGeometry.coordinateSpace
+  const lowConfidenceCandidates = spatialModel.candidateObjects.filter(
+    (candidate) => typeof candidate.confidenceScore === 'number' && candidate.confidenceScore < 0.7,
+  )
+  const lowConfidenceFixtures = spatialModel.structuralFixtures.filter(
+    (fixture) => typeof fixture.confidenceScore === 'number' && fixture.confidenceScore < 0.7,
+  )
+  const warnings = [
+    ...lowConfidenceCandidates.map((candidate) =>
+      t(
+        `${candidate.category} confidence ${Math.round((candidate.confidenceScore ?? 0) * 100)}%`,
+        `${candidate.category} confidence ${Math.round((candidate.confidenceScore ?? 0) * 100)}%`,
+      ),
+    ),
+    ...lowConfidenceFixtures.map((fixture) =>
+      t(
+        `${fixture.category} fixture confidence ${Math.round((fixture.confidenceScore ?? 0) * 100)}%`,
+        `${fixture.category} 고정 요소 confidence ${Math.round((fixture.confidenceScore ?? 0) * 100)}%`,
+      ),
+    ),
+  ]
+  const placement = placementWarning(spatialModel)
+  if (placement) {
+    warnings.push(placement)
+  }
+  if (scaleNeedsRecalculation) {
+    warnings.push(t('Scale should be recalculated after outline edits.', '윤곽 수정 후 스케일 재계산이 필요합니다.'))
+  }
+
+  reviewRoomSizeElement.textContent = `${bounds.widthMeters.toFixed(2)} x ${bounds.depthMeters.toFixed(2)} m`
+  reviewCoordinateSpaceElement.textContent = coordinateSpace
+  const hasMetricPlan = coordinateSpace === 'meters' && confirmedPoints.length >= 3
+  floorPlanStateElement.className = hasMetricPlan
+    ? warnings.length > 0
+      ? 'state-pill warning'
+      : 'state-pill confirmed'
+    : 'state-pill error'
+  floorPlanStateElement.textContent = hasMetricPlan
+    ? warnings.length > 0
+      ? t('warning', '경고')
+      : t('metric ready', '미터 평면도 준비됨')
+    : t('artifact missing', '아티팩트 누락')
+  floorWarningRailElement.innerHTML =
+    warnings.length === 0
+      ? warningRailRowMarkup('confirmed', t('No blocking warnings.', '차단 경고 없음'))
+      : warnings.map((warning) => warningRailRowMarkup('warning', warning)).join('')
+  floorArtifactGridElement.innerHTML = floorPlanArtifactRows()
+}
+
+function warningRailRowMarkup(state: 'confirmed' | 'warning' | 'error', message: string): string {
+  const label = state === 'confirmed' ? t('ready', '준비됨') : state === 'warning' ? t('warning', '경고') : t('missing', '누락')
+  return `<div class="warning-row" role="listitem"><span class="state-pill ${state}">${label}</span><span>${escapeHtml(message)}</span></div>`
+}
+
+function floorPlanArtifactRows(): string {
+  const artifacts = [
+    {
+      label: 'overlay',
+      ready: latestCandidateGeometry !== null || confirmedPoints.length >= 3,
+      detail: t('candidate and confirmed outline', '후보 및 확정 윤곽'),
+    },
+    {
+      label: 'mask',
+      ready: latestCandidateGeometry !== null,
+      detail: t('OpenCV segmentation artifact', 'OpenCV segmentation 아티팩트'),
+    },
+    {
+      label: 'depth.json',
+      ready: (captureSessionForSceneUnderstanding?.images ?? []).some(
+        (image) => (image.depthArtifactRefs ?? []).length > 0 || image.cameraPose?.depthEstimateMeters,
+      ),
+      detail: t('ARCore depth metadata', 'ARCore depth 메타데이터'),
+    },
+  ]
+  return artifacts
+    .map((artifact) => {
+      const state = artifact.ready ? 'confirmed' : 'error'
+      const label = artifact.ready ? t('ready', '준비됨') : t('missing', '누락')
+      return `<div class="artifact-row"><strong>${escapeHtml(artifact.label)}</strong><span>${escapeHtml(
+        artifact.detail,
+      )}</span><span class="state-pill ${state}">${label}</span></div>`
+    })
+    .join('')
+}
+
+function updateEditorStatusBar(): void {
+  const area = polygonAreaSquareMeters()
+  const warning = placementWarning(spatialModel)
+  const saveState = saveStateDisplay()
+  editorSaveStateElement.className = `state-pill ${saveState.className}`
+  editorSaveStateElement.textContent = saveState.label
+  layoutValidityElement.className = warning ? 'state-pill warning' : 'state-pill confirmed'
+  layoutValidityElement.textContent = warning
+    ? t('warning layout', '경고 레이아웃')
+    : t('valid layout', '유효한 레이아웃')
+  layoutCountsElement.textContent = usesKorean
+    ? `가구 ${spatialModel.furniture.length}개 · 고정 요소 ${spatialModel.structuralFixtures.length}개`
+    : `${spatialModel.furniture.length} objects · ${spatialModel.structuralFixtures.length} fixtures`
+  layoutAreaElement.textContent = `${area.toFixed(1)} m²`
+}
+
+function saveStateDisplay(): { className: string; label: string } {
+  if (persistenceStateValue === 'saving') {
+    return { className: 'save', label: t('saving', '저장 중') }
+  }
+  if (persistenceStateValue === 'exportFailed') {
+    return { className: 'error', label: t('export failed', '내보내기 실패') }
+  }
+  if (spatialModel.hasUnsavedChanges) {
+    return { className: 'warning', label: t('unsaved', '저장 안 됨') }
+  }
+  return { className: 'confirmed', label: t('saved', '저장됨') }
+}
+
+function saveLayoutFromEditor(): void {
+  persistenceStateValue = 'saving'
+  updateEditorStatusBar()
+  updatePersistencePanel()
+  sceneStatusElement.textContent = t('Saving layout draft.', '레이아웃 draft 저장 중입니다.')
+  window.setTimeout(() => {
+    spatialModel = { ...spatialModel, hasUnsavedChanges: false }
+    persistenceStateValue = 'saved'
+    updateSpatialStatus()
+    sceneStatusElement.textContent = t('Layout saved and ready to reload.', '레이아웃이 저장되어 다시 로드할 수 있습니다.')
+    emitSceneState('roomforge.layout.saved')
+  }, 180)
+}
+
+function prepareLayoutExport(): void {
+  const warning = placementWarning(spatialModel)
+  persistenceStateValue = warning ? 'exportFailed' : 'saved'
+  updateEditorStatusBar()
+  updatePersistencePanel()
+  sceneStatusElement.textContent = warning
+    ? t(
+        'Export preview has placement warnings. Resolve them before downloading JSON.',
+        '내보내기 미리보기에 배치 경고가 있습니다. JSON 다운로드 전에 해결하세요.',
+      )
+    : t(
+        'Layout JSON export preview is ready.',
+        '레이아웃 JSON 내보내기 미리보기가 준비되었습니다.',
+      )
+  postToParent({
+    type: 'roomforge.layout.exportPreviewed',
+    version: BRIDGE_VERSION,
+    payload: layoutExportPayload(),
+  })
+}
+
+function updatePersistencePanel(): void {
+  const saveState = saveStateDisplay()
+  persistenceStateElement.className = `state-pill ${saveState.className}`
+  persistenceStateElement.textContent = saveState.label
+  saveBoardElement.innerHTML = saveBoardMarkup()
+  layoutExportPreviewElement.textContent = JSON.stringify(layoutExportPayload(), null, 2)
+  for (const button of layoutLoadSourceButtonElements) {
+    const active = button.dataset.loadSource === selectedLoadSource
+    button.setAttribute('aria-pressed', String(active))
+    button.classList.toggle('is-active', active)
+  }
+  const warning = placementWarning(spatialModel)
+  const roundTripClass = warning || spatialModel.hasUnsavedChanges ? 'warning' : 'confirmed'
+  const roundTripLabel = warning
+    ? t('review', '검토 필요')
+    : spatialModel.hasUnsavedChanges
+      ? t('draft', 'draft')
+      : t('verified', '검증됨')
+  const roundTripMessage = warning
+    ? t(
+        'Round-trip preview includes placement warnings.',
+        'Round-trip 미리보기에 배치 경고가 포함되어 있습니다.',
+      )
+    : spatialModel.hasUnsavedChanges
+      ? t(
+          'Local draft differs from the last saved cloud layout.',
+          '로컬 draft가 마지막 클라우드 저장본과 다릅니다.',
+        )
+      : t(
+          'Save, load, and export fields match.',
+          '저장, 로드, 내보내기 필드가 일치합니다.',
+        )
+  roundTripNoticeElement.innerHTML = `<span class="state-pill ${roundTripClass}">${roundTripLabel}</span><span>${escapeHtml(
+    roundTripMessage,
+  )}</span>`
+}
+
+function saveBoardMarkup(): string {
+  const saveState = saveStateDisplay()
+  const warning = placementWarning(spatialModel)
+  const cloudLabel = spatialModel.hasUnsavedChanges ? t('previous cloud layout', '이전 클라우드 저장본') : t('cloud layout', '클라우드 저장본')
+  return [
+    {
+      chipClass: saveState.className,
+      chipLabel: saveState.label,
+      title: cloudLabel,
+      detail: usesKorean
+        ? `${spatialModel.furniture.length}개 객체 · ${spatialModel.coordinateSpace} · ${spatialModel.viewMode.toUpperCase()}`
+        : `${spatialModel.furniture.length} objects · ${spatialModel.coordinateSpace} · ${spatialModel.viewMode.toUpperCase()}`,
+    },
+    {
+      chipClass: spatialModel.hasUnsavedChanges ? 'warning' : 'confirmed',
+      chipLabel: spatialModel.hasUnsavedChanges ? t('local draft', '로컬 draft') : t('synced', '동기화됨'),
+      title: t('local draft', '로컬 draft'),
+      detail: warning ?? t('No placement warnings.', '배치 경고 없음.'),
+    },
+    {
+      chipClass: persistenceStateValue === 'exportFailed' ? 'error' : 'measurement',
+      chipLabel: persistenceStateValue === 'exportFailed' ? t('export failed', '내보내기 실패') : t('export', '내보내기'),
+      title: 'layout-export.json',
+      detail: t('room, furniture, camera, meta', 'room, furniture, camera, meta 포함'),
+    },
+  ]
+    .map(
+      (item) => `<div>
+        <span class="state-pill ${item.chipClass}">${item.chipLabel}</span>
+        <b>${escapeHtml(item.title)}</b>
+        <span>${escapeHtml(item.detail)}</span>
+      </div>`,
+    )
+    .join('')
+}
+
+function layoutExportPayload(): Record<string, unknown> {
+  const bounds = roomBounds(spatialModel)
+  return {
+    export_format: 'roomforge_layout_json',
+    export_version: 1,
+    coordinate_space: spatialModel.coordinateSpace,
+    unit: spatialModel.unit,
+    scene_id: spatialModel.sceneId,
+    room: {
+      room_id: spatialModel.room.objectId,
+      width_m: Number(bounds.widthMeters.toFixed(2)),
+      depth_m: Number(bounds.depthMeters.toFixed(2)),
+      height_m: spatialModel.room.heightMeters,
+      floor_plan: spatialModel.room.floorPlan,
+    },
+    furniture_objects: spatialModel.furniture.map((item) => ({
+      furniture_id: item.objectId,
+      category: item.category,
+      label: item.label,
+      position_m: item.position,
+      size_m: item.size,
+      rotation_deg: item.rotationDegrees,
+      locked: item.locked === true,
+      source: item.source ?? 'catalog',
+    })),
+    editor_scene: {
+      view_mode: spatialModel.viewMode,
+      selected: spatialModel.selected,
+      has_unsaved_changes: spatialModel.hasUnsavedChanges,
+    },
+    meta: {
+      review_required: placementWarning(spatialModel) !== null,
+      selected_load_source: selectedLoadSource,
+    },
+  }
+}
+
+function localizedLoadSourceMessage(source: LoadSource): string {
+  if (source === 'draft') {
+    return t('Local draft selected for load preview.', '로컬 draft를 로드 미리보기로 선택했습니다.')
+  }
+  if (source === 'export') {
+    return t('Previous export selected for load preview.', '이전 export를 로드 미리보기로 선택했습니다.')
+  }
+  return t('Latest cloud layout selected for load preview.', '최신 클라우드 저장본을 로드 미리보기로 선택했습니다.')
+}
+
+function updateCursorCoordinates(event: PointerEvent): void {
+  setPointerFromEvent(event)
+  raycaster.setFromCamera(pointer, camera)
+  const target = new THREE.Vector3()
+  if (!raycaster.ray.intersectPlane(dragPlane, target)) {
+    return
+  }
+  const metric = scenePointToMetric(target)
+  cursorCoordsElement.textContent = `x ${metric.x.toFixed(2)} · y ${metric.y.toFixed(2)}`
 }
 
 function rebuildWalls(): void {
@@ -1098,7 +2293,6 @@ function syncConfirmedGeometryMeshes(): void {
   selectionLine.geometry = new THREE.BufferGeometry().setFromPoints(
     closedPoints.map((point) => point.clone().setY(0.09)),
   )
-  selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
 
   while (cornerMeshes.length < confirmedPoints.length) {
     const corner = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), cornerMaterial)
@@ -1115,6 +2309,8 @@ function syncConfirmedGeometryMeshes(): void {
   for (const [index, point] of confirmedPoints.entries()) {
     cornerMeshes[index].position.copy(point)
   }
+  syncCornerHandleStyles()
+  applyLayerVisibility()
 }
 
 function rebuildStructuralFixtures(): void {
@@ -1238,11 +2434,18 @@ function updateSpatialStatus(): void {
   placementStatusElement.hidden = warning === null
   placementStatusElement.textContent = warning ?? ''
   placementSummaryElement.textContent = warning ?? t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음')
-  selectionLine.visible = spatialModel.selected?.objectId === spatialModel.room.objectId
-  view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d'))
-  view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d'))
-  view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d')
-  view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d')
+  view2dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '2d' && !splitViewActive))
+  view3dButtonElement.setAttribute('aria-pressed', String(spatialModel.viewMode === '3d' && !splitViewActive))
+  viewSplitButtonElement.setAttribute('aria-pressed', String(splitViewActive))
+  view2dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '2d' && !splitViewActive)
+  view3dButtonElement.classList.toggle('is-active', spatialModel.viewMode === '3d' && !splitViewActive)
+  viewSplitButtonElement.classList.toggle('is-active', splitViewActive)
+  applyLayerVisibility()
+  updateOutlineValidityPanel()
+  updateScaleCalibrationPanel()
+  updateFloorPlanReviewPanel()
+  updateEditorStatusBar()
+  updatePersistencePanel()
   const furnitureSelected = spatialModel.selected?.objectType === 'furniture'
   const fixtureSelected = spatialModel.selected?.objectType === 'fixture'
   const selected = selectedFurniture()
@@ -1267,6 +2470,14 @@ function updateSpatialStatus(): void {
     : fixture
       ? t('Fixture', '고정 요소')
     : t('Room', '방')
+  selectionStateElement.className = selected
+    ? selected.locked
+      ? 'state-pill warning'
+      : 'state-pill selected'
+    : fixture
+      ? 'state-pill measurement'
+      : 'state-pill confirmed'
+  updateFurnitureInspector(selected, fixture, warning)
   for (const button of furnitureEditButtons) {
     const action = button.dataset.furnitureEdit
     const locked = selected?.locked === true
@@ -1276,9 +2487,139 @@ function updateSpatialStatus(): void {
       button.textContent = locked ? t('Unlock object', '객체 잠금 해제') : t('Lock object', '객체 잠금')
     }
   }
-  for (const button of fixtureEditButtons) {
+  for (const button of fixtureEditButtonElements) {
     button.disabled = !fixtureSelected
   }
+}
+
+function updateFurnitureInspector(
+  selected: FurnitureObject | null,
+  fixture: StructuralFixtureObject | null,
+  warning: string | null,
+): void {
+  furnitureObjectListElement.innerHTML = furnitureObjectListMarkup()
+  updateTransformControls(selected)
+
+  if (selected) {
+    selectedObjectTitleElement.textContent = localizedFurnitureLabel(selected)
+    selectedObjectSourceElement.textContent =
+      selected.source === 'cv_candidate'
+        ? t('CV candidate proxy', 'CV 후보 프록시')
+        : t('catalog proxy', '카탈로그 프록시')
+  } else if (fixture) {
+    selectedObjectTitleElement.textContent = localizedFixtureLabel(fixture)
+    selectedObjectSourceElement.textContent = t('structural fixture', '구조 고정 요소')
+  } else {
+    selectedObjectTitleElement.textContent = t('Room shell', '방 외곽')
+    selectedObjectSourceElement.textContent = t('meters coordinate space', 'meters 좌표계')
+  }
+
+  const selectedOutside = selected ? furnitureOutsideRoom(selected, roomBounds(spatialModel)) : false
+  const warningMessage = selectedOutside
+    ? t(
+        `${selected?.label ?? 'Object'} is outside room bounds. Move or resize it before saving.`,
+        `${selected ? localizedFurnitureLabel(selected) : '오브젝트'}이(가) 방 경계 밖에 있습니다. 저장 전에 이동하거나 크기를 조정하세요.`,
+      )
+    : warning && usesKorean
+      ? '배치 경고가 있습니다. 저장 전에 모든 오브젝트를 방 경계 안으로 이동하거나 크기를 조정하세요.'
+      : warning
+  const stateClass = warningMessage ? 'collision' : 'confirmed'
+  const stateLabel = warningMessage ? t('collision', '충돌') : t('clear', '정상')
+  furniturePlacementWarningElement.innerHTML = `<span class="state-pill ${stateClass}">${stateLabel}</span><span>${escapeHtml(
+    warningMessage ?? t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음'),
+  )}</span>`
+}
+
+function furnitureObjectListMarkup(): string {
+  if (spatialModel.furniture.length === 0) {
+    return `<p class="object-list-empty">${t(
+      'No furniture proxies placed yet.',
+      '아직 배치된 가구 프록시가 없습니다.',
+    )}</p>`
+  }
+
+  const bounds = roomBounds(spatialModel)
+  return spatialModel.furniture
+    .map((item) => {
+      const selected = spatialModel.selected?.objectId === item.objectId
+      const state = furnitureObjectState(item, selected, bounds)
+      return `<button class="object-chip${selected ? ' is-selected' : ''}${
+        state.className === 'collision' ? ' is-collision' : ''
+      }" type="button" role="listitem" data-furniture-select="${escapeAttribute(item.objectId)}">
+        <strong>${escapeHtml(localizedFurnitureLabel(item))}</strong>
+        <span class="state-pill ${state.className}">${state.label}</span>
+        <small>${item.size.widthMeters.toFixed(2)} x ${item.size.depthMeters.toFixed(
+          2,
+        )} m · x ${item.position.x.toFixed(2)} · y ${item.position.y.toFixed(2)}</small>
+      </button>`
+    })
+    .join('')
+}
+
+function furnitureObjectState(
+  item: FurnitureObject,
+  selected: boolean,
+  bounds: ReturnType<typeof roomBounds>,
+): { className: string; label: string } {
+  if (furnitureOutsideRoom(item, bounds)) {
+    return { className: 'collision', label: t('collision', '충돌') }
+  }
+  if (selected) {
+    return { className: 'selected', label: t('selected', '선택됨') }
+  }
+  if (item.source === 'cv_candidate') {
+    return { className: 'candidate', label: t('candidate', '후보') }
+  }
+  return { className: 'confirmed', label: t('confirmed', '확정') }
+}
+
+function updateTransformControls(selected: FurnitureObject | null): void {
+  if (!selected) {
+    transformXReadoutElement.textContent = '--'
+    transformYReadoutElement.textContent = '--'
+    transformRotationReadoutElement.textContent = '--'
+    transformSizeReadoutElement.textContent = '--'
+    for (const input of transformInputElements) {
+      input.disabled = true
+    }
+    for (const output of transformOutputElements) {
+      output.textContent = '--'
+    }
+    return
+  }
+
+  const bounds = roomBounds(spatialModel)
+  transformXReadoutElement.textContent = `${selected.position.x.toFixed(2)} m`
+  transformYReadoutElement.textContent = `${selected.position.y.toFixed(2)} m`
+  transformRotationReadoutElement.textContent = `${selected.rotationDegrees.toFixed(0)} deg`
+  transformSizeReadoutElement.textContent = `${selected.size.widthMeters.toFixed(
+    2,
+  )} x ${selected.size.depthMeters.toFixed(2)} x ${selected.size.heightMeters.toFixed(2)} m`
+  setTransformControl('position-x', selected.position.x, 0, bounds.widthMeters, false)
+  setTransformControl('position-y', selected.position.y, 0, bounds.depthMeters, false)
+  setTransformControl('rotation', selected.rotationDegrees, 0, 345, false)
+  setTransformControl('width', selected.size.widthMeters, 0.2, Math.max(bounds.widthMeters, 0.2), false)
+  setTransformControl('depth', selected.size.depthMeters, 0.2, Math.max(bounds.depthMeters, 0.2), false)
+  setTransformControl('height', selected.size.heightMeters, 0.2, Math.max(spatialModel.room.heightMeters, 0.2), false)
+}
+
+function setTransformControl(
+  field: TransformField,
+  value: number,
+  min: number,
+  max: number,
+  disabled: boolean,
+): void {
+  const input = transformInputElements.find((item) => item.dataset.transformField === field)
+  const output = transformOutputElements.find((item) => item.dataset.transformOutput === field)
+  if (!input || !output) {
+    return
+  }
+  input.disabled = disabled
+  input.min = String(min)
+  input.max = String(max)
+  input.value = String(value)
+  output.textContent = field === 'rotation' ? `${Math.round(value)} deg` : `${value.toFixed(2)} m`
 }
 
 function updateCandidateTray(): void {
@@ -1332,13 +2673,22 @@ function localizedCoverageGuidance(summary: SceneCoverageSummary): string {
 }
 
 function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[number]): string {
-  const stateClass = item.rejected || item.lowConfidence ? ' warning' : ''
+  const stateClass = item.placed
+    ? ' confirmed'
+    : item.rejected || item.lowConfidence
+      ? ' warning'
+      : ' candidate'
+  const cardStateClass = item.placed
+    ? ' is-accepted'
+    : item.lowConfidence
+      ? ' is-low-confidence'
+      : ''
   const disabled = item.rejected ? ' disabled' : ''
   const placeDisabled = item.rejected || item.placed ? ' disabled' : ''
   const placeText = item.placed ? t('Placed', '배치됨') : t('Place', '배치')
   const rejectText = item.rejected ? t('Rejected', '거절됨') : t('Reject', '거절')
   return `
-    <article class="candidate-card${item.rejected ? ' is-rejected' : ''}" role="listitem" data-candidate-id="${escapeAttribute(
+    <article class="candidate-card${item.rejected ? ' is-rejected' : ''}${cardStateClass}" role="listitem" data-candidate-id="${escapeAttribute(
       item.candidateId,
     )}">
       <div class="candidate-card-header">
@@ -1368,12 +2718,14 @@ function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[num
             .join('')}
         </select>
       </label>
-      <button type="button" data-candidate-action="reject" data-candidate-id="${escapeAttribute(
-        item.candidateId,
-      )}"${disabled}>${rejectText}</button>
-      <button type="button" data-candidate-action="place" data-candidate-id="${escapeAttribute(
-        item.candidateId,
-      )}"${placeDisabled}>${placeText}</button>
+      <div class="candidate-card-actions">
+        <button type="button" data-candidate-action="reject" data-candidate-id="${escapeAttribute(
+          item.candidateId,
+        )}"${disabled}>${rejectText}</button>
+        <button type="button" data-candidate-action="place" data-candidate-id="${escapeAttribute(
+          item.candidateId,
+        )}"${placeDisabled}>${placeText}</button>
+      </div>
     </article>
   `
 }
@@ -1587,6 +2939,86 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
   emitSceneState('roomforge.scene.updated')
 }
 
+function updateSelectedFurnitureTransform(field: TransformField, value: number): void {
+  const selected = selectedFurniture()
+  if (!selected || !Number.isFinite(value)) {
+    return
+  }
+  if (selected.locked) {
+    geometryStatusElement.textContent = t(
+      `${selected.label} is locked. Unlock it before editing.`,
+      `${localizedFurnitureLabel(selected)}은 잠겨 있습니다. 편집 전에 잠금을 해제하세요.`,
+    )
+    updateSpatialStatus()
+    return
+  }
+
+  const bounds = roomBounds(spatialModel)
+  const nextItem = transformFurnitureObject(selected, field, value, bounds)
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    furniture: spatialModel.furniture.map((item) =>
+      item.objectId === selected.objectId ? nextItem : item,
+    ),
+  }
+  rebuildFurniture()
+  geometryStatusElement.textContent = t(
+    `Updated ${selected.label} transform.`,
+    `${localizedFurnitureLabel(selected)} 변환 값을 업데이트했습니다.`,
+  )
+  updateSpatialStatus()
+  emitSceneState('roomforge.scene.updated')
+}
+
+function transformFurnitureObject(
+  item: FurnitureObject,
+  field: TransformField,
+  value: number,
+  bounds: ReturnType<typeof roomBounds>,
+): FurnitureObject {
+  if (field === 'position-x') {
+    return {
+      ...item,
+      position: { ...item.position, x: Number(clampNumber(value, 0, bounds.widthMeters).toFixed(2)) },
+    }
+  }
+  if (field === 'position-y') {
+    return {
+      ...item,
+      position: { ...item.position, y: Number(clampNumber(value, 0, bounds.depthMeters).toFixed(2)) },
+    }
+  }
+  if (field === 'rotation') {
+    return { ...item, rotationDegrees: Math.round(clampNumber(value, 0, 345)) }
+  }
+  if (field === 'width') {
+    return {
+      ...item,
+      size: {
+        ...item.size,
+        widthMeters: Number(clampNumber(value, 0.2, Math.max(bounds.widthMeters, 0.2)).toFixed(2)),
+      },
+    }
+  }
+  if (field === 'depth') {
+    return {
+      ...item,
+      size: {
+        ...item.size,
+        depthMeters: Number(clampNumber(value, 0.2, Math.max(bounds.depthMeters, 0.2)).toFixed(2)),
+      },
+    }
+  }
+  return {
+    ...item,
+    size: {
+      ...item.size,
+      heightMeters: Number(clampNumber(value, 0.2, Math.max(spatialModel.room.heightMeters, 0.2)).toFixed(2)),
+    },
+  }
+}
+
 function editSelectedFixture(action: FixtureEditAction): void {
   const result = editSelectedFixtureInModel(spatialModel, action)
   const selected = result.selected
@@ -1617,14 +3049,29 @@ function localizedFurnitureLabel(item: FurnitureObject): string {
   if (!usesKorean) {
     return item.label
   }
+  if (item.category === 'bed') {
+    return '침대'
+  }
+  if (item.category === 'desk') {
+    return '책상'
+  }
   if (item.category === 'chair') {
     return '의자'
+  }
+  if (item.category === 'wardrobe') {
+    return '수납장'
   }
   if (item.category === 'table') {
     return '테이블'
   }
   if (item.category === 'sofa') {
     return '소파'
+  }
+  if (item.category === 'shelf') {
+    return '선반'
+  }
+  if (item.category === 'cabinet') {
+    return '캐비닛'
   }
   return item.label
 }
@@ -2132,6 +3579,7 @@ function clampNumber(value: number, min: number, max: number): number {
 }
 
 function updateConfirmedGeometry(message: string, emit = true): void {
+  scaleNeedsRecalculation = true
   spatialModel = {
     ...spatialModel,
     hasUnsavedChanges: true,
@@ -2213,7 +3661,32 @@ function inspectorSummary(model: SpatialModel): string {
 }
 
 function isFurnitureCategory(value: string | undefined): value is FurnitureCategory {
-  return value === 'chair' || value === 'table' || value === 'sofa'
+  return (
+    value === 'bed' ||
+    value === 'desk' ||
+    value === 'chair' ||
+    value === 'wardrobe' ||
+    value === 'sofa' ||
+    value === 'table' ||
+    value === 'shelf' ||
+    value === 'cabinet' ||
+    value === 'custom'
+  )
+}
+
+function isTransformField(value: string | undefined): value is TransformField {
+  return (
+    value === 'position-x' ||
+    value === 'position-y' ||
+    value === 'rotation' ||
+    value === 'width' ||
+    value === 'depth' ||
+    value === 'height'
+  )
+}
+
+function isLoadSource(value: string | undefined): value is LoadSource {
+  return value === 'latest' || value === 'draft' || value === 'export'
 }
 
 function measurementSummary(model: SpatialModel): string {
@@ -2227,10 +3700,21 @@ function measurementSummary(model: SpatialModel): string {
 }
 
 function placementWarning(model: SpatialModel): string | null {
-  return placementWarningForModel({
+  const warning = placementWarningForModel({
     model,
     labelFor: localizedFurnitureLabel,
   })
+  if (!warning || !usesKorean) {
+    return warning
+  }
+  const bounds = roomBounds(model)
+  const outside = model.furniture.find((item) => furnitureOutsideRoom(item, bounds))
+  if (!outside) {
+    return '배치 경고가 있습니다. 저장 전에 모든 오브젝트를 확인하세요.'
+  }
+  return `${localizedFurnitureLabel(outside)}이(가) ${bounds.widthMeters.toFixed(
+    2,
+  )} m x ${bounds.depthMeters.toFixed(2)} m 방 경계 밖에 있습니다. 저장 전에 이동하거나 크기를 조정하세요.`
 }
 
 function isFurnitureEditAction(value: string | undefined): value is FurnitureEditAction {

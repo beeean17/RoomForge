@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>01 · Sign In — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh; padding: 32px; }
+    .auth {
+      width: min(1040px, 100%);
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      border-radius: var(--rf-radius-xl);
+      overflow: hidden;
+      box-shadow: var(--rf-shadow-lg);
+      border: 1px solid var(--rf-line);
+      background: var(--rf-surface);
+    }
+
+    /* ---- Brand panel ---- */
+    .brandside {
+      position: relative;
+      padding: 48px 44px;
+      color: #fff;
+      background:
+        radial-gradient(700px 420px at 8% 6%, rgba(255,255,255,0.18), transparent 60%),
+        var(--rf-grad-brand);
+      overflow: hidden;
+      display: flex; flex-direction: column; justify-content: space-between;
+      min-height: 560px;
+    }
+    .brandside::after {
+      content: ""; position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: radial-gradient(600px 500px at 70% 80%, #000, transparent 75%);
+      opacity: 0.5;
+    }
+    .brandside > * { position: relative; z-index: 1; }
+    .brand-top { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 20px; }
+    .brand-top .mark { width: 38px; height: 38px; border-radius: 8px; background: var(--rf-grad-brand); box-shadow: var(--rf-ring-inset); backdrop-filter: blur(4px); }
+    .brand-headline { font-size: 38px; line-height: 1.05; letter-spacing: 0; margin: 18px 0 12px; max-width: 14ch; }
+    .brand-sub { color: rgba(255,255,255,0.86); font-size: 15px; max-width: 36ch; }
+
+    /* Floating mini floor-plan preview = product trust */
+    .preview {
+      margin-top: 28px; border-radius: var(--rf-radius-lg);
+      border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(6px); padding: 14px; height: 196px; position: relative; overflow: hidden;
+    }
+    .preview .plan { position: absolute; inset: 26px; border: 2.5px solid rgba(220,232,255,0.9); border-radius: 8px; }
+    .preview .fz { position: absolute; border-radius: 5px; }
+    .fz.bed { left: 26%; top: 24%; width: 30%; height: 30%; background: rgba(143,180,255,0.26); border: 2px solid rgba(143,180,255,0.86); animation: rf-float 5s var(--rf-ease-standard) infinite; }
+    .fz.desk { right: 16%; bottom: 22%; width: 22%; height: 16%; background: rgba(128,199,194,0.20); border: 2px solid rgba(128,199,194,0.74); animation: rf-float 6s var(--rf-ease-standard) infinite reverse; }
+    @keyframes rf-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    @media (prefers-reduced-motion: reduce) { .fz { animation: none !important; } }
+    .trust { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+    .trust .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28); }
+
+    /* ---- Form side ---- */
+    .formside { padding: 56px 52px; display: flex; flex-direction: column; justify-content: center; }
+    .formside h2 { font-size: 26px; letter-spacing: 0; }
+    .formside .lead { color: var(--rf-muted); margin: 8px 0 28px; }
+    .provider {
+      width: 100%; min-height: 52px; gap: 12px; font-size: 15px;
+      border: 1px solid rgba(220,232,255,0.42); background: #f8f8f5; color: #050505; box-shadow: var(--rf-shadow-xs);
+    }
+    .provider:hover { box-shadow: var(--rf-shadow-sm); }
+    .g-logo { width: 20px; height: 20px; filter: none; }
+    .legal { margin-top: 20px; font-size: 12px; color: var(--rf-subtle); text-align: center; }
+    .legal a { color: var(--rf-candidate); font-weight: 600; text-decoration: none; }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 24px 0; color: var(--rf-subtle); font-size: 12px; font-weight: 700; }
+    .divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: var(--rf-line); }
+    .statebar { display: flex; gap: 8px; margin-top: 28px; flex-wrap: wrap; }
+
+    /* spinner used by "signing in" demo state */
+    .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; animation: rf-spin 0.7s linear infinite; }
+    @keyframes rf-spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 860px) {
+      .auth { grid-template-columns: 1fr; }
+      .brandside { min-height: auto; padding: 36px 32px; }
+      .preview { display: none; }
+      .formside { padding: 40px 32px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="auth" data-reveal="scale" role="main" aria-labelledby="auth-title">
+    <!-- Brand panel -->
+    <section class="brandside" aria-label="RoomForge 소개">
+      <div class="brand-top"><span class="mark"></span> RoomForge</div>
+      <div>
+        <h1 class="brand-headline">사진 한 장으로 시작하는 방 설계</h1>
+        <p class="brand-sub">사진을 올리면 방의 윤곽과 가구 후보를 자동으로 찾아내고, 2D·3D에서 직접 다듬어 저장합니다.</p>
+        <div class="preview" aria-hidden="true">
+          <span class="plan"></span>
+          <span class="fz bed"></span>
+          <span class="fz desk"></span>
+        </div>
+        <div class="trust">
+          <span class="pill">Google 보안 로그인</span>
+          <span class="pill">자동 재구성</span>
+          <span class="pill">수동 보정 항상 가능</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Form side -->
+    <section class="formside">
+      <span class="rf-eyebrow" style="margin-bottom:16px">Welcome back</span>
+      <h2 id="auth-title">로그인</h2>
+      <p class="lead">계정으로 로그인하면 마지막 작업부터 이어서 진행할 수 있어요.</p>
+
+      <!-- Default error banner (hidden until a sign-in attempt fails) -->
+      <div class="rf-notice rf-notice--error" role="alert" id="err" hidden>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <div><strong>로그인이 완료되지 않았어요</strong>팝업이 차단되었을 수 있어요. 팝업을 허용한 뒤 다시 시도해 주세요.</div>
+      </div>
+
+      <button class="rf-btn provider" id="signin" aria-label="Google 계정으로 로그인">
+        <svg class="g-logo" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Google 계정으로 계속하기
+      </button>
+
+      <p class="legal">계속 진행하면 <a href="#">서비스 약관</a>과 <a href="#">개인정보 처리방침</a>에 동의하게 됩니다.</p>
+
+      <div class="divider">상태 미리보기</div>
+      <div class="statebar" aria-hidden="true">
+        <span class="rf-chip rf-chip--candidate"><span class="dot"></span>idle</span>
+        <span class="rf-chip rf-chip--save rf-chip--live"><span class="dot"></span>signing in</span>
+        <span class="rf-chip rf-chip--error"><span class="dot"></span>failed</span>
+        <span class="rf-chip rf-chip--warning"><span class="dot"></span>config missing</span>
+      </div>
+    </section>
+  </main>
+
+  <script src="../../system/motion.js"></script>
+  <script>
+    // Demo: cycle idle → signing in → failed to show micro-interactions.
+    var btn = document.getElementById('signin');
+    var err = document.getElementById('err');
+    var original = btn.innerHTML;
+    btn.addEventListener('click', function () {
+      if (btn.dataset.busy) return;
+      btn.dataset.busy = '1';
+      err.hidden = true;
+      btn.innerHTML = '<span class="spin"></span> 로그인 중…';
+      btn.style.background = 'var(--rf-grad-primary)';
+      btn.style.color = '#050505';
+      btn.style.borderColor = 'transparent';
+      setTimeout(function () {
+        btn.innerHTML = original;
+        btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = '';
+        err.hidden = false;
+        delete btn.dataset.busy;
+      }, 1600);
+    });
+  </script>
+</body>
+</html>

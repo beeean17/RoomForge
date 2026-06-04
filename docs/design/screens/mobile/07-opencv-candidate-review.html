@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>07 · OpenCV Candidate Review — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>07</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">CV Review &amp; Editor</span>
+          <h1>OpenCV Candidate Review</h1>
+          <p>원본 이미지 위에서 CV 후보를 검토하고, 틀린 후보를 즉시 수동 보정합니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="cv-scene">
+          <div class="photo-canvas">
+            <span class="candidate-box bed"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>bed 0.91</span></span>
+            <span class="candidate-box desk warn"><span class="rf-chip rf-chip--warning"><span class="dot"></span>desk 0.44</span></span>
+            <span class="candidate-box window"><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>window</span></span>
+          </div>
+          <div class="candidate-tray">
+            <div><span class="rf-chip rf-chip--candidate"><span class="dot"></span>candidate</span><b>침대</b><span>confidence 91%</span></div>
+            <div><span class="rf-chip rf-chip--warning"><span class="dot"></span>low</span><b>책상</b><span>confidence 44%</span></div>
+            <div><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>accepted</span><b>창문</b><span>고정 요소</span></div>
+          </div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>candidate</span><span class="rf-chip rf-chip--warning"><span class="dot"></span>low confidence</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>accepted</span></div>
+          <ul class="component-list">
+            <li><strong>Image canvas</strong><span>원본 이미지 위 후보 박스, 벽/바닥 후보, 고정 요소 후보를 레이어로 표시.</span></li><li><strong>Candidate tray</strong><span>침대, 책상, 창문, 문 등 감지 후보를 confidence와 함께 나열.</span></li><li><strong>Layer toggles</strong><span>가구, 구조물, 경계선, 낮은 신뢰도 후보를 켜고 끄는 토글.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">선택 후보 적용</button>
+        <button class="rf-btn rf-btn--block">수동 후보 추가</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

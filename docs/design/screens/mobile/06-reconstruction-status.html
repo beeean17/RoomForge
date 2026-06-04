@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>06 · Reconstruction Status — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>06</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">P0 Core Flow</span>
+          <h1>Reconstruction Status</h1>
+          <p>재구성 job의 상태, 실패, 재시도, 검토 필요 전환을 타임라인으로 보여줍니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="status-scene">
+          <div class="rf-timeline">
+            <div class="rf-tl-step is-done"><div class="rf-tl-node">1</div><div class="rf-tl-body"><b>created</b><span>Job record created</span><time>10:22:04</time></div></div>
+            <div class="rf-tl-step is-done"><div class="rf-tl-node">2</div><div class="rf-tl-body"><b>uploading</b><span>Source image stored</span><time>10:22:16</time></div></div>
+            <div class="rf-tl-step is-active"><div class="rf-tl-node">3</div><div class="rf-tl-body"><b>processing</b><span>OpenCV worker extracting candidates</span><time>10:22:31</time></div></div>
+            <div class="rf-tl-step"><div class="rf-tl-node">4</div><div class="rf-tl-body"><b>Needs review</b><span>Manual review opens when candidates are ready</span></div></div>
+          </div>
+          <div class="job-strip"><span>job_9b2f</span><span>opencv-worker</span><span>attempt 01</span></div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--admin"><span class="dot"></span>created</span><span class="rf-chip rf-chip--save"><span class="dot"></span>processing</span><span class="rf-chip rf-chip--warning"><span class="dot"></span>Needs review</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>succeeded</span><span class="rf-chip rf-chip--error"><span class="dot"></span>failed</span></div>
+          <ul class="component-list">
+            <li><strong>Status timeline</strong><span>`created`부터 `retrying`까지 단계별 점검표. `review_required`는 `Needs review`로 표시.</span></li><li><strong>Job detail strip</strong><span>job id, provider, source image, updated time을 compact하게 제공.</span></li><li><strong>Retry action</strong><span>실패/타임아웃 시 재시도 조건과 버튼.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">리뷰 화면으로 이동</button>
+        <button class="rf-btn rf-btn--block">재시도</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

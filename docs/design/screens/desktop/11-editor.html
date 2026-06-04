@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>11 · 2D/3D Editor — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <style>
+    html, body { height: 100%; }
+    .editor { height: 100vh; display: grid; grid-template-rows: var(--rf-topbar-h) 1fr var(--rf-statusbar-h); }
+
+    /* top bar */
+    .etop { display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--rf-line); background: var(--rf-glass); backdrop-filter: var(--rf-glass-blur); }
+    .etop .name { font-weight: 800; }
+    .etop .name small { display: block; font-weight: 600; font-size: 11px; color: var(--rf-subtle); }
+
+    /* main: rail / canvas / inspector */
+    .estage { display: grid; grid-template-columns: var(--rf-rail-w) 1fr var(--rf-inspector-w); min-height: 0; }
+    @media (max-width: 1100px) { .estage { grid-template-columns: var(--rf-rail-w) 1fr; } .inspector { display: none; } }
+
+    /* tool rail */
+    .rail { border-right: 1px solid var(--rf-line); background: var(--rf-surface); display: grid; align-content: start; gap: 8px; padding: 12px 0; justify-items: center; }
+    .tool { width: 44px; height: 44px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--rf-muted); display: grid; place-items: center; cursor: pointer; transition: transform var(--rf-dur-1) var(--rf-ease-spring), background var(--rf-dur-2), color var(--rf-dur-2); }
+    .tool svg { width: 20px; height: 20px; }
+    .tool:hover { background: var(--rf-paper); color: var(--rf-ink); transform: translateY(-1px); }
+    .tool[aria-pressed="true"] { background: var(--rf-candidate-tint); color: var(--rf-candidate); border-color: var(--rf-line-strong); }
+
+    /* canvas — the hero, not boxed in a card */
+    .canvaswrap { position: relative; overflow: hidden; background:
+        linear-gradient(135deg, rgba(143,180,255,0.08), transparent 42%),
+        linear-gradient(90deg, var(--rf-grid) 1px, transparent 1px),
+        linear-gradient(180deg, var(--rf-grid) 1px, transparent 1px),
+        var(--rf-canvas); background-size: auto, 30px 30px, 30px 30px, auto; }
+    /* floating canvas toolbar */
+    .ctools { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px; border-radius: 8px; background: var(--rf-glass-strong); backdrop-filter: var(--rf-glass-blur); border: 1px solid var(--rf-line); box-shadow: var(--rf-shadow-md); z-index: 4; }
+    .ctools .rf-icon-btn { width: 36px; height: 36px; border-color: transparent; background: transparent; }
+    .ctools .rf-icon-btn:hover { background: var(--rf-paper); }
+    .viewswitch { position: absolute; top: 14px; right: 16px; z-index: 4; }
+    .zoom { position: absolute; bottom: 16px; right: 16px; z-index: 4; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 8px; background: var(--rf-glass-strong); backdrop-filter: var(--rf-glass-blur); border: 1px solid var(--rf-line); box-shadow: var(--rf-shadow-sm); font-size: 12px; font-weight: 700; }
+
+    /* 2D scene */
+    .scene { position: absolute; inset: 0; display: grid; place-items: center; }
+    .room { position: relative; width: 460px; height: 360px; border: 3px solid var(--rf-ink); border-radius: 6px; background: rgba(220,232,255,0.30); box-shadow: var(--rf-shadow-md); transition: transform var(--rf-dur-3) var(--rf-ease-out); }
+    .fxt { position: absolute; background: #eaf0ff; border: 2px solid var(--rf-save); }
+    .fxt.window { top: -5px; left: 38%; width: 26%; height: 8px; }
+    .fxt.door { bottom: 30px; left: -5px; width: 8px; height: 60px; }
+    .obj { position: absolute; border-radius: 5px; border: 2px solid; cursor: grab; transition: box-shadow var(--rf-dur-2), transform var(--rf-dur-1) var(--rf-ease-spring); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+    .obj:hover { box-shadow: var(--rf-shadow-sm); }
+    .obj.bed { left: 22%; top: 22%; width: 38%; height: 34%; background: var(--rf-candidate-tint); border-color: var(--rf-candidate); color: var(--rf-candidate); }
+    .obj.desk { right: 12%; bottom: 16%; width: 26%; height: 16%; background: var(--rf-confirmed-tint); border-color: var(--rf-confirmed); color: var(--rf-confirmed); }
+    .obj.selected { outline: 2px solid var(--rf-selected); outline-offset: 4px; box-shadow: 0 0 0 4px var(--rf-selected-tint), var(--rf-shadow-md); }
+    .obj.selected .handle { opacity: 1; }
+    .handle { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--rf-selected); opacity: 0; transition: opacity var(--rf-dur-2); }
+    .handle.tl { left: -6px; top: -6px; } .handle.tr { right: -6px; top: -6px; }
+    .handle.bl { left: -6px; bottom: -6px; } .handle.br { right: -6px; bottom: -6px; cursor: nwse-resize; }
+    .dim { position: absolute; font-size: 11px; font-weight: 700; color: var(--rf-muted); background: var(--rf-glass-strong); padding: 1px 6px; border-radius: 5px; }
+    .dim.w { top: -22px; left: 50%; transform: translateX(-50%); } .dim.h { left: -42px; top: 50%; transform: translateY(-50%) rotate(-90deg); }
+
+    /* inspector dock */
+    .inspector { border-left: 1px solid var(--rf-line); background: var(--rf-surface); overflow: auto; padding: 16px; display: grid; gap: 16px; align-content: start; }
+    .insp-head { display: flex; align-items: center; justify-content: space-between; }
+    .insp-head h2 { font-size: 16px; }
+    .grp { display: grid; gap: 10px; }
+    .grp > .gt { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rf-subtle); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ctrl { display: grid; gap: 5px; }
+    .ctrl label { font-size: 12px; font-weight: 600; color: var(--rf-ink-soft); }
+
+    /* status bar */
+    .estatus { display: flex; align-items: center; gap: 14px; padding: 0 16px; border-top: 1px solid var(--rf-line); background: var(--rf-glass); backdrop-filter: var(--rf-glass-blur); font-size: 12px; }
+    .estatus .sep { width: 1px; height: 16px; background: var(--rf-line); }
+  </style>
+</head>
+<body>
+  <div class="editor">
+    <!-- Top bar -->
+    <header class="etop">
+      <button class="rf-icon-btn" data-tip="프로젝트로" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+      <div class="name">침실 — 리모델링 A안<small>좌표계 meters · 자동 저장 켜짐</small></div>
+      <div class="rf-spacer"></div>
+      <button class="rf-icon-btn" data-tip="실행 취소" aria-label="실행 취소"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>
+      <button class="rf-icon-btn" data-tip="다시 실행" aria-label="다시 실행"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>
+      <span class="rf-chip rf-chip--save rf-chip--live" id="savechip"><span class="dot"></span>저장 중…</span>
+      <button class="rf-btn rf-btn--primary" id="export">내보내기</button>
+    </header>
+
+    <!-- Stage -->
+    <div class="estage">
+      <!-- Tool rail -->
+      <nav class="rail" aria-label="편집 도구">
+        <button class="tool" aria-pressed="true" data-tip="선택" aria-label="선택"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 7.5 18 2.5-7 7-2.5z"/></svg></button>
+        <button class="tool" data-tip="이동" aria-label="이동"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9 2 12l3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
+        <button class="tool" data-tip="가구 추가" aria-label="가구 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="18" height="8" rx="1"/><path d="M5 10V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M5 18v2M19 18v2"/></svg></button>
+        <button class="tool" data-tip="측정" aria-label="측정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m2 12 5-5 15 15-5 5z"/><path d="m8 12 2 2M12 8l2 2"/></svg></button>
+        <button class="tool" data-tip="레이어" aria-label="레이어"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></svg></button>
+      </nav>
+
+      <!-- Canvas -->
+      <div class="canvaswrap">
+        <div class="ctools" role="toolbar" aria-label="캔버스 도구">
+          <button class="rf-icon-btn" data-tip="방에 맞추기" aria-label="방에 맞추기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
+          <button class="rf-icon-btn" data-tip="카메라 초기화" aria-label="카메라 초기화"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+          <button class="rf-icon-btn" data-tip="스냅" aria-pressed="true" aria-label="스냅" style="background:var(--rf-candidate-tint);color:var(--rf-candidate)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 14h7v7h-7zM14 3h7M21 3v7M3 14v7M3 21h7"/></svg></button>
+          <button class="rf-icon-btn" data-tip="그리드" aria-pressed="true" aria-label="그리드" style="background:var(--rf-candidate-tint);color:var(--rf-candidate)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button>
+        </div>
+
+        <div class="viewswitch rf-segment" role="tablist" aria-label="보기 전환">
+          <span class="thumb"></span>
+          <button data-value="2d" aria-selected="true">2D</button>
+          <button data-value="3d" aria-selected="false">3D</button>
+          <button data-value="split" aria-selected="false">Split</button>
+        </div>
+
+        <div class="scene">
+          <div class="room" id="room">
+            <span class="dim w">3.6 m</span>
+            <span class="dim h">4.2 m</span>
+            <span class="fxt window" title="창문"></span>
+            <span class="fxt door" title="문"></span>
+            <div class="obj bed selected" id="bed" tabindex="0">침대
+              <span class="handle tl"></span><span class="handle tr"></span>
+              <span class="handle bl"></span><span class="handle br"></span>
+            </div>
+            <div class="obj desk" id="desk" tabindex="0">책상</div>
+          </div>
+        </div>
+
+        <div class="zoom">
+          <button class="rf-icon-btn" style="width:30px;height:30px;border:0;background:transparent" aria-label="축소"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
+          <span id="zoomval">100%</span>
+          <button class="rf-icon-btn" style="width:30px;height:30px;border:0;background:transparent" aria-label="확대"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Inspector dock -->
+      <aside class="inspector" aria-label="속성 검사기">
+        <div class="insp-head">
+          <h2 id="inspname">침대</h2>
+          <span class="rf-chip rf-chip--selected"><span class="dot"></span>선택됨</span>
+        </div>
+
+        <div class="grp">
+          <span class="gt">위치 (m)</span>
+          <div class="row2">
+            <div class="ctrl"><label>X</label><div class="rf-stepper"><button>−</button><input value="0.82" /><button>+</button></div></div>
+            <div class="ctrl"><label>Y</label><div class="rf-stepper"><button>−</button><input value="0.95" /><button>+</button></div></div>
+          </div>
+        </div>
+
+        <div class="grp">
+          <span class="gt">크기 (m)</span>
+          <div class="row2">
+            <div class="ctrl"><label>가로</label><div class="rf-input-unit"><input class="rf-input" value="1.40" /><span class="unit">m</span></div></div>
+            <div class="ctrl"><label>세로</label><div class="rf-input-unit"><input class="rf-input" value="2.00" /><span class="unit">m</span></div></div>
+          </div>
+        </div>
+
+        <div class="grp">
+          <span class="gt">회전</span>
+          <input class="rf-slider" type="range" min="0" max="360" value="0" aria-label="회전 각도" />
+          <span class="rf-hint">0° · 15° 단위 스냅</span>
+        </div>
+
+        <div class="rf-notice rf-notice--warning">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+          <div><strong>창문과 가까움</strong>침대가 창문에서 12cm 떨어져 있습니다. 저장은 가능합니다.</div>
+        </div>
+
+        <button class="rf-btn rf-btn--danger rf-btn--block">선택 항목 삭제</button>
+      </aside>
+    </div>
+
+    <!-- Status bar -->
+    <footer class="estatus">
+      <span class="rf-row"><span class="rf-chip rf-chip--confirmed" style="min-height:20px"><span class="dot"></span>유효한 레이아웃</span></span>
+      <span class="sep"></span>
+      <span class="rf-muted">가구 2 · 고정요소 2</span>
+      <span class="sep"></span>
+      <span class="rf-muted">면적 15.1 m²</span>
+      <div class="rf-spacer" style="flex:1"></div>
+      <span class="rf-muted rf-mono">x 0.82 · y 0.95</span>
+    </footer>
+  </div>
+
+  <script src="../../system/motion.js"></script>
+  <script>
+    // selection sync: clicking an object updates inspector title + selected outline
+    var objs = document.querySelectorAll('.obj');
+    function select(el){
+      objs.forEach(function(o){ o.classList.remove('selected'); });
+      el.classList.add('selected');
+      document.getElementById('inspname').textContent = el.id === 'bed' ? '침대' : '책상';
+    }
+    objs.forEach(function(o){ o.addEventListener('click', function(){ select(o); }); o.addEventListener('focus', function(){ select(o); }); });
+
+    // tool rail single-select
+    document.querySelectorAll('.rail .tool').forEach(function(t){ t.addEventListener('click', function(){
+      document.querySelectorAll('.rail .tool').forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+      t.setAttribute('aria-pressed','true');
+    });});
+
+    // view switch demo: tilt the room for 3D
+    document.querySelector('.viewswitch').addEventListener('rf:segment', function(e){
+      var room = document.getElementById('room');
+      if (e.detail.value === '3d') room.style.transform = 'perspective(900px) rotateX(48deg) scale(0.92)';
+      else if (e.detail.value === 'split') room.style.transform = 'perspective(1100px) rotateX(24deg) scale(0.96)';
+      else room.style.transform = 'none';
+    });
+
+    // fake autosave settle
+    setTimeout(function(){
+      var c = document.getElementById('savechip');
+      c.className = 'rf-chip rf-chip--confirmed';
+      c.innerHTML = '<span class="dot"></span>저장됨';
+    }, 2200);
+    document.getElementById('export').addEventListener('click', function(){ rfToast('레이아웃 JSON 내보내기 준비 완료'); });
+  </script>
+</body>
+</html>

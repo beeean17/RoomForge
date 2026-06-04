@@ -3,16 +3,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'dart:ui_web' as ui_web;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/url_strategy.dart'
     show
         BrowserPlatformLocation,
-        HashUrlStrategy,
+        PathUrlStrategy,
         PlatformLocation,
         setUrlStrategy;
 
@@ -146,7 +150,7 @@ String _localizedProfileSyncExceptionMessage(
 
 enum _RoomForgeRouteShell { desktopApp, mobileApp, admin }
 
-class _RoomForgePathUrlStrategy extends HashUrlStrategy {
+class _RoomForgePathUrlStrategy extends PathUrlStrategy {
   _RoomForgePathUrlStrategy([PlatformLocation? platformLocation])
     : this._(platformLocation ?? BrowserPlatformLocation());
 
@@ -447,27 +451,51 @@ class RoomForgeApp extends StatelessWidget {
   final BackendMode backendMode;
   final String? authSetupMessage;
 
-  Route<void> _buildRoute(RouteSettings settings) {
+  Widget _buildAuthGate(String routeLocation) {
+    return AuthGate(
+      routeLocation: routeLocation,
+      authRepository: authRepository,
+      adminRepository: adminRepository,
+      floorPlanRepository: floorPlanRepository,
+      geometryRepository: geometryRepository,
+      layoutRepository: layoutRepository,
+      projectRepository: projectRepository,
+      reconstructionRepository: reconstructionRepository,
+      roomDimensionsRepository: roomDimensionsRepository,
+      sceneUnderstandingRepository: sceneUnderstandingRepository,
+      sourceImageRepository: sourceImageRepository,
+      sourceImageUploader: sourceImageUploader,
+      userRepository: userRepository,
+      backendMode: backendMode,
+      authSetupMessage: authSetupMessage,
+    );
+  }
+
+  Route<void> _buildRoute(RouteSettings settings, {bool animate = true}) {
     final routeSpec = _RoomForgeRouteSpec.fromLocation(settings.name);
-    return MaterialPageRoute<void>(
+
+    if (!animate) {
+      return MaterialPageRoute<void>(
+        settings: RouteSettings(name: routeSpec.location),
+        builder: (context) => _buildAuthGate(routeSpec.location),
+      );
+    }
+
+    return PageRouteBuilder<void>(
       settings: RouteSettings(name: routeSpec.location),
-      builder: (context) => AuthGate(
-        routeLocation: routeSpec.location,
-        authRepository: authRepository,
-        adminRepository: adminRepository,
-        floorPlanRepository: floorPlanRepository,
-        geometryRepository: geometryRepository,
-        layoutRepository: layoutRepository,
-        projectRepository: projectRepository,
-        reconstructionRepository: reconstructionRepository,
-        roomDimensionsRepository: roomDimensionsRepository,
-        sceneUnderstandingRepository: sceneUnderstandingRepository,
-        sourceImageRepository: sourceImageRepository,
-        sourceImageUploader: sourceImageUploader,
-        userRepository: userRepository,
-        backendMode: backendMode,
-        authSetupMessage: authSetupMessage,
-      ),
+      transitionDuration: const Duration(milliseconds: 110),
+      reverseTransitionDuration: const Duration(milliseconds: 80),
+      pageBuilder: (context, animation, secondaryAnimation) =>
+          _buildAuthGate(routeSpec.location),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        if (MediaQuery.of(context).disableAnimations) {
+          return child;
+        }
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          child: child,
+        );
+      },
     );
   }
 
@@ -553,10 +581,7 @@ class RoomForgeApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: _initialRoomForgeRouteName(),
-      onGenerateInitialRoutes: (initialRouteName) => [
-        _buildRoute(RouteSettings(name: initialRouteName)),
-      ],
+      home: _buildAuthGate(_initialRoomForgeRouteName()),
       onGenerateRoute: _buildRoute,
       onUnknownRoute: (settings) => _buildRoute(
         RouteSettings(
@@ -962,8 +987,73 @@ class SignInScreen extends StatefulWidget {
 class _SignInScreenState extends State<SignInScreen> {
   bool _isSigningIn = false;
   String? _errorMessage;
+  late final ScrollController _landingScrollController;
+  final GlobalKey _howSectionKey = GlobalKey();
+  final GlobalKey _featuresSectionKey = GlobalKey();
+  bool _isNavScrolled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _landingScrollController = ScrollController()
+      ..addListener(_handleLandingScroll);
+  }
+
+  @override
+  void dispose() {
+    _landingScrollController
+      ..removeListener(_handleLandingScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleLandingScroll() {
+    final next = _landingScrollController.offset > 40;
+    if (next == _isNavScrolled) {
+      return;
+    }
+    setState(() => _isNavScrolled = next);
+  }
+
+  Future<void> _scrollToSection(GlobalKey key) async {
+    final context = key.currentContext;
+    if (context == null) {
+      return;
+    }
+    await Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeOutCubic,
+      alignment: .02,
+    );
+  }
+
+  Future<void> _scrollToHero() async {
+    if (!_landingScrollController.hasClients) {
+      return;
+    }
+    await _landingScrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Future<void> _showAuthError(String message) async {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _errorMessage = message);
+    await _scrollToHero();
+  }
 
   Future<void> _signIn() async {
+    final authSetupMessage = widget.authSetupMessage;
+    if (authSetupMessage != null) {
+      await _showAuthError(_localizedAuthSetupMessage(authSetupMessage));
+      return;
+    }
+
     setState(() {
       _isSigningIn = true;
       _errorMessage = null;
@@ -972,14 +1062,12 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       await widget.authRepository.signInWithGoogle();
     } on AuthUnavailableException catch (error) {
-      setState(() => _errorMessage = _localizedAuthErrorMessage(error.message));
+      await _showAuthError(_localizedAuthErrorMessage(error.message));
     } on FirebaseAuthException catch (error) {
-      setState(() => _errorMessage = _localizedFirebaseAuthErrorMessage(error));
+      await _showAuthError(_localizedFirebaseAuthErrorMessage(error));
     } catch (error) {
-      setState(
-        () => _errorMessage = _localizedAuthErrorMessage(
-          'Google sign-in failed: $error',
-        ),
+      await _showAuthError(
+        _localizedAuthErrorMessage('Google sign-in failed: $error'),
       );
     } finally {
       if (mounted) {
@@ -990,135 +1078,52 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    final topPadding =
+        MediaQuery.paddingOf(context).top + (compact ? 64.0 : 72.0);
 
     return Scaffold(
       body: _RoomForgeAppBackground(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1080),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 860;
-                    final intro = _SignInIntro(theme: theme);
-                    final panel = _SignInPanel(
-                      isSigningIn: _isSigningIn,
-                      authSetupMessage: widget.authSetupMessage,
-                      errorMessage: _errorMessage,
-                      onSignIn: _signIn,
-                    );
-
-                    if (compact) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [intro, const SizedBox(height: 16), panel],
-                      );
-                    }
-
-                    return RoomForgePanel(
-                      padding: EdgeInsets.zero,
-                      backgroundColor: _roomForgePanel,
-                      borderColor: _roomForgeBorderStrong,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(flex: 5, child: intro),
-                          Expanded(flex: 4, child: panel),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SignInIntro extends StatelessWidget {
-  const _SignInIntro({required this.theme});
-
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      header: true,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 520),
-        padding: const EdgeInsets.all(30),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [_roomForgePaper, Color(0xFF172235), Color(0xFF294642)],
-          ),
-          borderRadius: BorderRadius.all(Radius.circular(8)),
-        ),
         child: Stack(
           children: [
             Positioned.fill(
-              child: CustomPaint(painter: _RoomForgeGridPainter()),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _RoomForgeWordmark(),
-                const SizedBox(height: 28),
-                Text(
-                  rf(
-                    'Start room planning from one photo.',
-                    '사진 한 장으로 시작하는 방 설계',
-                  ),
-                  style: theme.textTheme.displaySmall?.copyWith(
-                    color: _roomForgeInk,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                    height: 1.05,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  rf(
-                    'Capture dimensions, review CV candidates, and continue into an editable room layout.',
-                    '치수 입력, CV 후보 검토, 편집 가능한 방 배치까지 한 흐름으로 이어집니다.',
-                  ),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: _roomForgeInkSoft,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 26),
-                const _SignInMiniPlanPreview(),
-                const SizedBox(height: 26),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+              child: SingleChildScrollView(
+                controller: _landingScrollController,
+                padding: EdgeInsets.only(top: topPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    RoomForgeStatusPill(
-                      icon: Icons.lock_outline,
-                      label: rf('Secure login', '보안 로그인'),
-                      color: _roomForgeSave,
+                    _LandingHero(
+                      isSigningIn: _isSigningIn,
+                      errorMessage: _errorMessage,
+                      onSignIn: _signIn,
+                      onDemo: () => _scrollToSection(_howSectionKey),
                     ),
-                    RoomForgeStatusPill(
-                      icon: Icons.auto_awesome_outlined,
-                      label: rf('Auto reconstruction', '자동 재구성'),
-                      color: _roomForgePrimary,
+                    _LandingHowSection(key: _howSectionKey),
+                    _LandingFeatureSection(key: _featuresSectionKey),
+                    _LandingFinalCta(
+                      isSigningIn: _isSigningIn,
+                      onSignIn: _signIn,
                     ),
-                    RoomForgeStatusPill(
-                      icon: Icons.edit_location_alt_outlined,
-                      label: rf('Manual fallback', '수동 보정'),
-                      color: _roomForgeSelected,
-                    ),
+                    const _LandingFooter(),
                   ],
                 ),
-              ],
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: _LandingNav(
+                  isSigningIn: _isSigningIn,
+                  isScrolled: _isNavScrolled,
+                  onSignIn: _signIn,
+                  onHow: () => _scrollToSection(_howSectionKey),
+                  onFeatures: () => _scrollToSection(_featuresSectionKey),
+                ),
+              ),
             ),
           ],
         ),
@@ -1127,242 +1132,2162 @@ class _SignInIntro extends StatelessWidget {
   }
 }
 
-class _SignInMiniPlanPreview extends StatelessWidget {
-  const _SignInMiniPlanPreview();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 196,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .12),
-        border: Border.all(color: Colors.white.withValues(alpha: .30)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(child: CustomPaint(painter: _RoomForgeGridPainter())),
-          Positioned(
-            left: 26,
-            right: 26,
-            top: 26,
-            bottom: 26,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: _roomForgeLightSurface.withValues(alpha: .18),
-                border: Border.all(color: _roomForgeLightSurface, width: 2.5),
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 84,
-            top: 58,
-            width: 112,
-            height: 62,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: _roomForgePrimary.withValues(alpha: .26),
-                border: Border.all(color: _roomForgePrimary, width: 2),
-                borderRadius: BorderRadius.circular(5),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 58,
-            bottom: 42,
-            width: 82,
-            height: 38,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: _roomForgeSave.withValues(alpha: .20),
-                border: Border.all(color: _roomForgeSave, width: 2),
-                borderRadius: BorderRadius.circular(5),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SignInPanel extends StatelessWidget {
-  const _SignInPanel({
+class _LandingNav extends StatelessWidget {
+  const _LandingNav({
     required this.isSigningIn,
+    required this.isScrolled,
     required this.onSignIn,
-    this.authSetupMessage,
-    this.errorMessage,
+    required this.onHow,
+    required this.onFeatures,
   });
 
   final bool isSigningIn;
+  final bool isScrolled;
   final VoidCallback onSignIn;
-  final String? authSetupMessage;
-  final String? errorMessage;
+  final VoidCallback onHow;
+  final VoidCallback onFeatures;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return RoomForgePanel(
-      padding: const EdgeInsets.all(28),
-      backgroundColor: _roomForgePanel,
-      borderColor: _roomForgeBorder,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            rf('Sign in', '로그인'),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: _roomForgeInk,
-              fontWeight: FontWeight.w700,
-            ),
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: isScrolled ? const Color(0xE6050505) : const Color(0x94050505),
+        border: Border(
+          bottom: BorderSide(
+            color: isScrolled ? _roomForgeBorder : Colors.transparent,
           ),
-          const SizedBox(height: 8),
-          Text(
-            rf(
-              'Use Google sign-in to access RoomForge workspace data.',
-              'Google 계정으로 RoomForge 작업공간에 접근합니다.',
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 16 : 28,
+          vertical: compact ? 12 : (isScrolled ? 10 : 14),
+        ),
+        child: Row(
+          children: [
+            const _LandingBrand(),
+            if (!compact) ...[
+              const SizedBox(width: 24),
+              _LandingNavLink(label: rf('How it works', '작동 방식'), onTap: onHow),
+              _LandingNavLink(label: rf('Features', '기능'), onTap: onFeatures),
+              _LandingNavLink(label: rf('Design', '디자인'), onTap: onFeatures),
+            ],
+            const Spacer(),
+            _LandingButton(
+              label: rf('Login', '로그인'),
+              onPressed: isSigningIn ? null : onSignIn,
+              compact: compact,
             ),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: _roomForgeMuted,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              backgroundColor: _isProviderBusySurface
-                  ? _roomForgePrimary
-                  : _roomForgeLightSurface,
-              foregroundColor: _roomForgePaper,
-              side: const BorderSide(color: Color(0x6EDCE8FF)),
-            ),
-            onPressed: isSigningIn ? null : onSignIn,
-            icon: isSigningIn
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _roomForgePaper,
-                    ),
-                  )
-                : const _GoogleGlyph(),
-            label: Text(
-              isSigningIn
-                  ? rf('Signing in...', '로그인 중...')
-                  : rf('Continue with Google', 'Google 계정으로 계속하기'),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              RoomForgeStatusPill(
-                label: 'idle',
-                color: _roomForgePrimary,
-                dense: true,
-              ),
-              RoomForgeStatusPill(
-                label: 'signing in',
-                color: _roomForgeSave,
-                dense: true,
-              ),
-              RoomForgeStatusPill(
-                label: 'failed',
-                color: _roomForgeError,
-                dense: true,
+            if (!compact) ...[
+              const SizedBox(width: 10),
+              _LandingButton(
+                label: isSigningIn
+                    ? rf('Starting...', '시작 중...')
+                    : rf('Start', '시작하기'),
+                onPressed: isSigningIn ? null : onSignIn,
+                primary: true,
+                icon: isSigningIn ? null : Icons.arrow_forward,
               ),
             ],
-          ),
-          if (authSetupMessage != null) ...[
-            const SizedBox(height: 16),
-            RoomForgeNotice(
-              icon: Icons.settings_outlined,
-              title: rf(
-                'Firebase web configuration missing',
-                'Firebase 웹 설정이 없습니다',
-              ),
-              message: _localizedAuthSetupMessage(authSetupMessage!),
-              severity: NoticeSeverity.error,
-            ),
           ],
-          if (errorMessage != null) ...[
-            const SizedBox(height: 16),
-            RoomForgeNotice(
-              icon: Icons.error_outline,
-              title: rf('Google sign-in unavailable', 'Google 로그인을 사용할 수 없습니다'),
-              message: _localizedAuthErrorMessage(errorMessage!),
-              severity: NoticeSeverity.error,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  bool get _isProviderBusySurface => isSigningIn;
-}
-
-class _GoogleGlyph extends StatelessWidget {
-  const _GoogleGlyph();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 20,
-      height: 20,
-      child: Stack(
-        children: const [
-          Positioned(
-            left: 1,
-            top: 1,
-            child: Icon(Icons.circle, size: 9, color: Color(0xFFEA4335)),
-          ),
-          Positioned(
-            right: 1,
-            top: 1,
-            child: Icon(Icons.circle, size: 9, color: Color(0xFF4285F4)),
-          ),
-          Positioned(
-            left: 1,
-            bottom: 1,
-            child: Icon(Icons.circle, size: 9, color: Color(0xFFFBBC05)),
-          ),
-          Positioned(
-            right: 1,
-            bottom: 1,
-            child: Icon(Icons.circle, size: 9, color: Color(0xFF34A853)),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _RoomForgeWordmark extends StatelessWidget {
-  const _RoomForgeWordmark();
+class _LandingBrand extends StatelessWidget {
+  const _LandingBrand();
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const _RoomForgeBrandMark(size: 44),
-        const SizedBox(width: 12),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(5),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _roomForgePaper,
+                Color(0xFF172235),
+                Color(0xFF294642),
+                _roomForgeSelected,
+              ],
+              stops: [0, .46, .74, 1],
+            ),
+            boxShadow: const [
+              BoxShadow(color: Color(0x5CDCE8FF), spreadRadius: 1),
+            ],
+          ),
+          child: const SizedBox(width: 16, height: 16),
+        ),
+        const SizedBox(width: 10),
         Text(
           'RoomForge',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: _roomForgeInk,
-            fontWeight: FontWeight.w800,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
             letterSpacing: 0,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LandingNavLink extends StatefulWidget {
+  const _LandingNavLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_LandingNavLink> createState() => _LandingNavLinkState();
+}
+
+class _LandingNavLinkState extends State<_LandingNavLink> {
+  bool _hovered = false;
+  Offset _magnet = Offset.zero;
+
+  void _updateMagnet(PointerEvent event, Size size) {
+    final x = (event.localPosition.dx - size.width / 2) / size.width;
+    final y = (event.localPosition.dy - size.height / 2) / size.height;
+    final next = Offset(x * 5, y * 3);
+    if ((next - _magnet).distance < .45) {
+      return;
+    }
+    setState(() => _magnet = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final magnetSize = Size(math.max(72, widget.label.length * 12 + 22), 36);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _magnet = Offset.zero;
+      }),
+      onHover: (event) => _updateMagnet(event, magnetSize),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(_magnet.dx, _magnet.dy, 0),
+        decoration: BoxDecoration(
+          color: _hovered
+              ? Colors.white.withValues(alpha: .06)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(11, 8, 11, 8),
+            child: Stack(
+              alignment: Alignment.bottomLeft,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 5),
+                  child: Text(
+                    widget.label,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: _hovered ? Colors.white : _roomForgeSubtle,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                AnimatedScale(
+                  scale: _hovered ? 1 : 0,
+                  alignment: Alignment.centerLeft,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  child: Container(
+                    height: 1,
+                    width: math.max(1, widget.label.length * 8),
+                    color: _hovered ? Colors.white : _roomForgeSubtle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingButton extends StatefulWidget {
+  const _LandingButton({
+    required this.label,
+    required this.onPressed,
+    this.primary = false,
+    this.big = false,
+    this.compact = false,
+    this.icon,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool primary;
+  final bool big;
+  final bool compact;
+  final IconData? icon;
+
+  @override
+  State<_LandingButton> createState() => _LandingButtonState();
+}
+
+class _LandingButtonState extends State<_LandingButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+  Offset _magnet = Offset.zero;
+  Offset? _rippleOrigin;
+  int _rippleSeed = 0;
+
+  bool get _enabled => widget.onPressed != null;
+
+  void _updateMagnet(PointerEvent event, Size size) {
+    if (!_enabled) {
+      return;
+    }
+    final x = (event.localPosition.dx - size.width / 2) / size.width;
+    final y = (event.localPosition.dy - size.height / 2) / size.height;
+    final next = Offset(x * 5, y * 3);
+    if ((next - _magnet).distance < .45) {
+      return;
+    }
+    setState(() => _magnet = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = widget.compact ? 36.0 : (widget.big ? 54.0 : 40.0);
+    final horizontal = widget.compact ? 11.0 : (widget.big ? 24.0 : 16.0);
+    final textStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+      color: widget.primary ? _roomForgePaper : _roomForgeInk,
+      fontWeight: FontWeight.w800,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(
+          constraints.maxWidth.isFinite ? constraints.maxWidth : 160,
+          height,
+        );
+        return MouseRegion(
+          cursor: _enabled
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.forbidden,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() {
+            _hovered = false;
+            _pressed = false;
+            _magnet = Offset.zero;
+          }),
+          onHover: (event) => _updateMagnet(event, size),
+          child: Listener(
+            onPointerDown: (event) {
+              if (!_enabled) {
+                return;
+              }
+              setState(() {
+                _pressed = true;
+                _rippleOrigin = event.localPosition;
+                _rippleSeed++;
+              });
+            },
+            onPointerUp: (_) => setState(() => _pressed = false),
+            onPointerCancel: (_) => setState(() => _pressed = false),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(
+                _magnet.dx,
+                _magnet.dy + (_hovered ? -1 : 0),
+                0,
+              )..scale(_pressed ? .98 : 1.0),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: widget.onPressed,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      constraints: BoxConstraints(minHeight: height),
+                      padding: EdgeInsets.symmetric(horizontal: horizontal),
+                      decoration: BoxDecoration(
+                        color: widget.primary
+                            ? null
+                            : (_hovered
+                                  ? Colors.white.withValues(alpha: .09)
+                                  : Colors.white.withValues(alpha: .04)),
+                        gradient: widget.primary
+                            ? const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFFDCE8FF),
+                                  _roomForgePrimary,
+                                  _roomForgeSave,
+                                ],
+                                stops: [0, .58, 1],
+                              )
+                            : null,
+                        border: Border.all(
+                          color: widget.primary
+                              ? (_hovered
+                                    ? const Color(0xF5DCE8FF)
+                                    : const Color(0xDBDCE8FF))
+                              : (_hovered
+                                    ? _roomForgeBorderStrong
+                                    : _roomForgeBorder),
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          if (_hovered)
+                            BoxShadow(
+                              color: widget.primary
+                                  ? const Color(0x478FB4FF)
+                                  : const Color(0x57000000),
+                              blurRadius: widget.primary ? 58 : 45,
+                              offset: const Offset(0, 18),
+                            ),
+                        ],
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (_rippleOrigin != null)
+                            _LandingRipple(
+                              key: ValueKey(_rippleSeed),
+                              origin: _rippleOrigin!,
+                              color: widget.primary
+                                  ? _roomForgePaper
+                                  : _roomForgeInk,
+                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(widget.label, style: textStyle),
+                              if (widget.icon != null) ...[
+                                const SizedBox(width: 8),
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeOutCubic,
+                                  transform: Matrix4.translationValues(
+                                    _hovered ? 2 : 0,
+                                    0,
+                                    0,
+                                  ),
+                                  child: Icon(
+                                    widget.icon,
+                                    size: 16,
+                                    color: widget.primary
+                                        ? _roomForgePaper
+                                        : _roomForgeInk,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LandingRipple extends StatefulWidget {
+  const _LandingRipple({required this.origin, required this.color, super.key});
+
+  final Offset origin;
+  final Color color;
+
+  @override
+  State<_LandingRipple> createState() => _LandingRippleState();
+}
+
+class _LandingRippleState extends State<_LandingRipple>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            final size =
+                140.0 * Curves.easeOutCubic.transform(_controller.value);
+            return CustomPaint(
+              painter: _LandingRipplePainter(
+                origin: widget.origin,
+                radius: size,
+                color: widget.color.withValues(
+                  alpha: (.22 * (1 - _controller.value)).clamp(0, .22),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingRipplePainter extends CustomPainter {
+  const _LandingRipplePainter({
+    required this.origin,
+    required this.radius,
+    required this.color,
+  });
+
+  final Offset origin;
+  final double radius;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawCircle(origin, radius, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LandingRipplePainter oldDelegate) =>
+      origin != oldDelegate.origin ||
+      radius != oldDelegate.radius ||
+      color != oldDelegate.color;
+}
+
+class _LandingHero extends StatelessWidget {
+  const _LandingHero({
+    required this.isSigningIn,
+    required this.onSignIn,
+    required this.onDemo,
+    this.errorMessage,
+  });
+
+  final bool isSigningIn;
+  final VoidCallback onSignIn;
+  final VoidCallback onDemo;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: viewportHeight * .92),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 96, 28, 42),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1220),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 900;
+                    final title = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Photo to metric room model',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: _roomForgeSubtle,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'RoomForge',
+                              maxLines: 1,
+                              softWrap: false,
+                              style: theme.textTheme.displayLarge?.copyWith(
+                                color: Colors.white,
+                                fontSize: compact ? 72 : 124,
+                                height: .88,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                    final copy = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rf(
+                            'Turn a real room photo into a dimension-aware 3D space. Review the source image, CV candidate geometry, and confirmed room model in one flow before placing furniture.',
+                            '실제 방 사진을 치수 기반 3D 공간으로 전환합니다. 원본 이미지, 후보 geometry, 확인된 공간 모델을 한 흐름에서 검토하고 바로 배치까지 이어갑니다.',
+                          ),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: _roomForgeInkSoft,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            _LandingButton(
+                              label: isSigningIn
+                                  ? rf('Signing in...', '로그인 중...')
+                                  : rf('Create space', '공간 만들기'),
+                              onPressed: isSigningIn ? null : onSignIn,
+                              primary: true,
+                              big: true,
+                              icon: isSigningIn ? null : Icons.arrow_forward,
+                            ),
+                            _LandingButton(
+                              label: rf('Demo', '데모 보기'),
+                              onPressed: onDemo,
+                              big: true,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        const _LandingMetrics(),
+                        if (errorMessage != null) ...[
+                          const SizedBox(height: 16),
+                          RoomForgeNotice(
+                            icon: Icons.error_outline,
+                            title: rf(
+                              'Google sign-in unavailable',
+                              'Google 로그인을 사용할 수 없습니다',
+                            ),
+                            message: _localizedAuthErrorMessage(errorMessage!),
+                            severity: NoticeSeverity.error,
+                          ),
+                        ],
+                      ],
+                    );
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [title, const SizedBox(height: 18), copy],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(child: title),
+                        const SizedBox(width: 28),
+                        SizedBox(width: 420, child: copy),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                const _LandingCompareStage(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingMetrics extends StatelessWidget {
+  const _LandingMetrics();
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      (value: '3D', label: rf('Live space view', '실시간 공간 뷰')),
+      (value: 'm', label: rf('Meter calibration', '미터 좌표 보정')),
+      (value: 'CV', label: rf('Geometry review', '후보 geometry 검토')),
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _roomForgeBorder,
+        border: Border.all(color: _roomForgeBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 280;
+          return compact
+              ? Column(
+                  children: [
+                    for (final item in items)
+                      _LandingMetric(item.value, item.label),
+                  ],
+                )
+              : Row(
+                  children: [
+                    for (final item in items)
+                      Expanded(child: _LandingMetric(item.value, item.label)),
+                  ],
+                );
+        },
+      ),
+    );
+  }
+}
+
+class _LandingMetric extends StatelessWidget {
+  const _LandingMetric(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minHeight: 68),
+      padding: const EdgeInsets.all(12),
+      decoration: const BoxDecoration(color: Color(0xC7050505)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: _roomForgeSubtle,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LandingCompareStage extends StatefulWidget {
+  const _LandingCompareStage();
+
+  @override
+  State<_LandingCompareStage> createState() => _LandingCompareStageState();
+}
+
+class _LandingCompareStageState extends State<_LandingCompareStage>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  late final FocusNode _focusNode;
+  double _split = .72;
+  double _targetSplit = .72;
+  double _stageY = .5;
+  double _targetY = .5;
+  bool _moved = false;
+  bool _hovered = false;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+    _ticker = createTicker(_tick);
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _tick(Duration elapsed) {
+    if (!mounted) {
+      return;
+    }
+    final k = _reduceMotion ? 1.0 : .18;
+    final nextSplit = _split + (_targetSplit - _split) * k;
+    final nextY = _stageY + (_targetY - _stageY) * k;
+    final isSettled =
+        (nextSplit - _split).abs() < .0008 && (nextY - _stageY).abs() < .0008;
+    if (isSettled) {
+      _ticker.stop();
+      return;
+    }
+    setState(() {
+      _split = nextSplit.clamp(0, 1).toDouble();
+      _stageY = nextY.clamp(0, 1).toDouble();
+    });
+  }
+
+  void _startStageAnimation() {
+    if (!_ticker.isActive) {
+      _ticker.start();
+    }
+  }
+
+  void _setFromLocal(Offset localPosition, double width, double height) {
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    _targetSplit = (localPosition.dx / width).clamp(0, 1).toDouble();
+    _targetY = (localPosition.dy / height).clamp(0, 1).toDouble();
+    if (!_moved) {
+      setState(() => _moved = true);
+    }
+    _startStageAnimation();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _targetSplit = math.max(0, _targetSplit - .06);
+      if (!_moved) {
+        setState(() => _moved = true);
+      }
+      _startStageAnimation();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _targetSplit = math.min(1, _targetSplit + .06);
+      if (!_moved) {
+        setState(() => _moved = true);
+      }
+      _startStageAnimation();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _reduceMotion = MediaQuery.of(context).disableAnimations;
+    return RepaintBoundary(
+      child: Column(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final height = (constraints.maxWidth * 900 / 1536)
+                  .clamp(300.0, 610.0)
+                  .toDouble();
+              final stageWidth = constraints.maxWidth;
+              final tiltMatrix = Matrix4.identity()..setEntry(3, 2, .0008);
+              if (!_reduceMotion && _hovered) {
+                tiltMatrix
+                  ..rotateX((.5 - _targetY) * 2.0 * math.pi / 180)
+                  ..rotateY((_targetSplit - .5) * 2.6 * math.pi / 180);
+              }
+              return Semantics(
+                slider: true,
+                label: rf(
+                  'Compare real room photo and live 3D model',
+                  '실제 방 사진과 실시간 3D 모델 비교',
+                ),
+                value: '${(_split * 100).round()}%',
+                child: Focus(
+                  focusNode: _focusNode,
+                  onKeyEvent: _handleKey,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.resizeLeftRight,
+                    onEnter: (_) => setState(() => _hovered = true),
+                    onExit: (_) => setState(() => _hovered = false),
+                    onHover: (event) =>
+                        _setFromLocal(event.localPosition, stageWidth, height),
+                    child: GestureDetector(
+                      onTapDown: (details) {
+                        _focusNode.requestFocus();
+                        _setFromLocal(
+                          details.localPosition,
+                          stageWidth,
+                          height,
+                        );
+                      },
+                      onPanUpdate: (details) => _setFromLocal(
+                        details.localPosition,
+                        stageWidth,
+                        height,
+                      ),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        curve: Curves.easeOutCubic,
+                        transform: tiltMatrix,
+                        transformAlignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF080808),
+                          border: Border.all(
+                            color: _hovered
+                                ? _roomForgeBorderStrong
+                                : _roomForgeBorder,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x78000000),
+                              blurRadius: 42,
+                              offset: Offset(0, 22),
+                            ),
+                            BoxShadow(
+                              color: Color(0x29FFFFFF),
+                              blurRadius: 0,
+                              spreadRadius: 1,
+                              offset: Offset(0, -1),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            height: height,
+                            child: Stack(
+                              children: [
+                                const Positioned.fill(
+                                  child: _LandingPhotoLayer(),
+                                ),
+                                Positioned.fill(
+                                  right: stageWidth * (1 - _split),
+                                  child: ColorFiltered(
+                                    colorFilter: const ColorFilter.mode(
+                                      Color(0x00000000),
+                                      BlendMode.saturation,
+                                    ),
+                                    child: CustomPaint(
+                                      painter: _LandingModelPainter(),
+                                    ),
+                                  ),
+                                ),
+                                const Positioned.fill(
+                                  child: _LandingStageWash(),
+                                ),
+                                Positioned.fill(
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 220),
+                                    opacity: _hovered ? .32 : 0,
+                                    child: CustomPaint(
+                                      painter: _LandingStageGridPainter(),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: stageWidth * _split - 95,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: 190,
+                                  child: AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 220),
+                                    opacity: _moved ? 1 : 0,
+                                    child: const DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.transparent,
+                                            Color(0x29FFFFFF),
+                                            Colors.transparent,
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 16,
+                                  right: 16,
+                                  child: _LandingStageBadge(
+                                    label: rf(
+                                      'Original photo',
+                                      'Original photo',
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 16,
+                                  left: (stageWidth * _split - 58)
+                                      .clamp(16.0, stageWidth - 150)
+                                      .toDouble(),
+                                  child: _LandingStageBadge(
+                                    label: rf('Live 3D model', 'Live 3D model'),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: stageWidth * _split,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: _LandingScanHandle(
+                                    reduceMotion: _reduceMotion,
+                                    hovered: _hovered,
+                                  ),
+                                ),
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 16,
+                                  child: Center(
+                                    child: _LandingHint(gone: _moved),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 18,
+            runSpacing: 10,
+            children: [
+              _LandingStagePip(
+                label: rf('3D model', '3D 모델'),
+                active: _split > .5,
+              ),
+              _LandingStagePip(
+                label: rf('Original photo', '원본 사진'),
+                active: _split <= .5,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            rf(
+              'The left side recreates the Three.js room model from the design mockup in Flutter. In product, uploaded photos and reconstruction results connect to this comparison view.',
+              '왼쪽은 design 목업의 Three.js 공간 모델을 Flutter에서 재현한 장면입니다. 제품에서는 사용자의 업로드 사진과 재구성 결과가 이 비교 뷰에 연결됩니다.',
+            ),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: _roomForgeSubtle,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LandingStageBadge extends StatelessWidget {
+  const _LandingStageBadge({required this.label, this.icon});
+
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xB8050505),
+            border: Border.all(color: _roomForgeBorder),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  icon == Icons.arrow_forward
+                      ? const _NudgeIcon()
+                      : Icon(icon, size: 14, color: Colors.white),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: .92),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingHint extends StatelessWidget {
+  const _LandingHint({required this.gone});
+
+  final bool gone;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: gone ? 0 : 1,
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeOutCubic,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 520),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(0, gone ? 8 : 0, 0),
+        child: _LandingStageBadge(
+          icon: Icons.arrow_forward,
+          label: rf('Drag to compare', 'Drag to compare'),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingStagePip extends StatelessWidget {
+  const _LandingStagePip({required this.label, required this.active});
+
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      transform: Matrix4.translationValues(0, active ? -1 : 0, 0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: active
+                  ? _roomForgePrimary
+                  : Colors.white.withValues(alpha: .24),
+              borderRadius: BorderRadius.circular(99),
+              boxShadow: [
+                if (active)
+                  const BoxShadow(color: Color(0x298FB4FF), spreadRadius: 4),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: active ? const Color(0xFFEAF0FF) : _roomForgeSubtle,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LandingStageWash extends StatelessWidget {
+  const _LandingStageWash();
+
+  @override
+  Widget build(BuildContext context) {
+    return const IgnorePointer(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0x14FFFFFF),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Color(0x0FFFFFFF),
+                  ],
+                  stops: [0, .18, .82, 1],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x1FFFFFFF),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Color(0x7A000000),
+                  ],
+                  stops: [0, .15, .86, 1],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NudgeIcon extends StatelessWidget {
+  const _NudgeIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Icon(Icons.arrow_forward, size: 14, color: Colors.white);
+  }
+}
+
+class _LandingScanHandle extends StatelessWidget {
+  const _LandingScanHandle({required this.reduceMotion, required this.hovered});
+
+  final bool reduceMotion;
+  final bool hovered;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(
+      offset: const Offset(-.5, 0),
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: -54,
+            width: 108,
+            top: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      _roomForgePrimary.withValues(alpha: .16),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: 1,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Color(0xF5DCE8FF),
+                  _roomForgePrimary,
+                  _roomForgeSave,
+                  Colors.transparent,
+                ],
+                stops: [0, .10, .50, .90, 1],
+              ),
+              boxShadow: [BoxShadow(color: Color(0x708FB4FF), blurRadius: 34)],
+            ),
+          ),
+          AnimatedScale(
+            scale: hovered ? 1.04 : 1,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: hovered
+                        ? Colors.white.withValues(alpha: .12)
+                        : const Color(0xC8050505),
+                    border: Border.all(color: Colors.white70),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: reduceMotion
+                        ? const []
+                        : const [
+                            BoxShadow(
+                              color: Color(0x66000000),
+                              blurRadius: 24,
+                              offset: Offset(0, 14),
+                            ),
+                          ],
+                  ),
+                  child: const SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Icon(
+                      Icons.compare_arrows_outlined,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LandingPhotoLayer extends StatelessWidget {
+  const _LandingPhotoLayer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset('assets/design/room.png', fit: BoxFit.cover),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            color: Color(0x4A000000),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x2EFFFFFF), Color(0x12000000), Color(0x76000000)],
+              stops: [0, .42, 1],
+            ),
+          ),
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              radius: .86,
+              colors: [Color(0x00000000), Color(0x8A000000)],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LandingModelPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bounds = Offset.zero & size;
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF17191D), Color(0xFF090A0D), Color(0xFF050505)],
+        ).createShader(bounds),
+    );
+
+    final ceiling = _path([
+      Offset(size.width * .08, size.height * .10),
+      Offset(size.width * .98, size.height * .08),
+      Offset(size.width * .76, size.height * .20),
+      Offset(size.width * .34, size.height * .20),
+    ]);
+    final leftWall = _path([
+      Offset(size.width * .08, size.height * .10),
+      Offset(size.width * .34, size.height * .20),
+      Offset(size.width * .34, size.height * .58),
+      Offset(size.width * .08, size.height * .95),
+    ]);
+    final backWall = _path([
+      Offset(size.width * .34, size.height * .20),
+      Offset(size.width * .76, size.height * .20),
+      Offset(size.width * .76, size.height * .58),
+      Offset(size.width * .34, size.height * .58),
+    ]);
+    final rightWall = _path([
+      Offset(size.width * .76, size.height * .20),
+      Offset(size.width * .98, size.height * .08),
+      Offset(size.width * .98, size.height * .95),
+      Offset(size.width * .76, size.height * .58),
+    ]);
+    final floor = _path([
+      Offset(size.width * .08, size.height * .95),
+      Offset(size.width * .34, size.height * .58),
+      Offset(size.width * .76, size.height * .58),
+      Offset(size.width * .98, size.height * .95),
+    ]);
+
+    canvas.drawPath(ceiling, Paint()..color = const Color(0xFFE8E4DC));
+    canvas.drawPath(leftWall, Paint()..color = const Color(0xFF232326));
+    canvas.drawPath(backWall, Paint()..color = const Color(0xFFBEB8AD));
+    canvas.drawPath(rightWall, Paint()..color = const Color(0xFFD7D4CC));
+    canvas.drawPath(
+      floor,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFB9AD9C), Color(0xFF7E746A)],
+        ).createShader(bounds),
+    );
+
+    final shellLine = Paint()
+      ..color = const Color(0x668FB4FF)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    for (final path in [ceiling, leftWall, backWall, rightWall, floor]) {
+      canvas.drawPath(path, shellLine);
+    }
+
+    _drawBackWallDetails(canvas, size);
+    _drawWindow(canvas, size);
+    _drawShelvesAndDesk(canvas, size);
+    _drawBed(canvas, size);
+    _drawNightstands(canvas, size);
+    _drawDresser(canvas, size);
+    _drawCalibrationOverlay(canvas, size);
+
+    final vignette = Paint()
+      ..shader = const RadialGradient(
+        radius: .9,
+        colors: [Color(0x00000000), Color(0x9A000000)],
+      ).createShader(bounds);
+    canvas.drawRect(bounds, vignette);
+  }
+
+  static double _lerp(double start, double end, double t) =>
+      start + (end - start) * t;
+
+  static Path _path(List<Offset> points) {
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.dx, point.dy);
+    }
+    return path..close();
+  }
+
+  static void _drawBackWallDetails(Canvas canvas, Size size) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .37,
+          size.height * .265,
+          size.width * .40,
+          size.height * .035,
+        ),
+        const Radius.circular(12),
+      ),
+      Paint()
+        ..color = const Color(0xAAFFF1D0)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .49,
+        size.height * .29,
+        size.width * .19,
+        size.height * .13,
+      ),
+      const Color(0xFF18191B),
+      stroke: const Color(0xAA8FB4FF),
+      radius: 2,
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .50,
+        size.height * .305,
+        size.width * .17,
+        size.height * .10,
+      ),
+      const Color(0xFFBDB8AF),
+      radius: 1,
+    );
+  }
+
+  static void _drawBed(Canvas canvas, Size size) {
+    canvas.drawOval(
+      Rect.fromLTWH(
+        size.width * .34,
+        size.height * .71,
+        size.width * .38,
+        size.height * .11,
+      ),
+      Paint()
+        ..color = const Color(0x88000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+    );
+    final base = _path([
+      Offset(size.width * .39, size.height * .58),
+      Offset(size.width * .66, size.height * .58),
+      Offset(size.width * .75, size.height * .77),
+      Offset(size.width * .31, size.height * .77),
+    ]);
+    final mattress = _path([
+      Offset(size.width * .41, size.height * .56),
+      Offset(size.width * .64, size.height * .56),
+      Offset(size.width * .71, size.height * .69),
+      Offset(size.width * .35, size.height * .70),
+    ]);
+    canvas.drawPath(base, Paint()..color = const Color(0xFF202025));
+    canvas.drawPath(mattress, Paint()..color = const Color(0xFF54545A));
+    canvas.drawPath(
+      mattress,
+      Paint()
+        ..color = const Color(0xAA8FB4FF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.1,
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .42,
+        size.height * .52,
+        size.width * .10,
+        size.height * .06,
+      ),
+      const Color(0xFFC8C4BC),
+      radius: 5,
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .53,
+        size.height * .52,
+        size.width * .10,
+        size.height * .06,
+      ),
+      const Color(0xFF2E3034),
+      radius: 5,
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .49,
+        size.height * .57,
+        size.width * .08,
+        size.height * .055,
+      ),
+      const Color(0xFFB9B4AA),
+      radius: 4,
+    );
+  }
+
+  static void _drawNightstands(Canvas canvas, Size size) {
+    for (final x in [.35, .69]) {
+      _rect(
+        canvas,
+        Rect.fromLTWH(
+          size.width * x,
+          size.height * .57,
+          size.width * .07,
+          size.height * .075,
+        ),
+        const Color(0xFF17181B),
+        stroke: const Color(0x557F8DA3),
+        radius: 2,
+      );
+      canvas.drawCircle(
+        Offset(size.width * (x + .035), size.height * .545),
+        size.width * .010,
+        Paint()
+          ..color = const Color(0xFFFFE7B5)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+    }
+  }
+
+  static void _drawShelvesAndDesk(Canvas canvas, Size size) {
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .13,
+        size.height * .18,
+        size.width * .20,
+        size.height * .45,
+      ),
+      const Color(0xFF111214),
+      stroke: const Color(0x445E7A92),
+    );
+    for (final y in [.24, .34, .44]) {
+      _rect(
+        canvas,
+        Rect.fromLTWH(
+          size.width * .15,
+          size.height * y,
+          size.width * .17,
+          size.height * .015,
+        ),
+        const Color(0xFF303239),
+      );
+    }
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .13,
+        size.height * .58,
+        size.width * .22,
+        size.height * .045,
+      ),
+      const Color(0xFF17181B),
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .19,
+        size.height * .49,
+        size.width * .095,
+        size.height * .075,
+      ),
+      const Color(0xFF0B0C0E),
+      stroke: const Color(0x668FB4FF),
+      radius: 2,
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .23,
+        size.height * .62,
+        size.width * .075,
+        size.height * .115,
+      ),
+      const Color(0xFF15161A),
+      stroke: const Color(0x5580C7C2),
+      radius: 4,
+    );
+  }
+
+  static void _drawWindow(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width * .80,
+        size.height * .21,
+        size.width * .16,
+        size.height * .36,
+      ),
+      Paint()
+        ..color = const Color(0x9FEAF2FB)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22),
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .81,
+        size.height * .22,
+        size.width * .13,
+        size.height * .33,
+      ),
+      const Color(0xFFE8EDF2),
+      stroke: const Color(0xFF111114),
+      radius: 2,
+    );
+    canvas.drawLine(
+      Offset(size.width * .875, size.height * .22),
+      Offset(size.width * .875, size.height * .55),
+      Paint()
+        ..color = const Color(0xFF111114)
+        ..strokeWidth = 2,
+    );
+    canvas.drawLine(
+      Offset(size.width * .81, size.height * .39),
+      Offset(size.width * .94, size.height * .39),
+      Paint()
+        ..color = const Color(0xFF111114)
+        ..strokeWidth = 2,
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .78,
+        size.height * .18,
+        size.width * .035,
+        size.height * .58,
+      ),
+      const Color(0xFF303136),
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .94,
+        size.height * .18,
+        size.width * .035,
+        size.height * .58,
+      ),
+      const Color(0xFF25262A),
+    );
+  }
+
+  static void _drawDresser(Canvas canvas, Size size) {
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .82,
+        size.height * .66,
+        size.width * .18,
+        size.height * .20,
+      ),
+      const Color(0xFF121316),
+      stroke: const Color(0x445E7A92),
+      radius: 3,
+    );
+    _rect(
+      canvas,
+      Rect.fromLTWH(
+        size.width * .875,
+        size.height * .61,
+        size.width * .032,
+        size.height * .055,
+      ),
+      const Color(0xFF1E2024),
+      radius: 2,
+    );
+    canvas.drawCircle(
+      Offset(size.width * .895, size.height * .59),
+      size.width * .020,
+      Paint()..color = const Color(0xFF51614D),
+    );
+  }
+
+  static void _drawCalibrationOverlay(Canvas canvas, Size size) {
+    final floorGrid = Paint()
+      ..color = const Color(0x338FB4FF)
+      ..strokeWidth = .9;
+    for (var i = 1; i < 7; i++) {
+      final t = i / 7;
+      canvas.drawLine(
+        Offset(_lerp(size.width * .08, size.width * .34, t), size.height * .95),
+        Offset(_lerp(size.width * .34, size.width * .76, t), size.height * .58),
+        floorGrid,
+      );
+      canvas.drawLine(
+        Offset(_lerp(size.width * .34, size.width * .76, t), size.height * .58),
+        Offset(_lerp(size.width * .76, size.width * .98, t), size.height * .95),
+        floorGrid,
+      );
+    }
+
+    final scanOverlay = Paint()
+      ..color = const Color(0x3380C7C2)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(size.width * .34, size.height * .20),
+      Offset(size.width * .08, size.height * .95),
+      scanOverlay,
+    );
+    canvas.drawLine(
+      Offset(size.width * .76, size.height * .20),
+      Offset(size.width * .98, size.height * .95),
+      scanOverlay,
+    );
+
+    final handlePaint = Paint()
+      ..color = _roomForgeSelected
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke;
+    final anchor = Offset(size.width * .53, size.height * .57);
+    canvas.drawCircle(anchor, 7, handlePaint);
+    canvas.drawLine(
+      anchor,
+      Offset(size.width * .61, size.height * .52),
+      handlePaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * .61, size.height * .52),
+      4,
+      Paint()..color = _roomForgeSelected,
+    );
+  }
+
+  static void _rect(
+    Canvas canvas,
+    Rect rect,
+    Color color, {
+    Color? stroke,
+    double radius = 0,
+  }) {
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+    canvas.drawRRect(rrect, Paint()..color = color);
+    if (stroke != null) {
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = stroke
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _LandingStageGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0x18FFFFFF)
+      ..strokeWidth = 1;
+    const divisions = 12;
+    for (var i = 1; i < divisions; i++) {
+      final x = size.width * i / divisions;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (var i = 1; i < 7; i++) {
+      final y = size.height * i / 7;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+
+    final horizonPaint = Paint()
+      ..color = const Color(0x3080C7C2)
+      ..strokeWidth = 1.2;
+    canvas.drawLine(
+      Offset(0, size.height * .42),
+      Offset(size.width, size.height * .42),
+      horizonPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _LandingHowSection extends StatelessWidget {
+  const _LandingHowSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _LandingSection(
+      title: rf(
+        'Reviewable reconstruction results appear on the first screen.',
+        '검토 가능한 재구성 결과를 첫 화면에서 바로 보여줍니다',
+      ),
+      body: rf(
+        'The scan line compares a live 3D room model against the source photo, so users can verify candidate geometry before accepting the room.',
+        '스캔 라인은 실시간 3D 공간과 원본 사진을 비교합니다. 사용자는 후보 geometry가 실제 방과 얼마나 잘 맞는지 확인한 뒤 공간을 확정할 수 있습니다.',
+      ),
+    );
+  }
+}
+
+class _LandingFeatureSection extends StatelessWidget {
+  const _LandingFeatureSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final features = [
+      (
+        number: '01',
+        icon: Icons.camera_alt_outlined,
+        title: rf('Candidate geometry extraction', '후보 geometry 추출'),
+        body: rf(
+          'Walls, floor, doors, windows, and furniture candidates stay reviewable in source image coordinates.',
+          '벽, 바닥, 문, 창문, 가구 후보를 원본 이미지 좌표로 분리해 사용자가 검토할 수 있게 만듭니다.',
+        ),
+      ),
+      (
+        number: '02',
+        icon: Icons.grid_on_outlined,
+        title: rf('Meter scale calibration', '미터 스케일 보정'),
+        body: rf(
+          'A confirmed reference length converts pixels into meter-space placement surfaces.',
+          '확인된 기준 길이를 바탕으로 픽셀 좌표를 실제 미터 좌표로 전환하고 배치 가능한 평면을 만듭니다.',
+        ),
+      ),
+      (
+        number: '03',
+        icon: Icons.layers_outlined,
+        title: rf('2D and 3D placement', '2D와 3D 배치'),
+        body: rf(
+          'Move, rotate, resize, and save proxy furniture on top of the confirmed room.',
+          '확정된 공간 위에서 프록시 가구를 이동, 회전, 크기 조정하고 저장 가능한 layout 상태로 이어갑니다.',
+        ),
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 76, 28, 88),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _LandingSectionHeader(
+                title: rf(
+                  'Photos, coordinates, and furniture become one space model.',
+                  '사진, 좌표, 가구 배치가 하나의 공간 모델로 이어집니다',
+                ),
+              ),
+              const SizedBox(height: 38),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 900;
+                  if (compact) {
+                    return Column(
+                      children: [
+                        for (final feature in features) ...[
+                          _LandingFeatureCard(feature: feature),
+                          if (feature != features.last)
+                            const SizedBox(height: 12),
+                        ],
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final feature in features) ...[
+                        Expanded(child: _LandingFeatureCard(feature: feature)),
+                        if (feature != features.last) const SizedBox(width: 12),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingSection extends StatelessWidget {
+  const _LandingSection({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 88, 28, 0),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: _roomForgeBorder)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _LandingSectionHeader(title: title),
+                  const SizedBox(height: 16),
+                  Text(
+                    body,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: _roomForgeInkSoft,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingSectionHeader extends StatelessWidget {
+  const _LandingSectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+        color: _roomForgeInk,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0,
+      ),
+    );
+  }
+}
+
+class _LandingFeatureCard extends StatefulWidget {
+  const _LandingFeatureCard({required this.feature});
+
+  final ({String number, IconData icon, String title, String body}) feature;
+
+  @override
+  State<_LandingFeatureCard> createState() => _LandingFeatureCardState();
+}
+
+class _LandingFeatureCardState extends State<_LandingFeatureCard> {
+  bool _hovered = false;
+  double _tiltX = 0;
+  double _tiltY = 0;
+
+  void _updateTilt(PointerEvent event, Size size) {
+    if (size.width <= 0 || size.height <= 0) {
+      return;
+    }
+    final x = event.localPosition.dx / size.width;
+    final y = event.localPosition.dy / size.height;
+    final nextTiltX = (x - .5) * 3.2;
+    final nextTiltY = (.5 - y) * 2.8;
+    if ((nextTiltX - _tiltX).abs() < .18 && (nextTiltY - _tiltY).abs() < .18) {
+      return;
+    }
+    setState(() {
+      _tiltX = nextTiltX;
+      _tiltY = nextTiltY;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final reduce = MediaQuery.of(context).disableAnimations;
+    final matrix = Matrix4.identity()..setEntry(3, 2, .0011);
+    if (!reduce) {
+      matrix
+        ..rotateX(_tiltY * math.pi / 180)
+        ..rotateY(_tiltX * math.pi / 180);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 360.0;
+        return MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onHover: (event) => _updateTilt(
+            event,
+            Size(width, math.max(236, constraints.maxHeight)),
+          ),
+          onExit: (_) => setState(() {
+            _hovered = false;
+            _tiltX = 0;
+            _tiltY = 0;
+          }),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            transform: matrix,
+            transformAlignment: Alignment.center,
+            constraints: const BoxConstraints(minHeight: 236),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: _hovered ? .10 : .08),
+                  Colors.transparent,
+                  Colors.white.withValues(alpha: .02),
+                ],
+                stops: const [0, .42, 1],
+              ),
+              border: Border.all(
+                color: _hovered ? _roomForgeBorderStrong : _roomForgeBorder,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 620),
+                    curve: Curves.easeOutCubic,
+                    left: _hovered ? width : -width,
+                    top: 0,
+                    bottom: 0,
+                    width: width,
+                    child: IgnorePointer(
+                      child: Transform.rotate(
+                        angle: -18 * math.pi / 180,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                Colors.white.withValues(alpha: .10),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.feature.number,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: _roomForgeSubtle,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 42),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .06),
+                            border: Border.all(color: _roomForgeBorder),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: SizedBox(
+                            width: 42,
+                            height: 42,
+                            child: Icon(
+                              widget.feature.icon,
+                              color: Colors.white,
+                              size: 21,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          widget.feature.title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: _roomForgeInk,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 9),
+                        Text(
+                          widget.feature.body,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _roomForgeInkSoft,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LandingFinalCta extends StatelessWidget {
+  const _LandingFinalCta({required this.isSigningIn, required this.onSignIn});
+
+  final bool isSigningIn;
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 92, 28, 108),
+      child: Column(
+        children: [
+          Text(
+            rf(
+              'The shortest path from photo to space model.',
+              '사진을 공간 모델로 바꾸는 가장 짧은 경로',
+            ),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+              color: _roomForgeInk,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            rf(
+              'RoomForge connects reconstruction, review, and placement in one screen flow.',
+              'RoomForge는 방 재구성, 검토, 배치를 한 화면 흐름으로 묶어 실제 공간 의사결정에 바로 사용할 수 있게 합니다.',
+            ),
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: _roomForgeInkSoft),
+          ),
+          const SizedBox(height: 28),
+          FilledButton.icon(
+            onPressed: isSigningIn ? null : onSignIn,
+            icon: isSigningIn
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.arrow_forward),
+            label: Text(
+              isSigningIn
+                  ? rf('Signing in...', '로그인 중...')
+                  : rf('Start free', '무료로 시작하기'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LandingFooter extends StatelessWidget {
+  const _LandingFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _roomForgeBorder)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Text(
+          '© RoomForge · 사진이 방이 되는 순간',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: _roomForgeSubtle,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1990,7 +3915,7 @@ class _ProductRouteNavActions extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: rf('Projects', '프로젝트'),
+            tooltip: rf('My projects', '내 프로젝트'),
             onPressed: () => _go(context, routeSpec.projectsPath),
             icon: Icon(
               Icons.folder_copy_outlined,
@@ -2017,7 +3942,7 @@ class _ProductRouteNavActions extends StatelessWidget {
         TextButton.icon(
           onPressed: () => _go(context, routeSpec.projectsPath),
           icon: const Icon(Icons.folder_copy_outlined),
-          label: Text(rf('Projects', '프로젝트')),
+          label: Text(rf('My projects', '내 프로젝트')),
           style: TextButton.styleFrom(
             foregroundColor: routeSpec.isProjects
                 ? _roomForgePrimary
@@ -2068,7 +3993,7 @@ class _RoomForgeProductRouteScreen extends StatelessWidget {
   }
 }
 
-class _AppHomeScreen extends StatelessWidget {
+class _AppHomeScreen extends StatefulWidget {
   const _AppHomeScreen({
     required this.routeSpec,
     required this.displayName,
@@ -2080,14 +4005,499 @@ class _AppHomeScreen extends StatelessWidget {
   final ProjectApi projectApi;
 
   @override
+  State<_AppHomeScreen> createState() => _AppHomeScreenState();
+}
+
+class _AppHomeScreenState extends State<_AppHomeScreen> {
+  bool _isCreating = false;
+  String? _message;
+  NoticeSeverity _severity = NoticeSeverity.info;
+
+  Future<void> _createProject() async {
+    if (_isCreating) {
+      return;
+    }
+    final result = await showDialog<_ProjectDraft>(
+      context: context,
+      builder: (context) => const ProjectEditorDialog(),
+    );
+    if (result == null) {
+      return;
+    }
+
+    setState(() {
+      _isCreating = true;
+      _message = null;
+    });
+
+    try {
+      final created = await widget.projectApi.createProject(
+        name: result.name,
+        description: result.description,
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(
+        context,
+      ).pushNamed(widget.routeSpec.workspacePath(created.id));
+    } on ProjectApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = '${rf('Create failed', '생성 실패')}: ${error.message}';
+        _severity = NoticeSeverity.error;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = '${rf('Create failed', '생성 실패')}: $error';
+        _severity = NoticeSeverity.error;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isCreating = false);
+      }
+    }
+  }
+
+  void _openProjects() {
+    Navigator.of(context).pushNamed(widget.routeSpec.projectsPath);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return _ProjectWorkspaceBody(
-      routeSpec: routeSpec,
-      routeMode: _ProjectWorkspaceRouteMode.home,
-      title: rf('Main workspace', '메인 작업공간'),
-      routeLabel: rf('Main', '메인'),
-      displayName: displayName,
-      projectApi: projectApi,
+    return _AuthenticatedLandingBody(
+      routeSpec: widget.routeSpec,
+      displayName: widget.displayName,
+      isCreating: _isCreating,
+      message: _message,
+      severity: _severity,
+      onCreateProject: _createProject,
+      onOpenProjects: _openProjects,
+    );
+  }
+}
+
+class _AuthenticatedLandingBody extends StatelessWidget {
+  const _AuthenticatedLandingBody({
+    required this.routeSpec,
+    required this.displayName,
+    required this.isCreating,
+    required this.onCreateProject,
+    required this.onOpenProjects,
+    required this.severity,
+    this.message,
+  });
+
+  final _RoomForgeRouteSpec routeSpec;
+  final String displayName;
+  final bool isCreating;
+  final VoidCallback onCreateProject;
+  final VoidCallback onOpenProjects;
+  final NoticeSeverity severity;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 900;
+          final sidePadding = compact ? 18.0 : 28.0;
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              sidePadding,
+              compact ? 20 : 32,
+              sidePadding,
+              36,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1220),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, heroConstraints) {
+                        final heroCompact = heroConstraints.maxWidth < 940;
+                        final titleBlock = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                RoomForgeStatusPill(
+                                  label: rf('Signed in', '로그인됨'),
+                                  color: _roomForgeSave,
+                                  icon: Icons.verified_user_outlined,
+                                  dense: true,
+                                ),
+                                RoomForgeStatusPill(
+                                  label: routeSpec.isMobile
+                                      ? rf('Mobile web', '모바일 웹')
+                                      : rf('Product home', '제품 홈'),
+                                  color: _roomForgeAdmin,
+                                  dense: true,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              rf('RoomForge', 'RoomForge'),
+                              maxLines: 1,
+                              softWrap: false,
+                              style: theme.textTheme.displayLarge?.copyWith(
+                                color: Colors.white,
+                                fontSize: heroCompact ? 64 : 104,
+                                height: .9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              rf(
+                                'Signed-in landing for reconstruction, review, and space planning.',
+                                '재구성, 검토, 공간 배치를 시작하는 로그인 후 메인 화면입니다.',
+                              ),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: _roomForgeInkSoft,
+                                height: 1.45,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              '${rf('Account', '계정')}: $displayName',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: _roomForgeMuted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        );
+
+                        final commandPanel = _AuthenticatedLandingCommandPanel(
+                          isCreating: isCreating,
+                          onCreateProject: onCreateProject,
+                          onOpenProjects: onOpenProjects,
+                        );
+
+                        if (heroCompact) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              titleBlock,
+                              const SizedBox(height: 18),
+                              commandPanel,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(child: titleBlock),
+                            const SizedBox(width: 28),
+                            SizedBox(width: 420, child: commandPanel),
+                          ],
+                        );
+                      },
+                    ),
+                    if (message != null) ...[
+                      const SizedBox(height: 16),
+                      RoomForgeNotice(
+                        title: severity == NoticeSeverity.error
+                            ? rf('Project change failed', '프로젝트 변경 실패')
+                            : rf('Project updated', '프로젝트 업데이트됨'),
+                        message: message!,
+                        severity: severity,
+                        icon: severity == NoticeSeverity.error
+                            ? Icons.error_outline
+                            : Icons.check_circle_outline,
+                      ),
+                    ],
+                    const SizedBox(height: 26),
+                    const _LandingCompareStage(),
+                    const SizedBox(height: 28),
+                    _AuthenticatedLandingWorkflow(
+                      onCreateProject: onCreateProject,
+                      onOpenProjects: onOpenProjects,
+                      isCreating: isCreating,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AuthenticatedLandingCommandPanel extends StatelessWidget {
+  const _AuthenticatedLandingCommandPanel({
+    required this.isCreating,
+    required this.onCreateProject,
+    required this.onOpenProjects,
+  });
+
+  final bool isCreating;
+  final VoidCallback onCreateProject;
+  final VoidCallback onOpenProjects;
+
+  @override
+  Widget build(BuildContext context) {
+    return RoomForgePanel(
+      padding: const EdgeInsets.all(16),
+      backgroundColor: const Color(0xD80B0D0F),
+      borderColor: _roomForgeBorderStrong,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            rf('Start from here', '여기서 시작'),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: _roomForgeInk,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: isCreating ? null : onCreateProject,
+            icon: isCreating
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add_home_work_outlined),
+            label: Text(
+              isCreating
+                  ? rf('Creating...', '생성 중...')
+                  : rf('Create new space', '새 공간 만들기'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: onOpenProjects,
+            icon: const Icon(Icons.folder_copy_outlined),
+            label: Text(rf('View my projects', '내 프로젝트 보기')),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              RoomForgeStatusPill(
+                label: rf('Photo', '사진'),
+                color: _roomForgePrimary,
+                dense: true,
+              ),
+              RoomForgeStatusPill(
+                label: rf('CV review', 'CV 검토'),
+                color: _roomForgeMeasure,
+                dense: true,
+              ),
+              RoomForgeStatusPill(
+                label: rf('3D layout', '3D 배치'),
+                color: _roomForgeSuccess,
+                dense: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthenticatedLandingWorkflow extends StatelessWidget {
+  const _AuthenticatedLandingWorkflow({
+    required this.onCreateProject,
+    required this.onOpenProjects,
+    required this.isCreating,
+  });
+
+  final VoidCallback onCreateProject;
+  final VoidCallback onOpenProjects;
+  final bool isCreating;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 820;
+        final tiles = [
+          _AuthenticatedLandingAction(
+            label: rf('New space', '새 공간'),
+            detail: rf('Photo and dimensions', '사진과 치수 입력'),
+            icon: Icons.add_home_work_outlined,
+            color: _roomForgePrimary,
+            onTap: isCreating ? null : onCreateProject,
+          ),
+          _AuthenticatedLandingAction(
+            label: rf('My projects', '내 프로젝트'),
+            detail: rf('Saved room work', '저장된 방 작업'),
+            icon: Icons.folder_copy_outlined,
+            color: _roomForgeSave,
+            onTap: onOpenProjects,
+          ),
+          _AuthenticatedLandingAction(
+            label: rf('Review flow', '검토 흐름'),
+            detail: rf('Source, CV, model', '원본, CV, 모델'),
+            icon: Icons.compare_arrows_outlined,
+            color: _roomForgeMeasure,
+            onTap: onCreateProject,
+          ),
+        ];
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final tile in tiles) ...[
+                tile,
+                if (tile != tiles.last) const SizedBox(height: 10),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final tile in tiles) ...[
+              Expanded(child: tile),
+              if (tile != tiles.last) const SizedBox(width: 12),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AuthenticatedLandingAction extends StatefulWidget {
+  const _AuthenticatedLandingAction({
+    required this.label,
+    required this.detail,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final String detail;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  State<_AuthenticatedLandingAction> createState() =>
+      _AuthenticatedLandingActionState();
+}
+
+class _AuthenticatedLandingActionState
+    extends State<_AuthenticatedLandingAction> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final enabled = widget.onTap != null;
+    return MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(
+          0,
+          _hovered && enabled ? -2 : 0,
+          0,
+        ),
+        child: Material(
+          color: _roomForgePanel.withValues(alpha: enabled ? 1 : .62),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: _hovered && enabled
+                  ? widget.color.withValues(alpha: .54)
+                  : _roomForgeBorder,
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: widget.color.withValues(
+                        alpha: _hovered && enabled ? .20 : .12,
+                      ),
+                      border: Border.all(
+                        color: widget.color.withValues(alpha: .36),
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(widget.icon, color: widget.color, size: 21),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: _roomForgeInk,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          widget.detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: _roomForgeMuted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward,
+                    size: 18,
+                    color: _hovered && enabled ? widget.color : _roomForgeMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2109,7 +4519,7 @@ class _ProjectsScreen extends StatelessWidget {
       routeSpec: routeSpec,
       routeMode: _ProjectWorkspaceRouteMode.projects,
       title: rf('My projects', '내 프로젝트'),
-      routeLabel: rf('Projects', '프로젝트'),
+      routeLabel: rf('My projects', '내 프로젝트'),
       displayName: displayName,
       projectApi: projectApi,
     );
@@ -6403,7 +8813,7 @@ String _localizedEditorObjectLabel(String? label) {
   };
 }
 
-enum _ProjectWorkspaceRouteMode { home, projects, workspace }
+enum _ProjectWorkspaceRouteMode { projects, workspace }
 
 class _ProjectWorkspaceBody extends StatefulWidget {
   const _ProjectWorkspaceBody({
@@ -7106,7 +9516,7 @@ class _ProjectListPanel extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  rf('Projects', '프로젝트'),
+                  rf('My projects', '내 프로젝트'),
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: _roomForgeInk,
                     fontWeight: FontWeight.w800,

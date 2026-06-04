@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>20 · Responsive Layouts — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>20</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">Responsive &amp; Quality</span>
+          <h1>Responsive Layouts</h1>
+          <p>모바일 촬영, 태블릿 리뷰, 데스크톱 정밀 편집의 layout 전환을 정리합니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="responsive-scene">
+          <div class="break-card b0"><b>Mobile 390</b><span>capture first</span></div><div class="break-card b1"><b>Tablet 834</b><span>review tray</span></div><div class="break-card b2"><b>Desktop 1440</b><span>editor shell</span></div><div class="break-card b3"><b>Wide Ops</b><span>admin split</span></div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>mobile</span><span class="rf-chip rf-chip--measure"><span class="dot"></span>tablet</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>desktop</span><span class="rf-chip rf-chip--admin"><span class="dot"></span>reduced motion</span></div>
+          <ul class="component-list">
+            <li><strong>Mobile</strong><span>촬영, 업로드, 상태 확인. 큰 터치 타겟과 단일 컬럼.</span></li><li><strong>Tablet</strong><span>캔버스와 접히는 inspector. 후보 tray는 하단.</span></li><li><strong>Desktop</strong><span>넓은 캔버스, 좌측 도구, 우측 inspector, 하단 status.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">레이아웃 점검</button>
+        <button class="rf-btn rf-btn--block">reduced motion 보기</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

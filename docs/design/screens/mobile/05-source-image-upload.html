@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>05 · Source Image Upload — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>05</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">P0 Core Flow</span>
+          <h1>Source Image Upload</h1>
+          <p>원본 방 이미지를 업로드하고 품질, 권한, 진행 상태를 한 화면에서 복구합니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="upload-scene">
+          <div class="dropzone">
+            <div class="upload-icon">+</div>
+            <h2>방 사진을 여기에 놓기</h2>
+            <p>JPG, PNG · 최소 1600px 권장 · 모바일은 촬영 진입</p>
+            <span class="rf-chip rf-chip--save"><span class="dot"></span>uploading 68%</span>
+          </div>
+          <div class="file-card">
+            <div class="photo-strip"></div>
+            <div><b>bedroom-source.jpg</b><span>3024 × 4032 · 4.8 MB</span></div>
+            <div class="rf-progress"><span style="width:68%"></span></div>
+          </div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>dragging</span><span class="rf-chip rf-chip--save"><span class="dot"></span>uploading</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>uploaded</span><span class="rf-chip rf-chip--error"><span class="dot"></span>permission denied</span></div>
+          <ul class="component-list">
+            <li><strong>Drop zone</strong><span>클릭, 드래그, 모바일 촬영 진입을 모두 수용하는 이미지 입력 영역.</span></li><li><strong>File preview</strong><span>파일명, 해상도, 용량, 품질 경고, 교체 액션.</span></li><li><strong>Progress row</strong><span>Storage 업로드, metadata 저장, 실패 복구 단계를 분리해서 보여줌.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">재구성 시작</button>
+        <button class="rf-btn rf-btn--block">사진 교체</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

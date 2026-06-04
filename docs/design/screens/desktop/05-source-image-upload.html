@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>05 · Source Image Upload — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>upload</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/05-source-image-upload.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">05 · P0 Core Flow</span>
+            <h1>Source Image Upload</h1>
+            <p>원본 방 이미지를 업로드하고 품질, 권한, 진행 상태를 한 화면에서 복구합니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">사진 교체</button>
+            <button class="rf-btn rf-btn--primary">재구성 시작</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="upload-scene">
+          <div class="dropzone">
+            <div class="upload-icon">+</div>
+            <h2>방 사진을 여기에 놓기</h2>
+            <p>JPG, PNG · 최소 1600px 권장 · 모바일은 촬영 진입</p>
+            <span class="rf-chip rf-chip--save"><span class="dot"></span>uploading 68%</span>
+          </div>
+          <div class="file-card">
+            <div class="photo-strip"></div>
+            <div><b>bedroom-source.jpg</b><span>3024 × 4032 · 4.8 MB</span></div>
+            <div class="rf-progress"><span style="width:68%"></span></div>
+          </div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>dragging</span><span class="rf-chip rf-chip--save"><span class="dot"></span>uploading</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>uploaded</span><span class="rf-chip rf-chip--error"><span class="dot"></span>permission denied</span></div>
+        <ul class="component-list">
+          <li><strong>Drop zone</strong><span>클릭, 드래그, 모바일 촬영 진입을 모두 수용하는 이미지 입력 영역.</span></li><li><strong>File preview</strong><span>파일명, 해상도, 용량, 품질 경고, 교체 액션.</span></li><li><strong>Progress row</strong><span>Storage 업로드, metadata 저장, 실패 복구 단계를 분리해서 보여줌.</span></li><li><strong>Recovery controls</strong><span>사진 다시 선택, 업로드 재시도, 권한 오류 안내.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

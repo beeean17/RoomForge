@@ -1,7 +1,15 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import { App } from './App'
-import { AdminPlaceholderPage } from '../features/admin/AdminPlaceholderPage'
+import {
+  AdminAccessDeniedPage,
+  AdminAuditPage,
+  AdminDashboardPage,
+  AdminJobAuditPage,
+  AdminJobDetailPage,
+  AdminJobRetryPage,
+  AdminJobsPage,
+} from '../features/admin/AdminPages'
 import { EditorPage } from '../features/editor/EditorPage'
 import { LandingPage } from '../features/landing/LandingPage'
 import { LoginPage } from '../features/auth/LoginPage'
@@ -21,8 +29,14 @@ export const router = createBrowserRouter([
       { path: '/projects/:projectId/source', element: <SourceImagesPage /> },
       { path: '/projects/:projectId/status', element: <ReconstructionStatusPage /> },
       { path: '/projects/:projectId/editor', element: <EditorPage /> },
-      { path: '/admin', element: <AdminPlaceholderPage /> },
-      { path: '/admin/*', element: <AdminPlaceholderPage /> },
+      { path: '/admin', element: <AdminDashboardPage /> },
+      { path: '/admin/jobs', element: <AdminJobsPage /> },
+      { path: '/admin/jobs/:jobId', element: <AdminJobDetailPage /> },
+      { path: '/admin/jobs/:jobId/retry', element: <AdminJobRetryPage /> },
+      { path: '/admin/jobs/:jobId/audit', element: <AdminJobAuditPage /> },
+      { path: '/admin/audit', element: <AdminAuditPage /> },
+      { path: '/admin/access-denied', element: <AdminAccessDeniedPage /> },
+      { path: '/admin/*', element: <Navigate to="/admin" replace /> },
       { path: '/legacy/*', element: <LegacyFallback /> },
       { path: '/app/*', element: <Navigate to="/projects" replace /> },
       { path: '/m/app/*', element: <Navigate to="/projects" replace /> },

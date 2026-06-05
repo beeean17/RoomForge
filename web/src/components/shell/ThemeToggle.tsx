@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Moon, Sun } from 'lucide-react'
 
 type Theme = 'dark' | 'light'
 
@@ -9,6 +10,8 @@ function getInitialTheme(): Theme {
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
+  const nextTheme = theme === 'dark' ? 'light' : 'dark'
+  const nextLabel = nextTheme === 'light' ? '낮' : '밤'
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -18,16 +21,19 @@ export function ThemeToggle() {
 
   return (
     <button
-      className="theme-toggle"
+      className={`theme-toggle theme-toggle--${theme}`}
       type="button"
-      aria-label="낮/밤 테마 전환"
+      aria-label={`${nextLabel} 테마로 전환`}
       aria-pressed={theme === 'dark'}
-      title="낮 / 밤 전환"
-      onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+      title={`${nextLabel} 테마로 전환`}
+      onClick={() => setTheme(nextTheme)}
     >
-      <span className="dial" aria-hidden="true">
-        <span className="body sun" />
-        <span className="body moon" />
+      <span className="theme-toggle__icon" aria-hidden="true" key={theme}>
+        {theme === 'light' ? (
+          <Sun className="theme-toggle__svg theme-toggle__svg--sun" size={17} strokeWidth={1.8} />
+        ) : (
+          <Moon className="theme-toggle__svg theme-toggle__svg--moon" size={17} strokeWidth={1.8} />
+        )}
       </span>
     </button>
   )

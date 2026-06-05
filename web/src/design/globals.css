@@ -276,6 +276,8 @@ button {
   border: 1px solid var(--line-soft);
   border-radius: 10px;
   background: var(--surface);
+  color: var(--text-main);
+  cursor: pointer;
 }
 
 .theme-toggle:hover {
@@ -288,44 +290,40 @@ button {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 36%, transparent 42%, rgba(0, 0, 0, 0.28));
+  background: radial-gradient(circle at 50% 36%, transparent 48%, rgba(0, 0, 0, 0.18));
 }
 
-.theme-toggle .dial {
+.theme-toggle__icon {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 16px;
-  height: 46px;
-  transform: translate(-50%, -50%) rotate(0deg);
-  transform-origin: 50% 50%;
-  transition: transform 0.42s var(--rf-ease-out);
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  animation: theme-icon-pop 0.34s var(--rf-ease-out);
   will-change: transform;
 }
 
-:root[data-theme="light"] .theme-toggle .dial {
-  transform: translate(-50%, -50%) rotate(180deg);
+.theme-toggle__svg--sun {
+  color: #c98a27;
+  filter: drop-shadow(0 0 8px rgba(255, 185, 80, 0.34));
 }
 
-.theme-toggle .body {
-  position: absolute;
-  left: 50%;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  transform: translateX(-50%);
+.theme-toggle__svg--moon {
+  color: #dbe6ff;
+  filter: drop-shadow(0 0 8px rgba(170, 196, 255, 0.42));
 }
 
-.theme-toggle .sun {
-  top: 0;
-  background: radial-gradient(circle at 50% 45%, #ffe9b0, #ffb347 70%);
-  box-shadow: 0 0 10px rgba(255, 196, 90, 0.85);
-}
+@keyframes theme-icon-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.72) rotate(-24deg);
+  }
 
-.theme-toggle .moon {
-  bottom: 0;
-  background: radial-gradient(circle at 36% 34%, #f2f5ff, #b6c2e0 72%);
-  box-shadow: 0 0 8px rgba(180, 196, 232, 0.7);
+  100% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
 }
 
 .product-topbar {

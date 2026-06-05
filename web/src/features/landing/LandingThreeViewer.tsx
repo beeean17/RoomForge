@@ -38,12 +38,12 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
 
     const scene = new THREE.Scene()
 
-    const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 80)
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80)
     const cameraTarget = new THREE.Vector3()
-    const entryPosition = new THREE.Vector3(0, 1.35, 5.9)
-    const centerPosition = new THREE.Vector3(0, 1.34, 0.35)
-    const entryTarget = new THREE.Vector3(0, 1.05, -1.8)
-    const orbitAnchor = new THREE.Vector3(0, 1.28, 0.35)
+    const entryPosition = new THREE.Vector3(0, 1.48, 8.4)
+    const centerPosition = new THREE.Vector3(0, 1.38, 0.7)
+    const entryTarget = new THREE.Vector3(0, 1.08, -1.15)
+    const orbitAnchor = new THREE.Vector3(0, 1.32, 0.7)
     const orbitTarget = new THREE.Vector3()
     const lookDirection = new THREE.Vector3()
     const room = new THREE.Group()
@@ -118,9 +118,6 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     plane(roomWidth, roomHeight, 0xd7d0c8, { z: back, y: roomHeight / 2 })
     plane(roomDepth, roomHeight, 0xc7c1bb, { ry: Math.PI / 2, x: -halfWidth, y: roomHeight / 2 })
     plane(roomDepth, roomHeight, 0xd4d0ca, { ry: -Math.PI / 2, x: halfWidth, y: roomHeight / 2 })
-    plane(0.82, roomHeight, 0xc7c1bb, { x: -2.18, z: front, y: roomHeight / 2 })
-    plane(0.82, roomHeight, 0xd4d0ca, { x: 2.18, z: front, y: roomHeight / 2 })
-    plane(3.55, 0.56, 0xcbc5bf, { z: front, y: roomHeight - 0.28 })
     box(roomWidth, 0.16, 0.12, 0x202124, { x: 0, y: 0.08, z: back + 0.03 })
     box(roomWidth, 0.12, 0.14, 0x202124, { x: 0, y: roomHeight - 0.06, z: back + 0.03 })
     box(0.12, 0.16, roomDepth, 0x202124, { x: -halfWidth + 0.04, y: 0.08, z: 0 })
@@ -283,10 +280,10 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
       lampLeft.intensity = lampRight.intensity = lerp(0.64, 1.08, themeProgress)
       windowMaterial.emissiveIntensity = lerp(1.1, 0.62, themeProgress)
 
-      const entryProgress = smooth(clamp(progress / 0.36))
+      const entryProgress = smooth(clamp(progress / 0.82))
       const orbit = smooth(clamp((progress - 0.28) / 0.72))
       const cameraYaw = yaw
-      const cameraPitch = lerp(-0.04, 0.04, entryProgress) + pitch * 0.55
+      const cameraPitch = lerp(-0.025, 0.02, entryProgress) + pitch
       camera.position.lerpVectors(entryPosition, centerPosition, entryProgress)
 
       lookDirection.set(
@@ -297,7 +294,7 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
       orbitTarget.copy(orbitAnchor).add(lookDirection.multiplyScalar(3.1))
       cameraTarget.lerpVectors(entryTarget, orbitTarget, orbit)
       camera.lookAt(cameraTarget)
-      camera.fov = lerp(46, 64, entryProgress)
+      camera.fov = lerp(42, 68, entryProgress)
       camera.updateProjectionMatrix()
       room.rotation.y = lerp(-0.04, 0.02, entryProgress)
       renderer.render(scene, camera)

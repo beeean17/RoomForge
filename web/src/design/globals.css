@@ -2137,7 +2137,7 @@ button {
 }
 
 .landing-page {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .landing-nav {

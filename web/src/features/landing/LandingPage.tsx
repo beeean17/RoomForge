@@ -70,6 +70,10 @@ export function LandingPage() {
 
   useEffect(() => {
     let frame = 0
+    let loopFrame = 0
+    let loopActive = false
+    let lastViewportKey = ''
+    let lastTimelineKey = ''
 
     const update = () => {
       const intro = introRef.current
@@ -101,23 +105,27 @@ export function LandingPage() {
       const dockLeft = (width - dockWidth) / 2
       const dockTop = (height - dockHeight) / 2
       const lerp = (a: number, b: number) => a + (b - a) * introProgress
+      const timelineKey = `${t.toFixed(4)}:${width}:${height}`
 
-      setTimeline({
-        t,
-        intro: introProgress,
-        reveal,
-        recon,
-        orbit,
-        heroFade,
-        dockbar,
-        viewer: {
-          left: `${lerp(0, dockLeft).toFixed(1)}px`,
-          top: `${lerp(0, dockTop).toFixed(1)}px`,
-          width: `${lerp(width, dockWidth).toFixed(1)}px`,
-          height: `${lerp(height, dockHeight).toFixed(1)}px`,
-          borderRadius: `${(8 * introProgress).toFixed(2)}px`,
-        },
-      })
+      if (timelineKey !== lastTimelineKey) {
+        lastTimelineKey = timelineKey
+        setTimeline({
+          t,
+          intro: introProgress,
+          reveal,
+          recon,
+          orbit,
+          heroFade,
+          dockbar,
+          viewer: {
+            left: `${lerp(0, dockLeft).toFixed(1)}px`,
+            top: `${lerp(0, dockTop).toFixed(1)}px`,
+            width: `${lerp(width, dockWidth).toFixed(1)}px`,
+            height: `${lerp(height, dockHeight).toFixed(1)}px`,
+            borderRadius: `${(8 * introProgress).toFixed(2)}px`,
+          },
+        })
+      }
       setNavScrolled(window.scrollY > 40)
     }
 
@@ -126,11 +134,37 @@ export function LandingPage() {
       frame = window.requestAnimationFrame(update)
     }
 
+    const tick = () => {
+      const viewportKey = `${window.scrollY}:${window.innerWidth}:${window.innerHeight}`
+      if (viewportKey !== lastViewportKey) {
+        lastViewportKey = viewportKey
+        update()
+      }
+      if (loopActive) {
+        loopFrame = window.requestAnimationFrame(tick)
+      }
+    }
+
+    const startLoop = () => {
+      if (loopActive) {
+        return
+      }
+      loopActive = true
+      loopFrame = window.requestAnimationFrame(tick)
+    }
+
+    const stopLoop = () => {
+      loopActive = false
+      window.cancelAnimationFrame(loopFrame)
+    }
+
     update()
+    startLoop()
     window.addEventListener('scroll', requestUpdate, { passive: true })
     window.addEventListener('resize', requestUpdate)
     return () => {
       window.cancelAnimationFrame(frame)
+      stopLoop()
       window.removeEventListener('scroll', requestUpdate)
       window.removeEventListener('resize', requestUpdate)
     }

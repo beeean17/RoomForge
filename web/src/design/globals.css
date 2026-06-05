@@ -2402,10 +2402,16 @@ button {
   width: 130%;
   aspect-ratio: 1;
   pointer-events: none;
+  --rot: 180deg;
   transform: translateX(-50%) rotate(var(--rot, 0deg));
   transform-origin: 50% 50%;
   opacity: var(--dock, 0);
+  transition: transform 0.8s var(--rf-ease-out);
   will-change: transform;
+}
+
+:root[data-theme="light"] .landing-sky {
+  --rot: 0deg;
 }
 
 .landing-sky .orb {

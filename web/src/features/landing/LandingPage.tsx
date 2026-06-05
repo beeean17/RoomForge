@@ -282,7 +282,7 @@ export function LandingPage() {
             <div className="landing-layer landing-proc-layer" style={{ clipPath: processedClip }}>
               <LandingThreeViewer orbitProgress={timeline.orbit} yaw={drag.yaw} pitch={drag.pitch} />
             </div>
-            <div className="landing-sky" style={{ '--rot': document.documentElement.getAttribute('data-theme') === 'light' ? '0deg' : '180deg' } as CSSProperties}>
+            <div className="landing-sky">
               <span className="orb sun" />
               <span className="orb moon" />
             </div>

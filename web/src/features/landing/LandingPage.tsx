@@ -219,7 +219,7 @@ export function LandingPage() {
         ...current,
         lastX: event.clientX,
         lastY: event.clientY,
-        yaw: clamp(current.yaw - dx * 0.005, -0.62, 0.62),
+        yaw: current.yaw - dx * 0.006,
         pitch: clamp(current.pitch + dy * 0.004, -0.22, 0.36),
       }
     })

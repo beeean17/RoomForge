@@ -181,8 +181,7 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
 
       const entryProgress = smooth(clamp(progress / 0.36))
       const orbit = smooth(clamp((progress - 0.28) / 0.72))
-      const autoYaw = orbit * Math.PI * 2
-      const cameraYaw = autoYaw + yaw * 0.75
+      const cameraYaw = yaw
       const cameraPitch = lerp(-0.04, 0.04, entryProgress) + pitch * 0.55
       camera.position.lerpVectors(entryPosition, centerPosition, entryProgress)
 

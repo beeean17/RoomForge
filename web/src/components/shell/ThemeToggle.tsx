@@ -12,6 +12,7 @@ export function ThemeToggle() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.style.setProperty('--p', theme === 'dark' ? '1' : '0')
     localStorage.setItem('rf-theme', theme)
   }, [theme])
 

@@ -135,27 +135,27 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     gridMaterial.depthWrite = false
     room.add(floorGrid)
 
-    box(3.45, 0.04, 3.45, 0xbeb3a6, { x: 0.26, y: 0.036, z: -0.82, roughness: 1 })
-    box(3.32, 0.018, 3.32, 0xd1c8bb, { x: 0.26, y: 0.066, z: -0.82, roughness: 1 })
+    box(3.18, 0.04, 3.12, 0xbeb3a6, { x: 0.22, y: 0.036, z: -0.82, roughness: 1 })
+    box(3.05, 0.018, 3.0, 0xd1c8bb, { x: 0.22, y: 0.066, z: -0.82, roughness: 1 })
 
-    box(2.36, 1.04, 0.18, 0x303238, { x: 0, y: 0.78, z: back + 0.28, roughness: 0.86 })
+    box(2.02, 0.98, 0.16, 0x303238, { x: 0, y: 0.75, z: back + 0.28, roughness: 0.86 })
     for (let index = 0; index < 4; index += 1) {
-      box(0.018, 0.82, 0.03, 0x4b4d54, { x: -0.9 + index * 0.6, y: 0.9, z: back + 0.18 })
+      box(0.016, 0.76, 0.03, 0x4b4d54, { x: -0.72 + index * 0.48, y: 0.86, z: back + 0.18 })
     }
-    box(2.34, 0.34, 2.7, 0x25262b, { x: 0, y: 0.2, z: back + 1.45, roughness: 0.78 })
-    box(2.18, 0.28, 2.38, 0xe5ded7, { x: 0, y: 0.48, z: back + 1.48, roughness: 0.96 })
-    box(2.12, 0.26, 1.52, 0x34353a, { x: 0, y: 0.68, z: back + 1.82, roughness: 0.92 })
-    box(2.1, 0.22, 0.84, 0x8f8b84, { x: 0, y: 0.8, z: back + 2.45, roughness: 0.9 })
-    box(0.88, 0.2, 0.48, 0xded8d0, { x: -0.52, y: 0.78, z: back + 0.78, rz: -0.03, roughness: 0.98 })
-    box(0.88, 0.2, 0.48, 0xded8d0, { x: 0.52, y: 0.78, z: back + 0.78, rz: 0.03, roughness: 0.98 })
-    box(0.74, 0.2, 0.5, 0x4a4b50, { x: -0.46, y: 0.96, z: back + 1.04, rz: 0.04, roughness: 0.95 })
-    box(0.74, 0.2, 0.5, 0x4a4b50, { x: 0.46, y: 0.96, z: back + 1.04, rz: -0.04, roughness: 0.95 })
-    box(0.58, 0.18, 0.36, 0xe8e1d8, { x: 0, y: 1.08, z: back + 1.35, roughness: 0.98 })
+    box(1.92, 0.3, 2.24, 0x25262b, { x: 0, y: 0.18, z: back + 1.28, roughness: 0.78 })
+    box(1.78, 0.24, 2.02, 0xe5ded7, { x: 0, y: 0.43, z: back + 1.3, roughness: 0.96 })
+    box(1.76, 0.22, 1.26, 0x34353a, { x: 0, y: 0.62, z: back + 1.7, roughness: 0.92 })
+    box(1.7, 0.18, 0.66, 0x8f8b84, { x: 0, y: 0.74, z: back + 2.22, roughness: 0.9 })
+    box(0.68, 0.16, 0.4, 0xded8d0, { x: -0.38, y: 0.72, z: back + 0.76, rz: -0.03, roughness: 0.98 })
+    box(0.68, 0.16, 0.4, 0xded8d0, { x: 0.38, y: 0.72, z: back + 0.76, rz: 0.03, roughness: 0.98 })
+    box(0.58, 0.16, 0.42, 0x4a4b50, { x: -0.32, y: 0.88, z: back + 0.98, rz: 0.04, roughness: 0.95 })
+    box(0.58, 0.16, 0.42, 0x4a4b50, { x: 0.32, y: 0.88, z: back + 0.98, rz: -0.04, roughness: 0.95 })
+    box(0.44, 0.14, 0.28, 0xe8e1d8, { x: 0, y: 1.0, z: back + 1.25, roughness: 0.98 })
 
-    ;[-1.62, 1.62].forEach((x) => {
-      box(0.62, 0.5, 0.58, 0x252528, { x, y: 0.25, z: back + 0.72, roughness: 0.8 })
-      box(0.57, 0.04, 0.52, 0x171719, { x, y: 0.52, z: back + 0.72, roughness: 0.72 })
-      box(0.44, 0.018, 0.04, 0x686a70, { x, y: 0.38, z: back + 0.44, roughness: 0.5, metalness: 0.35 })
+    ;[-1.36, 1.36].forEach((x) => {
+      box(0.54, 0.46, 0.52, 0x252528, { x, y: 0.23, z: back + 0.72, roughness: 0.8 })
+      box(0.5, 0.04, 0.46, 0x171719, { x, y: 0.48, z: back + 0.72, roughness: 0.72 })
+      box(0.36, 0.016, 0.04, 0x686a70, { x, y: 0.35, z: back + 0.46, roughness: 0.5, metalness: 0.35 })
       cylinder(0.13, 0.13, 0.04, 0xf1f0e6, { x: x - 0.12, y: 0.63, z: back + 0.62, roughness: 0.58 }, 32)
       cylinder(0.06, 0.08, 0.32, 0x1a1a1d, { x: x - 0.12, y: 0.8, z: back + 0.62, roughness: 0.55 }, 24)
       cylinder(0.03, 0.03, 0.26, 0x3d3f28, { x: x + 0.18, y: 0.68, z: back + 0.82, roughness: 0.8 }, 10)

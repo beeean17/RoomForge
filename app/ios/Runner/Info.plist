@@ -24,6 +24,10 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>RoomForge uses the camera to capture guided room photos for reconstruction.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>RoomForge can read selected room photos if you choose to attach them to a capture session.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

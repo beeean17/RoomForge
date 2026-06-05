@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'src/api/backend_bindings.dart';
 import 'src/auth/auth_repository.dart';
@@ -222,6 +224,7 @@ class _MobileProjectShell extends StatefulWidget {
 }
 
 class _MobileProjectShellState extends State<_MobileProjectShell> {
+  final ImagePicker _imagePicker = ImagePicker();
   late Future<List<RoomProject>> _projectsFuture;
   RoomProject? _selectedProject;
   RoomDimensions? _dimensions;
@@ -336,6 +339,63 @@ class _MobileProjectShellState extends State<_MobileProjectShell> {
     }
   }
 
+  Future<void> _captureRole(GuidedCaptureRoleInstruction role) async {
+    final project = _selectedProject;
+    final session = _captureSnapshot?.session;
+    if (project == null || session == null) {
+      setState(
+        () => _status = 'Start guided capture before taking role photos.',
+      );
+      return;
+    }
+
+    setState(() => _status = 'Opening camera for ${role.label}...');
+    try {
+      final photo = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 88,
+        requestFullMetadata: false,
+      );
+      if (photo == null) {
+        if (!mounted) return;
+        setState(() => _status = 'Capture cancelled.');
+        return;
+      }
+
+      final bytes = await photo.readAsBytes();
+      final imageSize = await _decodeImageSize(bytes);
+      final image = await widget.projectApi.uploadCaptureImage(
+        projectId: project.id,
+        captureSessionId: session.id,
+        role: role.id,
+        filename: _captureFilename(role.id, photo.name),
+        contentType: _imageContentType(photo),
+        bytes: bytes,
+        widthPx: imageSize.width,
+        heightPx: imageSize.height,
+        captureOrder: _captureOrderForRole(role.id),
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(
+            () => _status =
+                'Uploading ${role.label}: ${(progress * 100).round()}%',
+          );
+        },
+      );
+      final snapshot = await widget.projectApi.loadLatestCaptureSession(
+        projectId: project.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _captureSnapshot = snapshot;
+        _status = '${role.label} uploaded as ${image.sourceImageId}.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _status = 'Capture upload failed: $error');
+    }
+  }
+
   Future<void> _signOut() async {
     await widget.bootstrap.authRepository.signOut();
   }
@@ -408,6 +468,7 @@ class _MobileProjectShellState extends State<_MobileProjectShell> {
                         captureSnapshot: _captureSnapshot,
                         onSaveDefaultDimensions: _saveDefaultDimensions,
                         onStartGuidedCapture: _startGuidedCapture,
+                        onCaptureRole: _captureRole,
                       ),
                     const SizedBox(height: 18),
                     _DesktopHandoffCard(project: project),
@@ -420,6 +481,55 @@ class _MobileProjectShellState extends State<_MobileProjectShell> {
       ),
     );
   }
+}
+
+Future<({int width, int height})> _decodeImageSize(List<int> bytes) async {
+  final codec = await ui.instantiateImageCodec(Uint8List.fromList(bytes));
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+  try {
+    return (width: image.width, height: image.height);
+  } finally {
+    image.dispose();
+  }
+}
+
+String _imageContentType(XFile file) {
+  final mimeType = file.mimeType;
+  if (mimeType != null && mimeType.startsWith('image/')) {
+    return mimeType;
+  }
+
+  final name = file.name.toLowerCase();
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+String _captureFilename(String role, String originalName) {
+  final extension = _extensionForName(originalName);
+  final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+  return '${role}_$timestamp$extension';
+}
+
+String _extensionForName(String name) {
+  final lower = name.toLowerCase();
+  if (lower.endsWith('.png')) return '.png';
+  if (lower.endsWith('.webp')) return '.webp';
+  if (lower.endsWith('.jpeg')) return '.jpeg';
+  return '.jpg';
+}
+
+int _captureOrderForRole(String role) {
+  const order = {
+    'overview': 0,
+    'front_wall': 1,
+    'right_wall': 2,
+    'back_wall': 3,
+    'left_wall': 4,
+    'extra': 5,
+  };
+  return order[role] ?? 99;
 }
 
 class _MobileHero extends StatelessWidget {
@@ -466,6 +576,7 @@ class _CaptureSection extends StatelessWidget {
     required this.captureSnapshot,
     required this.onSaveDefaultDimensions,
     required this.onStartGuidedCapture,
+    required this.onCaptureRole,
   });
 
   final RoomProject project;
@@ -473,6 +584,7 @@ class _CaptureSection extends StatelessWidget {
   final CaptureSessionSnapshot? captureSnapshot;
   final VoidCallback onSaveDefaultDimensions;
   final Future<void> Function(bool depthEnabled) onStartGuidedCapture;
+  final ValueChanged<GuidedCaptureRoleInstruction> onCaptureRole;
 
   @override
   Widget build(BuildContext context) {
@@ -516,15 +628,7 @@ class _CaptureSection extends StatelessWidget {
                   'Native camera and ARCore depth plugins will be attached in the next mobile phase.',
             ),
             onStart: () => unawaited(onStartGuidedCapture(false)),
-            onUploadRole: (_) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Native camera capture is not connected in this migration phase.',
-                  ),
-                ),
-              );
-            },
+            onUploadRole: onCaptureRole,
           ),
           if (dimensions == null) ...[
             const SizedBox(height: 12),

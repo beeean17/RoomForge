@@ -99,6 +99,7 @@ node_modules/
 dist/
 dist-ssr/
 .vite/
+*.tsbuildinfo
 .npm/
 .pnpm-store/
 npm-debug.log*

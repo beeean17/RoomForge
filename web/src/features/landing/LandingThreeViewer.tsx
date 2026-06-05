@@ -40,7 +40,7 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80)
     const cameraTarget = new THREE.Vector3()
-    const entryPosition = new THREE.Vector3(0, 1.48, 8.4)
+    const entryPosition = new THREE.Vector3(0, 1.42, 2.78)
     const centerPosition = new THREE.Vector3(0, 1.38, 0.7)
     const entryTarget = new THREE.Vector3(0, 1.08, -1.15)
     const orbitAnchor = new THREE.Vector3(0, 1.32, 0.7)
@@ -118,8 +118,11 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     plane(roomWidth, roomHeight, 0xd7d0c8, { z: back, y: roomHeight / 2 })
     plane(roomDepth, roomHeight, 0xc7c1bb, { ry: Math.PI / 2, x: -halfWidth, y: roomHeight / 2 })
     plane(roomDepth, roomHeight, 0xd4d0ca, { ry: -Math.PI / 2, x: halfWidth, y: roomHeight / 2 })
+    plane(roomWidth, roomHeight, 0xd0cac3, { z: front, y: roomHeight / 2 })
     box(roomWidth, 0.16, 0.12, 0x202124, { x: 0, y: 0.08, z: back + 0.03 })
+    box(roomWidth, 0.16, 0.12, 0x202124, { x: 0, y: 0.08, z: front - 0.03 })
     box(roomWidth, 0.12, 0.14, 0x202124, { x: 0, y: roomHeight - 0.06, z: back + 0.03 })
+    box(roomWidth, 0.12, 0.14, 0x202124, { x: 0, y: roomHeight - 0.06, z: front - 0.03 })
     box(0.12, 0.16, roomDepth, 0x202124, { x: -halfWidth + 0.04, y: 0.08, z: 0 })
     box(0.12, 0.16, roomDepth, 0x202124, { x: halfWidth - 0.04, y: 0.08, z: 0 })
 

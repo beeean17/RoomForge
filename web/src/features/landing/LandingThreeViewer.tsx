@@ -31,13 +31,21 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
       return undefined
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    renderer.setClearColor(0x080808, 1)
+    renderer.setClearColor(0x101114, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.35
 
     const scene = new THREE.Scene()
 
-    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 80)
-    const target = new THREE.Vector3(-0.12, 0.94, -2.29)
+    const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 80)
+    const cameraTarget = new THREE.Vector3()
+    const entryPosition = new THREE.Vector3(0, 1.35, 5.9)
+    const centerPosition = new THREE.Vector3(0, 1.34, 0.35)
+    const entryTarget = new THREE.Vector3(0, 1.05, -1.8)
+    const orbitAnchor = new THREE.Vector3(0, 1.28, 0.35)
+    const orbitTarget = new THREE.Vector3()
+    const lookDirection = new THREE.Vector3()
     const room = new THREE.Group()
     scene.add(room)
 
@@ -46,8 +54,9 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     const roomHeight = 2.8
     const halfWidth = roomWidth / 2
     const back = -roomDepth / 2
+    const front = roomDepth / 2
 
-    function material(color: number, roughness = 0.72, metalness = 0.04) {
+    function material(color: number, roughness = 0.68, metalness = 0.02) {
       return new THREE.MeshStandardMaterial({ color, roughness, metalness })
     }
 
@@ -80,17 +89,29 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
       return mesh
     }
 
-    plane(roomWidth, roomDepth, 0x353238, { rx: -Math.PI / 2, y: 0 })
-    plane(roomWidth, roomHeight, 0x202126, { z: back, y: roomHeight / 2 })
-    plane(roomDepth, roomHeight, 0x191b20, { ry: Math.PI / 2, x: -halfWidth, y: roomHeight / 2 })
-    plane(roomDepth, roomHeight, 0x23262b, { ry: -Math.PI / 2, x: halfWidth, y: roomHeight / 2 })
+    plane(roomWidth, roomDepth, 0x817971, { rx: -Math.PI / 2, y: 0 })
+    plane(roomWidth, roomHeight, 0x6e727a, { z: back, y: roomHeight / 2 })
+    plane(roomDepth, roomHeight, 0x777a80, { ry: Math.PI / 2, x: -halfWidth, y: roomHeight / 2 })
+    plane(roomDepth, roomHeight, 0x878a8f, { ry: -Math.PI / 2, x: halfWidth, y: roomHeight / 2 })
+    plane(0.82, roomHeight, 0x777a80, { x: -2.18, z: front, y: roomHeight / 2 })
+    plane(0.82, roomHeight, 0x85888f, { x: 2.18, z: front, y: roomHeight / 2 })
+    plane(3.55, 0.56, 0x7e8288, { z: front, y: roomHeight - 0.28 })
 
-    box(2.3, 0.55, 2.75, 0x2b2b32, { x: 0, y: 0.28, z: back + 1.25 })
-    box(2.3, 0.18, 0.38, 0x45454e, { x: 0, y: 0.76, z: back + 0.25 })
-    box(0.55, 0.46, 0.48, 0x24242a, { x: -1.55, y: 0.23, z: back + 0.52 })
-    box(0.55, 0.46, 0.48, 0x24242a, { x: 1.55, y: 0.23, z: back + 0.52 })
-    box(0.62, 0.78, 1.6, 0x292a30, { x: -halfWidth + 0.35, y: 0.39, z: -0.4 })
-    box(0.46, 1.65, 1.5, 0x1d1e24, { x: halfWidth - 0.3, y: 0.82, z: 1.0 })
+    const floorGrid = new THREE.GridHelper(roomDepth, 12, 0xd9dde3, 0xb8bdc5)
+    floorGrid.position.y = 0.014
+    floorGrid.scale.x = roomWidth / roomDepth
+    const gridMaterial = floorGrid.material as THREE.Material
+    gridMaterial.transparent = true
+    gridMaterial.opacity = 0.24
+    gridMaterial.depthWrite = false
+    room.add(floorGrid)
+
+    box(2.3, 0.55, 2.75, 0x383a42, { x: 0, y: 0.28, z: back + 1.25 })
+    box(2.3, 0.18, 0.38, 0x9a9ca4, { x: 0, y: 0.76, z: back + 0.25 })
+    box(0.55, 0.46, 0.48, 0x393b42, { x: -1.55, y: 0.23, z: back + 0.52 })
+    box(0.55, 0.46, 0.48, 0x393b42, { x: 1.55, y: 0.23, z: back + 0.52 })
+    box(0.62, 0.78, 1.6, 0x4d5058, { x: -halfWidth + 0.35, y: 0.39, z: -0.4 })
+    box(0.46, 1.65, 1.5, 0x3c3f46, { x: halfWidth - 0.3, y: 0.82, z: 1.0 })
     box(0.05, 1.6, 2.3, 0x111114, { x: halfWidth - 0.02, y: 1.5, z: -0.8 })
 
     const windowMesh = plane(2.1, 1.4, 0xe9f1f8, {
@@ -103,18 +124,20 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     windowMaterial.emissive = new THREE.Color(0xeaf2fb)
     windowMaterial.emissiveIntensity = 0.95
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x3a3a42, 0.55)
+    const ambient = new THREE.AmbientLight(0xffffff, 0.34)
+    scene.add(ambient)
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x6a5f54, 0.9)
     scene.add(hemi)
-    const sun = new THREE.DirectionalLight(0xfff4e2, 0.85)
+    const sun = new THREE.DirectionalLight(0xfff4e2, 1.25)
     sun.position.set(6, 4.5, -1)
     scene.add(sun)
-    const ceiling = new THREE.PointLight(0xffffff, 0.35, 12)
+    const ceiling = new THREE.PointLight(0xffffff, 0.82, 12)
     ceiling.position.set(0, 2.6, 0.4)
     scene.add(ceiling)
-    const lampLeft = new THREE.PointLight(0xffd49a, 0.5, 4)
+    const lampLeft = new THREE.PointLight(0xffd49a, 0.72, 4)
     lampLeft.position.set(-1.45, 0.85, back + 0.6)
     scene.add(lampLeft)
-    const lampRight = new THREE.PointLight(0xffd49a, 0.5, 4)
+    const lampRight = new THREE.PointLight(0xffd49a, 0.72, 4)
     lampRight.position.set(1.45, 0.85, back + 0.6)
     scene.add(lampRight)
 
@@ -145,26 +168,35 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
       const dark = document.documentElement.getAttribute('data-theme') !== 'light'
       const themeProgress = dark ? 1 : 0
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+      const smooth = (value: number) => value * value * (3 - 2 * value)
+      const clamp = (value: number) => Math.max(0, Math.min(1, value))
 
-      sun.intensity = lerp(0.95, 0.1, themeProgress)
-      sun.position.set(6, lerp(4.5, -3, themeProgress), -1)
-      hemi.intensity = lerp(0.58, 0.34, themeProgress)
-      ceiling.intensity = lerp(0.4, 0.22, themeProgress)
-      lampLeft.intensity = lampRight.intensity = lerp(0.4, 0.95, themeProgress)
-      windowMaterial.emissiveIntensity = lerp(0.95, 0.45, themeProgress)
+      ambient.intensity = lerp(0.48, 0.34, themeProgress)
+      sun.intensity = lerp(1.35, 0.56, themeProgress)
+      sun.position.set(6, lerp(4.5, -1.8, themeProgress), -1)
+      hemi.intensity = lerp(1.0, 0.72, themeProgress)
+      ceiling.intensity = lerp(0.92, 0.68, themeProgress)
+      lampLeft.intensity = lampRight.intensity = lerp(0.64, 1.08, themeProgress)
+      windowMaterial.emissiveIntensity = lerp(1.1, 0.62, themeProgress)
 
-      const baseRadius = 7.2
-      const radius = lerp(5.7, baseRadius, progress)
-      const cameraYaw = yaw * progress
-      const cameraPitch = -0.05 + pitch * progress
-      const cp = Math.cos(cameraPitch)
-      camera.position.set(
-        target.x + radius * Math.sin(cameraYaw) * cp,
-        target.y + radius * Math.sin(cameraPitch),
-        target.z + radius * Math.cos(cameraYaw) * cp,
+      const entryProgress = smooth(clamp(progress / 0.36))
+      const orbit = smooth(clamp((progress - 0.28) / 0.72))
+      const autoYaw = orbit * Math.PI * 2
+      const cameraYaw = autoYaw + yaw * 0.75
+      const cameraPitch = lerp(-0.04, 0.04, entryProgress) + pitch * 0.55
+      camera.position.lerpVectors(entryPosition, centerPosition, entryProgress)
+
+      lookDirection.set(
+        Math.sin(cameraYaw) * Math.cos(cameraPitch),
+        Math.sin(cameraPitch) * 0.74,
+        -Math.cos(cameraYaw) * Math.cos(cameraPitch),
       )
-      camera.lookAt(target)
-      room.rotation.y = lerp(-0.08, 0.02, progress)
+      orbitTarget.copy(orbitAnchor).add(lookDirection.multiplyScalar(3.1))
+      cameraTarget.lerpVectors(entryTarget, orbitTarget, orbit)
+      camera.lookAt(cameraTarget)
+      camera.fov = lerp(46, 64, entryProgress)
+      camera.updateProjectionMatrix()
+      room.rotation.y = lerp(-0.04, 0.02, entryProgress)
       renderer.render(scene, camera)
     }
 

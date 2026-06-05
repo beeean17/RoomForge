@@ -25,16 +25,16 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
 
     let renderer: THREE.WebGLRenderer
     try {
-      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true })
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: false, antialias: true })
     } catch {
       setIsWebGlUnavailable(true)
       return undefined
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.setClearColor(0x080808, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
 
     const scene = new THREE.Scene()
-    scene.background = null
 
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 80)
     const target = new THREE.Vector3(-0.12, 0.94, -2.29)
@@ -46,7 +46,6 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     const roomHeight = 2.8
     const halfWidth = roomWidth / 2
     const back = -roomDepth / 2
-    const front = roomDepth / 2
 
     function material(color: number, roughness = 0.72, metalness = 0.04) {
       return new THREE.MeshStandardMaterial({ color, roughness, metalness })
@@ -85,7 +84,6 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     plane(roomWidth, roomHeight, 0x202126, { z: back, y: roomHeight / 2 })
     plane(roomDepth, roomHeight, 0x191b20, { ry: Math.PI / 2, x: -halfWidth, y: roomHeight / 2 })
     plane(roomDepth, roomHeight, 0x23262b, { ry: -Math.PI / 2, x: halfWidth, y: roomHeight / 2 })
-    plane(roomWidth, roomHeight, 0x17191d, { z: front, y: roomHeight / 2, rz: Math.PI })
 
     box(2.3, 0.55, 2.75, 0x2b2b32, { x: 0, y: 0.28, z: back + 1.25 })
     box(2.3, 0.18, 0.38, 0x45454e, { x: 0, y: 0.76, z: back + 0.25 })

@@ -1,51 +1,143 @@
+import { ArrowRight, Check, Layers, MoreHorizontal, Pencil, Plus } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
 import { StatusPill } from '../../components/ui/StatusPill'
 import { demoProjectId, routes } from '../../lib/routes'
+import { getPipelineState, getProject, pipelineSteps } from './projectData'
 
 export function ProjectOverviewPage() {
   const projectId = useParams().projectId ?? demoProjectId
+  const project = getProject(projectId)
+  const pipelineState = getPipelineState(project, 'status')
 
   return (
-    <ProductShell active="overview">
-      <header className="page-head">
-        <div>
-          <p className="rf-eyebrow">Project hub</p>
-          <h1>거실 리노베이션</h1>
-          <p>소스 → 재구성 → 편집으로 이어지는 단일 프로젝트 허브입니다.</p>
-        </div>
-        <Link className="rf-btn rf-btn--primary ml-auto" to={routes.editor(projectId)}>
-          에디터 열기
-        </Link>
-      </header>
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1.7fr_1fr]">
-        <div className="rf-panel overflow-hidden">
-          <div className="relative aspect-video bg-[#080808]">
-            <img className="absolute inset-0 h-full w-full object-cover brightness-[0.78] saturate-[0.86]" src="/assets/room.png" alt="" />
-            <div className="absolute bottom-4 left-4 flex gap-2">
-              <Link className="rf-btn rf-btn--primary" to={routes.editor(projectId)}>
-                3D 에디터
-              </Link>
-              <Link className="rf-btn" to={routes.source(projectId)}>
-                소스 이미지
-              </Link>
-            </div>
+    <ProductShell active="overview" project={project}>
+      <header className="page-head project-head">
+        <div className="min-w-0">
+          <div className="project-title-row">
+            <h1>{project.name}</h1>
+            <button className="icon-button" type="button" title="이름 편집" aria-label="이름 편집">
+              <Pencil size={15} />
+            </button>
+          </div>
+          <div className="project-meta">
+            <StatusPill label={project.statusLabel} tone={project.tone} />
+            <span>이미지 {project.imageCount}</span>
+            {project.roomEstimate && <span>방 추정 {project.roomEstimate}</span>}
+            <span>{project.updatedAtLabel}</span>
           </div>
         </div>
-        <div className="grid gap-4">
-          <article className="route-card">
-            <StatusPill label="재구성 완료" tone="success" />
-            <h2 className="mt-4">다음 단계</h2>
-            <p>에디터에서 벽, 바닥, 개구부와 가구 배치를 다듬습니다.</p>
-          </article>
-          <article className="route-card">
-            <StatusPill label="이미지 18장" />
-            <h2 className="mt-4">소스 커버리지</h2>
-            <p>8개 기준 각도와 추가 디테일 사진이 프로젝트에 연결됩니다.</p>
-          </article>
+        <button className="icon-button ml-auto" type="button" aria-label="더보기">
+          <MoreHorizontal size={18} />
+        </button>
+      </header>
+
+      <section className="pipeline-card" aria-label="프로젝트 진행 단계">
+        <div className="pipeline-stepper">
+          {pipelineSteps.map((step, index) => {
+            const state = pipelineState[step.key]
+            return (
+              <span className="pipeline-item" key={step.key}>
+                <span className={`pipeline-node pipeline-node--${state}`}>
+                  {state === 'done' ? <Check size={13} /> : <span />}
+                </span>
+                <span>{step.label}</span>
+                {index < pipelineSteps.length - 1 && <i />}
+              </span>
+            )
+          })}
         </div>
       </section>
+
+      <section className="project-overview-grid">
+        <div className="project-main-column">
+          <article className="preview-card">
+            <div className="preview-media">
+              <img src="/assets/room.png" alt="" />
+              <StatusPill label="3D 재구성 프리뷰" tone="accent" />
+              <div className="preview-actions">
+                <Link className="rf-btn rf-btn--primary" to={routes.editor(project.id)}>
+                  <Layers size={15} />
+                  에디터 열기
+                </Link>
+                <Link className="rf-btn rf-btn--dark" to={routes.editor(project.id)}>
+                  2D 평면도
+                </Link>
+              </div>
+            </div>
+          </article>
+
+          <article className="next-step-card">
+            <p className="rf-eyebrow">다음 단계</p>
+            <div>
+              <h2>에디터에서 공간을 다듬으세요</h2>
+              <p>재구성된 벽·바닥·개구부를 직접 보정하고, 2D 평면도와 3D로 가구를 배치합니다.</p>
+            </div>
+            <Link className="rf-btn rf-btn--primary" to={routes.editor(project.id)}>
+              에디터 열기
+              <ArrowRight size={15} />
+            </Link>
+          </article>
+        </div>
+
+        <aside className="project-side-column">
+          <article className="summary-card">
+            <header>
+              <h2>소스 이미지</h2>
+              <span>{project.imageCount}장</span>
+              <Link to={routes.source(project.id)}>전체 보기</Link>
+            </header>
+            <div className="thumb-grid">
+              {Array.from({ length: 7 }, (_, index) => (
+                <span className="source-thumb" key={index} style={{ filter: `brightness(${0.62 + index * 0.06}) saturate(.86)` }} />
+              ))}
+              <Link className="source-thumb source-thumb--add" to={routes.source(project.id)} aria-label="소스 이미지 추가">
+                <Plus size={16} />
+              </Link>
+            </div>
+          </article>
+
+          <article className="summary-card">
+            <header>
+              <h2>재구성 상태</h2>
+              <Link to={routes.status(project.id)}>상세</Link>
+            </header>
+            <div className="status-summary-row">
+              <span className={`status-icon status-icon--${project.tone}`}>
+                <Check size={16} />
+              </span>
+              <span>
+                <strong>{project.status === 'succeeded' ? '완료됨' : project.statusLabel}</strong>
+                <small>{project.updatedAtLabel} · 약 4분 소요</small>
+              </span>
+            </div>
+            <dl className="metric-dl">
+              <dt>후보 면</dt><dd>12</dd>
+              <dt>개구부</dt><dd>문 1 · 창 2</dd>
+              <dt>스케일 기준</dt><dd>문 높이 2.04 m</dd>
+            </dl>
+          </article>
+        </aside>
+      </section>
+
+      {project.status === 'created' && (
+        <section className="empty-project-panel">
+          <span className="create-icon"><Plus size={24} /></span>
+          <div>
+            <h2>방을 재구성할 사진을 추가하세요</h2>
+            <p>사진을 업로드하거나 앱의 가이드 촬영으로 시작하면 자동으로 3D 재구성이 진행됩니다.</p>
+          </div>
+          <div className="empty-actions">
+            <Link className="rf-btn rf-btn--primary" to={routes.source(project.id)}>
+              사진 업로드
+            </Link>
+            <Link className="rf-btn" to={routes.source(project.id)}>
+              앱으로 촬영
+            </Link>
+          </div>
+        </section>
+      )}
     </ProductShell>
   )
 }

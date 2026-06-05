@@ -138,9 +138,9 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     box(3.18, 0.04, 3.12, 0xbeb3a6, { x: 0.22, y: 0.036, z: -0.82, roughness: 1 })
     box(3.05, 0.018, 3.0, 0xd1c8bb, { x: 0.22, y: 0.066, z: -0.82, roughness: 1 })
 
-    box(2.02, 0.98, 0.16, 0x303238, { x: 0, y: 0.75, z: back + 0.28, roughness: 0.86 })
+    box(1.98, 0.66, 0.09, 0x303238, { x: 0, y: 0.58, z: back + 0.24, roughness: 0.86 })
     for (let index = 0; index < 4; index += 1) {
-      box(0.016, 0.76, 0.03, 0x4b4d54, { x: -0.72 + index * 0.48, y: 0.86, z: back + 0.18 })
+      box(0.014, 0.5, 0.024, 0x4b4d54, { x: -0.72 + index * 0.48, y: 0.64, z: back + 0.16 })
     }
     box(1.92, 0.3, 2.24, 0x25262b, { x: 0, y: 0.18, z: back + 1.28, roughness: 0.78 })
     box(1.78, 0.24, 2.02, 0xe5ded7, { x: 0, y: 0.43, z: back + 1.3, roughness: 0.96 })
@@ -148,9 +148,9 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     box(1.7, 0.18, 0.66, 0x8f8b84, { x: 0, y: 0.74, z: back + 2.22, roughness: 0.9 })
     box(0.68, 0.16, 0.4, 0xded8d0, { x: -0.38, y: 0.72, z: back + 0.76, rz: -0.03, roughness: 0.98 })
     box(0.68, 0.16, 0.4, 0xded8d0, { x: 0.38, y: 0.72, z: back + 0.76, rz: 0.03, roughness: 0.98 })
-    box(0.58, 0.16, 0.42, 0x4a4b50, { x: -0.32, y: 0.88, z: back + 0.98, rz: 0.04, roughness: 0.95 })
-    box(0.58, 0.16, 0.42, 0x4a4b50, { x: 0.32, y: 0.88, z: back + 0.98, rz: -0.04, roughness: 0.95 })
-    box(0.44, 0.14, 0.28, 0xe8e1d8, { x: 0, y: 1.0, z: back + 1.25, roughness: 0.98 })
+    box(0.58, 0.12, 0.38, 0x4a4b50, { x: -0.32, y: 0.84, z: back + 0.98, rz: 0.04, roughness: 0.95 })
+    box(0.58, 0.12, 0.38, 0x4a4b50, { x: 0.32, y: 0.84, z: back + 0.98, rz: -0.04, roughness: 0.95 })
+    box(0.42, 0.1, 0.24, 0xe8e1d8, { x: 0, y: 0.94, z: back + 1.25, roughness: 0.98 })
 
     ;[-1.36, 1.36].forEach((x) => {
       box(0.54, 0.46, 0.52, 0x252528, { x, y: 0.23, z: back + 0.72, roughness: 0.8 })

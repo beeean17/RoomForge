@@ -2,12 +2,30 @@ import { AlertTriangle, ArrowRight, Check, RotateCcw, X } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
+import { StatePanel } from '../../components/ui/StatePanel'
 import { demoProjectId, routes } from '../../lib/routes'
-import { getProject, reconstructionSteps, type ReconstructionStep } from '../projects/projectData'
+import { reconstructionSteps, type ReconstructionStep } from '../projects/projectData'
+import { useProject } from '../projects/projectRepository'
 
 export function ReconstructionStatusPage() {
   const projectId = useParams().projectId ?? demoProjectId
-  const project = getProject(projectId)
+  const { project, status, error } = useProject(projectId)
+
+  if (!project && status === 'loading') {
+    return <StatePanel eyebrow="Reconstruction" title="재구성 상태를 불러오는 중입니다" body="최신 작업 상태와 실행 이력을 확인하고 있습니다." />
+  }
+
+  if (!project) {
+    return (
+      <StatePanel
+        eyebrow="Reconstruction"
+        title="프로젝트를 찾을 수 없습니다"
+        body={error ?? '요청한 프로젝트가 없거나 현재 계정에 접근 권한이 없습니다.'}
+        action={<Link className="rf-btn rf-btn--primary" to={routes.projects}>프로젝트 목록</Link>}
+      />
+    )
+  }
+
   const isComplete = project.status === 'succeeded'
 
   return (

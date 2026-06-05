@@ -2,14 +2,32 @@ import { Camera, Plus, RotateCcw, Smartphone, Trash2, Upload } from 'lucide-reac
 import { useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
+import { StatePanel } from '../../components/ui/StatePanel'
 import { StatusPill } from '../../components/ui/StatusPill'
 import { demoProjectId } from '../../lib/routes'
-import { getProject, sourceDirections, type SourceDirection } from '../projects/projectData'
+import { routes } from '../../lib/routes'
+import { sourceDirections, type SourceDirection } from '../projects/projectData'
+import { useProject } from '../projects/projectRepository'
 
 export function SourceImagesPage() {
   const projectId = useParams().projectId ?? demoProjectId
-  const project = getProject(projectId)
+  const { project, status, error } = useProject(projectId)
   const filledCount = sourceDirections.filter((direction) => direction.filled && direction.key !== 'ROOM').length
+
+  if (!project && status === 'loading') {
+    return <StatePanel eyebrow="Source" title="소스 이미지를 불러오는 중입니다" body="프로젝트 접근 권한과 업로드 상태를 확인하고 있습니다." />
+  }
+
+  if (!project) {
+    return (
+      <StatePanel
+        eyebrow="Source"
+        title="프로젝트를 찾을 수 없습니다"
+        body={error ?? '요청한 프로젝트가 없거나 현재 계정에 접근 권한이 없습니다.'}
+        action={<a className="rf-btn rf-btn--primary" href={routes.projects}>프로젝트 목록</a>}
+      />
+    )
+  }
 
   return (
     <ProductShell active="source" project={project}>

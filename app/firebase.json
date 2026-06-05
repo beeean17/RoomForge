@@ -7,7 +7,7 @@
         "rules": "storage.rules"
     },
     "hosting": {
-        "public": "build/web",
+        "public": "../web/dist",
         "ignore": [
             "firebase.json",
             "**/.*",
@@ -15,28 +15,56 @@
         ],
         "rewrites": [
             {
-                "source": "/app",
-                "destination": "/app/index.html"
+                "source": "/",
+                "destination": "/index.html"
             },
             {
-                "source": "/app/**",
-                "destination": "/app/index.html"
+                "source": "/login",
+                "destination": "/index.html"
             },
             {
-                "source": "/m/app",
-                "destination": "/app/index.html"
+                "source": "/projects",
+                "destination": "/index.html"
             },
             {
-                "source": "/m/app/**",
-                "destination": "/app/index.html"
+                "source": "/projects/**",
+                "destination": "/index.html"
             },
             {
                 "source": "/admin",
-                "destination": "/app/index.html"
+                "destination": "/index.html"
             },
             {
                 "source": "/admin/**",
-                "destination": "/app/index.html"
+                "destination": "/index.html"
+            },
+            {
+                "source": "/legacy",
+                "destination": "/index.html"
+            },
+            {
+                "source": "/legacy/**",
+                "destination": "/index.html"
+            },
+            {
+                "source": "/app",
+                "destination": "/index.html"
+            },
+            {
+                "source": "/app/**",
+                "destination": "/index.html"
+            },
+            {
+                "source": "/m/app",
+                "destination": "/index.html"
+            },
+            {
+                "source": "/m/app/**",
+                "destination": "/index.html"
+            },
+            {
+                "source": "**",
+                "destination": "/index.html"
             }
         ]
     },

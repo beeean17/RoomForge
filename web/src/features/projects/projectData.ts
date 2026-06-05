@@ -2,7 +2,16 @@ import { demoProjectId } from '../../lib/routes'
 
 export type ProjectTone = 'success' | 'accent' | 'warning' | 'danger' | 'muted'
 
-export type ProjectStatus = 'created' | 'processing' | 'review_required' | 'succeeded' | 'failed'
+export type ProjectStatus =
+  | 'created'
+  | 'uploading'
+  | 'processing'
+  | 'review_required'
+  | 'succeeded'
+  | 'failed'
+  | 'timeout'
+  | 'cancelled'
+  | 'retrying'
 
 export type WorkspaceProject = {
   id: string
@@ -98,13 +107,15 @@ export const demoProjects: WorkspaceProject[] = [
   },
 ]
 
-export const projectFilters = [
-  { key: 'all', label: '전체', count: 6 },
-  { key: 'active', label: '진행 중', count: 2 },
-  { key: 'review', label: '검토 대기', count: 1 },
-  { key: 'done', label: '완료', count: 2 },
-  { key: 'archived', label: '보관', count: 0 },
+export const projectFilterLabels = [
+  { key: 'all', label: '전체' },
+  { key: 'active', label: '진행 중' },
+  { key: 'review', label: '검토 대기' },
+  { key: 'done', label: '완료' },
+  { key: 'archived', label: '보관' },
 ] as const
+
+export type ProjectFilterKey = (typeof projectFilterLabels)[number]['key']
 
 export const pipelineSteps = [
   { key: 'source', label: '소스' },
@@ -137,12 +148,56 @@ export function getProject(projectId: string | undefined) {
   return demoProjects.find((project) => project.id === projectId) ?? demoProjects[0]
 }
 
+export function getProjectFilters(projects: WorkspaceProject[]) {
+  return projectFilterLabels.map((filter) => {
+    const count = projects.filter((project) => {
+      if (filter.key === 'all') return true
+      if (filter.key === 'active') return ['uploading', 'processing', 'retrying'].includes(project.status)
+      if (filter.key === 'review') return project.status === 'review_required'
+      if (filter.key === 'done') return project.status === 'succeeded'
+      return false
+    }).length
+    return { ...filter, count }
+  })
+}
+
 export function getPipelineState(project: WorkspaceProject, current: 'source' | 'status' | 'editor') {
   if (project.status === 'succeeded') {
     return { source: 'done', status: 'done', editor: current === 'editor' ? 'active' : 'pending' } as const
   }
-  if (project.status === 'processing' || project.status === 'failed' || project.status === 'review_required') {
+  if (
+    project.status === 'processing' ||
+    project.status === 'failed' ||
+    project.status === 'review_required' ||
+    project.status === 'timeout' ||
+    project.status === 'cancelled' ||
+    project.status === 'retrying' ||
+    project.status === 'uploading'
+  ) {
     return { source: 'done', status: current === 'status' ? 'active' : 'done', editor: 'pending' } as const
   }
   return { source: current === 'source' ? 'active' : 'pending', status: 'pending', editor: 'pending' } as const
+}
+
+export function projectToneForStatus(status: ProjectStatus): ProjectTone {
+  if (status === 'succeeded') return 'success'
+  if (status === 'processing' || status === 'uploading' || status === 'retrying') return 'accent'
+  if (status === 'review_required') return 'warning'
+  if (status === 'failed' || status === 'timeout' || status === 'cancelled') return 'danger'
+  return 'muted'
+}
+
+export function projectLabelForStatus(status: ProjectStatus) {
+  const labels: Record<ProjectStatus, string> = {
+    created: '촬영 필요',
+    uploading: '업로드 중',
+    processing: '재구성 중',
+    review_required: 'Needs review',
+    succeeded: '3D 완료',
+    failed: '실패',
+    timeout: '시간 초과',
+    cancelled: '취소됨',
+    retrying: '재시도 중',
+  }
+  return labels[status]
 }

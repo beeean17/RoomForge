@@ -27,9 +27,11 @@ import { Link, useParams } from 'react-router-dom'
 
 import { Brand } from '../../components/shell/Brand'
 import { ThemeToggle } from '../../components/shell/ThemeToggle'
+import { StatePanel } from '../../components/ui/StatePanel'
 import { StatusPill } from '../../components/ui/StatusPill'
 import { demoProjectId, routes } from '../../lib/routes'
-import { getProject, pipelineSteps } from '../projects/projectData'
+import { pipelineSteps } from '../projects/projectData'
+import { useProject } from '../projects/projectRepository'
 
 const tools = [
   { id: 'select', label: '선택', icon: MousePointer2 },
@@ -55,10 +57,25 @@ const swatches = ['#2a2a30', '#6b6f78', '#b9bac2', '#7a5b46', '#3f6b46']
 
 export function EditorPage() {
   const projectId = useParams().projectId ?? demoProjectId
-  const project = getProject(projectId)
+  const { project, status, error } = useProject(projectId)
   const [activeTool, setActiveTool] = useState<(typeof tools)[number]['id']>('select')
   const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d')
   const [material, setMaterial] = useState(swatches[0])
+
+  if (!project && status === 'loading') {
+    return <StatePanel eyebrow="Editor" title="에디터 상태를 불러오는 중입니다" body="프로젝트 소유권과 저장된 편집 상태를 확인하고 있습니다." />
+  }
+
+  if (!project) {
+    return (
+      <StatePanel
+        eyebrow="Editor"
+        title="프로젝트를 찾을 수 없습니다"
+        body={error ?? '요청한 프로젝트가 없거나 현재 계정에 접근 권한이 없습니다.'}
+        action={<Link className="rf-btn rf-btn--primary" to={routes.projects}>프로젝트 목록</Link>}
+      />
+    )
+  }
 
   return (
     <main className="editor-page" data-project-id={project.id}>

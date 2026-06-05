@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Brand } from '../../components/shell/Brand'
 import { ThemeToggle } from '../../components/shell/ThemeToggle'
@@ -9,14 +9,16 @@ import { useAuth } from './AuthProvider'
 export function LoginPage() {
   const auth = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [isSigningIn, setIsSigningIn] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
+  const next = searchParams.get('next')
 
   useEffect(() => {
     if (auth.status === 'signed-in') {
-      navigate(routes.projects, { replace: true })
+      navigate(next && next.startsWith('/') ? next : routes.projects, { replace: true })
     }
-  }, [auth.status, navigate])
+  }, [auth.status, navigate, next])
 
   async function handleGoogleSignIn() {
     setIsSigningIn(true)

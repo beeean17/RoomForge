@@ -5,10 +5,23 @@ import { Link } from 'react-router-dom'
 import { ProductShell } from '../../components/shell/ProductShell'
 import { StatusPill } from '../../components/ui/StatusPill'
 import { routes } from '../../lib/routes'
-import { demoProjects, projectFilters, type WorkspaceProject } from './projectData'
+import { demoProjectId } from '../../lib/routes'
+import { getProjectFilters, type ProjectFilterKey, type WorkspaceProject } from './projectData'
+import { useProjects } from './projectRepository'
 
 export function ProjectsPage() {
-  const [activeFilter, setActiveFilter] = useState<(typeof projectFilters)[number]['key']>('all')
+  const projectState = useProjects()
+  const projects = projectState.projects
+  const filters = getProjectFilters(projects)
+  const [activeFilter, setActiveFilter] = useState<ProjectFilterKey>('all')
+  const visibleProjects = projects.filter((project) => {
+    if (activeFilter === 'all') return true
+    if (activeFilter === 'active') return ['uploading', 'processing', 'retrying'].includes(project.status)
+    if (activeFilter === 'review') return project.status === 'review_required'
+    if (activeFilter === 'done') return project.status === 'succeeded'
+    return false
+  })
+  const firstProjectId = projects[0]?.id ?? demoProjectId
 
   return (
     <ProductShell active="projects">
@@ -30,8 +43,22 @@ export function ProjectsPage() {
         </div>
       </header>
 
+      {projectState.status === 'error' && (
+        <section className="data-notice data-notice--danger">
+          <strong>프로젝트 데이터를 불러오지 못했습니다</strong>
+          <span>{projectState.error}</span>
+        </section>
+      )}
+
+      {projectState.source === 'demo' && (
+        <section className="data-notice">
+          <strong>Demo mode</strong>
+          <span>Firebase web config가 없어서 샘플 프로젝트로 화면을 확인합니다.</span>
+        </section>
+      )}
+
       <div className="filter-row" role="group" aria-label="프로젝트 필터">
-        {projectFilters.map((filter) => (
+        {filters.map((filter) => (
           <button
             className={`filter-chip ${activeFilter === filter.key ? 'is-active' : ''}`}
             key={filter.key}
@@ -45,13 +72,13 @@ export function ProjectsPage() {
       </div>
 
       <section className="project-grid" aria-label="프로젝트 목록">
-        <Link className="create-project-card" to={routes.source(demoProjects[0].id)}>
+        <Link className="create-project-card" to={routes.source(firstProjectId)}>
           <span className="create-icon"><Plus size={22} /></span>
           <strong>새 프로젝트</strong>
           <span>사진 업로드 또는 앱 가이드 촬영으로 방을 재구성하세요.</span>
         </Link>
 
-        {demoProjects.map((project) => (
+        {visibleProjects.map((project) => (
           <ProjectCard key={project.id} project={project} />
         ))}
       </section>

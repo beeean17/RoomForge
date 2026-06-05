@@ -1,4 +1,4 @@
-import { Activity, Archive, ChevronDown, Folder, Images, Layers, Search, Smartphone, Users } from 'lucide-react'
+import { Activity, Archive, ChevronDown, Folder, Images, Layers, RefreshCw, Ruler, Search, Smartphone, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 import { Brand } from './Brand'
@@ -8,7 +8,7 @@ import { useAuth } from '../../features/auth/AuthProvider'
 import type { WorkspaceProject } from '../../features/projects/projectData'
 
 type ProductShellProps = {
-  active?: 'projects' | 'overview' | 'source' | 'status' | 'editor' | 'admin'
+  active?: 'projects' | 'overview' | 'room' | 'source' | 'status' | 'editor' | 'recovery' | 'admin'
   project?: WorkspaceProject
   children: React.ReactNode
 }
@@ -23,9 +23,11 @@ export function ProductShell({ active = 'projects', project, children }: Product
   const projectId = project?.id ?? demoProjectId
   const projectLinks = [
     { key: 'overview', label: '개요', to: routes.project(projectId), icon: Folder, badge: undefined, pulse: false },
+    { key: 'room', label: '방 치수', to: routes.room(projectId), icon: Ruler, badge: undefined, pulse: false },
     { key: 'source', label: '소스 이미지', to: routes.source(projectId), icon: Images, badge: project?.imageCount ? String(project.imageCount) : undefined, pulse: false },
     { key: 'status', label: '재구성 상태', to: routes.status(projectId), icon: Activity, badge: undefined, pulse: project?.status === 'processing' },
     { key: 'editor', label: '에디터', to: routes.editor(projectId), icon: Layers, badge: undefined, pulse: true },
+    { key: 'recovery', label: '복구', to: routes.recovery(projectId), icon: RefreshCw, badge: undefined, pulse: false },
   ] as const
 
   return (
@@ -97,7 +99,7 @@ export function ProductShell({ active = 'projects', project, children }: Product
           <nav className="sidebar-nav" aria-label="현재 프로젝트">
             <p className="nav-grouptitle">촬영 · 재구성</p>
             {projectLinks.map((link) => (
-              link.key !== 'editor' ? (
+              link.key !== 'editor' && link.key !== 'recovery' ? (
                 <NavLink
                   className={() => `nav-link ${active === link.key ? 'is-active' : ''}`}
                   key={link.key}
@@ -112,7 +114,7 @@ export function ProductShell({ active = 'projects', project, children }: Product
             ))}
             <p className="nav-grouptitle">편집</p>
             {projectLinks.map((link) => (
-              link.key === 'editor' ? (
+              link.key === 'editor' || link.key === 'recovery' ? (
                 <NavLink
                   className={() => `nav-link ${active === link.key ? 'is-active' : ''}`}
                   key={link.key}
@@ -120,7 +122,7 @@ export function ProductShell({ active = 'projects', project, children }: Product
                 >
                   <link.icon size={16} />
                   {link.label}
-                  <span className="nav-dot is-pulsing" />
+                  {link.key === 'editor' && <span className="nav-dot is-pulsing" />}
                 </NavLink>
               ) : null
             ))}

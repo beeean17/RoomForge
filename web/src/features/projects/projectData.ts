@@ -20,6 +20,7 @@ export type WorkspaceProject = {
   statusLabel: string
   tone: ProjectTone
   imageCount: number
+  latestSourceImageId?: string
   updatedAtLabel: string
   roomEstimate?: string
   progress?: number
@@ -49,6 +50,7 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: '3D 완료',
     tone: 'success',
     imageCount: 24,
+    latestSourceImageId: 'demo-source-image',
     updatedAtLabel: '2일 전 수정',
     roomEstimate: '5.2 x 6.0 m',
     progress: 100,
@@ -62,6 +64,7 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: '재구성 중 62%',
     tone: 'accent',
     imageCount: 18,
+    latestSourceImageId: 'demo-bedroom-source-image',
     updatedAtLabel: '방금 전 업데이트',
     roomEstimate: '4.8 x 5.4 m',
     progress: 62,
@@ -75,6 +78,7 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: 'Needs review',
     tone: 'warning',
     imageCount: 16,
+    latestSourceImageId: 'demo-meeting-room-source-image',
     updatedAtLabel: '1일 전',
     roomEstimate: '7.1 x 4.6 m',
     progress: 86,
@@ -99,6 +103,7 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: '3D 완료',
     tone: 'success',
     imageCount: 31,
+    latestSourceImageId: 'demo-balcony-source-image',
     updatedAtLabel: '5일 전 수정',
     roomEstimate: '6.4 x 3.2 m',
     progress: 100,

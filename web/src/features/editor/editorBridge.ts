@@ -15,6 +15,37 @@ type InitializeMessageOptions = {
   project: WorkspaceProject
   requestId: string
   route: string
+  source?: EditorSourceImageBridgePayload
+}
+
+export type EditorSourceImageBridgePayload = {
+  sourceImage?: {
+    sourceImageId: string
+    dataUrl: string
+    widthPx?: number
+    heightPx?: number
+    contentType?: string
+  }
+  captureSession?: {
+    captureSessionId: string
+    projectId?: string
+    roomDimensionsId?: string
+    captureMethod?: string
+    depthEnabled: boolean
+    availableRoles: string[]
+    images: Array<{
+      captureImageId: string
+      captureSessionId: string
+      sourceImageId: string
+      role: string
+      storagePath?: string
+      contentType?: string
+      widthPx?: number
+      heightPx?: number
+      captureOrder?: number
+      guidanceState?: string
+    }>
+  }
 }
 
 export function editorFrameSrc(projectId: string): string {
@@ -34,6 +65,7 @@ export function createEditorInitializeMessage({
   project,
   requestId,
   route,
+  source,
 }: InitializeMessageOptions): EditorBridgeMessage {
   return {
     type: 'roomforge.scene.initialize',
@@ -57,6 +89,8 @@ export function createEditorInitializeMessage({
         modelAssetsPresent: false,
         scoreThreshold: 0.45,
       },
+      ...(source?.sourceImage ? { sourceImage: source.sourceImage } : {}),
+      ...(source?.captureSession ? { captureSession: source.captureSession } : {}),
       scene: {
         sceneId: `${project.id}-editor-scene`,
         coordinateSpace: 'meters',
@@ -84,6 +118,8 @@ export function createEditorInitializeMessage({
         placedObjects: [],
         confirmedObjects: [],
         structuralFixtures: [],
+        ...(source?.sourceImage ? { sourceImage: source.sourceImage } : {}),
+        ...(source?.captureSession ? { captureSession: source.captureSession } : {}),
       },
     },
   }

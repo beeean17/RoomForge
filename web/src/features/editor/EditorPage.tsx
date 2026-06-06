@@ -22,8 +22,8 @@ import {
   editorFrameOrigin,
   editorFrameSrc,
   isEditorBridgeMessage,
-  type EditorBridgeMessage,
 } from './editorBridge'
+import { useEditorSourceImagePayload } from './editorSourceImages'
 
 type BridgeState = 'loading' | 'ready' | 'initializing' | 'initialized' | 'error'
 
@@ -38,27 +38,46 @@ export function EditorPage() {
   const location = useLocation()
   const { project, status, error } = useProject(projectId)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const lastInitializeKeyRef = useRef<string | null>(null)
   const [bridgeState, setBridgeState] = useState<BridgeState>('loading')
+  const [frameLoaded, setFrameLoaded] = useState(false)
   const [frameKey, setFrameKey] = useState(0)
   const [events, setEvents] = useState<BridgeEventRecord[]>([])
+  const sourceImageState = useEditorSourceImagePayload(project)
 
   const frameSrc = useMemo(() => editorFrameSrc(projectId), [projectId, frameKey])
   const frameOrigin = useMemo(() => editorFrameOrigin(frameSrc), [frameSrc])
 
-  const initializeEditor = () => {
+  useEffect(() => {
     if (!project || !iframeRef.current?.contentWindow) {
       return
     }
+
+    if (!frameLoaded || sourceImageState.status === 'loading') {
+      return
+    }
+
+    const initializeKey = [
+      frameKey,
+      project.id,
+      sourceImageState.status,
+      sourceImageState.sourceImageId ?? 'no-source-image',
+    ].join(':')
+    if (lastInitializeKeyRef.current === initializeKey) {
+      return
+    }
+    lastInitializeKeyRef.current = initializeKey
 
     const message = createEditorInitializeMessage({
       project,
       requestId: `react-editor-init-${project.id}-${Date.now()}`,
       route: `${location.pathname}${location.search}`,
+      source: sourceImageState.bridgePayload,
     })
 
     setBridgeState('initializing')
     iframeRef.current.contentWindow.postMessage(message, frameOrigin)
-  }
+  }, [frameKey, frameLoaded, frameOrigin, location.pathname, location.search, project, sourceImageState])
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>) => {
@@ -168,6 +187,8 @@ export function EditorPage() {
                 type="button"
                 onClick={() => {
                   setBridgeState('loading')
+                  setFrameLoaded(false)
+                  lastInitializeKeyRef.current = null
                   setFrameKey((key) => key + 1)
                   setEvents([])
                 }}
@@ -198,7 +219,7 @@ export function EditorPage() {
               allow="clipboard-write; fullscreen"
               onLoad={() => {
                 setBridgeState('ready')
-                initializeEditor()
+                setFrameLoaded(true)
               }}
             />
           </div>
@@ -222,6 +243,10 @@ export function EditorPage() {
               <div>
                 <dt>메시지</dt>
                 <dd>roomforge.scene.initialize</dd>
+              </div>
+              <div>
+                <dt>소스 이미지</dt>
+                <dd>{sourceImageStatusLabel(sourceImageState)}</dd>
               </div>
             </dl>
           </section>
@@ -266,4 +291,11 @@ function bridgeStateTone(state: BridgeState) {
   if (state === 'error') return 'danger'
   if (state === 'loading' || state === 'initializing') return 'accent'
   return 'warning'
+}
+
+function sourceImageStatusLabel(state: ReturnType<typeof useEditorSourceImagePayload>) {
+  if (state.status === 'ready') return `${state.sourceImageId} loaded`
+  if (state.status === 'loading') return 'Loading private source image'
+  if (state.status === 'error') return state.error ?? 'Source image load failed'
+  return 'No source image bytes available'
 }

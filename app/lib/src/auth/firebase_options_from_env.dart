@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 
 class FirebaseOptionsFromEnv {
   static const apiKey = String.fromEnvironment('ROOMFORGE_FIREBASE_API_KEY');
@@ -18,6 +19,9 @@ class FirebaseOptionsFromEnv {
   static const useAuthEmulator = bool.fromEnvironment(
     'ROOMFORGE_USE_FIREBASE_EMULATOR',
   );
+  static const emulatorHost = String.fromEnvironment(
+    'ROOMFORGE_FIREBASE_EMULATOR_HOST',
+  );
 
   static bool get isConfigured {
     return apiKey.isNotEmpty &&
@@ -36,5 +40,17 @@ class FirebaseOptionsFromEnv {
       authDomain: authDomain,
       storageBucket: storageBucket,
     );
+  }
+
+  static String get resolvedEmulatorHost {
+    if (emulatorHost.isNotEmpty) {
+      return emulatorHost;
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return '10.0.2.2';
+    }
+
+    return 'localhost';
   }
 }

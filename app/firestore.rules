@@ -452,9 +452,13 @@ service cloud.firestore {
       return role in [
         'overview',
         'front_wall',
+        'front_right_corner',
         'right_wall',
+        'back_right_corner',
         'back_wall',
+        'back_left_corner',
         'left_wall',
+        'front_left_corner',
         'extra'
       ];
     }

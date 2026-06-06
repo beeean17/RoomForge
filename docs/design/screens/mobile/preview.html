@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>RoomForge — 3D 미리보기</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <style>
+    :root { --ink:#f6f7f9; --muted:rgba(246,247,249,.64); --dim:rgba(246,247,249,.42); --accent:#8fb4ff; --line:rgba(214,226,236,.14); --surface:rgba(255,255,255,.06); }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body { height:100%; }
+    body { margin:0; font-family:var(--rf-sans); color:var(--ink); background:#0a0b0d; overflow:hidden; max-width:480px; margin-inline:auto; }
+    .stage { position:fixed; inset:0; max-width:480px; margin-inline:auto; background:#0a0b0d; }
+    canvas { display:block; width:100%; height:100%; touch-action:none; }
+    .top { position:absolute; top:0; left:0; right:0; padding:calc(env(safe-area-inset-top) + 12px) 14px 12px; display:flex; align-items:center; gap:10px; background:linear-gradient(180deg, rgba(5,6,8,.6), transparent); }
+    .ic { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; color:#fff; background:rgba(8,10,14,.5); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.14); text-decoration:none; }
+    .ic svg { width:19px; height:19px; }
+    .top .ttl { flex:1; text-align:center; line-height:1.15; }
+    .top .ttl b { display:block; font-size:14px; font-weight:800; } .top .ttl span { display:block; font-size:11px; color:var(--dim); font-weight:700; }
+    .hint { position:absolute; left:50%; top:18%; transform:translateX(-50%); display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border-radius:999px; font-size:12px; font-weight:800; color:rgba(255,255,255,.86); background:rgba(8,10,14,.5); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.14); transition:opacity .4s; }
+    .chips { position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom) + 92px); display:flex; justify-content:center; gap:8px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 14px; border-radius:999px; font-size:13px; font-weight:800; color:#fff; background:rgba(8,10,14,.5); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.16); }
+    .chip svg { width:15px; height:15px; }
+    .actionbar { position:absolute; left:0; right:0; bottom:0; display:flex; gap:10px; padding:12px 16px calc(env(safe-area-inset-bottom) + 14px); background:linear-gradient(0deg, rgba(5,6,8,.78), transparent); }
+    .btn { flex:1; height:50px; border-radius:14px; border:1px solid rgba(255,255,255,.16); background:rgba(8,10,14,.5); backdrop-filter:blur(8px); color:#fff; font:inherit; font-weight:800; font-size:15px; display:inline-flex; align-items:center; justify-content:center; gap:8px; text-decoration:none; }
+    .btn svg { width:18px; height:18px; }
+    .btn.primary { border:0; color:#050505; background:var(--rf-grad-primary); }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+    <div class="top">
+      <a class="ic" href="project.html" aria-label="뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></a>
+      <div class="ttl"><b>거실 리노베이션</b><span>3D 미리보기</span></div>
+      <a class="ic" href="#" aria-label="공유"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></a>
+    </div>
+    <div class="hint" id="hint"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 7 3 12l5 5M16 7l5 5-5 5"/></svg> 드래그하여 둘러보기</div>
+    <div class="chips">
+      <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 3v18M3 9h18"/></svg>평면도</span>
+      <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 3v6h6"/></svg>시점 초기화</span>
+    </div>
+    <div class="actionbar">
+      <a class="btn" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>데스크탑 링크</a>
+      <a class="btn primary" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>데스크탑에서 편집</a>
+    </div>
+  </div>
+
+  <script src="../../assets/vendor/three.min.js"></script>
+  <script>
+  (function () {
+    var stage = document.getElementById('stage'), canvas = document.getElementById('c'), hint = document.getElementById('hint');
+    var renderer, scene, camera, has3D = false, R0 = 8.2, P0 = 0.14, yaw = 0, pitch = 0, need = true;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.setClearColor(0x0a0b0d, 1);
+      scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(46, 1, 0.1, 100);
+      function box(w,h,d,c,o){o=o||{};var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:c,roughness:o.rough!=null?o.rough:.85,metalness:o.metal||0,emissive:o.emissive!=null?o.emissive:0,emissiveIntensity:o.emi!=null?o.emi:1}));m.position.set(o.x||0,o.y||0,o.z||0);if(o.ry)m.rotation.y=o.ry;scene.add(m);return m;}
+      function plane(w,h,c,o){o=o||{};var m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({color:c,roughness:o.rough!=null?o.rough:.9,metalness:0,side:THREE.DoubleSide,emissive:o.emissive!=null?o.emissive:0,emissiveIntensity:o.emi!=null?o.emi:1}));m.position.set(o.x||0,o.y||0,o.z||0);if(o.rx)m.rotation.x=o.rx;if(o.ry)m.rotation.y=o.ry;scene.add(m);return m;}
+      var HW=2.6,BK=-3.0,HT=2.8;
+      plane(5.2,6.0,0xcdbca0,{rx:-Math.PI/2,y:0,z:0,rough:.95}); plane(2.6,1.7,0x9a9aa0,{rx:-Math.PI/2,y:.01,z:.4,rough:1});
+      plane(5.2,HT,0xcfd0d4,{y:HT/2,z:BK}); plane(6.0,HT,0xeef0f3,{ry:Math.PI/2,x:-HW,y:HT/2}); plane(6.0,HT,0xe7e8ec,{ry:-Math.PI/2,x:HW,y:HT/2}); plane(5.2,6.0,0xf2f3f5,{rx:Math.PI/2,y:HT,z:0,rough:1});
+      box(1.5,.85,.05,0x111114,{y:1.85,z:BK+.05}); plane(1.35,.72,0x2b3340,{y:1.85,z:BK+.08,emissive:0x2b3340,emi:.25}); box(2.4,.04,.12,0xffffff,{y:HT-.02,z:.2,emissive:0xffffff,emi:.8});
+      box(2.30,.30,2.75,0x2a2a30,{y:.15,z:-1.40}); box(2.18,.24,2.55,0x35353c,{y:.42,z:-1.48}); box(2.20,.12,1.45,0x232328,{y:.55,z:-.95}); box(2.34,1.15,.14,0x2d2d33,{y:.74,z:BK+.12});
+      box(.74,.20,.44,0xc9cad0,{y:.60,z:-2.45,x:-.5}); box(.74,.20,.44,0xb9bac2,{y:.60,z:-2.45,x:.5});
+      [[-1.45],[1.45]].forEach(function(n){box(.5,.46,.42,0x1e1e23,{x:n[0],y:.23,z:BK+.55}); box(.26,.18,.26,0xfff3d6,{x:n[0],y:.80,z:BK+.55,emissive:0xffcf80,emi:.6});});
+      var DX=-2.18; box(.62,.05,1.7,0x26262b,{x:DX,y:.74,z:-.9}); box(.42,.30,.04,0x101013,{x:DX+.02,y:1.06,z:-1.5,ry:Math.PI/2}); plane(.40,.26,0x16263f,{x:DX+.05,y:1.06,z:-1.5,ry:-Math.PI/2,emissive:0x1d3a63,emi:.7}); box(.46,.06,.46,0x1a1a1f,{x:DX+.45,y:.48,z:-.45});
+      box(.5,.8,1.7,0x161619,{x:HW-.28,y:.4,z:.7}); box(.18,.30,.18,0x3f6b46,{x:HW-.34,y:1.18,z:.2,emissive:0x244a2c,emi:.3});
+      box(.05,2.1,1.0,0x121214,{x:-HW+.04,y:1.05,z:2.0}); box(.05,1.6,2.3,0x111114,{x:HW-.02,y:1.5,z:-.8}); plane(2.1,1.4,0xe9f1f8,{ry:-Math.PI/2,x:HW-.06,y:1.5,z:-.8,emissive:0xeaf2fb,emi:.95});
+      scene.add(new THREE.HemisphereLight(0xffffff,0x3a3a42,.6)); var sun=new THREE.DirectionalLight(0xfff4e2,.9); sun.position.set(6,4.5,-1); scene.add(sun); var ceil=new THREE.PointLight(0xffffff,.4,12); ceil.position.set(0,2.6,.4); scene.add(ceil);
+      var target=new THREE.Vector3(-0.1,1.0,-1.2);
+      function cam(){var cp=Math.cos(P0+pitch),sp=Math.sin(P0+pitch),sy=Math.sin(yaw),cy=Math.cos(yaw);camera.position.set(target.x+R0*sy*cp,target.y+R0*sp,target.z+R0*cy*cp);camera.lookAt(target);}
+      function resize(){var w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();need=true;}
+      window.addEventListener('resize',resize); resize(); cam(); has3D=true;
+      var drag=false,lx=0,ly=0,moved=false;
+      canvas.addEventListener('pointerdown',function(e){drag=true;lx=e.clientX;ly=e.clientY;});
+      window.addEventListener('pointerup',function(){drag=false;});
+      canvas.addEventListener('pointermove',function(e){if(!drag)return;if(!moved){moved=true;hint.style.opacity='0';}yaw=Math.max(-.9,Math.min(.9,yaw-(e.clientX-lx)*.006));pitch=Math.max(-.2,Math.min(.5,pitch+(e.clientY-ly)*.005));lx=e.clientX;ly=e.clientY;cam();need=true;});
+      (function loop(){if(has3D&&need){renderer.render(scene,camera);need=false;}requestAnimationFrame(loop);})();
+    } catch(e){ console.warn('3D unavailable',e); }
+  })();
+  </script>
+</body>
+</html>

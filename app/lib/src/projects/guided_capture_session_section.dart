@@ -109,17 +109,16 @@ class GuidedCaptureRoleInstruction {
 
 const defaultGuidedCaptureRoles = [
   GuidedCaptureRoleInstruction(
-    id: 'overview',
-    label: 'Overview',
-    description:
-        'Capture the room from the widest available corner or doorway.',
-    icon: Icons.photo_size_select_large_outlined,
-  ),
-  GuidedCaptureRoleInstruction(
     id: 'front_wall',
     label: 'Front wall',
     description: 'Stand near the opposite side and capture the front wall.',
     icon: Icons.border_top_outlined,
+  ),
+  GuidedCaptureRoleInstruction(
+    id: 'front_right_corner',
+    label: 'Front-right corner',
+    description: 'Capture the front-right corner with both walls visible.',
+    icon: Icons.crop_square_outlined,
   ),
   GuidedCaptureRoleInstruction(
     id: 'right_wall',
@@ -128,16 +127,34 @@ const defaultGuidedCaptureRoles = [
     icon: Icons.border_right_outlined,
   ),
   GuidedCaptureRoleInstruction(
+    id: 'back_right_corner',
+    label: 'Back-right corner',
+    description: 'Capture the back-right corner with overlapping context.',
+    icon: Icons.crop_square_outlined,
+  ),
+  GuidedCaptureRoleInstruction(
     id: 'back_wall',
     label: 'Back wall',
     description: 'Capture the back wall from the clearest available angle.',
     icon: Icons.border_bottom_outlined,
   ),
   GuidedCaptureRoleInstruction(
+    id: 'back_left_corner',
+    label: 'Back-left corner',
+    description: 'Capture the back-left corner with both walls in frame.',
+    icon: Icons.crop_square_outlined,
+  ),
+  GuidedCaptureRoleInstruction(
     id: 'left_wall',
     label: 'Left wall',
     description: 'Capture the left wall with any doors or windows visible.',
     icon: Icons.border_left_outlined,
+  ),
+  GuidedCaptureRoleInstruction(
+    id: 'front_left_corner',
+    label: 'Front-left corner',
+    description: 'Capture the front-left corner to complete room coverage.',
+    icon: Icons.crop_square_outlined,
   ),
   GuidedCaptureRoleInstruction(
     id: 'extra',

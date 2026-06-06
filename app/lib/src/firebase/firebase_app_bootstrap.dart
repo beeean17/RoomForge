@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../admin/firebase_admin_access_repository.dart';
@@ -49,12 +50,12 @@ class FirebaseAppBootstrapResult {
 }
 
 class FirebaseAppBootstrap {
-  static const _bootstrapTimeout = Duration(seconds: 5);
+  static const _bootstrapTimeout = Duration(seconds: 20);
 
   static Future<FirebaseAppBootstrapResult> initialize() async {
     final backendMode = BackendModeConfig.current;
 
-    if (!FirebaseOptionsFromEnv.isConfigured) {
+    if (kIsWeb && !FirebaseOptionsFromEnv.isConfigured) {
       return _disabledResult(
         backendMode,
         'Firebase web configuration is missing. Provide ROOMFORGE_FIREBASE_* dart defines to enable Google sign-in.',
@@ -62,19 +63,18 @@ class FirebaseAppBootstrap {
     }
 
     try {
-      await Firebase.initializeApp(
-        options: FirebaseOptionsFromEnv.currentPlatform,
-      ).timeout(_bootstrapTimeout);
+      await _ensureDefaultFirebaseApp().timeout(_bootstrapTimeout);
 
       final firebaseAuth = FirebaseAuth.instance;
       final firestore = FirebaseFirestore.instance;
       final storage = FirebaseStorage.instance;
       if (FirebaseOptionsFromEnv.useAuthEmulator) {
+        final emulatorHost = FirebaseOptionsFromEnv.resolvedEmulatorHost;
         await firebaseAuth
-            .useAuthEmulator('localhost', 9099)
+            .useAuthEmulator(emulatorHost, 9099)
             .timeout(_bootstrapTimeout);
-        firestore.useFirestoreEmulator('localhost', 8080);
-        storage.useStorageEmulator('localhost', 9199);
+        firestore.useFirestoreEmulator(emulatorHost, 8080);
+        storage.useStorageEmulator(emulatorHost, 9199);
       }
 
       return FirebaseAppBootstrapResult(
@@ -112,9 +112,27 @@ class FirebaseAppBootstrap {
     } catch (error) {
       return _disabledResult(
         backendMode,
-        'Firebase initialization failed. Check Firebase dart defines, network, emulator settings, and browser console. Error: $error',
+        'Firebase 초기화에 실패했습니다. Android 패키지 이름, google-services.json, Firebase 콘솔 앱 설정, 네트워크와 에뮬레이터 실행 상태를 확인하세요. Error: $error',
       );
     }
+  }
+
+  static Future<FirebaseApp> _ensureDefaultFirebaseApp() async {
+    if (Firebase.apps.isNotEmpty) {
+      return Firebase.app();
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return Firebase.initializeApp();
+    }
+
+    if (!FirebaseOptionsFromEnv.isConfigured) {
+      return Firebase.initializeApp();
+    }
+
+    return Firebase.initializeApp(
+      options: FirebaseOptionsFromEnv.currentPlatform,
+    );
   }
 
   static FirebaseAppBootstrapResult _disabledResult(

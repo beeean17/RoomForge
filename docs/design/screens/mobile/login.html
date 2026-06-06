@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>RoomForge — 로그인</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <style>
+    :root { --bg:#070608; --ink:#f6f7f9; --muted:rgba(246,247,249,.66); --dim:rgba(246,247,249,.42); --accent:#8fb4ff; --line:rgba(214,226,236,.14); --surface:rgba(255,255,255,.06); }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; } html,body{ height:100%; }
+    body { margin:0; font-family:var(--rf-sans); color:var(--ink); background:var(--bg); overflow:hidden; max-width:480px; margin-inline:auto; }
+    .wrap { position:fixed; inset:0; max-width:480px; margin-inline:auto; display:flex; flex-direction:column; }
+    .bg { position:absolute; inset:0; }
+    .bg img { width:100%; height:100%; object-fit:cover; filter:saturate(.7) contrast(1.05) brightness(.5) blur(3px); }
+    .bg::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(7,6,8,.5), transparent 30%, rgba(7,6,8,.5) 58%, rgba(7,6,8,.96)); }
+    .top { position:relative; padding:calc(env(safe-area-inset-top) + 22px) 22px 0; }
+    .brand { display:inline-flex; align-items:center; gap:9px; font-weight:800; font-size:13px; text-transform:uppercase; letter-spacing:.02em; }
+    .brand .mk { width:18px; height:18px; border-radius:6px; background:var(--rf-grad-brand); box-shadow:var(--rf-ring-inset); }
+    .mid { position:relative; flex:1; display:flex; flex-direction:column; justify-content:flex-end; padding:0 22px; }
+    .eyebrow { font-size:11px; font-weight:800; text-transform:uppercase; color:var(--dim); letter-spacing:.04em; }
+    h1 { margin:12px 0 0; font-size:40px; line-height:1.02; font-weight:800; letter-spacing:-.01em; }
+    .sub { margin:14px 0 0; font-size:15px; color:var(--muted); max-width:30ch; }
+    .bottom { position:relative; padding:26px 22px calc(env(safe-area-inset-bottom) + 22px); display:flex; flex-direction:column; gap:14px; }
+    .gbtn { height:54px; border-radius:14px; border:0; background:#fff; color:#131417; font:inherit; font-weight:700; font-size:16px; display:flex; align-items:center; justify-content:center; gap:11px; box-shadow:0 16px 40px rgba(0,0,0,.4); }
+    .gbtn svg { width:20px; height:20px; }
+    .legal { font-size:12px; color:var(--dim); line-height:1.55; text-align:center; }
+    .legal a { color:var(--muted); text-decoration:underline; }
+    .note { display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; color:var(--muted); padding:11px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+    .note svg { width:15px; height:15px; color:var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="bg"><img src="../../assets/room.png" alt="" /></div>
+    <div class="top"><span class="brand"><span class="mk"></span> RoomForge</span></div>
+    <div class="mid">
+      <p class="eyebrow">Photo → metric room</p>
+      <h1>사진으로<br>방을 3D로.</h1>
+      <p class="sub">앱의 가이드 촬영으로 방을 스캔하면, 치수 기반 3D 공간이 자동으로 만들어집니다.</p>
+    </div>
+    <div class="bottom">
+      <div class="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg> 촬영은 이 앱에서, 정밀 편집은 데스크탑에서</div>
+      <a class="gbtn" href="projects.html">
+        <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Google로 계속하기
+      </a>
+      <p class="legal">계속하면 <a href="#">이용약관</a> 및 <a href="#">개인정보처리방침</a>에 동의합니다.</p>
+    </div>
+  </div>
+</body>
+</html>

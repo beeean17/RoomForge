@@ -895,10 +895,14 @@ class FirebaseEditorBridgeMapper {
     return switch (role) {
       FirebaseCaptureImageRole.overview => 0,
       FirebaseCaptureImageRole.frontWall => 1,
-      FirebaseCaptureImageRole.rightWall => 2,
-      FirebaseCaptureImageRole.backWall => 3,
-      FirebaseCaptureImageRole.leftWall => 4,
-      FirebaseCaptureImageRole.extra => 5,
+      FirebaseCaptureImageRole.frontRightCorner => 2,
+      FirebaseCaptureImageRole.rightWall => 3,
+      FirebaseCaptureImageRole.backRightCorner => 4,
+      FirebaseCaptureImageRole.backWall => 5,
+      FirebaseCaptureImageRole.backLeftCorner => 6,
+      FirebaseCaptureImageRole.leftWall => 7,
+      FirebaseCaptureImageRole.frontLeftCorner => 8,
+      FirebaseCaptureImageRole.extra => 9,
     };
   }
 }

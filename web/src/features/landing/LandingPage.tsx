@@ -1,5 +1,5 @@
-import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { type CSSProperties, type MouseEvent, type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Brand } from '../../components/shell/Brand'
 import { ThemeToggle } from '../../components/shell/ThemeToggle'
@@ -18,6 +18,14 @@ type Timeline = {
   heroFade: number
   dockbar: number
   viewer: LandingViewerStyle
+}
+
+type PhotoTransitionRect = {
+  left: number
+  top: number
+  width: number
+  height: number
+  createdAt?: number
 }
 
 const photoReference = {
@@ -83,19 +91,138 @@ const features = [
   },
 ]
 
+const photoTransitionStorageKey = 'roomforge:landing-photo-transition'
+const photoTransitionPortalSelector = '[data-roomforge-auth-photo-portal="true"]'
+const photoFlightDurationMs = 1150
+const photoFlightCleanupDelayMs = photoFlightDurationMs + 250
+const photoFlightOverlayReleaseDelayMs = 90
+const photoDockScrollDurationMs = 900
+const landingPhotoDockFilter = 'saturate(0.580) contrast(1.08) brightness(0.740) blur(0px)'
+const authPhotoFilter = 'var(--auth-photo-filter)'
+
+function getPhotoPortal() {
+  return document.querySelector<HTMLElement>(photoTransitionPortalSelector)
+}
+
+function removePhotoPortal() {
+  getPhotoPortal()?.remove()
+}
+
+function readPxVar(element: HTMLElement, name: string) {
+  const value = Number.parseFloat(element.style.getPropertyValue(name))
+  return Number.isFinite(value) ? value : null
+}
+
+function getPortalPhotoRect(portal: HTMLElement): PhotoTransitionRect | null {
+  const left = readPxVar(portal, '--from-left')
+  const top = readPxVar(portal, '--from-top')
+  const width = readPxVar(portal, '--from-width')
+  const height = readPxVar(portal, '--from-height')
+  const createdAt = Number.parseInt(portal.dataset.createdAt ?? '', 10)
+
+  if (left === null || top === null || width === null || height === null || width <= 0 || height <= 0) {
+    return null
+  }
+
+  return {
+    left,
+    top,
+    width,
+    height,
+    createdAt: Number.isFinite(createdAt) ? createdAt : undefined,
+  }
+}
+
+function getStoredPhotoRect(raw: string | null): PhotoTransitionRect | null {
+  if (!raw) {
+    return null
+  }
+
+  try {
+    const rect = JSON.parse(raw) as PhotoTransitionRect
+    return rect.width > 0 && rect.height > 0 ? rect : null
+  } catch {
+    return null
+  }
+}
+
+function getPhotoFlightVars(from: PhotoTransitionRect, to: PhotoTransitionRect, fromFilter = landingPhotoDockFilter, toFilter = authPhotoFilter) {
+  return {
+    '--from-left': `${from.left}px`,
+    '--from-top': `${from.top}px`,
+    '--from-width': `${from.width}px`,
+    '--from-height': `${from.height}px`,
+    '--to-left': `${to.left}px`,
+    '--to-top': `${to.top}px`,
+    '--to-width': `${to.width}px`,
+    '--to-height': `${to.height}px`,
+    '--flight-from-filter': fromFilter,
+    '--flight-to-filter': toFilter,
+  }
+}
+
+function createAuthPhotoPortal(rect: DOMRect) {
+  removePhotoPortal()
+
+  const portal = document.createElement('div')
+  portal.className = 'auth-photo-flight-portal'
+  portal.dataset.roomforgeAuthPhotoPortal = 'true'
+  portal.dataset.createdAt = String(Date.now())
+  portal.style.setProperty('--from-left', `${rect.left}px`)
+  portal.style.setProperty('--from-top', `${rect.top}px`)
+  portal.style.setProperty('--from-width', `${rect.width}px`)
+  portal.style.setProperty('--from-height', `${rect.height}px`)
+  portal.style.setProperty('--flight-from-filter', landingPhotoDockFilter)
+  portal.style.setProperty('--flight-to-filter', authPhotoFilter)
+
+  const image = document.createElement('img')
+  image.src = '/assets/room.png'
+  image.alt = ''
+  image.draggable = false
+  portal.appendChild(image)
+  document.body.appendChild(portal)
+
+  window.setTimeout(() => {
+    if (portal.isConnected && !portal.classList.contains('is-flying')) {
+      portal.remove()
+    }
+  }, 5000)
+}
+
+function easeOutCubic(value: number) {
+  return 1 - Math.pow(1 - value, 3)
+}
+
 export function LandingPage() {
   const auth = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const introRef = useRef<HTMLElement | null>(null)
   const pinRef = useRef<HTMLDivElement | null>(null)
+  const viewerRef = useRef<HTMLDivElement | null>(null)
   const [timeline, setTimeline] = useState<Timeline>(initialTimeline)
   const [navScrolled, setNavScrolled] = useState(false)
   const [drag, setDrag] = useState({ active: false, yaw: 0, pitch: 0, lastX: 0, lastY: 0, touched: false })
+  const [loginTransitioning, setLoginTransitioning] = useState(false)
+  const [returnTransitioning, setReturnTransitioning] = useState(false)
+  const fromLoginPhoto = searchParams.get('from') === 'login-photo'
   const startRoute = auth.status === 'signed-in' ? routes.projects : routes.login
   const isSignedIn = auth.status === 'signed-in'
   const accountLabel = isSignedIn ? auth.user.displayName ?? auth.user.email ?? '내 계정' : ''
   const accountInitials = isSignedIn ? (auth.user.displayName ?? auth.user.email ?? 'RF').slice(0, 2).toUpperCase() : ''
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!fromLoginPhoto) {
+      return
+    }
+
+    const targetTop = getPhotoDockTop()
+    if (targetTop !== null) {
+      window.scrollTo({ top: targetTop, behavior: 'auto' })
+    }
+  }, [fromLoginPhoto])
+
+  useLayoutEffect(() => {
     let frame = 0
     let loopFrame = 0
     let loopActive = false
@@ -229,9 +356,10 @@ export function LandingPage() {
   const modeLabel = timeline.reveal < 0.4 ? '원본 사진' : timeline.orbit < 0.25 ? '재구성 중...' : 'Live 3D 공간'
 
   function startDrag(event: PointerEvent<HTMLDivElement>) {
-    if (timeline.orbit < 0.12) {
+    if (timeline.orbit < 0.12 || loginTransitioning) {
       return
     }
+    event.preventDefault()
     setDrag((current) => ({
       ...current,
       active: true,
@@ -274,6 +402,207 @@ export function LandingPage() {
     event.currentTarget.style.transform = ''
   }
 
+  function getPhotoDockTop() {
+    const intro = introRef.current
+    if (!intro) {
+      return null
+    }
+    const total = Math.max(1, intro.offsetHeight - window.innerHeight)
+    return intro.offsetTop + total * 0.265
+  }
+
+  function animateScrollTo(targetTop: number, durationMs = photoDockScrollDurationMs) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      window.scrollTo({ top: targetTop, behavior: 'auto' })
+      return Promise.resolve()
+    }
+
+    return new Promise<void>((resolve) => {
+      const startTop = window.scrollY
+      const delta = targetTop - startTop
+      if (Math.abs(delta) < 2) {
+        window.scrollTo({ top: targetTop, behavior: 'auto' })
+        resolve()
+        return
+      }
+
+      const startedAt = performance.now()
+      const step = (now: number) => {
+        const progress = clamp((now - startedAt) / durationMs)
+        window.scrollTo({ top: startTop + delta * easeOutCubic(progress), behavior: 'auto' })
+        if (progress < 1) {
+          window.requestAnimationFrame(step)
+          return
+        }
+        window.scrollTo({ top: targetTop, behavior: 'auto' })
+        resolve()
+      }
+      window.requestAnimationFrame(step)
+    })
+  }
+
+  async function moveToPhotoDock(behavior?: ScrollBehavior) {
+    const targetTop = getPhotoDockTop()
+    if (targetTop === null) {
+      return
+    }
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const scrollBehavior = behavior ?? (reduceMotion ? 'auto' : 'smooth')
+
+    if (reduceMotion || scrollBehavior === 'auto') {
+      window.scrollTo({ top: targetTop, behavior: 'auto' })
+      return
+    }
+
+    await animateScrollTo(targetTop)
+  }
+
+  function scrollToMainLanding(behavior: ScrollBehavior = 'smooth') {
+    window.requestAnimationFrame(() => {
+      if (behavior === 'auto' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        window.scrollTo({ top: 0, behavior: 'auto' })
+        return
+      }
+
+      void animateScrollTo(0)
+    })
+  }
+
+  async function navigateToLoginFromPhoto(event: MouseEvent<HTMLAnchorElement>) {
+    if (auth.status === 'signed-in') {
+      return
+    }
+
+    event.preventDefault()
+    if (loginTransitioning) {
+      return
+    }
+
+    setLoginTransitioning(true)
+    setDrag((current) => ({ ...current, active: false }))
+    await moveToPhotoDock()
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const viewerRect = viewerRef.current?.getBoundingClientRect()
+
+    if (viewerRect && viewerRect.width > 0 && viewerRect.height > 0 && !reduceMotion) {
+      createAuthPhotoPortal(viewerRect)
+      try {
+        window.sessionStorage.setItem(
+          photoTransitionStorageKey,
+          JSON.stringify({
+            left: viewerRect.left,
+            top: viewerRect.top,
+            width: viewerRect.width,
+            height: viewerRect.height,
+            createdAt: Date.now(),
+          }),
+        )
+      } catch {
+        // Session storage can be unavailable in restricted browser contexts.
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 80))
+    }
+
+    const nextUrl = `${routes.login}?from=landing-photo`
+    navigate(nextUrl)
+  }
+
+  useEffect(() => {
+    if (!fromLoginPhoto) {
+      return undefined
+    }
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      removePhotoPortal()
+      window.sessionStorage.removeItem(photoTransitionStorageKey)
+      navigate(routes.landing, { replace: true })
+      scrollToMainLanding('auto')
+      return undefined
+    }
+
+    let cancelled = false
+    let frame = 0
+    let cleanupTimer = 0
+    let releaseTimer = 0
+
+    const run = async () => {
+      setDrag((current) => ({ ...current, active: false }))
+      await moveToPhotoDock('auto')
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => resolve())
+        })
+      })
+      if (cancelled) {
+        return
+      }
+
+      frame = window.requestAnimationFrame(() => {
+        const activePortal = getPhotoPortal()
+        const from = getStoredPhotoRect(window.sessionStorage.getItem(photoTransitionStorageKey)) ?? (activePortal ? getPortalPhotoRect(activePortal) : null)
+        const isFresh = from ? !from.createdAt || Date.now() - from.createdAt < 6000 : false
+        const toRect = viewerRef.current?.getBoundingClientRect()
+
+        if (!activePortal || !from || !isFresh || !toRect || toRect.width <= 0 || toRect.height <= 0) {
+          removePhotoPortal()
+          window.sessionStorage.removeItem(photoTransitionStorageKey)
+          setReturnTransitioning(false)
+          navigate(routes.landing, { replace: true })
+          scrollToMainLanding()
+          return
+        }
+
+        setReturnTransitioning(true)
+        viewerRef.current?.classList.add('is-return-transitioning')
+
+        const to = {
+          left: toRect.left,
+          top: toRect.top,
+          width: toRect.width,
+          height: toRect.height,
+        }
+
+        let finished = false
+        const finish = () => {
+          if (finished) {
+            return
+          }
+          finished = true
+          window.clearTimeout(cleanupTimer)
+          window.clearTimeout(releaseTimer)
+          releaseTimer = window.setTimeout(() => {
+            activePortal.remove()
+            window.sessionStorage.removeItem(photoTransitionStorageKey)
+            setReturnTransitioning(false)
+            viewerRef.current?.classList.remove('is-return-transitioning')
+            navigate(routes.landing, { replace: true })
+            scrollToMainLanding()
+          }, photoFlightOverlayReleaseDelayMs)
+        }
+
+        activePortal.classList.remove('is-flying')
+        Object.entries(getPhotoFlightVars(from, to, authPhotoFilter, landingPhotoDockFilter)).forEach(([name, value]) => {
+          activePortal.style.setProperty(name, value)
+        })
+        activePortal.getBoundingClientRect()
+        activePortal.addEventListener('animationend', finish, { once: true })
+        activePortal.addEventListener('animationcancel', finish, { once: true })
+        cleanupTimer = window.setTimeout(finish, photoFlightCleanupDelayMs)
+        activePortal.classList.add('is-flying')
+      })
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+      viewerRef.current?.classList.remove('is-return-transitioning')
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(cleanupTimer)
+      window.clearTimeout(releaseTimer)
+    }
+  }, [fromLoginPhoto, navigate])
+
   return (
     <main className="rf-page landing-page">
       <nav className={`landing-nav ${navScrolled ? 'is-scrolled' : ''}`}>
@@ -313,10 +642,10 @@ export function LandingPage() {
             </>
           ) : (
             <>
-              <Link className="rf-btn" onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={routes.login}>
+              <Link className="rf-btn" onClick={navigateToLoginFromPhoto} onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={routes.login}>
                 로그인
               </Link>
-              <Link className="rf-btn rf-btn--primary" onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={startRoute}>
+              <Link className="rf-btn rf-btn--primary" onClick={navigateToLoginFromPhoto} onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={startRoute}>
                 시작하기
               </Link>
             </>
@@ -327,7 +656,8 @@ export function LandingPage() {
       <section className="landing-intro" ref={introRef}>
         <div className="landing-pin" ref={pinRef}>
           <div
-            className={`landing-viewer ${drag.active ? 'is-grabbing' : ''}`}
+            ref={viewerRef}
+            className={`landing-viewer ${timeline.orbit > 0.12 ? 'is-orbit-ready' : ''} ${drag.active ? 'is-grabbing' : ''} ${loginTransitioning ? 'is-login-transitioning' : ''} ${returnTransitioning ? 'is-return-transitioning' : ''}`}
             onPointerDown={startDrag}
             onPointerMove={moveDrag}
             style={stageStyle}
@@ -335,7 +665,14 @@ export function LandingPage() {
             aria-label="흐릿한 실제 방 사진이 선명해지며 3D 재구성 뷰어로 들어가는 데모"
           >
             <div className="landing-layer landing-photo-layer">
-              <img src="/assets/room.png" alt="실제 침실 사진" style={{ filter: photoFilter }} />
+              <img
+                className="landing-room-photo"
+                src="/assets/room.png"
+                alt="실제 침실 사진"
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                style={{ filter: photoFilter }}
+              />
             </div>
             <div className="landing-layer landing-proc-layer" style={{ clipPath: processedClip }}>
               <LandingThreeViewer orbitProgress={timeline.orbit} yaw={drag.yaw} pitch={drag.pitch} isFreeLook={drag.touched} />
@@ -380,7 +717,7 @@ export function LandingPage() {
                 <div>
                   <p className="sub">실제 방 사진을 치수 기반 3D 공간으로 전환합니다. 원본 이미지, 후보 geometry, 확인된 공간 모델을 한 흐름에서 검토하고 바로 배치까지 이어갑니다.</p>
                   <div className="hero-actions">
-                    <Link className="rf-btn rf-btn--primary btn-big" to={startRoute}>
+                    <Link className="rf-btn rf-btn--primary btn-big" onClick={navigateToLoginFromPhoto} to={startRoute}>
                       공간 만들기
                     </Link>
                     <a className="rf-btn btn-big" href="#how">
@@ -432,7 +769,7 @@ export function LandingPage() {
         <p className="rf-eyebrow">Start building</p>
         <h2>사진 한 장에서 시작해, 실제 배치 가능한 방으로.</h2>
         <div className="row">
-          <Link className="rf-btn rf-btn--primary btn-big" to={startRoute}>
+          <Link className="rf-btn rf-btn--primary btn-big" onClick={navigateToLoginFromPhoto} to={startRoute}>
             무료로 시작하기
           </Link>
           <Link className="rf-btn" to={routes.projects}>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>RoomForge — 내 프로젝트</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <style>
+    :root { --bg:#070608; --ink:#f6f7f9; --muted:rgba(246,247,249,.64); --dim:rgba(246,247,249,.42); --accent:#8fb4ff; --ok:#48d39a; --warn:#f0be5a; --violet:#b296eb; --line:rgba(214,226,236,.12); --line2:rgba(214,226,236,.22); --surface:rgba(255,255,255,.045); --bar:rgba(10,9,12,.86); }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { margin:0; font-family:var(--rf-sans); color:var(--ink); background:var(--bg); max-width:480px; margin-inline:auto; padding-bottom:calc(env(safe-area-inset-bottom) + 78px); }
+    .appbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px; padding:calc(env(safe-area-inset-top) + 12px) 18px 12px; background:var(--bar); backdrop-filter:blur(16px); border-bottom:1px solid var(--line); }
+    .appbar .brand { display:inline-flex; align-items:center; gap:8px; font-weight:800; font-size:13px; text-transform:uppercase; }
+    .appbar .brand .mk { width:16px; height:16px; border-radius:5px; background:var(--rf-grad-brand); box-shadow:var(--rf-ring-inset); }
+    .ic { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; color:var(--ink); background:var(--surface); border:1px solid var(--line); }
+    .ic svg { width:18px; height:18px; }
+    .avatar { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; color:#fff; background:linear-gradient(135deg,#8fb4ff,#80c7c2); }
+    main { padding:18px; }
+    .h { display:flex; align-items:flex-end; gap:10px; }
+    .h h1 { margin:0; font-size:26px; font-weight:800; }
+    .h .count { font-size:13px; color:var(--dim); font-weight:700; margin-bottom:3px; }
+    .chips { display:flex; gap:8px; margin-top:14px; overflow-x:auto; padding-bottom:2px; }
+    .chip { flex:none; height:32px; padding:0 14px; border-radius:999px; font-size:13px; font-weight:700; color:var(--muted); border:1px solid var(--line); background:var(--surface); display:inline-flex; align-items:center; }
+    .chip.on { color:var(--ink); border-color:var(--line2); background:rgba(255,255,255,.1); }
+    .list { display:flex; flex-direction:column; gap:14px; margin-top:16px; }
+    .card { display:block; border-radius:16px; border:1px solid var(--line); background:var(--surface); overflow:hidden; text-decoration:none; color:inherit; }
+    .card .ph { position:relative; aspect-ratio:16/10; background:#0c0d10; }
+    .card .ph img { width:100%; height:100%; object-fit:cover; }
+    .card .ph .badge { position:absolute; top:10px; left:10px; display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:8px; font-size:11px; font-weight:800; color:#fff; background:rgba(5,7,12,.55); backdrop-filter:blur(8px); border:1px solid var(--line2); }
+    .card .ph .bar { position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(0,0,0,.4); }
+    .card .ph .bar i { display:block; height:100%; background:linear-gradient(90deg,#8fb4ff,#80c7c2); }
+    .card .ph .ph-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--dim); }
+    .card .meta { padding:13px 14px; }
+    .card .meta b { font-size:16px; font-weight:800; }
+    .card .meta p { margin:4px 0 0; font-size:12.5px; color:var(--dim); }
+    .dot { width:7px; height:7px; border-radius:50%; }
+    /* FAB capture */
+    .fab { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(env(safe-area-inset-bottom) + 90px); z-index:20; height:52px; padding:0 22px 0 18px; border-radius:999px; border:0; display:inline-flex; align-items:center; gap:9px; font:inherit; font-weight:800; font-size:15px; color:#050505; background:var(--rf-grad-primary); box-shadow:0 16px 38px rgba(143,180,255,.34); text-decoration:none; }
+    .fab svg { width:20px; height:20px; }
+    /* bottom tab bar */
+    .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:15; max-width:480px; margin-inline:auto; display:flex; padding:8px 10px calc(env(safe-area-inset-bottom) + 8px); background:var(--bar); backdrop-filter:blur(16px); border-top:1px solid var(--line); }
+    .tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0; color:var(--dim); text-decoration:none; font-size:11px; font-weight:700; }
+    .tab.on { color:var(--accent); }
+    .tab svg { width:22px; height:22px; }
+  </style>
+</head>
+<body>
+  <header class="appbar">
+    <span class="brand"><span class="mk"></span> RoomForge</span>
+    <button class="ic" style="margin-left:auto" aria-label="검색"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
+    <span class="avatar">SY</span>
+  </header>
+
+  <main>
+    <div class="h"><h1>내 프로젝트</h1><span class="count">6</span></div>
+    <div class="chips">
+      <span class="chip on">전체</span><span class="chip">진행 중</span><span class="chip">완료</span><span class="chip">촬영 필요</span>
+    </div>
+
+    <div class="list">
+      <a class="card" href="project.html">
+        <div class="ph"><img src="../../assets/room.png" style="filter:saturate(.9) brightness(.82)" alt="" />
+          <span class="badge"><span class="dot" style="background:#48d39a"></span>완료</span></div>
+        <div class="meta"><b>거실 리노베이션</b><p>이미지 18 · 2일 전</p></div>
+      </a>
+      <a class="card" href="project.html">
+        <div class="ph"><img src="../../assets/room.png" style="filter:brightness(.5) blur(1px)" alt="" />
+          <span class="badge"><span class="dot" style="background:#8fb4ff"></span>재구성 중 62%</span>
+          <span class="bar"><i style="width:62%"></i></span></div>
+        <div class="meta"><b>침실 A동</b><p>이미지 18 · 방금 전</p></div>
+      </a>
+      <a class="card" href="capture.html">
+        <div class="ph" style="background:radial-gradient(120% 120% at 30% 20%, rgba(143,180,255,.12), transparent 60%), #0c0d10">
+          <span class="ph-empty"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7h3l2-2h8l2 2h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
+          <span class="badge"><span class="dot" style="background:#b296eb"></span>촬영 필요</span></div>
+        <div class="meta"><b>원룸 스튜디오</b><p>가이드 촬영으로 시작</p></div>
+      </a>
+      <a class="card" href="project.html">
+        <div class="ph"><img src="../../assets/room.png" style="filter:saturate(.92) brightness(.88)" alt="" />
+          <span class="badge"><span class="dot" style="background:#48d39a"></span>완료</span></div>
+        <div class="meta"><b>발코니 확장</b><p>이미지 31 · 5일 전</p></div>
+      </a>
+    </div>
+  </main>
+
+  <a class="fab" href="capture.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 7h3l2-2h8l2 2h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg> 새 방 촬영</a>
+
+  <nav class="tabbar">
+    <a class="tab on" href="projects.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>프로젝트</a>
+    <a class="tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>활동</a>
+    <a class="tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>설정</a>
+  </nav>
+</body>
+</html>

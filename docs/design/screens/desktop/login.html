@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge — 로그인</title>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('rf-theme');
+        var dark = saved ? saved === 'dark'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <style>
+    :root[data-theme="dark"] {
+      --page-bg: #050505;
+      --text-main: #f8f8f5;
+      --text-muted: rgba(248,248,245,0.66);
+      --text-dim: rgba(248,248,245,0.42);
+      --brand-ink: #ffffff;
+      --line-soft: rgba(214,226,236,0.13);
+      --line-strong: rgba(214,226,236,0.30);
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.09);
+      --panel: rgba(255,255,255,0.03);
+      --vignette: linear-gradient(90deg, rgba(0,0,0,0.82), transparent 18%, transparent 82%, rgba(0,0,0,0.42));
+      --grid-tint: rgba(185,204,220,0.05);
+      --grid-tint-soft: rgba(185,204,220,0.038);
+      --grid-opacity: 0.55;
+    }
+    :root[data-theme="light"] {
+      --page-bg: #ecebe4;
+      --text-main: #15171c;
+      --text-muted: rgba(21,23,28,0.66);
+      --text-dim: rgba(21,23,28,0.46);
+      --brand-ink: #0a0c10;
+      --line-soft: rgba(20,30,45,0.12);
+      --line-strong: rgba(20,30,45,0.26);
+      --surface: rgba(15,20,30,0.045);
+      --surface-hover: rgba(15,20,30,0.09);
+      --panel: rgba(255,255,255,0.55);
+      --vignette: linear-gradient(90deg, rgba(150,150,140,0.22), transparent 16%, transparent 84%, rgba(150,150,140,0.10));
+      --grid-tint: rgba(60,80,110,0.06);
+      --grid-tint-soft: rgba(60,80,110,0.045);
+      --grid-opacity: 0.42;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--page-bg);
+      color: var(--text-main);
+      overflow: hidden;
+      transition: background-color 0.6s ease, color 0.6s ease;
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(143,180,255,0.075), transparent 24%, transparent 76%, rgba(128,199,194,0.052)),
+        repeating-linear-gradient(90deg, var(--grid-tint) 0 1px, transparent 1px 92px),
+        repeating-linear-gradient(180deg, var(--grid-tint-soft) 0 1px, transparent 1px 92px);
+      opacity: var(--grid-opacity);
+      transition: opacity 0.6s ease;
+    }
+
+    .rf-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      min-height: 44px; padding: 0 16px;
+      border-radius: 8px; border: 1px solid var(--line-soft);
+      background: var(--surface); color: var(--text-main);
+      font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; text-decoration: none;
+      transition: background var(--rf-dur-2), border-color var(--rf-dur-2), transform var(--rf-dur-2);
+    }
+    .rf-btn:hover { background: var(--surface-hover); border-color: var(--line-strong); }
+    .rf-btn svg { width: 16px; height: 16px; }
+
+    /* ---------- Sun / Moon theme toggle ---------- */
+    .theme-toggle {
+      position: relative; width: 42px; height: 42px; flex: none;
+      border-radius: 11px; border: 1px solid var(--line-soft);
+      background: var(--surface); overflow: hidden; cursor: pointer;
+      transition: background var(--rf-dur-2), border-color var(--rf-dur-2);
+    }
+    .theme-toggle:hover { background: var(--surface-hover); border-color: var(--line-strong); }
+    .theme-toggle::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(circle at 50% 36%, transparent 42%, rgba(0,0,0,0.28));
+    }
+    .theme-toggle .dial {
+      position: absolute; left: 50%; top: 50%; width: 18px; height: 52px;
+      transform: translate(-50%, -50%) rotate(0deg); transform-origin: 50% 50%; will-change: transform;
+    }
+    .theme-toggle .body { position: absolute; left: 50%; width: 17px; height: 17px; border-radius: 50%; transform: translateX(-50%); }
+    .theme-toggle .sun { top: 0; background: radial-gradient(circle at 50% 45%, #ffe9b0, #ffb347 70%); box-shadow: 0 0 11px rgba(255,196,90,0.85); }
+    .theme-toggle .moon { bottom: 0; background: radial-gradient(circle at 36% 34%, #f2f5ff, #b6c2e0 72%); box-shadow: 0 0 9px rgba(180,196,232,0.7); }
+
+    /* ---------- Page split ---------- */
+    .page {
+      position: relative; z-index: 1;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(440px, 560px) 1fr;
+    }
+
+    /* ---- left: auth column ---- */
+    .auth {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 26px 30px;
+      min-width: 0;
+    }
+    .auth-top { display: flex; align-items: center; gap: 12px; }
+    .rf-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--text-main); font-size: 13px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; text-decoration: none; }
+    .rf-brand-mark { width: 16px; height: 16px; border-radius: 5px; background: var(--rf-grad-brand); box-shadow: var(--rf-ring-inset); }
+    .auth-top .spacer { margin-left: auto; }
+
+    .auth-body { display: grid; align-content: center; justify-items: start; }
+    .auth-card { width: min(380px, 100%); animation: rise 0.6s var(--rf-ease-out) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+    .eyebrow { margin: 0 0 14px; color: var(--text-dim); font-size: 11px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; }
+    .auth-card h1 { margin: 0; font-size: clamp(30px, 3.4vw, 42px); line-height: 1.02; letter-spacing: 0; font-weight: 800; color: var(--brand-ink); }
+    .auth-card .sub { margin: 14px 0 0; color: var(--text-muted); font-size: 15px; max-width: 34ch; }
+
+    .btn-google {
+      width: 100%; min-height: 52px; margin-top: 30px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 11px;
+      border-radius: 9px; border: 1px solid rgba(20,24,30,0.10);
+      background: #ffffff; color: #131417; font-weight: 700; font-size: 15px;
+      cursor: pointer; text-decoration: none;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.28);
+      transition: transform var(--rf-dur-2) var(--rf-ease-out), box-shadow var(--rf-dur-2);
+    }
+    .btn-google:hover { transform: translateY(-1px); box-shadow: 0 20px 48px rgba(0,0,0,0.34); }
+    .btn-google:active { transform: translateY(0); }
+    .btn-google svg { width: 19px; height: 19px; }
+
+    .legal { margin: 18px 0 0; color: var(--text-dim); font-size: 12px; line-height: 1.55; max-width: 36ch; }
+    .legal a { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+
+    .handoff {
+      margin-top: 26px; padding: 13px 14px;
+      border: 1px solid var(--line-soft); border-radius: 9px; background: var(--panel);
+      display: flex; gap: 11px; align-items: flex-start;
+      color: var(--text-muted); font-size: 12.5px; line-height: 1.5;
+    }
+    .handoff svg { width: 16px; height: 16px; flex: none; margin-top: 1px; color: var(--rf-candidate, #8fb4ff); }
+
+    .auth-foot { display: flex; align-items: center; gap: 16px; color: var(--text-dim); font-size: 12px; }
+    .auth-foot a { color: var(--text-dim); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .auth-foot a:hover { color: var(--text-main); }
+    .auth-foot .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--line-strong); }
+
+    /* ---- right: room visual panel ---- */
+    .visual {
+      position: relative; overflow: hidden;
+      margin: 14px 14px 14px 0; border-radius: 14px;
+      border: 1px solid var(--line-soft);
+      background: #080808;
+      isolation: isolate;
+    }
+    .visual .shot {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+      filter: saturate(0.82) contrast(1.06) brightness(0.7);
+      transition: filter 0.6s ease;
+    }
+    :root[data-theme="light"] .visual .shot { filter: saturate(0.92) contrast(1.04) brightness(0.92); }
+    .visual::before {
+      content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(5,7,12,0.32), transparent 34%, transparent 52%, rgba(5,7,12,0.82)),
+        linear-gradient(90deg, rgba(5,7,12,0.42), transparent 30%);
+      transition: opacity 0.6s ease;
+    }
+    /* day/night wash echoing the landing window light, driven by --p (0 day, 1 night) */
+    .visual::after {
+      content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: soft-light;
+      background:
+        radial-gradient(120% 80% at 82% 18%, rgba(255,210,140, calc(0.5 * (1 - var(--p, 1)))), transparent 60%),
+        radial-gradient(120% 90% at 78% 22%, rgba(120,150,220, calc(0.45 * var(--p, 1))), transparent 62%);
+    }
+
+    .v-scan {
+      position: absolute; top: 0; bottom: 0; left: 28%; width: 1px; z-index: 2; pointer-events: none;
+      background: linear-gradient(180deg, transparent, rgba(220,232,255,0.9) 12%, #8fb4ff 50%, rgba(128,199,194,0.9) 88%, transparent);
+      box-shadow: 0 0 0 1px rgba(143,180,255,0.22), 0 0 30px rgba(143,180,255,0.4);
+      opacity: 0.55;
+      animation: sweep 7s var(--rf-ease-standard) infinite alternate;
+    }
+    @keyframes sweep { from { left: 24%; } to { left: 70%; } }
+
+    .v-copy { position: absolute; z-index: 3; left: 30px; bottom: 28px; right: 30px; color: #f4f6fb; }
+    .v-copy .tag { font-size: 11px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; color: rgba(244,246,251,0.62); }
+    .v-copy h2 { margin: 12px 0 0; font-size: clamp(24px, 2.4vw, 34px); line-height: 1.05; letter-spacing: 0; font-weight: 800; text-shadow: 0 8px 36px rgba(0,0,0,0.5); }
+    .v-chips { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: baseline; gap: 7px;
+      padding: 8px 12px; border-radius: 8px;
+      background: rgba(5,7,12,0.5); backdrop-filter: blur(10px);
+      border: 1px solid rgba(214,226,236,0.16);
+    }
+    .chip b { font-size: 14px; color: #fff; }
+    .chip span { font-size: 11px; font-weight: 700; color: rgba(244,246,251,0.6); }
+
+    .v-badge {
+      position: absolute; z-index: 3; top: 18px; left: 18px;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 7px 11px; border-radius: 8px; font-size: 11px; font-weight: 800;
+      background: rgba(5,7,12,0.5); backdrop-filter: blur(10px);
+      border: 1px solid rgba(214,226,236,0.16); color: rgba(255,255,255,0.9);
+    }
+    .v-badge .led { width: 7px; height: 7px; border-radius: 50%; background: var(--rf-candidate, #8fb4ff); box-shadow: 0 0 0 4px rgba(143,180,255,0.16); }
+
+    @media (max-width: 880px) {
+      body { overflow: auto; }
+      .page { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+      .visual { display: none; }
+      .auth { min-height: 100vh; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .auth-card { animation: none; }
+      .v-scan { animation: none; }
+      .theme-toggle .dial { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- left: sign-in -->
+    <section class="auth">
+      <header class="auth-top">
+        <a class="rf-brand" href="../../landing.html"><span class="rf-brand-mark"></span> RoomForge</a>
+        <span class="spacer"></span>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="낮/밤 테마 전환" aria-pressed="true" title="낮 / 밤 전환">
+          <span class="dial" aria-hidden="true"><span class="body sun"></span><span class="body moon"></span></span>
+        </button>
+      </header>
+
+      <div class="auth-body">
+        <div class="auth-card">
+          <p class="eyebrow">Welcome back</p>
+          <h1>RoomForge에<br>로그인</h1>
+          <p class="sub">사진을 치수 기반 3D 공간으로. 계정으로 계속하면 프로젝트와 재구성 결과가 그대로 이어집니다.</p>
+
+          <button class="btn-google" type="button">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            Google로 계속하기
+          </button>
+
+          <p class="legal">계속하면 RoomForge <a href="#">이용약관</a> 및 <a href="#">개인정보처리방침</a>에 동의하는 것으로 간주됩니다.</p>
+
+          <div class="handoff">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+            <span>카메라 가이드 촬영은 <b style="color:var(--text-main)">RoomForge 모바일 앱</b>에서 진행됩니다. 데스크탑 웹은 재구성 검토와 편집에 최적화되어 있어요.</span>
+          </div>
+        </div>
+      </div>
+
+      <footer class="auth-foot">
+        <a href="../../landing.html"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M11 18l-6-6 6-6"/></svg> 홈으로</a>
+        <span class="dot"></span>
+        <a href="#">도움이 필요하신가요?</a>
+        <span class="spacer" style="margin-left:auto"></span>
+        <span>© RoomForge</span>
+      </footer>
+    </section>
+
+    <!-- right: room visual -->
+    <aside class="visual" aria-hidden="true">
+      <img class="shot" src="../../assets/room.png" alt="" />
+      <div class="v-badge"><span class="led"></span>Live reconstruction</div>
+      <span class="v-scan"></span>
+      <div class="v-copy">
+        <span class="tag">Photo → metric room model</span>
+        <h2>사진이 방이 되는 순간.</h2>
+        <div class="v-chips">
+          <span class="chip"><b>3D</b><span>실시간 공간 뷰</span></span>
+          <span class="chip"><b>m</b><span>미터 좌표 보정</span></span>
+          <span class="chip"><b>CV</b><span>후보 geometry</span></span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+  (function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var root = document.documentElement;
+    var THEME_KEY = 'rf-theme';
+    var saved = (function () { try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })();
+    var manual = saved !== null;
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var curP = theme === 'dark' ? 1 : 0;
+    var toggle = document.getElementById('themeToggle');
+    var dial = toggle.querySelector('.dial');
+
+    function render(p) {
+      curP = p;
+      dial.style.transform = 'translate(-50%,-50%) rotate(' + (p * 180).toFixed(2) + 'deg)';
+      root.style.setProperty('--p', p.toFixed(3));
+    }
+    function setPage(dark) { root.setAttribute('data-theme', dark ? 'dark' : 'light'); }
+
+    function animate(toDark) {
+      var to = toDark ? 1 : 0, from = curP, start = performance.now(), dur = reduce ? 0 : 820;
+      var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+      var switched = false;
+      if (dur === 0) { render(to); setPage(toDark); return; }
+      (function step(now) {
+        var k = Math.min(1, (now - start) / dur);
+        var e = from + (to - from) * ease(k);
+        render(e);
+        if (!switched && ((to > from && e >= 0.5) || (to < from && e <= 0.5))) { setPage(toDark); switched = true; }
+        if (k < 1) requestAnimationFrame(step); else setPage(toDark);
+      })(performance.now());
+    }
+
+    toggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+    toggle.addEventListener('click', function () {
+      manual = true;
+      theme = theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+      toggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      animate(theme === 'dark');
+    });
+    var osq = window.matchMedia('(prefers-color-scheme: dark)');
+    var oh = function (e) { if (manual) return; theme = e.matches ? 'dark' : 'light'; toggle.setAttribute('aria-pressed', theme === 'dark'); animate(e.matches); };
+    if (osq.addEventListener) osq.addEventListener('change', oh); else if (osq.addListener) osq.addListener(oh);
+
+    render(curP);
+  })();
+  </script>
+</body>
+</html>

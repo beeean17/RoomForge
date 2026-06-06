@@ -94,38 +94,52 @@ Canonical URL policy:
 | `/` | Public landing | Static/React landing | Public | Allowed |
 | `/login` | Auth callback / explicit sign-in | React web | Public -> auth | Allowed |
 | `/projects` | My projects | React web | Required | Allowed |
-| `/projects/new` | Create project modal route | React web | Required | Allowed |
 | `/projects/:projectId` | Project overview | React web | Required + owner/admin | Allowed |
 
 There is no final `/app` route. The homepage remains `/`, and the authenticated
 product entry is `/projects`.
 
+There is no `/projects/new` route. Project creation provisions the project and
+navigates directly to `/projects/:projectId/workspace`, where naming, photo
+upload, and capture handoff happen. Desktop cannot capture, so the workspace
+offers photo upload and a mobile-app capture handoff instead of a separate
+create modal.
+
 ## Project Workflow Routes
 
 | Route | Page | Owner | Desktop web | Mobile web | Native mobile |
 |---|---|---|---|---|---|
-| `/projects/:projectId/workspace` | Project workspace | React web | Full | Limited summary | Lightweight project shell |
 | `/projects/:projectId/room` | Room dimensions | React web | Full | View-only or locked edit | Optional later |
 | `/projects/:projectId/source` | Source images / upload status | React web | Upload/select | View-only, app handoff | Guided upload |
 | `/projects/:projectId/status` | Reconstruction status | React web | Full | Full status | Full status |
-| `/projects/:projectId/review` | CV candidate review | React web + editor bridge | Full | Locked, desktop handoff | Partial/later |
-| `/projects/:projectId/floor-plan` | Floor plan review | React web + editor bridge | Full | Preview only | Preview only |
-| `/projects/:projectId/editor` | 2D/3D editor | React editor | Full | Locked, desktop handoff | Viewer only |
-| `/projects/:projectId/layouts` | Save/load layout | React web | Full | Preview/recent only | Preview/recent only |
-| `/projects/:projectId/export` | Export JSON | React web | Full | Locked or download-only | Locked |
+| `/projects/:projectId/editor` | 2D/3D editor (floor plan + correction + furniture) | React editor | Full | Locked, desktop handoff | Viewer only |
 | `/projects/:projectId/recovery` | Draft/sync recovery | React web | Full | Limited recovery notices | Native draft handling |
 
 Route names use `projects/:projectId` instead of the current
-`workspaces/:projectId` path. "Workspace" becomes a page under a project, not
-the primary entity path.
+`workspaces/:projectId` path.
+
+`/projects/:projectId` (project overview) **is** the project hub: it shows the
+pipeline, preview, source images, status, and next-step actions. There is no
+separate `/projects/:projectId/workspace` route — overview and workspace are
+merged into `/projects/:projectId`. The rows above are sections that live under
+that hub (`/projects/:projectId/source`, `/status`, `/editor`, ...).
+
+Reconstruction produces a best-effort editable model; there is **no separate
+candidate-review step**. The metric **floor plan and corrections happen inside
+the editor** (`/projects/:projectId/editor`), so there are no
+`/projects/:projectId/review` or `/projects/:projectId/floor-plan` routes. The
+project pipeline is: 소스(source) → 재구성(status) → 편집(editor).
+
+There is **no export stage and no layouts stage**. Export is a single action
+button in the editor's 2D toolbar that saves the floor plan as an image (PNG);
+there is no `/projects/:projectId/export` route. The editor auto-saves a single
+state, so there is no `/projects/:projectId/layouts` save/load route.
 
 ## Editor Routes
 
 | Route | Page | Owner | Notes |
 |---|---|---|---|
-| `/projects/:projectId/review` | CV candidate review | React web + React editor shell | Uses existing postMessage bridge contract. |
-| `/projects/:projectId/floor-plan` | Metric floor plan review | React web + React editor shell | Shows confirmed meter-space model. |
-| `/projects/:projectId/editor` | Precision 2D/3D editor | React editor | React + react-three-fiber target. |
+| `/projects/:projectId/editor` | Precision 2D/3D editor (floor plan + correction + furniture) | React editor | React + react-three-fiber target. Uses the postMessage bridge contract. Includes the metric 2D floor-plan view/mode and geometry correction. |
 | `/legacy/editor/:projectId` | Legacy editor fallback | Flutter web legacy | Temporary only. |
 
 The editor must not import Firebase SDKs or own persistence. It receives project
@@ -171,7 +185,7 @@ During the migration, Flutter web remains available under `/legacy/**`.
 |---|---|---|
 | `/app` | `/projects` | `/legacy/app` |
 | `/app/projects` | `/projects` | `/legacy/app/projects` |
-| `/app/workspaces/:projectId` | `/projects/:projectId/workspace` | `/legacy/app/workspaces/:projectId` |
+| `/app/workspaces/:projectId` | `/projects/:projectId` | `/legacy/app/workspaces/:projectId` |
 | `/app/workspaces/:projectId/editor` | `/projects/:projectId/editor` | `/legacy/app/workspaces/:projectId/editor` |
 | `/m/app/**` | Matching unprefixed route with mobile gates | `/legacy/m/app/**` |
 | `/admin/**` | `/admin/**` | `/legacy/admin/**` |
@@ -191,11 +205,9 @@ paths to project paths inside unrelated feature code.
 | Source upload | Yes | App handoff | Yes |
 | Guided camera capture | No | Locked | Yes |
 | Reconstruction status | Yes | Yes | Yes |
-| CV candidate review | Yes | Locked | Later/partial |
-| Geometry correction | Yes | Locked | Later/partial |
-| 2D/3D editor | Yes | Locked | Viewer only |
-| Layout save/load | Yes | Preview/recent only | Preview/recent only |
-| Export | Yes | Locked or download-only | No |
+| Geometry correction (in editor) | Yes | Locked | Later/partial |
+| 2D/3D editor (incl. floor plan) | Yes | Locked | Viewer only |
+| Floor-plan image export (button) | Yes | Locked | No |
 | Admin | Yes | Locked | No |
 
 ## Phase Entry Criteria
@@ -216,7 +228,6 @@ Minimum validation URLs for Phase 0/1:
 /
 /projects
 /projects/demo-project
-/projects/demo-project/workspace
 /projects/demo-project/editor
 /admin
 /legacy/app

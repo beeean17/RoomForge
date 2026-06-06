@@ -8,6 +8,46 @@ It is intentionally narrower than the older story queue. The current work is
 screen design for the route table, not product feature implementation and not
 route-table redesign.
 
+## Current Decisions (supersede conflicting guidance below)
+
+Agreed with the project owner during this design pass. Where this section
+conflicts with "Target Design Folder Shape", the route groups, or the CSS rules
+below, this section wins.
+
+- **Scope: desktop web + native mobile mockups.** Product web route mockups are
+  desktop-first under `screens/desktop/`. The mobile surface is the **Flutter
+  native app** (capture-first); its screens are mocked as mobile-width HTML under
+  `screens/mobile/` to serve as **Flutter implementation specs** (not React
+  migration). Do not build a responsive mobile-web product app here — mobile is
+  the native app.
+- **Working location:** `docs/design/screens/desktop/` with route-named files
+  (`login.html`, `projects.html`, `workspace.html`, ...). The `routes/`
+  single-file shape in "Target Design Folder Shape" is not used.
+- **CSS / tooling:** mockups use **Tailwind** (vendored at
+  `system/vendor/tailwind.js`) with an inline `tailwind.config` that maps the
+  design tokens to CSS variables, plus `tokens.css` for brand tokens. This keeps
+  pages 1:1 translatable to the React app and is the source of the landing
+  visual language. `base.css`/`motion.js` are optional and only used when they
+  do not conflict with the token palette.
+- **Project creation:** there is no `/projects/new` modal route. Creating a
+  project provisions it and navigates directly to
+  `/projects/:projectId/workspace`, where naming, photo upload, and capture
+  handoff happen. `routing-page-definition.md` is updated to match.
+- **No export/layouts stage:** export is a single "floor-plan image (PNG)"
+  button in the editor 2D toolbar, not a route. Layouts (save/load) are removed
+  — the editor auto-saves one state. Pipeline is just 소스 → 재구성 → 편집; Group 6's
+  layouts/export mockups are dropped (recovery handled separately if needed).
+- **No candidate review; floor-plan in editor:** reconstruction outputs a
+  best-effort editable model. There is no `/projects/:projectId/review` route,
+  and `/projects/:projectId/floor-plan` is folded into the editor as a 2D mode.
+  Pipeline: 소스 → 재구성 → 편집 → 내보내기 (Group 5's review/floor-plan mockups are dropped).
+- **Overview = workspace (merged):** `/projects/:projectId` is the single
+  project hub (pipeline, preview, source, status, next-step actions). There is
+  no separate `/projects/:projectId/workspace` route; Group 4's
+  `project-workspace.html` is delivered as `screens/desktop/project.html`.
+- **Validation widths:** desktop-first (1440 / 1024). The 390 mobile pass is
+  owned by the Flutter app, not these HTML mockups.
+
 ## Operating Rule
 
 Default rule for mockups:

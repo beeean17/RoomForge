@@ -16,6 +16,7 @@ notes/
 Thumbs.db
 
 # Editor / IDE local state
+.run/
 .idea/
 .vscode/*
 !.vscode/extensions.json
@@ -159,5 +160,6 @@ tmp/
 temp/
 .tmp/
 *.tmp
+*.backup.html
 *.bak
 *.orig

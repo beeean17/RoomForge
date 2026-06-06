@@ -7,6 +7,8 @@ import { useAuth } from '../auth/AuthProvider'
 import { routes } from '../../lib/routes'
 import { LandingThreeViewer } from './LandingThreeViewer'
 
+type LandingViewerStyle = CSSProperties & Record<`--${string}`, string | number>
+
 type Timeline = {
   t: number
   intro: number
@@ -15,13 +17,35 @@ type Timeline = {
   orbit: number
   heroFade: number
   dockbar: number
-  viewer: CSSProperties
+  viewer: LandingViewerStyle
+}
+
+const photoReference = {
+  width: 1536,
+  height: 1024,
+  aspect: 1536 / 1024,
 }
 
 const clamp = (value: number, min = 0, max = 1) => Math.max(min, Math.min(max, value))
 const smooth = (value: number, start: number, end: number) => {
   const x = clamp((value - start) / (end - start))
   return x * x * (3 - 2 * x)
+}
+
+function getCoverFrame(width: number, height: number) {
+  if (width <= 0 || height <= 0) {
+    return { left: 0, top: 0, width, height }
+  }
+  const containerAspect = width / height
+  const frameWidth = containerAspect > photoReference.aspect ? width : height * photoReference.aspect
+  const frameHeight = frameWidth / photoReference.aspect
+
+  return {
+    left: (width - frameWidth) / 2,
+    top: (height - frameHeight) / 2,
+    width: frameWidth,
+    height: frameHeight,
+  }
 }
 
 const initialTimeline: Timeline = {
@@ -96,15 +120,18 @@ export function LandingPage() {
       const height = pin.clientHeight
       const padding = width < 760 ? 16 : 28
       let dockWidth = Math.min(1120, width - padding * 2)
-      let dockHeight = (dockWidth * 900) / 1536
+      let dockHeight = dockWidth / photoReference.aspect
       const maxHeight = height - (width < 760 ? 140 : 168)
       if (dockHeight > maxHeight) {
         dockHeight = maxHeight
-        dockWidth = (dockHeight * 1536) / 900
+        dockWidth = dockHeight * photoReference.aspect
       }
       const dockLeft = (width - dockWidth) / 2
       const dockTop = (height - dockHeight) / 2
       const lerp = (a: number, b: number) => a + (b - a) * introProgress
+      const viewerWidth = lerp(width, dockWidth)
+      const viewerHeight = lerp(height, dockHeight)
+      const mediaFrame = getCoverFrame(viewerWidth, viewerHeight)
       const timelineKey = `${t.toFixed(4)}:${width}:${height}`
 
       if (timelineKey !== lastTimelineKey) {
@@ -120,9 +147,13 @@ export function LandingPage() {
           viewer: {
             left: `${lerp(0, dockLeft).toFixed(1)}px`,
             top: `${lerp(0, dockTop).toFixed(1)}px`,
-            width: `${lerp(width, dockWidth).toFixed(1)}px`,
-            height: `${lerp(height, dockHeight).toFixed(1)}px`,
+            width: `${viewerWidth.toFixed(1)}px`,
+            height: `${viewerHeight.toFixed(1)}px`,
             borderRadius: `${(8 * introProgress).toFixed(2)}px`,
+            '--media-left': `${mediaFrame.left.toFixed(1)}px`,
+            '--media-top': `${mediaFrame.top.toFixed(1)}px`,
+            '--media-width': `${mediaFrame.width.toFixed(1)}px`,
+            '--media-height': `${mediaFrame.height.toFixed(1)}px`,
           },
         })
       }
@@ -280,7 +311,7 @@ export function LandingPage() {
               <img src="/assets/room.png" alt="실제 침실 사진" style={{ filter: photoFilter }} />
             </div>
             <div className="landing-layer landing-proc-layer" style={{ clipPath: processedClip }}>
-              <LandingThreeViewer orbitProgress={timeline.orbit} yaw={drag.yaw} pitch={drag.pitch} />
+              <LandingThreeViewer orbitProgress={timeline.orbit} yaw={drag.yaw} pitch={drag.pitch} isFreeLook={drag.touched} />
             </div>
             <div className="landing-sky">
               <span className="orb sun" />

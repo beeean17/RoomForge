@@ -44,6 +44,7 @@ export type LandingRoomLighting = WindowRefs & {
 
 export type LandingRoomScene = {
   room: THREE.Group
+  frontWall: THREE.Mesh[]
   lighting: LandingRoomLighting
 }
 
@@ -152,7 +153,7 @@ export function createLandingRoomScene(scene: THREE.Scene): LandingRoomScene {
   }
 
   createFloor(builder)
-  createRoomShell(builder)
+  const frontWall = createRoomShell(builder)
   createAreaRug(builder, furniturePlan.rug)
   createBed(builder, furniturePlan.bed)
   createNightstand(builder, furniturePlan.nightstandLeft)
@@ -167,6 +168,7 @@ export function createLandingRoomScene(scene: THREE.Scene): LandingRoomScene {
 
   return {
     room,
+    frontWall,
     lighting: createLighting(builder, windowRefs),
   }
 }
@@ -203,13 +205,14 @@ function createRoomShell({ roomWidth, roomDepth, roomHeight, halfWidth, back, fr
   plane(roomWidth, roomHeight, 0xd7d0c8, { z: back, y: roomHeight / 2 })
   plane(roomDepth, roomHeight, 0xc7c1bb, { ry: Math.PI / 2, x: -halfWidth, y: roomHeight / 2 })
   plane(roomDepth, roomHeight, 0xd4d0ca, { ry: -Math.PI / 2, x: halfWidth, y: roomHeight / 2 })
-  plane(roomWidth, roomHeight, 0xd0cac3, { z: front, y: roomHeight / 2 })
+  const frontWall = plane(roomWidth, roomHeight, 0xd0cac3, { z: front, y: roomHeight / 2 })
   box(roomWidth, 0.16, 0.12, 0x202124, { x: 0, y: 0.08, z: back + 0.03 })
-  box(roomWidth, 0.16, 0.12, 0x202124, { x: 0, y: 0.08, z: front - 0.03 })
+  const frontBase = box(roomWidth, 0.16, 0.12, 0x202124, { x: 0, y: 0.08, z: front - 0.03 })
   box(roomWidth, 0.12, 0.14, 0x202124, { x: 0, y: roomHeight - 0.06, z: back + 0.03 })
-  box(roomWidth, 0.12, 0.14, 0x202124, { x: 0, y: roomHeight - 0.06, z: front - 0.03 })
+  const frontCrown = box(roomWidth, 0.12, 0.14, 0x202124, { x: 0, y: roomHeight - 0.06, z: front - 0.03 })
   box(0.12, 0.16, roomDepth, 0x202124, { x: -halfWidth + 0.04, y: 0.08, z: 0 })
   box(0.12, 0.16, roomDepth, 0x202124, { x: halfWidth - 0.04, y: 0.08, z: 0 })
+  return [frontWall, frontBase, frontCrown]
 }
 
 function createAreaRug({ box }: LandingRoomBuilder, rug: PlanItem) {

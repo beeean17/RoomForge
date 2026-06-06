@@ -2268,9 +2268,10 @@ button {
 
 .landing-layer {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: var(--media-left, 0);
+  top: var(--media-top, 0);
+  width: var(--media-width, 100%);
+  height: var(--media-height, 100%);
 }
 
 .landing-layer img,

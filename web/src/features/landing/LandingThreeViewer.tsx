@@ -7,15 +7,30 @@ type LandingThreeViewerProps = {
   orbitProgress: number
   yaw: number
   pitch: number
+  isFreeLook: boolean
 }
 
-export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeViewerProps) {
+const photoCameraFlow = {
+  aspect: 1536 / 1024,
+  initial: {
+    fov: 58,
+    position: new THREE.Vector3(-0.08, 1.46, 3.35),
+    target: new THREE.Vector3(0.22, 1.12, -1.1),
+  },
+  center: {
+    fov: 56,
+    position: new THREE.Vector3(0, 1.42, 1.15),
+    target: new THREE.Vector3(0.18, 1.05, -1.2),
+  },
+}
+
+export function LandingThreeViewer({ orbitProgress, yaw, pitch, isFreeLook }: LandingThreeViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const stateRef = useRef({ orbitProgress, yaw, pitch })
+  const stateRef = useRef({ orbitProgress, yaw, pitch, isFreeLook })
   const renderSceneRef = useRef<() => void>(() => undefined)
   const [isWebGlUnavailable, setIsWebGlUnavailable] = useState(false)
 
-  stateRef.current = { orbitProgress, yaw, pitch }
+  stateRef.current = { orbitProgress, yaw, pitch, isFreeLook }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -40,13 +55,11 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
 
     const scene = new THREE.Scene()
 
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80)
+    const camera = new THREE.PerspectiveCamera(photoCameraFlow.initial.fov, photoCameraFlow.aspect, 0.1, 80)
     const cameraTarget = new THREE.Vector3()
-    const entryPosition = new THREE.Vector3(0.08, 1.42, 1.94)
-    const centerPosition = new THREE.Vector3(0.16, 1.36, 0.18)
-    const entryTarget = new THREE.Vector3(0.28, 1.08, -1.05)
-    const orbitAnchor = new THREE.Vector3(0.26, 1.3, -0.1)
+    const orbitAnchor = new THREE.Vector3(0.18, 1.05, -1.2)
     const orbitTarget = new THREE.Vector3()
+    const transitionTarget = new THREE.Vector3()
     const lookDirection = new THREE.Vector3()
     const colorScratch = new THREE.Color()
     const daySkyColor = new THREE.Color(0xdfeff8)
@@ -61,7 +74,7 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     const nightCeilingColor = new THREE.Color(0xffd7a2)
     const dayLampColor = new THREE.Color(0xffe4ba)
     const nightLampColor = new THREE.Color(0xffb866)
-    const { room, lighting } = createLandingRoomScene(scene)
+    const { room, frontWall, lighting } = createLandingRoomScene(scene)
     const { ambient, hemi, sun, ceiling, lampLeft, lampRight, windowMaterial, windowGlow } = lighting
 
     let frame = 0
@@ -87,7 +100,7 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
     }
 
     function render() {
-      const { orbitProgress: progress, yaw, pitch } = stateRef.current
+      const { orbitProgress: progress, yaw, pitch, isFreeLook } = stateRef.current
       const dark = document.documentElement.getAttribute('data-theme') !== 'light'
       const themeProgress = dark ? 1 : 0
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t
@@ -115,10 +128,10 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
       lampLeft.intensity = lampRight.intensity = lerp(0.22, 1.48, themeProgress)
 
       const entryProgress = smooth(clamp(progress / 0.82))
-      const orbit = smooth(clamp((progress - 0.28) / 0.72))
+      const freeLookProgress = isFreeLook ? smooth(clamp((progress - 0.18) / 0.62)) : 0
       const cameraYaw = yaw
       const cameraPitch = lerp(-0.025, 0.02, entryProgress) + pitch
-      camera.position.lerpVectors(entryPosition, centerPosition, entryProgress)
+      camera.position.lerpVectors(photoCameraFlow.initial.position, photoCameraFlow.center.position, entryProgress)
 
       lookDirection.set(
         Math.sin(cameraYaw) * Math.cos(cameraPitch),
@@ -126,11 +139,26 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
         -Math.cos(cameraYaw) * Math.cos(cameraPitch),
       )
       orbitTarget.copy(orbitAnchor).add(lookDirection.multiplyScalar(3.1))
-      cameraTarget.lerpVectors(entryTarget, orbitTarget, orbit)
+      transitionTarget.lerpVectors(photoCameraFlow.initial.target, photoCameraFlow.center.target, entryProgress)
+      cameraTarget.lerpVectors(transitionTarget, orbitTarget, freeLookProgress)
       camera.lookAt(cameraTarget)
-      camera.fov = lerp(42, 68, entryProgress)
+      camera.fov = lerp(photoCameraFlow.initial.fov, photoCameraFlow.center.fov, entryProgress)
       camera.updateProjectionMatrix()
-      room.rotation.y = lerp(-0.04, 0.02, entryProgress)
+      const frontWallOpacity = smooth(clamp((entryProgress - 0.18) / 0.58))
+      for (const mesh of frontWall) {
+        const meshMaterial = mesh.material
+        if (Array.isArray(meshMaterial)) {
+          meshMaterial.forEach((item) => {
+            item.opacity = frontWallOpacity
+            item.transparent = frontWallOpacity < 1
+          })
+        } else {
+          meshMaterial.opacity = frontWallOpacity
+          meshMaterial.transparent = frontWallOpacity < 1
+        }
+        mesh.visible = frontWallOpacity > 0.015
+      }
+      room.rotation.y = 0
       renderer.render(scene, camera)
     }
 
@@ -165,7 +193,7 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch }: LandingThreeVi
 
   useEffect(() => {
     renderSceneRef.current()
-  }, [orbitProgress, yaw, pitch])
+  }, [orbitProgress, yaw, pitch, isFreeLook])
 
   if (isWebGlUnavailable) {
     return (

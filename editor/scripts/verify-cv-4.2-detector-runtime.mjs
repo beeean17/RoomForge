@@ -125,6 +125,36 @@ assert.equal(mock.payload.sceneUnderstandingResult.runtime, 'mock')
 assert.equal(mock.payload.sceneUnderstandingResult.providerType, 'browser_cv_mock')
 assert.equal(mock.payload.sceneUnderstandingResult.candidateObjects.length, 1)
 
+const imageDriven = sceneUnderstandingResponseMessage(
+  {
+    captureSession,
+    sourceImage: {
+      sourceImageId: 'source-image-overview',
+      widthPx: 1600,
+      heightPx: 900,
+      contentType: 'image/png',
+      dataUrl: `data:image/png;base64,${'roomforge-source-a'.repeat(64)}`,
+    },
+  },
+  'cv-4.2-image-driven',
+)
+assert.equal(imageDriven.type, 'roomforge.sceneUnderstanding.candidatesExtracted')
+assert.equal(imageDriven.payload.sceneUnderstandingResult.providerType, 'browser_cv')
+assert.equal(imageDriven.payload.sceneUnderstandingResult.modelId, 'roomforge-image-proposal-v1')
+assert.equal(
+  imageDriven.payload.sceneUnderstandingResult.algorithmId,
+  'image-proposal-scene-understanding-v1',
+)
+assert.ok(imageDriven.payload.sceneUnderstandingResult.candidateObjects.length >= 1)
+assert.notDeepEqual(
+  imageDriven.payload.sceneUnderstandingResult.candidateObjects[0].boundingBox,
+  mock.payload.sceneUnderstandingResult.candidateObjects[0].boundingBox,
+)
+assert.equal(
+  imageDriven.payload.sceneUnderstandingResult.candidateObjects[0].sourceImageId,
+  'source-image-overview',
+)
+
 const unsupported = sceneUnderstandingResponseMessage(
   {
     captureSession,

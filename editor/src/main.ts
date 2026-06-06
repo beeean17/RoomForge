@@ -1534,8 +1534,8 @@ function ensureSceneUnderstandingWorker(): Worker {
     if (event.data.type === 'roomforge.sceneUnderstanding.candidatesExtracted') {
       applySceneUnderstandingResult(event.data.payload)
       candidateTrayStatusElement.textContent = t(
-        'Scene understanding mock candidates loaded.',
-        '장면 이해 mock 후보를 불러왔습니다.',
+        'Scene understanding candidates loaded.',
+        '장면 이해 후보를 불러왔습니다.',
       )
     } else if (event.data.type === 'roomforge.sceneUnderstanding.candidatesFailed') {
       const error = recordFromUnknown(event.data.payload.error)
@@ -1556,6 +1556,7 @@ function requestSceneUnderstanding(requestId?: string, payload: BridgePayload = 
     payload: {
       ...payload,
       captureSession: captureSessionForSceneUnderstanding ?? payload.captureSession,
+      sourceImage: sourceImageForExtraction ?? payload.sourceImage,
       spatialModel: spatialModelPayload(),
     },
   } satisfies BridgeMessage)

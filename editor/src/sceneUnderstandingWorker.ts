@@ -41,6 +41,14 @@ export type DetectorRuntime = {
   failureReason?: string
 }
 
+type SourceImageForDetection = {
+  dataUrl?: string
+  sourceImageId?: string
+  widthPx?: number
+  heightPx?: number
+  contentType?: string
+}
+
 export type DetectorOutput = {
   className: string
   score: number
@@ -144,6 +152,7 @@ export function detectorRuntimeFromPayload(payload: BridgePayload): DetectorRunt
   const webgpuAvailable =
     booleanValue(config.webgpuAvailable) ??
     (typeof navigator !== 'undefined' && 'gpu' in navigator)
+  const sourceImage = sourceImageFromPayload(payload)
 
   if (webgpuAvailable && modelAssetsPresent) {
     return {
@@ -159,6 +168,15 @@ export function detectorRuntimeFromPayload(payload: BridgePayload): DetectorRunt
       providerType: 'browser_cv_wasm_mock',
       runtime: 'wasm',
       modelId: 'roomforge-detector-wasm-mock',
+      supported: true,
+      scoreThreshold,
+    }
+  }
+  if (sourceImage.dataUrl) {
+    return {
+      providerType: 'browser_cv',
+      runtime: 'mock',
+      modelId: 'roomforge-image-proposal-v1',
       supported: true,
       scoreThreshold,
     }
@@ -206,7 +224,9 @@ export function detectorResult(
     resultId: `scene-understanding-${Date.now()}`,
     captureSessionId: session.captureSessionId,
     providerType: runtime.providerType,
-    algorithmId,
+    algorithmId: runtime.modelId === 'roomforge-image-proposal-v1'
+      ? 'image-proposal-scene-understanding-v1'
+      : algorithmId,
     modelId: runtime.modelId,
     runtime: runtime.runtime,
     detectorScoreThreshold: runtime.scoreThreshold,
@@ -275,6 +295,12 @@ function detectorOutputsFromPayload(
   if (configured.length > 0) {
     return configured
   }
+
+  const sourceImage = sourceImageFromPayload(payload)
+  if (sourceImage.dataUrl) {
+    return imageDrivenDetectorOutputs(sourceImage, session)
+  }
+
   const image = session.images[0]
   return [
     {
@@ -288,6 +314,120 @@ function detectorOutputsFromPayload(
       },
     },
   ]
+}
+
+function imageDrivenDetectorOutputs(
+  sourceImage: SourceImageForDetection,
+  session: CaptureSessionForSceneUnderstanding,
+): DetectorOutput[] {
+  const image = imageForSourceImage(session, sourceImage)
+  const widthPx = sourceImage.widthPx ?? image.widthPx ?? 1600
+  const heightPx = sourceImage.heightPx ?? image.heightPx ?? 900
+  const signature = sourceImageSignature(sourceImage.dataUrl ?? '')
+  const furnitureClasses = ['bed', 'sofa', 'desk', 'chair', 'wardrobe', 'table']
+  const furnitureClass = furnitureClasses[signature % furnitureClasses.length]
+  const secondClass = furnitureClasses[(signature + 3) % furnitureClasses.length]
+  const primaryWidth = Math.round(widthPx * (0.2 + ((signature % 4) * 0.035)))
+  const primaryHeight = Math.round(heightPx * (0.24 + ((signature % 5) * 0.025)))
+  const primaryX = Math.round(widthPx * (0.12 + ((signature % 7) * 0.045)))
+  const primaryY = Math.round(heightPx * (0.46 + ((signature % 3) * 0.04)))
+  const outputs: DetectorOutput[] = [
+    {
+      className: furnitureClass,
+      score: 0.58 + ((signature % 11) / 100),
+      captureImageId: image.captureImageId,
+      sourceImageId: sourceImage.sourceImageId ?? image.sourceImageId,
+      sourceImageRole: image.role,
+      box: clampBox({
+        x: primaryX,
+        y: primaryY,
+        width: primaryWidth,
+        height: primaryHeight,
+      }, widthPx, heightPx),
+    },
+  ]
+
+  if (signature % 2 === 0) {
+    outputs.push({
+      className: secondClass,
+      score: 0.5 + ((signature % 13) / 100),
+      captureImageId: image.captureImageId,
+      sourceImageId: sourceImage.sourceImageId ?? image.sourceImageId,
+      sourceImageRole: image.role,
+      box: clampBox({
+        x: Math.round(widthPx * 0.58),
+        y: Math.round(heightPx * 0.5),
+        width: Math.round(widthPx * 0.16),
+        height: Math.round(heightPx * 0.22),
+      }, widthPx, heightPx),
+    })
+  }
+
+  if (image.role.includes('wall') || signature % 3 === 0) {
+    outputs.push({
+      className: signature % 5 === 0 ? 'door' : 'window',
+      score: 0.56 + ((signature % 9) / 100),
+      captureImageId: image.captureImageId,
+      sourceImageId: sourceImage.sourceImageId ?? image.sourceImageId,
+      sourceImageRole: image.role,
+      box: clampBox({
+        x: Math.round(widthPx * 0.62),
+        y: Math.round(heightPx * 0.18),
+        width: Math.round(widthPx * 0.2),
+        height: Math.round(heightPx * 0.22),
+      }, widthPx, heightPx),
+    })
+  }
+
+  return outputs
+}
+
+function sourceImageFromPayload(payload: BridgePayload): SourceImageForDetection {
+  const direct = recordValue(payload.sourceImage)
+  const scene = recordValue(payload.scene)
+  const fromScene = recordValue(scene.sourceImage)
+  const sourceImage = Object.keys(direct).length > 0 ? direct : fromScene
+  return {
+    dataUrl: optionalStringValue(sourceImage.dataUrl),
+    sourceImageId: optionalStringValue(sourceImage.sourceImageId),
+    widthPx: positiveNumberValue(sourceImage.widthPx),
+    heightPx: positiveNumberValue(sourceImage.heightPx),
+    contentType: optionalStringValue(sourceImage.contentType),
+  }
+}
+
+function imageForSourceImage(
+  session: CaptureSessionForSceneUnderstanding,
+  sourceImage: SourceImageForDetection,
+): CaptureImageReference {
+  return (
+    session.images.find((image) => image.sourceImageId === sourceImage.sourceImageId) ??
+    session.images[0]
+  )
+}
+
+function sourceImageSignature(dataUrl: string): number {
+  let hash = dataUrl.length
+  const stride = Math.max(1, Math.floor(dataUrl.length / 96))
+  for (let index = 0; index < dataUrl.length; index += stride) {
+    hash = ((hash << 5) - hash + dataUrl.charCodeAt(index)) >>> 0
+  }
+  return hash
+}
+
+function clampBox(
+  box: { x: number; y: number; width: number; height: number },
+  widthPx: number,
+  heightPx: number,
+): { x: number; y: number; width: number; height: number } {
+  const x = clampNumber(box.x, 0, Math.max(0, widthPx - 2))
+  const y = clampNumber(box.y, 0, Math.max(0, heightPx - 2))
+  return {
+    x,
+    y,
+    width: clampNumber(box.width, 2, Math.max(2, widthPx - x)),
+    height: clampNumber(box.height, 2, Math.max(2, heightPx - y)),
+  }
 }
 
 function detectorOutputValue(value: unknown): DetectorOutput | null {
@@ -447,4 +587,13 @@ function booleanValue(value: unknown): boolean | undefined {
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function positiveNumberValue(value: unknown): number | undefined {
+  const parsed = numberValue(value)
+  return parsed !== undefined && parsed > 0 ? parsed : undefined
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
 }

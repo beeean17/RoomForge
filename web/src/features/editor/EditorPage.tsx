@@ -15,6 +15,7 @@ import { ThemeToggle } from '../../components/shell/ThemeToggle'
 import { StatePanel } from '../../components/ui/StatePanel'
 import { StatusPill } from '../../components/ui/StatusPill'
 import { demoProjectId, routes } from '../../lib/routes'
+import { useAuth } from '../auth/AuthProvider'
 import { pipelineSteps } from '../projects/projectData'
 import { useProject } from '../projects/projectRepository'
 import {
@@ -23,6 +24,10 @@ import {
   editorFrameSrc,
   isEditorBridgeMessage,
 } from './editorBridge'
+import {
+  persistEditorBridgeEvent,
+  type EditorEventPersistenceResult,
+} from './editorEventPersistence'
 import { useEditorSourceImagePayload } from './editorSourceImages'
 
 type BridgeState = 'loading' | 'ready' | 'initializing' | 'initialized' | 'error'
@@ -36,6 +41,7 @@ type BridgeEventRecord = {
 export function EditorPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const location = useLocation()
+  const auth = useAuth()
   const { project, status, error } = useProject(projectId)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const lastInitializeKeyRef = useRef<string | null>(null)
@@ -43,6 +49,10 @@ export function EditorPage() {
   const [frameLoaded, setFrameLoaded] = useState(false)
   const [frameKey, setFrameKey] = useState(0)
   const [events, setEvents] = useState<BridgeEventRecord[]>([])
+  const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
+    status: 'ignored',
+    label: 'Waiting for CV events',
+  })
   const sourceImageState = useEditorSourceImagePayload(project)
 
   const frameSrc = useMemo(() => editorFrameSrc(projectId), [projectId, frameKey])
@@ -108,17 +118,36 @@ export function EditorPage() {
         message.type === 'roomforge.scene.initialize.response'
       ) {
         setBridgeState('initialized')
-        return
       }
 
       if (message.type.endsWith('Failed')) {
         setBridgeState('error')
       }
+
+      if (project) {
+        persistEditorBridgeEvent({
+          message,
+          project,
+          ownerUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
+          source: sourceImageState.bridgePayload,
+        })
+          .then((result) => {
+            if (result.status !== 'ignored') {
+              setPersistenceState(result)
+            }
+          })
+          .catch((error) => {
+            setPersistenceState({
+              status: 'skipped',
+              label: error instanceof Error ? error.message : String(error),
+            })
+          })
+      }
     }
 
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [frameOrigin])
+  }, [auth, frameOrigin, project, sourceImageState.bridgePayload])
 
   if (!project && status === 'loading') {
     return (
@@ -247,6 +276,10 @@ export function EditorPage() {
               <div>
                 <dt>소스 이미지</dt>
                 <dd>{sourceImageStatusLabel(sourceImageState)}</dd>
+              </div>
+              <div>
+                <dt>저장</dt>
+                <dd>{persistenceState.label}</dd>
               </div>
             </dl>
           </section>

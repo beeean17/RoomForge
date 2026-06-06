@@ -181,6 +181,7 @@ function projectFromSnapshot(snapshot: QueryDocumentSnapshot<DocumentData> | Awa
     tone: projectToneForStatus(status),
     imageCount,
     latestSourceImageId: stringValue(data.latest_source_image_id) ?? undefined,
+    latestJobId: stringValue(data.latest_job_id) ?? undefined,
     updatedAtLabel: updatedAt ? relativeDateLabel(updatedAt) : '업데이트 시간 없음',
     roomEstimate: stringValue(data.room_estimate_label) ?? undefined,
     progress: progressForStatus(status),

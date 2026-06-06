@@ -293,10 +293,10 @@ export function LandingPage() {
               {modeLabel}
             </span>
             <span className="landing-dimtag d1" style={{ opacity: clamp((timeline.orbit - 0.15) / 0.6) }}>
-              침대 · 2.3 x 2.75 m
+              침대 · 1.85 x 2.57 m
             </span>
             <span className="landing-dimtag d2" style={{ opacity: clamp((timeline.orbit - 0.38) / 0.6) }}>
-              방 · 5.2 x 6.0 m
+              방 · 5.20 x 4.27 m
             </span>
             <span className="landing-scan" style={{ left: scanLeft, opacity: timeline.reveal > 0.005 && timeline.reveal < 0.995 ? timeline.intro : 0 }}>
               <span className="handle" aria-hidden="true">↔</span>

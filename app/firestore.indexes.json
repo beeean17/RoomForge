@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "owner_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updated_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "reconstruction_jobs",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

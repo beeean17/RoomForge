@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowRight, Check, RotateCcw, X } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
@@ -10,6 +11,8 @@ import { useProject } from '../projects/projectRepository'
 export function ReconstructionStatusPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const { project, status, error } = useProject(projectId)
+  const [statusOverride, setStatusOverride] = useState<string | null>(null)
+  const [showLogs, setShowLogs] = useState(false)
 
   if (!project && status === 'loading') {
     return <StatePanel eyebrow="Reconstruction" title="재구성 상태를 불러오는 중입니다" body="최신 작업 상태와 실행 이력을 확인하고 있습니다." />
@@ -26,7 +29,8 @@ export function ReconstructionStatusPage() {
     )
   }
 
-  const isComplete = project.status === 'succeeded'
+  const effectiveStatus = statusOverride ?? project.status
+  const isComplete = effectiveStatus === 'succeeded'
 
   return (
     <ProductShell active="status" project={project}>
@@ -43,13 +47,13 @@ export function ReconstructionStatusPage() {
         )}
       </header>
 
-      <StatusHero projectStatus={project.status} projectId={project.id} />
+      <StatusHero projectStatus={effectiveStatus} projectId={project.id} onCancel={() => setStatusOverride('cancelled')} />
 
       <section className="status-grid">
         <article className="summary-card status-steps-card">
           <h2>재구성 단계</h2>
           <ul className="status-steps">
-            {stepsFor(project.status).map((step) => (
+            {stepsFor(effectiveStatus).map((step) => (
               <StatusStepRow key={step.label} step={step} />
             ))}
           </ul>
@@ -81,17 +85,27 @@ export function ReconstructionStatusPage() {
                 <span className="history-dot history-dot--danger" />
                 <strong>시도 #1</strong>
                 <span>실패 · 2일 전 · 정합 단계</span>
-                <a href="#logs">로그</a>
+                <button className="inline-action" type="button" onClick={() => setShowLogs((open) => !open)}>로그</button>
               </li>
             </ul>
           </article>
+          {showLogs && (
+            <article className="summary-card" id="logs">
+              <h2>실패 로그</h2>
+              <ul className="reconstruction-log">
+                <li><strong>camera_alignment</strong><span>인접 이미지 겹침이 22%로 기준값보다 낮습니다.</span></li>
+                <li><strong>feature_matching</strong><span>오른쪽 창 주변 반사 영역에서 특징점 신뢰도가 낮습니다.</span></li>
+                <li><strong>next_action</strong><span>NE/SW 각도를 보강 촬영한 뒤 재구성을 다시 실행하세요.</span></li>
+              </ul>
+            </article>
+          )}
         </aside>
       </section>
     </ProductShell>
   )
 }
 
-function StatusHero({ projectStatus, projectId }: { projectStatus: string; projectId: string }) {
+function StatusHero({ projectStatus, projectId, onCancel }: { projectStatus: string; projectId: string; onCancel: () => void }) {
   if (projectStatus === 'processing') {
     return (
       <section className="status-hero status-hero--accent">
@@ -100,8 +114,24 @@ function StatusHero({ projectStatus, projectId }: { projectStatus: string; proje
           <h2>재구성 중 · 62%</h2>
           <p>포인트 클라우드 생성 중 · 예상 2분 남음</p>
         </div>
-        <button className="rf-btn" type="button">취소</button>
+        <button className="rf-btn" type="button" onClick={onCancel}>취소</button>
         <span className="hero-progress"><span style={{ width: '62%' }} /></span>
+      </section>
+    )
+  }
+
+  if (projectStatus === 'cancelled') {
+    return (
+      <section className="status-hero status-hero--danger">
+        <span className="status-hero-icon"><X size={24} /></span>
+        <div>
+          <h2>재구성 취소됨</h2>
+          <p>현재 실행 중이던 작업을 중단했습니다. 소스 이미지를 보강한 뒤 다시 실행할 수 있습니다.</p>
+        </div>
+        <Link className="rf-btn rf-btn--primary" to={routes.source(projectId)}>
+          <RotateCcw size={15} />
+          다시 실행
+        </Link>
       </section>
     )
   }

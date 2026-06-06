@@ -1,4 +1,5 @@
 import { Check, DoorOpen, Ruler, Smartphone } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
@@ -7,16 +8,15 @@ import { StatusPill } from '../../components/ui/StatusPill'
 import { demoProjectId, routes } from '../../lib/routes'
 import { useProject } from './projectRepository'
 
-const wallRows = [
-  ['북쪽 벽', '5.20 m', '창 1'],
-  ['동쪽 벽', '6.00 m', '창 1'],
-  ['남쪽 벽', '5.20 m', '문 1'],
-  ['서쪽 벽', '6.00 m', '개구부 없음'],
-] as const
-
 export function RoomDimensionsPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const { project, status, error } = useProject(projectId)
+  const [dimensions, setDimensions] = useState({
+    width: '5.20',
+    depth: '6.00',
+    height: '2.80',
+    scaleBasis: '문 높이 2.04',
+  })
 
   if (!project && status === 'loading') {
     return <StatePanel eyebrow="Room" title="방 치수를 불러오는 중입니다" body="저장된 metric room state와 스케일 기준을 확인하고 있습니다." />
@@ -31,6 +31,18 @@ export function RoomDimensionsPage() {
         action={<Link className="rf-btn rf-btn--primary" to={routes.projects}>프로젝트 목록</Link>}
       />
     )
+  }
+
+  const hasDimensionEdits = dimensions.width !== '5.20' || dimensions.depth !== '6.00' || dimensions.height !== '2.80' || dimensions.scaleBasis !== '문 높이 2.04'
+  const wallRows = [
+    ['북쪽 벽', `${dimensions.width} m`, '창 1'],
+    ['동쪽 벽', `${dimensions.depth} m`, '창 1'],
+    ['남쪽 벽', `${dimensions.width} m`, '문 1'],
+    ['서쪽 벽', `${dimensions.depth} m`, '개구부 없음'],
+  ] as const
+
+  function updateDimension(key: keyof typeof dimensions, value: string) {
+    setDimensions((current) => ({ ...current, [key]: value }))
   }
 
   return (
@@ -49,19 +61,26 @@ export function RoomDimensionsPage() {
         </div>
       </header>
 
+      {hasDimensionEdits && (
+        <section className="data-notice">
+          <strong>치수 변경됨</strong>
+          <span>입력값이 현재 화면의 평면 기준과 벽 길이에 반영되었습니다.</span>
+        </section>
+      )}
+
       <section className="room-dimension-grid">
         <article className="summary-card room-canvas-card">
           <header>
             <h2>평면 기준</h2>
-            <StatusPill label="5.2 x 6.0 m" tone="success" />
+            <StatusPill label={`${dimensions.width} x ${dimensions.depth} m`} tone="success" />
           </header>
           <div className="room-plan-preview" aria-label="방 치수 평면도">
             <svg viewBox="0 0 520 600" aria-hidden="true">
               <rect x="20" y="20" width="480" height="560" rx="8" />
               <line x1="160" y1="20" x2="300" y2="20" />
               <path d="M20 430a110 110 0 0 0 110 110" />
-              <text x="260" y="55">5.20 m</text>
-              <text x="462" y="308" transform="rotate(90 462 308)">6.00 m</text>
+              <text x="260" y="55">{dimensions.width} m</text>
+              <text x="462" y="308" transform="rotate(90 462 308)">{dimensions.depth} m</text>
             </svg>
           </div>
         </article>
@@ -70,10 +89,10 @@ export function RoomDimensionsPage() {
           <article className="summary-card">
             <header><h2>기준 치수</h2><Ruler size={16} /></header>
             <div className="dimension-field-grid">
-              <label><span>너비</span><input defaultValue="5.20" /><small>m</small></label>
-              <label><span>깊이</span><input defaultValue="6.00" /><small>m</small></label>
-              <label><span>천장</span><input defaultValue="2.80" /><small>m</small></label>
-              <label><span>스케일 기준</span><input defaultValue="문 높이 2.04" /><small>m</small></label>
+              <label><span>너비</span><input value={dimensions.width} onChange={(event) => updateDimension('width', event.currentTarget.value)} /><small>m</small></label>
+              <label><span>깊이</span><input value={dimensions.depth} onChange={(event) => updateDimension('depth', event.currentTarget.value)} /><small>m</small></label>
+              <label><span>천장</span><input value={dimensions.height} onChange={(event) => updateDimension('height', event.currentTarget.value)} /><small>m</small></label>
+              <label><span>스케일 기준</span><input value={dimensions.scaleBasis} onChange={(event) => updateDimension('scaleBasis', event.currentTarget.value)} /><small>m</small></label>
             </div>
           </article>
 

@@ -1,4 +1,5 @@
 import { ArrowRight, Check, Layers, MoreHorizontal, Pencil, Plus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
@@ -11,6 +12,33 @@ import { useProject } from './projectRepository'
 export function ProjectOverviewPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const { project, status, error } = useProject(projectId)
+  const [displayName, setDisplayName] = useState('')
+  const [nameDraft, setNameDraft] = useState('')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (project?.name) {
+      setDisplayName(project.name)
+      setNameDraft(project.name)
+    }
+  }, [project?.name])
+
+  useEffect(() => {
+    if (!moreOpen) {
+      return undefined
+    }
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!moreMenuRef.current?.contains(event.target as Node)) {
+        setMoreOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => window.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [moreOpen])
 
   if (!project && status === 'loading') {
     return <StatePanel eyebrow="Workspace" title="프로젝트를 불러오는 중입니다" body="Firebase에서 소유 프로젝트와 최신 상태를 확인하고 있습니다." />
@@ -28,16 +56,52 @@ export function ProjectOverviewPage() {
   }
 
   const pipelineState = getPipelineState(project, 'status')
+  const visibleName = displayName || project.name
+  const sourceThumbCount = Math.min(7, project.imageCount)
+
+  function saveProjectName(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const nextName = nameDraft.trim()
+    if (nextName) {
+      setDisplayName(nextName)
+      setNameDraft(nextName)
+    }
+    setIsEditingName(false)
+  }
 
   return (
     <ProductShell active="overview" project={project}>
       <header className="page-head project-head">
         <div className="min-w-0">
           <div className="project-title-row">
-            <h1>{project.name}</h1>
-            <button className="icon-button" type="button" title="이름 편집" aria-label="이름 편집">
-              <Pencil size={15} />
-            </button>
+            {isEditingName ? (
+              <form className="project-title-edit" onSubmit={saveProjectName}>
+                <input
+                  aria-label="프로젝트 이름"
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(event) => setNameDraft(event.target.value)}
+                />
+                <button className="rf-btn rf-btn--primary" type="submit">저장</button>
+                <button
+                  className="rf-btn"
+                  type="button"
+                  onClick={() => {
+                    setNameDraft(visibleName)
+                    setIsEditingName(false)
+                  }}
+                >
+                  취소
+                </button>
+              </form>
+            ) : (
+              <>
+                <h1>{visibleName}</h1>
+                <button className="icon-button" type="button" title="이름 편집" aria-label="이름 편집" onClick={() => setIsEditingName(true)}>
+                  <Pencil size={15} />
+                </button>
+              </>
+            )}
           </div>
           <div className="project-meta">
             <StatusPill label={project.statusLabel} tone={project.tone} />
@@ -46,9 +110,25 @@ export function ProjectOverviewPage() {
             <span>{project.updatedAtLabel}</span>
           </div>
         </div>
-        <button className="icon-button ml-auto" type="button" aria-label="더보기">
-          <MoreHorizontal size={18} />
-        </button>
+        <div className="rf-menu-wrap ml-auto" ref={moreMenuRef}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="더보기"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((open) => !open)}
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {moreOpen && (
+            <div className="rf-popover rf-popover--right compact-menu" role="menu">
+              <Link role="menuitem" to={routes.source(project.id)} onClick={() => setMoreOpen(false)}>소스 이미지</Link>
+              <Link role="menuitem" to={routes.status(project.id)} onClick={() => setMoreOpen(false)}>재구성 상태</Link>
+              <Link role="menuitem" to={routes.recovery(project.id)} onClick={() => setMoreOpen(false)}>복구 상태</Link>
+              <Link role="menuitem" to={routes.editor(project.id)} onClick={() => setMoreOpen(false)}>에디터 열기</Link>
+            </div>
+          )}
+        </div>
       </header>
 
       <section className="pipeline-card" aria-label="프로젝트 진행 단계">
@@ -72,7 +152,7 @@ export function ProjectOverviewPage() {
         <div className="project-main-column">
           <article className="preview-card">
             <div className="preview-media">
-              <img src="/assets/room.png" alt="" />
+              {project.coverMode === 'image' ? <img src="/assets/room.png" alt="" /> : <span className="preview-placeholder">촬영 대기</span>}
               <StatusPill label="3D 재구성 프리뷰" tone="accent" />
               <div className="preview-actions">
                 <Link className="rf-btn rf-btn--primary" to={routes.editor(project.id)}>
@@ -107,7 +187,7 @@ export function ProjectOverviewPage() {
               <Link to={routes.source(project.id)}>전체 보기</Link>
             </header>
             <div className="thumb-grid">
-              {Array.from({ length: 7 }, (_, index) => (
+              {Array.from({ length: sourceThumbCount }, (_, index) => (
                 <span className="source-thumb" key={index} style={{ filter: `brightness(${0.62 + index * 0.06}) saturate(.86)` }} />
               ))}
               <Link className="source-thumb source-thumb--add" to={routes.source(project.id)} aria-label="소스 이미지 추가">

@@ -1,5 +1,6 @@
 import { Activity, Archive, ChevronDown, Folder, Images, Layers, RefreshCw, Ruler, Search, Smartphone, Users } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 
 import { Brand } from './Brand'
 import { ThemeToggle } from './ThemeToggle'
@@ -15,6 +16,16 @@ type ProductShellProps = {
 
 export function ProductShell({ active = 'projects', project, children }: ProductShellProps) {
   const auth = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [workspaceOpen, setWorkspaceOpen] = useState(false)
+  const [searchDraft, setSearchDraft] = useState(searchParams.get('q') ?? '')
+  const accountRef = useRef<HTMLDivElement | null>(null)
+  const workspaceRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const searchValueFromUrl = searchParams.get('q') ?? ''
+  const projectScope = searchParams.get('scope') ?? 'mine'
   const userLabel = auth.status === 'signed-in' ? auth.user.displayName ?? '개인 워크스페이스' : '개인 워크스페이스'
   const userEmail = auth.status === 'signed-in' ? auth.user.email ?? 'RoomForge 계정' : '로그인 후 프로젝트가 동기화됩니다'
   const initials = auth.status === 'signed-in'
@@ -29,6 +40,66 @@ export function ProductShell({ active = 'projects', project, children }: Product
     { key: 'editor', label: '에디터', to: routes.editor(projectId), icon: Layers, badge: undefined, pulse: true },
     { key: 'recovery', label: '복구', to: routes.recovery(projectId), icon: RefreshCw, badge: undefined, pulse: false },
   ] as const
+  const workspaceScopes = [
+    { key: 'mine', label: '내 프로젝트', to: routes.projects, icon: Folder, badge: '6' },
+    { key: 'shared', label: '공유됨', to: `${routes.projects}?scope=shared`, icon: Users, badge: undefined },
+    { key: 'templates', label: '템플릿', to: `${routes.projects}?scope=templates`, icon: Layers, badge: undefined },
+    { key: 'archive', label: '보관함', to: `${routes.projects}?scope=archive`, icon: Archive, badge: undefined },
+  ] as const
+
+  useEffect(() => {
+    if (!accountOpen && !workspaceOpen) {
+      return undefined
+    }
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (!accountRef.current?.contains(target)) {
+        setAccountOpen(false)
+      }
+      if (!workspaceRef.current?.contains(target)) {
+        setWorkspaceOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => window.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [accountOpen, workspaceOpen])
+
+  useEffect(() => {
+    setSearchDraft(searchValueFromUrl)
+  }, [searchValueFromUrl])
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', focusSearch)
+    return () => window.removeEventListener('keydown', focusSearch)
+  }, [])
+
+  async function handleSignOut() {
+    await auth.signOut()
+    setAccountOpen(false)
+    navigate(routes.landing)
+  }
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const query = searchDraft.trim()
+    const params = new URLSearchParams(searchParams)
+    params.delete('scope')
+    if (query) {
+      params.set('q', query)
+    } else {
+      params.delete('q')
+    }
+    navigate(`${routes.projects}${params.toString() ? `?${params.toString()}` : ''}`)
+  }
 
   return (
     <div className="rf-page">
@@ -39,47 +110,86 @@ export function ProductShell({ active = 'projects', project, children }: Product
           {active !== 'projects' && <span>/</span>}
           {active !== 'projects' && <span>{project?.name ?? '거실 리노베이션'}</span>}
         </nav>
-        <label className="top-search">
+        <form className="top-search" role="search" onSubmit={handleSearch}>
           <Search size={15} />
-          <input type="search" placeholder="프로젝트 검색" />
+          <input
+            ref={searchInputRef}
+            name="q"
+            type="search"
+            placeholder="프로젝트 검색"
+            value={searchDraft}
+            onChange={(event) => setSearchDraft(event.currentTarget.value)}
+          />
           <kbd>⌘K</kbd>
-        </label>
+        </form>
         <div className="top-actions">
           <ThemeToggle />
-          <button className="account-avatar" type="button" aria-label="계정">
-            {initials}
-          </button>
+          <div className="rf-menu-wrap" ref={accountRef}>
+            <button
+              className="account-avatar"
+              type="button"
+              aria-label="계정"
+              aria-expanded={accountOpen}
+              onClick={() => setAccountOpen((open) => !open)}
+            >
+              {initials}
+            </button>
+            {accountOpen && (
+              <div className="rf-popover rf-popover--right account-menu" role="menu">
+                <strong>{userLabel}</strong>
+                <small>{userEmail}</small>
+                <Link role="menuitem" to={routes.projects} onClick={() => setAccountOpen(false)}>내 프로젝트</Link>
+                {auth.status === 'signed-in' ? (
+                  <button role="menuitem" type="button" onClick={handleSignOut}>로그아웃</button>
+                ) : (
+                  <Link role="menuitem" to={routes.login} onClick={() => setAccountOpen(false)}>로그인</Link>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
       <aside className="product-sidebar" aria-label="워크스페이스 탐색">
-        <button className="workspace-switcher" type="button">
-          <span className="workspace-avatar">{initials}</span>
-          <span className="workspace-copy">
-            <span>{userLabel}</span>
-            <small>{userEmail}</small>
-          </span>
-          <ChevronDown size={15} />
-        </button>
+        <div className="rf-menu-wrap" ref={workspaceRef}>
+          <button
+            className="workspace-switcher"
+            type="button"
+            aria-expanded={workspaceOpen}
+            onClick={() => setWorkspaceOpen((open) => !open)}
+          >
+            <span className="workspace-avatar">{initials}</span>
+            <span className="workspace-copy">
+              <span>{userLabel}</span>
+              <small>{userEmail}</small>
+            </span>
+            <ChevronDown size={15} />
+          </button>
+          {workspaceOpen && (
+            <div className="rf-popover workspace-menu" role="menu">
+              {workspaceScopes.map((scope) => (
+                <Link key={scope.key} role="menuitem" to={scope.to} onClick={() => setWorkspaceOpen(false)}>
+                  <scope.icon size={15} />
+                  {scope.label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="sidebar-rule" />
         <nav className="sidebar-nav" aria-label="프로젝트 범위">
-          <NavLink className={({ isActive }) => `nav-link ${isActive || active === 'projects' ? 'is-active' : ''}`} to={routes.projects}>
-            <Folder size={16} />
-            내 프로젝트 <span className="nav-badge">6</span>
-          </NavLink>
-          <a className="nav-link" href="#shared">
-            <Users size={16} />
-            공유됨
-          </a>
-          <a className="nav-link" href="#templates">
-            <Layers size={16} />
-            템플릿
-          </a>
-          <a className="nav-link" href="#archive">
-            <Archive size={16} />
-            보관함
-          </a>
+          {workspaceScopes.map((scope) => (
+            <Link
+              className={`nav-link ${active === 'projects' && projectScope === scope.key ? 'is-active' : ''}`}
+              key={scope.key}
+              to={scope.to}
+            >
+              <scope.icon size={16} />
+              {scope.label}
+              {scope.badge && <span className="nav-badge">{scope.badge}</span>}
+            </Link>
+          ))}
         </nav>
 
         {project && (

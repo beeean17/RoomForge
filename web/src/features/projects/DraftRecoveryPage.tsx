@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Cloud, RefreshCw, RotateCcw } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
 import { StatePanel } from '../../components/ui/StatePanel'
@@ -15,7 +16,9 @@ const recoveryRows = [
 
 export function DraftRecoveryPage() {
   const projectId = useParams().projectId ?? demoProjectId
+  const navigate = useNavigate()
   const { project, status, error } = useProject(projectId)
+  const [resolution, setResolution] = useState<'local' | 'cloud' | null>(null)
 
   if (!project && status === 'loading') {
     return <StatePanel eyebrow="Recovery" title="복구 상태를 불러오는 중입니다" body="로컬 draft와 클라우드 저장본 상태를 확인하고 있습니다." />
@@ -30,6 +33,11 @@ export function DraftRecoveryPage() {
         action={<Link className="rf-btn rf-btn--primary" to={routes.projects}>프로젝트 목록</Link>}
       />
     )
+  }
+
+  function resolveDraft(nextResolution: 'local' | 'cloud') {
+    setResolution(nextResolution)
+    window.setTimeout(() => navigate(`${routes.editor(project!.id)}?recovered=${nextResolution}`), 650)
   }
 
   return (
@@ -52,10 +60,21 @@ export function DraftRecoveryPage() {
             <StatusPill label="복구 가능" tone="warning" />
             <h2>최근 로컬 draft가 클라우드 저장본보다 새롭습니다</h2>
             <p>복구하면 현재 에디터 상태가 로컬 draft 기준으로 열리고, 저장 시 Firestore layout state로 동기화됩니다.</p>
+            {resolution && (
+              <p className="recovery-result">
+                {resolution === 'local' ? '로컬 draft를 적용합니다. 에디터로 이동 중입니다.' : '클라우드 저장본을 유지합니다. 에디터로 이동 중입니다.'}
+              </p>
+            )}
           </div>
           <div className="recovery-actions">
-            <button className="rf-btn rf-btn--primary" type="button"><RotateCcw size={15} />로컬 draft 복구</button>
-            <button className="rf-btn" type="button"><Cloud size={15} />클라우드 저장본 유지</button>
+            <button className="rf-btn rf-btn--primary" type="button" onClick={() => resolveDraft('local')} disabled={resolution !== null}>
+              <RotateCcw size={15} />
+              {resolution === 'local' ? '복구 중' : '로컬 draft 복구'}
+            </button>
+            <button className="rf-btn" type="button" onClick={() => resolveDraft('cloud')} disabled={resolution !== null}>
+              <Cloud size={15} />
+              {resolution === 'cloud' ? '유지 중' : '클라우드 저장본 유지'}
+            </button>
           </div>
         </article>
 

@@ -2211,6 +2211,64 @@ button {
   margin-left: auto;
 }
 
+.landing-account-chip,
+.landing-auth-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 800;
+  transition:
+    transform var(--rf-dur-2) var(--rf-ease-out),
+    background var(--rf-dur-2),
+    border-color var(--rf-dur-2),
+    box-shadow var(--rf-dur-2);
+}
+
+.landing-account-chip {
+  gap: 8px;
+  max-width: 220px;
+  padding: 3px 12px 3px 5px;
+}
+
+.landing-account-chip:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-hover);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+}
+
+.landing-account-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(220, 232, 255, 0.72);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.86), transparent 24%),
+    linear-gradient(135deg, #111111, #8fb4ff);
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.landing-account-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing-auth-status {
+  padding: 0 14px;
+  color: var(--text-dim);
+}
+
 .landing-intro {
   position: relative;
   height: 440vh;
@@ -4461,6 +4519,19 @@ button {
   }
 
   .landing-links {
+    display: none;
+  }
+
+  .landing-cta {
+    gap: 8px;
+  }
+
+  .landing-account-chip {
+    padding-right: 5px;
+  }
+
+  .landing-account-name,
+  .landing-auth-status {
     display: none;
   }
 

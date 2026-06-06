@@ -91,6 +91,9 @@ export function LandingPage() {
   const [navScrolled, setNavScrolled] = useState(false)
   const [drag, setDrag] = useState({ active: false, yaw: 0, pitch: 0, lastX: 0, lastY: 0, touched: false })
   const startRoute = auth.status === 'signed-in' ? routes.projects : routes.login
+  const isSignedIn = auth.status === 'signed-in'
+  const accountLabel = isSignedIn ? auth.user.displayName ?? auth.user.email ?? '내 계정' : ''
+  const accountInitials = isSignedIn ? (auth.user.displayName ?? auth.user.email ?? 'RF').slice(0, 2).toUpperCase() : ''
 
   useEffect(() => {
     let frame = 0
@@ -288,12 +291,36 @@ export function LandingPage() {
         </div>
         <div className="landing-cta">
           <ThemeToggle />
-          <Link className="rf-btn" onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={routes.login}>
-            로그인
-          </Link>
-          <Link className="rf-btn rf-btn--primary" onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={startRoute}>
-            시작하기
-          </Link>
+          {auth.status === 'loading' ? (
+            <span className="landing-auth-status">로그인 확인 중</span>
+          ) : isSignedIn ? (
+            <>
+              <Link
+                className="landing-account-chip"
+                onPointerMove={magnetic}
+                onPointerLeave={resetMagnetic}
+                title={auth.user.email ?? undefined}
+                to={routes.projects}
+              >
+                <span className="landing-account-avatar" aria-hidden="true">
+                  {accountInitials}
+                </span>
+                <span className="landing-account-name">{accountLabel}</span>
+              </Link>
+              <Link className="rf-btn rf-btn--primary" onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={routes.projects}>
+                내 프로젝트
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link className="rf-btn" onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={routes.login}>
+                로그인
+              </Link>
+              <Link className="rf-btn rf-btn--primary" onPointerMove={magnetic} onPointerLeave={resetMagnetic} to={startRoute}>
+                시작하기
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 

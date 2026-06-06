@@ -14,12 +14,16 @@ class RoomProject {
     required this.createdAt,
     required this.updatedAt,
     this.description,
+    this.latestFloorPlanId,
+    this.currentReconstructionStatus,
   });
 
   final String id;
   final String userId;
   final String name;
   final String? description;
+  final String? latestFloorPlanId;
+  final String? currentReconstructionStatus;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -29,6 +33,11 @@ class RoomProject {
       userId: _stringId(json['user_id']),
       name: json['name'] as String,
       description: json['description'] as String?,
+      latestFloorPlanId: json['latest_floor_plan_id'] == null
+          ? null
+          : _stringId(json['latest_floor_plan_id']),
+      currentReconstructionStatus:
+          json['current_reconstruction_status'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );

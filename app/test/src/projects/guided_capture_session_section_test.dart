@@ -12,11 +12,15 @@ void main() {
     await tester.pumpGuidedCaptureSection(dimensions: null, started: false);
 
     expect(find.text('Guided room capture'), findsOneWidget);
-    expect(find.textContaining('overview'), findsOneWidget);
     expect(find.textContaining('front_wall'), findsOneWidget);
+    expect(find.textContaining('front_right_corner'), findsOneWidget);
     expect(find.textContaining('right_wall'), findsOneWidget);
+    expect(find.textContaining('back_right_corner'), findsOneWidget);
     expect(find.textContaining('back_wall'), findsOneWidget);
+    expect(find.textContaining('back_left_corner'), findsOneWidget);
     expect(find.textContaining('left_wall'), findsOneWidget);
+    expect(find.textContaining('front_left_corner'), findsOneWidget);
+    expect(find.textContaining('extra'), findsOneWidget);
     expect(find.text('Blocked walls are acceptable'), findsOneWidget);
     expect(
       find.textContaining('visible wall and floor evidence'),
@@ -92,12 +96,12 @@ void main() {
       dimensions: _roomDimensions(),
       started: true,
       roleUploads: {
-        'overview': GuidedCaptureRoleUploadSnapshot(
+        'front_wall': GuidedCaptureRoleUploadSnapshot(
           status: SourceImageUploadStatus.uploaded,
-          image: _captureImage(role: 'overview'),
-          message: 'Uploaded: overview',
+          image: _captureImage(role: 'front_wall'),
+          message: 'Uploaded: front_wall',
         ),
-        'front_wall': const GuidedCaptureRoleUploadSnapshot(
+        'front_right_corner': const GuidedCaptureRoleUploadSnapshot(
           status: SourceImageUploadStatus.uploadFailed,
           message: 'Network failed',
         ),
@@ -116,7 +120,7 @@ void main() {
     await tester.tap(find.text('Retry role').first);
     await tester.pump();
 
-    expect(actions, ['retry:front_wall']);
+    expect(actions, ['retry:front_right_corner']);
   });
 
   testWidgets('enables ARCore depth enhancement when supported', (

@@ -286,9 +286,13 @@ enum FirebaseCaptureMethod {
 enum FirebaseCaptureImageRole {
   overview('overview'),
   frontWall('front_wall'),
+  frontRightCorner('front_right_corner'),
   rightWall('right_wall'),
+  backRightCorner('back_right_corner'),
   backWall('back_wall'),
+  backLeftCorner('back_left_corner'),
   leftWall('left_wall'),
+  frontLeftCorner('front_left_corner'),
   extra('extra');
 
   const FirebaseCaptureImageRole(this.wireValue);

@@ -1,4 +1,4 @@
-package com.example.app
+package com.roomforge.app
 
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity

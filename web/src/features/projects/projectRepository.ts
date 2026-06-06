@@ -6,6 +6,8 @@ import {
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
+  setDoc,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -146,6 +148,23 @@ export function useProject(projectId: string | undefined) {
       error: collectionState.error ?? remoteError,
     }
   }, [auth.isConfigured, collectionState, projectId, remoteError, remoteProject])
+}
+
+export async function createWorkspaceProject(owner: { uid: string }) {
+  const firestore = getFirestore(roomForgeFirebaseApp())
+  const projectRef = doc(collection(firestore, 'projects'))
+
+  await setDoc(projectRef, {
+    project_id: projectRef.id,
+    owner_uid: owner.uid,
+    name: '새 프로젝트',
+    description: '첫 소스 이미지를 추가하면 공간 재구성을 시작할 수 있습니다.',
+    schema_version: 1,
+    created_at: serverTimestamp(),
+    updated_at: serverTimestamp(),
+  })
+
+  return projectRef.id
 }
 
 function projectFromSnapshot(snapshot: QueryDocumentSnapshot<DocumentData> | Awaited<ReturnType<typeof getDoc>>) {

@@ -12,7 +12,6 @@ import { useProject } from '../projects/projectRepository'
 export function SourceImagesPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const { project, status, error } = useProject(projectId)
-  const filledCount = sourceDirections.filter((direction) => direction.filled && direction.key !== 'ROOM').length
 
   if (!project && status === 'loading') {
     return <StatePanel eyebrow="Source" title="소스 이미지를 불러오는 중입니다" body="프로젝트 접근 권한과 업로드 상태를 확인하고 있습니다." />
@@ -28,6 +27,14 @@ export function SourceImagesPage() {
       />
     )
   }
+
+  const hasSourceImages = project.imageCount > 0
+  const sourceSlots = hasSourceImages
+    ? sourceDirections
+    : sourceDirections.map((direction) => (direction.key === 'ROOM' ? direction : { ...direction, filled: false, quality: undefined, brightness: undefined }))
+  const filledCount = sourceSlots.filter((direction) => direction.filled && direction.key !== 'ROOM').length
+  const emptyCount = 8 - filledCount
+  const extraImageCount = hasSourceImages ? Math.max(0, project.imageCount - filledCount) : 0
 
   return (
     <ProductShell active="source" project={project}>
@@ -51,8 +58,8 @@ export function SourceImagesPage() {
       <section className="coverage-banner">
         <span className="coverage-icon"><Camera size={20} /></span>
         <div>
-          <strong>8개 각도 중 {filledCount}개 촬영됨 · <span>2개</span>가 비어 있어요</strong>
-          <p>현재 상태로 재구성은 가능하지만, 비어 있는 각도를 채우면 모서리 정확도가 올라갑니다.</p>
+          <strong>8개 각도 중 {filledCount}개 촬영됨 · <span>{emptyCount}개</span>가 비어 있어요</strong>
+          <p>{hasSourceImages ? '현재 상태로 재구성은 가능하지만, 비어 있는 각도를 채우면 모서리 정확도가 올라갑니다.' : '첫 사진을 업로드하거나 모바일 앱 가이드 촬영으로 빈 슬롯을 채우세요.'}</p>
         </div>
         <button className="rf-btn" type="button">
           <Smartphone size={15} />
@@ -68,7 +75,7 @@ export function SourceImagesPage() {
           </div>
 
           <div className="capture-grid" aria-label="각도별 촬영 슬롯">
-            {sourceDirections.map((direction) => (
+            {sourceSlots.map((direction) => (
               <CaptureCell direction={direction} key={direction.key} />
             ))}
           </div>
@@ -98,15 +105,15 @@ export function SourceImagesPage() {
       <section className="extra-source-section">
         <div className="section-title-row">
           <h2>추가 사진</h2>
-          <StatusPill label="+@" tone="accent" />
-          <span>특정 각도에 매이지 않는 디테일·접사 12장</span>
+          <StatusPill label={`+${extraImageCount}`} tone={extraImageCount > 0 ? 'accent' : 'muted'} />
+          <span>{extraImageCount > 0 ? `특정 각도에 매이지 않는 디테일·접사 ${extraImageCount}장` : '추가된 디테일 사진이 없습니다'}</span>
         </div>
         <div className="extra-grid">
           <button className="extra-cell extra-cell--add" type="button">
             <Plus size={20} />
             <span>추가</span>
           </button>
-          {Array.from({ length: 11 }, (_, index) => (
+          {Array.from({ length: Math.min(11, extraImageCount) }, (_, index) => (
             <div className="extra-cell" key={index}>
               <img src="/assets/room.png" alt="" style={{ filter: `brightness(${0.58 + (index % 6) * 0.07}) saturate(.86)` }} />
               <button type="button" aria-label="삭제"><Trash2 size={13} /></button>

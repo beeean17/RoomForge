@@ -222,19 +222,12 @@ function createAreaRug({ box }: LandingRoomBuilder, rug: PlanItem) {
 
 function createBed({ box }: LandingRoomBuilder, bed: PlanItem) {
   const backEdge = bed.z - bed.depth / 2
-  box(bed.width, 0.64, 0.09, 0x303238, { x: bed.x, y: 0.58, z: backEdge + 0.08, roughness: 0.86 })
-  for (let index = 0; index < 4; index += 1) {
-    box(0.014, 0.48, 0.024, 0x4b4d54, { x: bed.x - 0.66 + index * 0.44, y: 0.64, z: backEdge + 0.03 })
-  }
+  box(bed.width, 0.58, 0.1, 0x303238, { x: bed.x, y: 0.56, z: backEdge + 0.07, roughness: 0.86 })
   box(bed.width, 0.3, bed.depth, 0x25262b, { x: bed.x, y: 0.18, z: bed.z, roughness: 0.78 })
-  box(bed.width - 0.14, 0.22, bed.depth - 0.24, 0xe5ded7, { x: bed.x, y: 0.43, z: bed.z + 0.02, roughness: 0.96 })
-  box(bed.width - 0.18, 0.2, bed.depth * 0.52, 0x34353a, { x: bed.x, y: 0.62, z: bed.z + 0.44, roughness: 0.92 })
-  box(bed.width - 0.24, 0.16, bed.depth * 0.26, 0x8f8b84, { x: bed.x, y: 0.74, z: bed.z + 0.95, roughness: 0.9 })
-  box(0.68, 0.14, 0.38, 0xded8d0, { x: bed.x - 0.42, y: 0.72, z: backEdge + 0.45, rz: -0.03, roughness: 0.98 })
-  box(0.68, 0.14, 0.38, 0xded8d0, { x: bed.x + 0.42, y: 0.72, z: backEdge + 0.45, rz: 0.03, roughness: 0.98 })
-  box(0.54, 0.11, 0.36, 0x4a4b50, { x: bed.x - 0.34, y: 0.84, z: backEdge + 0.68, rz: 0.04, roughness: 0.95 })
-  box(0.54, 0.11, 0.36, 0x4a4b50, { x: bed.x + 0.34, y: 0.84, z: backEdge + 0.68, rz: -0.04, roughness: 0.95 })
-  box(0.42, 0.09, 0.24, 0xe8e1d8, { x: bed.x, y: 0.94, z: backEdge + 0.94, roughness: 0.98 })
+  box(bed.width - 0.12, 0.18, bed.depth - 0.2, 0xe3ded6, { x: bed.x, y: 0.42, z: bed.z + 0.02, roughness: 0.96 })
+  box(bed.width - 0.18, 0.14, bed.depth * 0.58, 0x34353a, { x: bed.x, y: 0.57, z: bed.z + 0.38, roughness: 0.92 })
+  box(0.68, 0.13, 0.38, 0xded8d0, { x: bed.x - 0.38, y: 0.62, z: backEdge + 0.48, roughness: 0.98 })
+  box(0.68, 0.13, 0.38, 0xded8d0, { x: bed.x + 0.38, y: 0.62, z: backEdge + 0.48, roughness: 0.98 })
 }
 
 function createNightstand({ box, cylinder }: LandingRoomBuilder, stand: PlanItem) {

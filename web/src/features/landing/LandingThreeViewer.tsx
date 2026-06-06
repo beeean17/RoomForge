@@ -14,13 +14,13 @@ const photoCameraFlow = {
   aspect: 1536 / 1024,
   initial: {
     fov: 58,
-    position: new THREE.Vector3(-0.08, 1.46, 3.35),
-    target: new THREE.Vector3(0.22, 1.12, -1.1),
+    position: new THREE.Vector3(0.12, 1.46, 3.35),
+    target: new THREE.Vector3(0.2, 1.12, -1.1),
   },
   center: {
     fov: 56,
-    position: new THREE.Vector3(0, 1.42, 1.15),
-    target: new THREE.Vector3(0.18, 1.05, -1.2),
+    position: new THREE.Vector3(0.06, 1.42, 1.15),
+    target: new THREE.Vector3(0.2, 1.05, -1.2),
   },
 }
 
@@ -57,7 +57,7 @@ export function LandingThreeViewer({ orbitProgress, yaw, pitch, isFreeLook }: La
 
     const camera = new THREE.PerspectiveCamera(photoCameraFlow.initial.fov, photoCameraFlow.aspect, 0.1, 80)
     const cameraTarget = new THREE.Vector3()
-    const orbitAnchor = new THREE.Vector3(0.18, 1.05, -1.2)
+    const orbitAnchor = new THREE.Vector3(0.2, 1.05, -1.2)
     const orbitTarget = new THREE.Vector3()
     const transitionTarget = new THREE.Vector3()
     const lookDirection = new THREE.Vector3()

@@ -38,6 +38,14 @@ type BridgeEventRecord = {
   receivedAt: string
 }
 
+type CvSummary = {
+  opencvQuality: string
+  sceneQuality: string
+  candidateCount: number
+  fixtureCount: number
+  coverageLabel: string
+}
+
 export function EditorPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const location = useLocation()
@@ -52,6 +60,13 @@ export function EditorPage() {
   const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
     status: 'ignored',
     label: 'Waiting for CV events',
+  })
+  const [cvSummary, setCvSummary] = useState<CvSummary>({
+    opencvQuality: '대기 중',
+    sceneQuality: '대기 중',
+    candidateCount: 0,
+    fixtureCount: 0,
+    coverageLabel: '촬영 이미지 대기 중',
   })
   const sourceImageState = useEditorSourceImagePayload(project)
 
@@ -122,6 +137,11 @@ export function EditorPage() {
 
       if (message.type.endsWith('Failed')) {
         setBridgeState('error')
+      }
+
+      const nextCvSummary = cvSummaryFromMessage(message)
+      if (nextCvSummary) {
+        setCvSummary((current) => ({ ...current, ...nextCvSummary }))
       }
 
       if (project) {
@@ -287,6 +307,31 @@ export function EditorPage() {
           <section>
             <div className="editor-host-section-title">
               <Layers size={18} />
+              <h2>CV 요약</h2>
+            </div>
+            <dl className="editor-host-status-list">
+              <div>
+                <dt>OpenCV</dt>
+                <dd>{cvSummary.opencvQuality}</dd>
+              </div>
+              <div>
+                <dt>Scene</dt>
+                <dd>{cvSummary.sceneQuality}</dd>
+              </div>
+              <div>
+                <dt>후보</dt>
+                <dd>{cvSummary.candidateCount} objects · {cvSummary.fixtureCount} fixtures</dd>
+              </div>
+              <div>
+                <dt>Coverage</dt>
+                <dd>{cvSummary.coverageLabel}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section>
+            <div className="editor-host-section-title">
+              <Cpu size={18} />
               <h2>최근 이벤트</h2>
             </div>
             {events.length === 0 ? (
@@ -331,4 +376,59 @@ function sourceImageStatusLabel(state: ReturnType<typeof useEditorSourceImagePay
   if (state.status === 'loading') return 'Loading private source image'
   if (state.status === 'error') return state.error ?? 'Source image load failed'
   return 'No source image bytes available'
+}
+
+function cvSummaryFromMessage(message: { type: string; payload: Record<string, unknown> }): Partial<CvSummary> | null {
+  if (message.type === 'roomforge.opencv.candidatesExtracted') {
+    return {
+      opencvQuality: qualityLabel(message.payload.qualityStatus),
+    }
+  }
+
+  if (message.type === 'roomforge.sceneUnderstanding.candidatesExtracted') {
+    const result = recordValue(message.payload.sceneUnderstandingResult)
+    const coverage = recordValue(result.coverage)
+    return {
+      sceneQuality: qualityLabel(result.qualityStatus),
+      candidateCount: listValue(result.candidateObjects).length,
+      fixtureCount: listValue(result.structuralFixtures).length,
+      coverageLabel: coverageLabel(coverage),
+    }
+  }
+
+  if (message.type === 'roomforge.sceneUnderstanding.candidatesFailed') {
+    return {
+      sceneQuality: 'Failed',
+      candidateCount: 0,
+      fixtureCount: 0,
+    }
+  }
+
+  return null
+}
+
+function qualityLabel(value: unknown): string {
+  if (value === 'review_required') return 'Needs review'
+  if (value === 'success') return 'Success'
+  if (value === 'failed') return 'Failed'
+  return '대기 중'
+}
+
+function coverageLabel(value: Record<string, unknown>): string {
+  const canContinue = typeof value.canContinue === 'boolean' ? value.canContinue : undefined
+  const roles = listValue(value.requiredRoles).filter((role): role is string => typeof role === 'string')
+  const guidance = listValue(value.guidance).filter((item): item is string => typeof item === 'string')
+  if (canContinue === undefined && roles.length === 0 && guidance.length === 0) {
+    return 'Coverage pending'
+  }
+  const state = canContinue ? 'complete' : 'Needs review'
+  return `${state} · ${guidance[0] ?? `${roles.length} roles checked`}`
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+}
+
+function listValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
 }

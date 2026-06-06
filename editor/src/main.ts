@@ -995,6 +995,9 @@ function handleBridgeCommand(message: BridgeMessage): void {
     respondToFlutter(message)
     emitSceneState('roomforge.scene.initialized', message.requestId)
     requestCandidateExtraction()
+    if (captureSessionForSceneUnderstanding?.images.length) {
+      requestSceneUnderstanding(`scene-understanding-init-${Date.now()}`)
+    }
     return
   }
 

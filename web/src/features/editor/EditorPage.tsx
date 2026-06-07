@@ -884,7 +884,7 @@ function PlacedObjectEditor({
         <h2 id="react-placed-object-title">Placed objects</h2>
       </div>
 
-      <div className="placed-object-counts" aria-label="Placed object counts">
+      <div className="placed-object-counts" aria-label="Placed object counts" aria-live="polite">
         <span><strong>{state.counts.total}</strong> placed</span>
         <span><strong>{state.counts.cvCandidates}</strong> CV</span>
         <span><strong>{state.counts.locked}</strong> locked</span>
@@ -1099,7 +1099,7 @@ function StructuralFixtureReview({
         <h2 id="react-structural-fixture-title">Structural fixtures</h2>
       </div>
 
-      <div className="fixture-review-counts" aria-label="Structural fixture counts">
+      <div className="fixture-review-counts" aria-label="Structural fixture counts" aria-live="polite">
         <span><strong>{state.counts.candidates}</strong> candidates</span>
         <span><strong>{state.counts.needsReview}</strong> Needs review</span>
         <span><strong>{state.counts.placed}</strong> placed</span>
@@ -1337,7 +1337,7 @@ function ConfirmationHandoffPanel({
         <h2 id="react-confirmation-handoff-title">Confirmation handoff</h2>
       </div>
 
-      <div className="confirmation-counts" aria-label="Confirmation handoff counts">
+      <div className="confirmation-counts" aria-label="Confirmation handoff counts" aria-live="polite">
         <span><strong>{state.counts.placed}</strong> placed</span>
         <span><strong>{state.counts.unconfirmed}</strong> unconfirmed</span>
         <span><strong>{state.counts.confirmed}</strong> confirmed</span>
@@ -1445,7 +1445,7 @@ function CandidateReviewTray({
         <h2 id="react-candidate-review-title">Candidate review</h2>
       </div>
 
-      <div className="candidate-review-counts" aria-label="CV candidate counts">
+      <div className="candidate-review-counts" aria-label="CV candidate counts" aria-live="polite">
         <span><strong>{state.counts.candidates}</strong> candidates</span>
         <span><strong>{state.counts.needsReview}</strong> Needs review</span>
         <span><strong>{state.counts.placed}</strong> placed</span>

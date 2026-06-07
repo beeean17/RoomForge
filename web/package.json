@@ -9,6 +9,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 9241",
     "test:editor-candidates": "node --experimental-strip-types scripts/verify-editor-candidate-review.mjs",
     "test:editor-confirmation": "node --experimental-strip-types scripts/verify-editor-confirmation-handoff.mjs",
+    "test:editor-a11y": "node scripts/verify-editor-responsive-a11y.mjs",
     "test:editor-fixtures": "node --experimental-strip-types scripts/verify-editor-structural-fixtures.mjs",
     "test:editor-placed": "node --experimental-strip-types scripts/verify-editor-placed-objects.mjs",
     "typecheck": "tsc -b"

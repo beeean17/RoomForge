@@ -5149,7 +5149,10 @@ button:disabled {
 
 .editor-runtime-toolbar {
   min-width: 0;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  align-content: center;
+  row-gap: 6px;
+  overflow-x: clip;
 }
 
 .editor-toolbar-group {
@@ -5200,7 +5203,12 @@ button:disabled {
   flex-direction: column;
   gap: 18px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px;
+}
+
+.editor-runtime-inspector-body > section {
+  min-width: 0;
 }
 
 .editor-inspector-actions {
@@ -5388,6 +5396,7 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--line-soft);
@@ -5396,6 +5405,16 @@ button:disabled {
   color: inherit;
   font: inherit;
   text-align: left;
+}
+
+.placed-object-card:focus-visible,
+.fixture-object-card:focus-visible,
+.candidate-review-card:focus-within,
+.fixture-candidate-card:focus-within,
+.confirmation-item:focus-within,
+.confirmed-object-row:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .placed-object-card:hover {
@@ -5537,6 +5556,19 @@ button:disabled {
   min-width: 0;
   min-height: 36px;
   padding-inline: 8px;
+}
+
+.placed-object-actions .rf-btn:focus-visible,
+.placed-object-actions .danger-button:focus-visible,
+.fixture-review-actions .rf-btn:focus-visible,
+.fixture-action-grid .rf-btn:focus-visible,
+.fixture-action-grid .danger-button:focus-visible,
+.confirmation-actions .rf-btn:focus-visible,
+.candidate-review-actions .rf-btn:focus-visible,
+.candidate-review-category select:focus-visible,
+.placed-object-transform-grid input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .structural-fixture-review {
@@ -6059,6 +6091,24 @@ button:disabled {
     grid-template-columns: 56px minmax(0, 1fr);
   }
 
+  .editor-topbar {
+    flex-wrap: wrap;
+    min-height: 64px;
+  }
+
+  .editor-pipeline {
+    display: none;
+  }
+
+  .editor-runtime-canvas-shell {
+    grid-template-rows: minmax(44px, auto) minmax(420px, 1fr);
+  }
+
+  .editor-runtime-toolbar {
+    min-height: 52px;
+    padding-block: 6px;
+  }
+
   .editor-runtime-inspector {
     grid-column: 1 / -1;
     min-height: 320px;
@@ -6097,6 +6147,34 @@ button:disabled {
     width: 1px;
     height: 28px;
     margin: auto 4px;
+  }
+
+  .editor-runtime-toolbar {
+    gap: 6px;
+  }
+
+  .toolbar-rule {
+    display: none;
+  }
+
+  .candidate-review-meta,
+  .placed-object-transform-grid,
+  .placed-object-actions,
+  .fixture-meta-grid,
+  .fixture-action-grid,
+  .confirmation-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .placed-object-card,
+  .fixture-object-card,
+  .confirmation-item,
+  .confirmed-object-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .placed-object-card-meta {
+    justify-items: start;
   }
 
   .landing-links {

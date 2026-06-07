@@ -130,10 +130,13 @@ const furnitureCatalogMarkup = catalogFurnitureItems
     const prior = furnitureSizePriorForCategory(item.category)
     const label = t(item.label, item.labelKo)
     const note = t(item.note, item.noteKo)
-    return `<button class="obj-tile" type="button" data-furniture-category="${item.category}">
+    return `<button class="obj-tile" type="button" draggable="true" data-furniture-category="${item.category}" aria-label="${t(
+      `Drag ${item.label} onto the 2D floor plan`,
+      `${item.labelKo} 가구를 2D 평면도에 드래그해서 배치`,
+    )}">
       <strong>${label}</strong>
       <span>${prior.size.widthMeters.toFixed(1)} x ${prior.size.depthMeters.toFixed(1)} m</span>
-      <small>${note}</small>
+      <small>${note} · ${t('drag to place', '드래그 배치')}</small>
     </button>`
   })
   .join('')
@@ -189,6 +192,9 @@ app.innerHTML = `
     </div>
     <div class="viewport-measurements" id="measurement-status" role="status" aria-live="polite">
       ${t('Room 4.20 m x 3.60 m', '방 4.20 m x 3.60 m')}
+    </div>
+    <div class="viewport-plan-hint" id="plan-hint" role="status" aria-live="polite">
+      ${t('2D top plan: drag furniture from the catalog, then click and drag placed objects.', '2D 탑다운 평면도: 카탈로그 가구를 드래그해 배치하고, 배치된 가구를 클릭해 끌어 이동하세요.')}
     </div>
     <div class="viewport-warning" id="placement-status" role="status" aria-live="assertive" hidden>
       ${t('Placement warning', '배치 경고')}
@@ -529,6 +535,7 @@ app.innerHTML = `
 `
 
 const canvas = app.querySelector<HTMLCanvasElement>('.editor-canvas')
+const viewport = app.querySelector<HTMLElement>('.viewport')
 const bridgeStatus = app.querySelector<HTMLElement>('#bridge-status')
 const opencvStatus = app.querySelector<HTMLElement>('#opencv-status')
 const captureSessionStatus = app.querySelector<HTMLElement>('#capture-session-status')
@@ -537,6 +544,7 @@ const geometryStatus = app.querySelector<HTMLElement>('#geometry-status')
 const spatialStatus = app.querySelector<HTMLElement>('#spatial-status')
 const inspectorStatus = app.querySelector<HTMLElement>('#inspector-status')
 const measurementStatus = app.querySelector<HTMLElement>('#measurement-status')
+const planHint = app.querySelector<HTMLElement>('#plan-hint')
 const placementStatus = app.querySelector<HTMLElement>('#placement-status')
 const placementSummary = app.querySelector<HTMLElement>('#placement-summary')
 const sceneStatus = app.querySelector<HTMLElement>('#scene-status')
@@ -630,6 +638,7 @@ const fixtureEditButtons = Array.from(
 
 if (
   !canvas ||
+  !viewport ||
   !bridgeStatus ||
   !opencvStatus ||
   !captureSessionStatus ||
@@ -638,6 +647,7 @@ if (
   !spatialStatus ||
   !inspectorStatus ||
   !measurementStatus ||
+  !planHint ||
   !placementStatus ||
   !placementSummary ||
   !sceneStatus ||
@@ -711,6 +721,7 @@ if (
 }
 
 const editorCanvas = canvas
+const viewportElement = viewport
 const bridgeStatusElement = bridgeStatus
 const opencvStatusElement = opencvStatus
 const captureSessionStatusElement = captureSessionStatus
@@ -719,6 +730,7 @@ const geometryStatusElement = geometryStatus
 const spatialStatusElement = spatialStatus
 const inspectorStatusElement = inspectorStatus
 const measurementStatusElement = measurementStatus
+const planHintElement = planHint
 const placementStatusElement = placementStatus
 const placementSummaryElement = placementSummary
 const sceneStatusElement = sceneStatus
@@ -809,6 +821,10 @@ const floor = new THREE.Mesh(
 floor.rotation.x = -Math.PI / 2
 floor.userData.objectId = spatialModel.room.objectId
 room.add(floor)
+
+const measurementOverlayGroup = new THREE.Group()
+measurementOverlayGroup.userData.objectType = 'plan-measurements'
+room.add(measurementOverlayGroup)
 
 const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xf4f1ea })
 const outlinePoints = [
@@ -938,6 +954,12 @@ type OutlineValidity = {
   areaSquareMeters: number
 }
 
+type FurnitureDragState = {
+  pointerId: number
+  objectId: string
+  offset: { x: number; y: number }
+}
+
 let activeCameraDrag:
   | {
       pointerId: number
@@ -946,6 +968,7 @@ let activeCameraDrag:
       lastY: number
     }
   | null = null
+let activeFurnitureDrag: FurnitureDragState | null = null
 let cameraTransition: CameraTransition | null = null
 let furnitureIdCounter = 0
 let selectedReferenceEdgeIndex = 0
@@ -1296,6 +1319,22 @@ for (const button of furnitureCategoryButtons) {
       addFurniture(category)
     }
   })
+  button.addEventListener('dragstart', (event) => {
+    const category = button.dataset.furnitureCategory
+    if (!isFurnitureCategory(category) || !event.dataTransfer) {
+      return
+    }
+    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.setData('application/x-roomforge-furniture-category', category)
+    event.dataTransfer.setData('text/plain', category)
+    planHintElement.textContent = t(
+      'Drop the furniture onto the 2D floor plan.',
+      '가구를 2D 평면도 위에 놓으세요.',
+    )
+  })
+  button.addEventListener('dragend', () => {
+    updatePlanHint()
+  })
 }
 for (const button of furnitureEditButtons) {
   button.addEventListener('click', () => {
@@ -1523,6 +1562,34 @@ app.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListener('
   })
 })
 
+editorCanvas.addEventListener('dragover', (event) => {
+  if (!hasDraggedFurnitureCategory(event.dataTransfer)) {
+    return
+  }
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+  planHintElement.textContent = t(
+    'Release to place the furniture at this metric position.',
+    '이 미터 좌표에 가구를 배치하려면 놓으세요.',
+  )
+})
+
+editorCanvas.addEventListener('dragleave', () => {
+  updatePlanHint()
+})
+
+editorCanvas.addEventListener('drop', (event) => {
+  const category = draggedFurnitureCategory(event.dataTransfer)
+  if (!category) {
+    return
+  }
+  event.preventDefault()
+  const metricPoint = metricPointFromCanvasEvent(event)
+  addFurniture(category, metricPoint ?? undefined)
+})
+
 editorCanvas.addEventListener('pointerdown', (event) => {
   setPointerFromEvent(event)
   raycaster.setFromCamera(pointer, camera)
@@ -1541,7 +1608,10 @@ editorCanvas.addEventListener('pointerdown', (event) => {
 
   const furnitureIntersections = raycaster.intersectObjects([...furnitureMeshes.values()], true)
   if (furnitureIntersections.length > 0) {
-    selectFurniture(furnitureIntersections[0].object.userData.objectId)
+    const objectId = furnitureIntersections[0].object.userData.objectId
+    selectFurniture(objectId)
+    startFurnitureDrag(event, objectId)
+    event.preventDefault()
     return
   }
 
@@ -1576,6 +1646,12 @@ editorCanvas.addEventListener('pointerdown', (event) => {
 
 editorCanvas.addEventListener('pointermove', (event) => {
   updateCursorCoordinates(event)
+  if (activeFurnitureDrag) {
+    updateFurnitureDrag(event)
+    event.preventDefault()
+    return
+  }
+
   if (activeCameraDrag) {
     const deltaX = event.clientX - activeCameraDrag.lastX
     const deltaY = event.clientY - activeCameraDrag.lastY
@@ -1603,6 +1679,11 @@ editorCanvas.addEventListener('pointermove', (event) => {
 })
 
 editorCanvas.addEventListener('pointerup', (event) => {
+  if (activeFurnitureDrag?.pointerId === event.pointerId) {
+    finishFurnitureDrag(event)
+    return
+  }
+
   if (activeCameraDrag?.pointerId === event.pointerId) {
     if (editorCanvas.hasPointerCapture(event.pointerId)) {
       editorCanvas.releasePointerCapture(event.pointerId)
@@ -1624,6 +1705,9 @@ editorCanvas.addEventListener('pointerup', (event) => {
 })
 
 editorCanvas.addEventListener('pointercancel', (event) => {
+  if (activeFurnitureDrag?.pointerId === event.pointerId) {
+    cancelFurnitureDrag(event)
+  }
   if (activeCameraDrag?.pointerId === event.pointerId) {
     activeCameraDrag = null
   }
@@ -1891,6 +1975,7 @@ function applySpatialModel(): void {
   rebuildWalls()
   rebuildStructuralFixtures()
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   applyViewModeCamera()
   updateSpatialStatus()
 }
@@ -1900,6 +1985,7 @@ function setViewMode(viewMode: ViewMode): void {
   spatialModel = { ...spatialModel, viewMode }
   rebuildStructuralFixtures()
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   applyViewModeCamera()
   updateSpatialStatus()
   emitSceneState('roomforge.view.changed')
@@ -1910,6 +1996,7 @@ function setSplitViewMode(): void {
   spatialModel = { ...spatialModel, viewMode: '3d' }
   rebuildStructuralFixtures()
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   queueCameraSnapshot(cameraSnapshotFor('corner'), 'Split inspection view', true)
   applyLayerVisibility()
   updateSpatialStatus()
@@ -1917,6 +2004,7 @@ function setSplitViewMode(): void {
 }
 
 function applyViewModeCamera(): void {
+  applyViewPresentation()
   if (spatialModel.viewMode === '2d') {
     queueCameraSnapshot(cameraSnapshotFor('top'), '2D top view', false)
   } else if (splitViewActive) {
@@ -1925,6 +2013,25 @@ function applyViewModeCamera(): void {
     queueCameraSnapshot(cameraSnapshotFor('corner'), '3D corner view', true)
   }
   applyLayerVisibility()
+}
+
+function applyViewPresentation(): void {
+  const is2d = spatialModel.viewMode === '2d' && !splitViewActive
+  viewportElement.dataset.viewMode = is2d ? '2d' : '3d'
+  renderer.setClearColor(is2d ? 0xf7f6f1 : 0x090a0c)
+
+  const floorMaterial = floor.material
+  if (floorMaterial instanceof THREE.MeshBasicMaterial) {
+    floorMaterial.color.set(is2d ? 0xf2d8a8 : 0xd8c7a3)
+    floorMaterial.opacity = is2d ? 0.94 : 0.14
+    floorMaterial.transparent = true
+    floorMaterial.needsUpdate = true
+  }
+
+  outlineMaterial.color.set(is2d ? 0x0d0d0e : 0xf4f1ea)
+  selectionMaterial.color.set(is2d ? 0x0ea5e9 : 0xd6a75b)
+  furnitureSelectionMaterial.color.set(is2d ? 0x0ea5e9 : 0xf4f1ea)
+  updatePlanHint()
 }
 
 function stringPayloadValue(payload: BridgePayload, key: string): string | undefined {
@@ -1984,6 +2091,7 @@ function syncLayerToggleButtons(): void {
 function applyLayerVisibility(): void {
   furnitureGroup.visible = layerVisibility.furniture
   fixtureGroup.visible = layerVisibility.fixtures
+  measurementOverlayGroup.visible = spatialModel.viewMode === '2d' && layerVisibility.boundaries
   candidateLine.visible = layerVisibility.lowConfidence
   confirmedLine.visible = layerVisibility.boundaries
   for (const corner of cornerMeshes) {
@@ -2669,18 +2777,37 @@ function rebuildStructuralFixtures(): void {
 
 function disposeObject3D(object: THREE.Object3D): void {
   object.traverse((child) => {
-    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Line) {
       child.geometry.dispose()
     }
-    if (child instanceof THREE.Mesh) {
+    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Line) {
       const meshMaterial = child.material
       if (Array.isArray(meshMaterial)) {
-        meshMaterial.forEach((material) => material.dispose())
+        meshMaterial.forEach(disposeOwnedMaterial)
       } else {
-        meshMaterial.dispose()
+        disposeOwnedMaterial(meshMaterial)
       }
     }
+    if (child instanceof THREE.Sprite) {
+      const spriteMaterial = child.material
+      spriteMaterial.map?.dispose()
+      spriteMaterial.dispose()
+    }
   })
+}
+
+function disposeOwnedMaterial(material: THREE.Material): void {
+  if (
+    material === outlineMaterial ||
+    material === selectionMaterial ||
+    material === furnitureSelectionMaterial ||
+    material === wallMaterial ||
+    material === cornerMaterial ||
+    material === candidateMaterial
+  ) {
+    return
+  }
+  material.dispose()
 }
 
 function tagSelectableObject(object: THREE.Object3D, objectId: string, objectType: string): void {
@@ -2703,6 +2830,113 @@ function setObjectOpacity(object: THREE.Object3D, opacity: number): void {
   })
 }
 
+function createFurniturePlanSymbol(item: FurnitureObject, isSelected: boolean): THREE.Group {
+  const width = Math.max(item.size.widthMeters, 0.2)
+  const depth = Math.max(item.size.depthMeters, 0.2)
+  const group = new THREE.Group()
+  group.userData.objectType = 'furniture-plan-symbol'
+
+  addPlanBox(group, {
+    name: 'footprint',
+    width,
+    depth,
+    y: 0.04,
+    color: item.color ?? '#9ab3d1',
+    opacity: isSelected ? 0.98 : 0.9,
+  })
+
+  const accent = isSelected ? '#0ea5e9' : '#f4f1ea'
+  if (item.category === 'bed') {
+    addPlanBox(group, { name: 'mattress', width: width * 0.86, depth: depth * 0.66, z: depth * 0.08, y: 0.08, color: '#f8fafc', opacity: 0.94 })
+    addPlanBox(group, { name: 'pillow-left', width: width * 0.32, depth: depth * 0.16, x: -width * 0.2, z: -depth * 0.31, y: 0.12, color: '#e5e7eb', opacity: 0.96 })
+    addPlanBox(group, { name: 'pillow-right', width: width * 0.32, depth: depth * 0.16, x: width * 0.2, z: -depth * 0.31, y: 0.12, color: '#e5e7eb', opacity: 0.96 })
+  } else if (item.category === 'desk' || item.category === 'table') {
+    addPlanBox(group, { name: 'top', width: width * 0.9, depth: depth * 0.82, y: 0.08, color: '#c48a50', opacity: 0.92 })
+    addPlanBox(group, { name: 'edge', width: width * 0.72, depth: 0.045, z: -depth * 0.34, y: 0.12, color: '#5f3b22', opacity: 0.8 })
+  } else if (item.category === 'chair') {
+    addPlanBox(group, { name: 'seat', width: width * 0.72, depth: depth * 0.58, z: depth * 0.08, y: 0.08, color: '#8b6f52', opacity: 0.9 })
+    addPlanBox(group, { name: 'back', width: width * 0.78, depth: depth * 0.12, z: -depth * 0.34, y: 0.12, color: '#4f3f33', opacity: 0.9 })
+  } else if (item.category === 'wardrobe' || item.category === 'cabinet' || item.category === 'dresser' || item.category === 'nightstand') {
+    const rows = item.category === 'nightstand' ? 2 : 3
+    for (let index = 1; index < rows; index += 1) {
+      addPlanBox(group, {
+        name: `drawer-${index}`,
+        width: width * 0.86,
+        depth: 0.035,
+        z: -depth / 2 + (depth / rows) * index,
+        y: 0.1,
+        color: '#38291e',
+        opacity: 0.72,
+      })
+    }
+  } else if (item.category === 'sofa') {
+    addPlanBox(group, { name: 'seat', width: width * 0.78, depth: depth * 0.62, z: depth * 0.08, y: 0.08, color: '#6b7280', opacity: 0.92 })
+    addPlanBox(group, { name: 'back', width, depth: depth * 0.16, z: -depth * 0.42, y: 0.12, color: '#374151', opacity: 0.92 })
+    addPlanBox(group, { name: 'left-arm', width: width * 0.1, depth: depth * 0.72, x: -width * 0.44, z: depth * 0.02, y: 0.12, color: '#4b5563', opacity: 0.92 })
+    addPlanBox(group, { name: 'right-arm', width: width * 0.1, depth: depth * 0.72, x: width * 0.44, z: depth * 0.02, y: 0.12, color: '#4b5563', opacity: 0.92 })
+  } else if (item.category === 'shelf') {
+    for (let index = 1; index < 4; index += 1) {
+      addPlanBox(group, {
+        name: `shelf-${index}`,
+        width: width * 0.92,
+        depth: 0.035,
+        z: -depth / 2 + (depth / 4) * index,
+        y: 0.1,
+        color: '#3f2e1c',
+        opacity: 0.76,
+      })
+    }
+  }
+
+  addPlanOutline(group, width, depth, isSelected ? '#0ea5e9' : accent)
+  const label = createPlanTextSprite(`${localizedFurnitureLabel(item)} · ${width.toFixed(2)} x ${depth.toFixed(2)} m`, {
+    background: isSelected ? 'rgba(14, 165, 233, 0.92)' : 'rgba(17, 24, 39, 0.82)',
+    color: '#ffffff',
+    fontSize: 40,
+  })
+  label.position.set(0, 0.22, Math.max(depth / 2 + 0.16, 0.32))
+  label.scale.set(Math.max(1.1, Math.min(2.2, width + 0.3)), 0.28, 1)
+  group.add(label)
+
+  return group
+}
+
+function addPlanBox(
+  group: THREE.Group,
+  options: {
+    name: string
+    width: number
+    depth: number
+    x?: number
+    z?: number
+    y?: number
+    color: THREE.ColorRepresentation
+    opacity: number
+  },
+): void {
+  const geometry = new THREE.BoxGeometry(Math.max(options.width, 0.02), 0.035, Math.max(options.depth, 0.02))
+  const material = new THREE.MeshBasicMaterial({
+    color: options.color,
+    transparent: true,
+    opacity: options.opacity,
+    depthWrite: false,
+  })
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = options.name
+  mesh.position.set(options.x ?? 0, options.y ?? 0.05, options.z ?? 0)
+  group.add(mesh)
+}
+
+function addPlanOutline(group: THREE.Group, width: number, depth: number, color: THREE.ColorRepresentation): void {
+  const geometry = new THREE.BoxGeometry(Math.max(width, 0.02), 0.042, Math.max(depth, 0.02))
+  const outline = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometry),
+    new THREE.LineBasicMaterial({ color }),
+  )
+  outline.position.y = 0.086
+  group.add(outline)
+}
+
 function rebuildFurniture(): void {
   for (const child of [...furnitureGroup.children]) {
     furnitureGroup.remove(child)
@@ -2716,20 +2950,22 @@ function rebuildFurniture(): void {
       spatialModel.selected?.objectType === 'furniture' &&
       spatialModel.selected.objectId === item.objectId
     const height = Math.max(item.size.heightMeters, 0.2)
-    const asset = createRoomObjectAssetGroup({
-      assetId: item.assetId,
-      category: item.category,
-      dimensions: {
-        x: item.size.widthMeters,
-        y: height,
-        z: item.size.depthMeters,
-      },
-    })
+    const asset = spatialModel.viewMode === '2d' && !splitViewActive
+      ? createFurniturePlanSymbol(item, isSelected)
+      : createRoomObjectAssetGroup({
+          assetId: item.assetId,
+          category: item.category,
+          dimensions: {
+            x: item.size.widthMeters,
+            y: height,
+            z: item.size.depthMeters,
+          },
+        })
     const position = metricPointToScene(item.position.x, item.position.y, 0.03)
     asset.position.copy(position)
     asset.rotation.y = THREE.MathUtils.degToRad(item.rotationDegrees)
     tagSelectableObject(asset, item.objectId, 'furniture')
-    setObjectOpacity(asset, spatialModel.viewMode === '2d' ? 0.78 : 0.92)
+    setObjectOpacity(asset, spatialModel.viewMode === '2d' ? 0.94 : 0.92)
     furnitureGroup.add(asset)
     furnitureMeshes.set(item.objectId, asset)
 
@@ -2746,6 +2982,180 @@ function rebuildFurniture(): void {
       furnitureOutlineObjects.push(outline)
     }
   }
+}
+
+function rebuildPlanMeasurementOverlay(): void {
+  for (const child of [...measurementOverlayGroup.children]) {
+    measurementOverlayGroup.remove(child)
+    disposeObject3D(child)
+  }
+
+  if (spatialModel.viewMode !== '2d' || splitViewActive) {
+    measurementOverlayGroup.visible = false
+    return
+  }
+
+  const bounds = roomBounds(spatialModel)
+  const width = Math.max(bounds.widthMeters, 0.1)
+  const depth = Math.max(bounds.depthMeters, 0.1)
+  const offset = Math.max(0.42, Math.min(width, depth) * 0.14)
+  const y = 0.2
+
+  addPlanWallStrips(width, depth)
+  addDimensionLine({
+    label: `${width.toFixed(2)} m`,
+    start: { x: 0, y: -offset },
+    end: { x: width, y: -offset },
+    labelAt: { x: width / 2, y: -offset - 0.18 },
+    height: y,
+  })
+  addDimensionLine({
+    label: `${width.toFixed(2)} m`,
+    start: { x: 0, y: depth + offset },
+    end: { x: width, y: depth + offset },
+    labelAt: { x: width / 2, y: depth + offset + 0.18 },
+    height: y,
+  })
+  addDimensionLine({
+    label: `${depth.toFixed(2)} m`,
+    start: { x: -offset, y: 0 },
+    end: { x: -offset, y: depth },
+    labelAt: { x: -offset - 0.24, y: depth / 2 },
+    height: y,
+  })
+  addDimensionLine({
+    label: `${depth.toFixed(2)} m`,
+    start: { x: width + offset, y: 0 },
+    end: { x: width + offset, y: depth },
+    labelAt: { x: width + offset + 0.24, y: depth / 2 },
+    height: y,
+  })
+
+  const areaLabel = createPlanTextSprite(
+    `${t('Area', '면적')} ${polygonAreaSquareMeters().toFixed(1)} m² · ${spatialModel.furniture.length} ${t('objects', '개 가구')}`,
+    {
+      background: 'rgba(255, 255, 255, 0.9)',
+      color: '#111827',
+      fontSize: 42,
+    },
+  )
+  areaLabel.position.copy(metricPointToScene(width / 2, depth / 2, 0.24))
+  areaLabel.scale.set(Math.max(1.7, width * 0.36), 0.3, 1)
+  measurementOverlayGroup.add(areaLabel)
+  measurementOverlayGroup.visible = true
+}
+
+function addPlanWallStrips(width: number, depth: number): void {
+  const thickness = 0.08
+  addPlanMetricRect({ x: width / 2, y: -thickness / 2, width: width + thickness * 2, depth: thickness })
+  addPlanMetricRect({ x: width / 2, y: depth + thickness / 2, width: width + thickness * 2, depth: thickness })
+  addPlanMetricRect({ x: -thickness / 2, y: depth / 2, width: thickness, depth: depth })
+  addPlanMetricRect({ x: width + thickness / 2, y: depth / 2, width: thickness, depth: depth })
+}
+
+function addPlanMetricRect(options: { x: number; y: number; width: number; depth: number }): void {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(options.width, 0.045, options.depth),
+    new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.96, depthWrite: false }),
+  )
+  mesh.position.copy(metricPointToScene(options.x, options.y, 0.16))
+  measurementOverlayGroup.add(mesh)
+}
+
+function addDimensionLine(options: {
+  label: string
+  start: { x: number; y: number }
+  end: { x: number; y: number }
+  labelAt: { x: number; y: number }
+  height: number
+}): void {
+  const start = metricPointToScene(options.start.x, options.start.y, options.height)
+  const end = metricPointToScene(options.end.x, options.end.y, options.height)
+  const direction = end.clone().sub(start).setY(0).normalize()
+  const perpendicular = new THREE.Vector3(-direction.z, 0, direction.x)
+  const arrowLength = 0.12
+  const arrowWidth = 0.06
+  const points = [
+    start,
+    end,
+    start,
+    start.clone().add(direction.clone().multiplyScalar(arrowLength)).add(perpendicular.clone().multiplyScalar(arrowWidth)),
+    start,
+    start.clone().add(direction.clone().multiplyScalar(arrowLength)).add(perpendicular.clone().multiplyScalar(-arrowWidth)),
+    end,
+    end.clone().add(direction.clone().multiplyScalar(-arrowLength)).add(perpendicular.clone().multiplyScalar(arrowWidth)),
+    end,
+    end.clone().add(direction.clone().multiplyScalar(-arrowLength)).add(perpendicular.clone().multiplyScalar(-arrowWidth)),
+  ]
+  const line = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color: 0x111827 }),
+  )
+  measurementOverlayGroup.add(line)
+
+  const label = createPlanTextSprite(options.label, {
+    background: 'rgba(255, 255, 255, 0.92)',
+    color: '#111827',
+    fontSize: 44,
+  })
+  label.position.copy(metricPointToScene(options.labelAt.x, options.labelAt.y, options.height + 0.04))
+  label.scale.set(0.82, 0.22, 1)
+  measurementOverlayGroup.add(label)
+}
+
+function createPlanTextSprite(
+  text: string,
+  options: { background: string; color: string; fontSize: number },
+): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 640
+  canvas.height = 160
+  const context = canvas.getContext('2d')
+  if (!context) {
+    throw new Error('Could not create plan label canvas context.')
+  }
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  context.fillStyle = options.background
+  roundRect(context, 18, 28, canvas.width - 36, canvas.height - 56, 18)
+  context.fill()
+  context.fillStyle = options.color
+  context.font = `700 ${options.fontSize}px Inter, system-ui, sans-serif`
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 72)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  })
+  const sprite = new THREE.Sprite(material)
+  sprite.userData.objectType = 'plan-label'
+  return sprite
+}
+
+function roundRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  context.beginPath()
+  context.moveTo(x + radius, y)
+  context.lineTo(x + width - radius, y)
+  context.quadraticCurveTo(x + width, y, x + width, y + radius)
+  context.lineTo(x + width, y + height - radius)
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+  context.lineTo(x + radius, y + height)
+  context.quadraticCurveTo(x, y + height, x, y + height - radius)
+  context.lineTo(x, y + radius)
+  context.quadraticCurveTo(x, y, x + radius, y)
+  context.closePath()
 }
 
 function updateCaptureSessionStatus(): void {
@@ -2775,6 +3185,7 @@ function updateSpatialStatus(): void {
   sceneStatusElement.textContent = localizedSpatialSummary(spatialModel)
   inspectorStatusElement.textContent = inspectorSummary(spatialModel)
   measurementStatusElement.textContent = measurementSummary(spatialModel)
+  updatePlanHint()
   updateCandidateTray()
   const warning = placementWarning(spatialModel)
   placementStatusElement.hidden = warning === null
@@ -3090,6 +3501,7 @@ function placeCandidate(candidateId: string): void {
   }
   spatialModel = nextModel
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   geometryStatusElement.textContent = t(
     'Candidate placed as an editable furniture object.',
     '후보를 편집 가능한 가구 객체로 배치했습니다.',
@@ -3120,6 +3532,7 @@ function rejectCandidate(candidateId: string): void {
   }
   spatialModel = nextModel
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   geometryStatusElement.textContent = t(
     'Candidate rejected and removed from placed CV objects.',
     '후보를 거절하고 배치된 CV 객체에서 제거했습니다.',
@@ -3228,17 +3641,173 @@ function spatialModelPayload(): Record<string, unknown> {
   }
 }
 
-function addFurniture(category: FurnitureCategory): void {
+function addFurniture(category: FurnitureCategory, position?: { x: number; y: number }): void {
   furnitureIdCounter += 1
-  const item = furnitureDefaults({
+  const defaults = furnitureDefaults({
     category,
     id: `furniture-${category}-${Date.now()}-${furnitureIdCounter}`,
     model: spatialModel,
   })
+  const item = position
+    ? {
+        ...defaults,
+        position: clampedFurniturePosition(defaults, position),
+      }
+    : defaults
   spatialModel = addFurnitureToModel(spatialModel, item)
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   updateSpatialStatus()
+  geometryStatusElement.textContent = position
+    ? t(
+        `Placed ${item.label} at x ${item.position.x.toFixed(2)} m, y ${item.position.y.toFixed(2)} m.`,
+        `${localizedFurnitureLabel(item)} 배치됨: x ${item.position.x.toFixed(2)} m, y ${item.position.y.toFixed(2)} m.`,
+      )
+    : t(
+        `Added ${item.label} to the measured room.`,
+        `${localizedFurnitureLabel(item)}을(를) 측정된 방에 추가했습니다.`,
+      )
+  updatePlanHint()
   emitSceneState('roomforge.selection.changed')
+}
+
+function draggedFurnitureCategory(dataTransfer: DataTransfer | null): FurnitureCategory | null {
+  const raw =
+    dataTransfer?.getData('application/x-roomforge-furniture-category') ||
+    dataTransfer?.getData('text/plain')
+  return isFurnitureCategory(raw) ? raw : null
+}
+
+function hasDraggedFurnitureCategory(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) {
+    return false
+  }
+  const types = Array.from(dataTransfer.types)
+  return types.includes('application/x-roomforge-furniture-category') || types.includes('text/plain')
+}
+
+function metricPointFromCanvasEvent(event: MouseEvent | PointerEvent | DragEvent): { x: number; y: number } | null {
+  setPointerFromEvent(event)
+  raycaster.setFromCamera(pointer, camera)
+  const target = new THREE.Vector3()
+  if (!raycaster.ray.intersectPlane(dragPlane, target)) {
+    return null
+  }
+  return scenePointToMetric(target)
+}
+
+function startFurnitureDrag(event: PointerEvent, objectId: unknown): void {
+  if (spatialModel.viewMode !== '2d' || typeof objectId !== 'string') {
+    return
+  }
+  const selected = spatialModel.furniture.find((item) => item.objectId === objectId)
+  const metricPoint = metricPointFromCanvasEvent(event)
+  if (!selected || selected.locked || !metricPoint) {
+    if (selected?.locked) {
+      geometryStatusElement.textContent = t(
+        `${selected.label} is locked. Unlock it before dragging.`,
+        `${localizedFurnitureLabel(selected)}은 잠겨 있습니다. 드래그 전에 잠금을 해제하세요.`,
+      )
+    }
+    return
+  }
+  activeFurnitureDrag = {
+    pointerId: event.pointerId,
+    objectId,
+    offset: {
+      x: selected.position.x - metricPoint.x,
+      y: selected.position.y - metricPoint.y,
+    },
+  }
+  viewportElement.classList.add('is-dragging-furniture')
+  editorCanvas.setPointerCapture(event.pointerId)
+  planHintElement.textContent = t(
+    'Dragging furniture on the 2D floor plan.',
+    '2D 평면도에서 가구를 드래그 중입니다.',
+  )
+}
+
+function updateFurnitureDrag(event: PointerEvent): void {
+  if (!activeFurnitureDrag) {
+    return
+  }
+  const selected = spatialModel.furniture.find((item) => item.objectId === activeFurnitureDrag?.objectId)
+  const metricPoint = metricPointFromCanvasEvent(event)
+  if (!selected || !metricPoint) {
+    return
+  }
+  const nextPosition = clampedFurniturePosition(selected, {
+    x: metricPoint.x + activeFurnitureDrag.offset.x,
+    y: metricPoint.y + activeFurnitureDrag.offset.y,
+  })
+  if (
+    Math.abs(nextPosition.x - selected.position.x) < 0.001 &&
+    Math.abs(nextPosition.y - selected.position.y) < 0.001
+  ) {
+    return
+  }
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    furniture: spatialModel.furniture.map((item) =>
+      item.objectId === selected.objectId ? { ...item, position: nextPosition } : item,
+    ),
+  }
+  rebuildFurniture()
+  updateSpatialStatus()
+}
+
+function finishFurnitureDrag(event: PointerEvent): void {
+  const selected = activeFurnitureDrag
+    ? spatialModel.furniture.find((item) => item.objectId === activeFurnitureDrag?.objectId)
+    : null
+  if (editorCanvas.hasPointerCapture(event.pointerId)) {
+    editorCanvas.releasePointerCapture(event.pointerId)
+  }
+  activeFurnitureDrag = null
+  viewportElement.classList.remove('is-dragging-furniture')
+  if (selected) {
+    geometryStatusElement.textContent = t(
+      `Moved ${selected.label} to x ${selected.position.x.toFixed(2)} m, y ${selected.position.y.toFixed(2)} m.`,
+      `${localizedFurnitureLabel(selected)} 이동됨: x ${selected.position.x.toFixed(2)} m, y ${selected.position.y.toFixed(2)} m.`,
+    )
+  }
+  updatePlanHint()
+  updateSpatialStatus()
+  emitSceneState('roomforge.scene.updated')
+}
+
+function cancelFurnitureDrag(event: PointerEvent): void {
+  if (editorCanvas.hasPointerCapture(event.pointerId)) {
+    editorCanvas.releasePointerCapture(event.pointerId)
+  }
+  activeFurnitureDrag = null
+  viewportElement.classList.remove('is-dragging-furniture')
+  updatePlanHint()
+}
+
+function clampedFurniturePosition(
+  item: Pick<FurnitureObject, 'size'>,
+  position: { x: number; y: number },
+): { x: number; y: number } {
+  const bounds = roomBounds(spatialModel)
+  const halfWidth = Math.max(item.size.widthMeters / 2, 0)
+  const halfDepth = Math.max(item.size.depthMeters / 2, 0)
+  const minX = Math.min(halfWidth, bounds.widthMeters / 2)
+  const maxX = Math.max(bounds.widthMeters - halfWidth, bounds.widthMeters / 2)
+  const minY = Math.min(halfDepth, bounds.depthMeters / 2)
+  const maxY = Math.max(bounds.depthMeters - halfDepth, bounds.depthMeters / 2)
+  return {
+    x: snappedNumber(clampNumber(position.x, minX, maxX)),
+    y: snappedNumber(clampNumber(position.y, minY, maxY)),
+  }
+}
+
+function snappedNumber(value: number): number {
+  if (!canvasToggleState.snap) {
+    return Number(value.toFixed(2))
+  }
+  return Number((Math.round(value / 0.05) * 0.05).toFixed(2))
 }
 
 function selectFurniture(objectId: unknown): void {
@@ -3317,6 +3886,7 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
     )
   }
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   updateSpatialStatus()
   emitSceneState('roomforge.scene.updated')
 }
@@ -3345,6 +3915,7 @@ function updateSelectedFurnitureTransform(field: TransformField, value: number):
     ),
   }
   rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
   geometryStatusElement.textContent = t(
     `Updated ${selected.label} transform.`,
     `${localizedFurnitureLabel(selected)} 변환 값을 업데이트했습니다.`,
@@ -4132,6 +4703,28 @@ function isLoadSource(value: string | undefined): value is LoadSource {
   return value === 'latest' || value === 'draft' || value === 'export'
 }
 
+function updatePlanHint(): void {
+  if (spatialModel.viewMode !== '2d' || splitViewActive) {
+    planHintElement.textContent = t(
+      'Switch to 2D for top-down drag placement.',
+      '탑다운 드래그 배치는 2D에서 사용할 수 있습니다.',
+    )
+    return
+  }
+  const selected = selectedFurniture()
+  if (selected) {
+    planHintElement.textContent = t(
+      `Selected ${selected.label}: drag it on the plan or use the transform controls.`,
+      `${localizedFurnitureLabel(selected)} 선택됨: 평면도에서 드래그하거나 변환 컨트롤을 사용하세요.`,
+    )
+    return
+  }
+  planHintElement.textContent = t(
+    '2D top plan: drag furniture from the catalog, then click and drag placed objects.',
+    '2D 탑다운 평면도: 카탈로그 가구를 드래그해 배치하고, 배치된 가구를 클릭해 끌어 이동하세요.',
+  )
+}
+
 function measurementSummary(model: SpatialModel): string {
   const selected = selectedFurniture()
   return measurementSummaryForModel({
@@ -4192,7 +4785,7 @@ function isFixtureEditAction(value: string | undefined): value is FixtureEditAct
   )
 }
 
-function setPointerFromEvent(event: PointerEvent): void {
+function setPointerFromEvent(event: MouseEvent | PointerEvent | DragEvent): void {
   const rect = editorCanvas.getBoundingClientRect()
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
   pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1)

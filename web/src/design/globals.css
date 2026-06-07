@@ -5179,6 +5179,85 @@ button:disabled {
   background: #0f1115;
 }
 
+.editor-host-frame-wrap--direct {
+  display: grid;
+  min-height: 640px;
+}
+
+.editor-direct-runtime-root {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  background: #090a0c;
+}
+
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  max-height: none;
+  grid-template-rows: minmax(0, 1fr);
+  background: var(--canvas);
+}
+
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] > .editor-topbar,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] > .editor-statusbar,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .tool-rail,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .status-panel {
+  display: none;
+}
+
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .editor-stage {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .viewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(143, 180, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 180, 255, 0.08) 1px, transparent 1px),
+    #090a0c;
+  background-size: 42px 42px;
+}
+
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .editor-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .viewport-toolbar,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .canvas-toolbar,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .viewport-layer-controls,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .viewport-measurements,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .viewport-warning,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .viewport-status-strip,
+.editor-direct-runtime-root .editor-shell[data-editor-chrome="embedded"] .viewport-cv-readout {
+  display: none;
+}
+
+.editor-host-runtime-error {
+  position: absolute;
+  inset: 16px 16px auto;
+  z-index: 2;
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 114, 106, 0.34);
+  background: rgba(240, 114, 106, 0.12);
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .editor-host-loading {
   position: absolute;
   inset: 16px auto auto 16px;

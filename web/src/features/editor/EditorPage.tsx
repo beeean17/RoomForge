@@ -7,7 +7,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { Brand } from '../../components/shell/Brand'
@@ -20,14 +20,14 @@ import { pipelineSteps } from '../projects/projectData'
 import { useProject } from '../projects/projectRepository'
 import {
   createEditorInitializeMessage,
-  editorFrameOrigin,
   editorFrameSrc,
-  isEditorBridgeMessage,
+  type EditorBridgeMessage,
 } from './editorBridge'
 import {
   persistEditorBridgeEvent,
   type EditorEventPersistenceResult,
 } from './editorEventPersistence'
+import { EditorRuntimeSurface, type EditorRuntimeDispatch } from './EditorRuntimeSurface'
 import { useEditorSourceImagePayload } from './editorSourceImages'
 
 type BridgeState = 'loading' | 'ready' | 'initializing' | 'initialized' | 'error'
@@ -46,44 +46,110 @@ type CvSummary = {
   coverageLabel: string
 }
 
+const initialCvSummary: CvSummary = {
+  opencvQuality: '대기 중',
+  sceneQuality: '대기 중',
+  candidateCount: 0,
+  fixtureCount: 0,
+  coverageLabel: '촬영 이미지 대기 중',
+}
+
 export function EditorPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const location = useLocation()
   const auth = useAuth()
   const { project, status, error } = useProject(projectId)
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const runtimeDispatchRef = useRef<EditorRuntimeDispatch | null>(null)
   const lastInitializeKeyRef = useRef<string | null>(null)
   const [bridgeState, setBridgeState] = useState<BridgeState>('loading')
-  const [frameLoaded, setFrameLoaded] = useState(false)
-  const [frameKey, setFrameKey] = useState(0)
+  const [runtimeReady, setRuntimeReady] = useState(false)
+  const [runtimeKey, setRuntimeKey] = useState(0)
+  const [runtimeError, setRuntimeError] = useState<string | null>(null)
+  const [initializeMessage, setInitializeMessage] = useState<EditorBridgeMessage | null>(null)
   const [events, setEvents] = useState<BridgeEventRecord[]>([])
   const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
     status: 'ignored',
     label: 'Waiting for CV events',
   })
-  const [cvSummary, setCvSummary] = useState<CvSummary>({
-    opencvQuality: '대기 중',
-    sceneQuality: '대기 중',
-    candidateCount: 0,
-    fixtureCount: 0,
-    coverageLabel: '촬영 이미지 대기 중',
-  })
+  const [cvSummary, setCvSummary] = useState<CvSummary>(initialCvSummary)
   const sourceImageState = useEditorSourceImagePayload(project)
 
-  const frameSrc = useMemo(() => editorFrameSrc(projectId), [projectId, frameKey])
-  const frameOrigin = useMemo(() => editorFrameOrigin(frameSrc), [frameSrc])
+  const standaloneEditorSrc = useMemo(() => editorFrameSrc(projectId), [projectId])
 
-  useEffect(() => {
-    if (!project || !iframeRef.current?.contentWindow) {
+  const handleRuntimeMessage = useCallback((message: EditorBridgeMessage) => {
+    setEvents((current) => [
+      {
+        id: `${message.type}-${message.requestId ?? Date.now()}`,
+        type: message.type,
+        receivedAt: new Date().toLocaleTimeString(),
+      },
+      ...current,
+    ].slice(0, 6))
+
+    if (
+      message.type === 'roomforge.scene.initialized' ||
+      message.type === 'roomforge.scene.initialize.response'
+    ) {
+      setBridgeState('initialized')
+    }
+
+    if (message.type.endsWith('Failed')) {
+      setBridgeState('error')
+    }
+
+    const nextCvSummary = cvSummaryFromMessage(message)
+    if (nextCvSummary) {
+      setCvSummary((current) => ({ ...current, ...nextCvSummary }))
+    }
+
+    if (!project) {
       return
     }
 
-    if (!frameLoaded || sourceImageState.status === 'loading') {
+    persistEditorBridgeEvent({
+      message,
+      project,
+      ownerUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
+      source: sourceImageState.bridgePayload,
+    })
+      .then((result) => {
+        if (result.status !== 'ignored') {
+          setPersistenceState(result)
+        }
+      })
+      .catch((error) => {
+        setPersistenceState({
+          status: 'skipped',
+          label: error instanceof Error ? error.message : String(error),
+        })
+      })
+  }, [auth, project, sourceImageState.bridgePayload])
+
+  const handleRuntimeReady = useCallback((dispatch: EditorRuntimeDispatch) => {
+    runtimeDispatchRef.current = dispatch
+    setRuntimeReady(true)
+    setRuntimeError(null)
+    setBridgeState('ready')
+  }, [])
+
+  const handleRuntimeError = useCallback((error: Error) => {
+    runtimeDispatchRef.current = null
+    setRuntimeReady(false)
+    setRuntimeError(error.message)
+    setBridgeState('error')
+  }, [])
+
+  useEffect(() => {
+    if (!project || !runtimeReady || !runtimeDispatchRef.current) {
+      return
+    }
+
+    if (sourceImageState.status === 'loading') {
       return
     }
 
     const initializeKey = [
-      frameKey,
+      runtimeKey,
       project.id,
       sourceImageState.status,
       sourceImageState.sourceImageId ?? 'no-source-image',
@@ -101,73 +167,8 @@ export function EditorPage() {
     })
 
     setBridgeState('initializing')
-    iframeRef.current.contentWindow.postMessage(message, frameOrigin)
-  }, [frameKey, frameLoaded, frameOrigin, location.pathname, location.search, project, sourceImageState])
-
-  useEffect(() => {
-    const onMessage = (event: MessageEvent<unknown>) => {
-      if (event.source !== iframeRef.current?.contentWindow) {
-        return
-      }
-
-      if (event.origin !== frameOrigin) {
-        return
-      }
-
-      if (!isEditorBridgeMessage(event.data)) {
-        return
-      }
-
-      const message = event.data
-      setEvents((current) => [
-        {
-          id: `${message.type}-${message.requestId ?? Date.now()}`,
-          type: message.type,
-          receivedAt: new Date().toLocaleTimeString(),
-        },
-        ...current,
-      ].slice(0, 6))
-
-      if (
-        message.type === 'roomforge.scene.initialized' ||
-        message.type === 'roomforge.scene.initialize.response'
-      ) {
-        setBridgeState('initialized')
-      }
-
-      if (message.type.endsWith('Failed')) {
-        setBridgeState('error')
-      }
-
-      const nextCvSummary = cvSummaryFromMessage(message)
-      if (nextCvSummary) {
-        setCvSummary((current) => ({ ...current, ...nextCvSummary }))
-      }
-
-      if (project) {
-        persistEditorBridgeEvent({
-          message,
-          project,
-          ownerUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
-          source: sourceImageState.bridgePayload,
-        })
-          .then((result) => {
-            if (result.status !== 'ignored') {
-              setPersistenceState(result)
-            }
-          })
-          .catch((error) => {
-            setPersistenceState({
-              status: 'skipped',
-              label: error instanceof Error ? error.message : String(error),
-            })
-          })
-      }
-    }
-
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [auth, frameOrigin, project, sourceImageState.bridgePayload])
+    setInitializeMessage(message)
+  }, [location.pathname, location.search, project, runtimeKey, runtimeReady, sourceImageState])
 
   if (!project && status === 'loading') {
     return (
@@ -223,7 +224,7 @@ export function EditorPage() {
         </div>
       </header>
 
-      <section className="editor-host-shell" aria-label="RoomForge CV editor host">
+      <section className="editor-host-shell editor-host-shell--direct" aria-label="RoomForge CV editor host">
         <div className="editor-host-frame-panel">
           <div className="editor-host-frame-toolbar">
             <div>
@@ -236,40 +237,44 @@ export function EditorPage() {
                 type="button"
                 onClick={() => {
                   setBridgeState('loading')
-                  setFrameLoaded(false)
+                  setRuntimeReady(false)
+                  setRuntimeError(null)
+                  setInitializeMessage(null)
+                  runtimeDispatchRef.current = null
                   lastInitializeKeyRef.current = null
-                  setFrameKey((key) => key + 1)
+                  setRuntimeKey((key) => key + 1)
                   setEvents([])
+                  setCvSummary(initialCvSummary)
                 }}
               >
                 <RefreshCw size={16} />
                 새로고침
               </button>
-              <a className="rf-btn" href={frameSrc} target="_blank" rel="noreferrer">
+              <a className="rf-btn" href={standaloneEditorSrc} target="_blank" rel="noreferrer">
                 <ExternalLink size={16} />
-                직접 열기
+                standalone
               </a>
             </div>
           </div>
 
-          <div className="editor-host-frame-wrap">
-            {bridgeState === 'loading' && (
+          <div className="editor-host-frame-wrap editor-host-frame-wrap--direct">
+            {(bridgeState === 'loading' || bridgeState === 'initializing') && (
               <div className="editor-host-loading" role="status">
                 <LoaderCircle size={18} />
-                에디터 런타임 로딩 중
+                {bridgeState === 'initializing' ? '에디터 런타임 초기화 중' : '에디터 런타임 로딩 중'}
               </div>
             )}
-            <iframe
-              key={frameKey}
-              ref={iframeRef}
-              className="editor-host-frame"
-              src={frameSrc}
-              title={`${project.name} RoomForge CV editor`}
-              allow="clipboard-write; fullscreen"
-              onLoad={() => {
-                setBridgeState('ready')
-                setFrameLoaded(true)
-              }}
+            {runtimeError && (
+              <div className="editor-host-runtime-error" role="status">
+                {runtimeError}
+              </div>
+            )}
+            <EditorRuntimeSurface
+              initializeMessage={initializeMessage}
+              mountKey={runtimeKey}
+              onError={handleRuntimeError}
+              onMessage={handleRuntimeMessage}
+              onReady={handleRuntimeReady}
             />
           </div>
         </div>
@@ -286,8 +291,8 @@ export function EditorPage() {
                 <dd><StatusPill label={bridgeLabel} tone={bridgeTone} /></dd>
               </div>
               <div>
-                <dt>대상 origin</dt>
-                <dd>{frameOrigin}</dd>
+                <dt>마운트</dt>
+                <dd>{runtimeReady ? 'React direct runtime' : 'Mounting runtime module'}</dd>
               </div>
               <div>
                 <dt>메시지</dt>
@@ -335,7 +340,7 @@ export function EditorPage() {
               <h2>최근 이벤트</h2>
             </div>
             {events.length === 0 ? (
-              <p className="editor-host-empty">아직 editor bridge 이벤트가 없습니다.</p>
+              <p className="editor-host-empty">아직 editor runtime 이벤트가 없습니다.</p>
             ) : (
               <ol className="editor-host-event-list">
                 {events.map((event) => (
@@ -355,11 +360,11 @@ export function EditorPage() {
 
 function bridgeStateLabel(state: BridgeState) {
   const labels: Record<BridgeState, string> = {
-    loading: 'Editor loading',
-    ready: 'Bridge ready',
+    loading: 'Runtime loading',
+    ready: 'Runtime ready',
     initializing: 'Initializing',
-    initialized: 'Bridge initialized',
-    error: 'Bridge error',
+    initialized: 'Runtime initialized',
+    error: 'Runtime error',
   }
   return labels[state]
 }
@@ -400,7 +405,6 @@ function cvSummaryFromMessage(message: { type: string; payload: Record<string, u
     return {
       sceneQuality: 'Failed',
       candidateCount: 0,
-      fixtureCount: 0,
     }
   }
 

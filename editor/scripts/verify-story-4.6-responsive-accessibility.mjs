@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const mainSource = readFileSync(resolve(rootDir, 'src/main.ts'), 'utf8')
+const runtimeSource = readFileSync(resolve(rootDir, 'src/runtime.ts'), 'utf8')
 const cssSource = readFileSync(resolve(rootDir, 'src/style.css'), 'utf8')
 
 function assertContains(source, expected, label) {
@@ -19,23 +19,23 @@ function mediaBlock(query) {
   return cssSource.slice(start, nextMedia === -1 ? cssSource.length : nextMedia)
 }
 
-assertContains(mainSource, '<section class="editor-shell">', 'desktop shell exists')
-assertContains(mainSource, '<div class="viewport"', 'central viewport exists')
-assertContains(mainSource, '<aside class="status-panel"', 'right inspector/status panel exists')
-assertContains(mainSource, 'class="viewport-toolbar"', 'persistent 2D/3D switcher exists')
-assertContains(mainSource, 'Show 2D planning view', '2D button has accessible name')
-assertContains(mainSource, 'Show 3D inspection view', '3D button has accessible name')
-assertContains(mainSource, 'aria-pressed="true"', 'view switcher exposes pressed state')
+assertContains(runtimeSource, '<section class="editor-shell"', 'desktop shell exists')
+assertContains(runtimeSource, '<div class="viewport"', 'central viewport exists')
+assertContains(runtimeSource, '<aside class="status-panel"', 'right inspector/status panel exists')
+assertContains(runtimeSource, 'class="viewport-toolbar"', 'persistent 2D/3D switcher exists')
+assertContains(runtimeSource, 'Show 2D planning view', '2D button has accessible name')
+assertContains(runtimeSource, 'Show 3D inspection view', '3D button has accessible name')
+assertContains(runtimeSource, 'aria-pressed="true"', 'view switcher exposes pressed state')
 assertContains(
-  mainSource,
+  runtimeSource,
   'aria-describedby="measurement-status scene-status inspector-status placement-summary"',
   'canvas references textual measurement, scene, inspector, and placement summaries',
 )
-assertContains(mainSource, 'role="application"', 'canvas exposes interactive application role')
-assertContains(mainSource, 'tabindex="0"', 'canvas is keyboard focusable')
-assertContains(mainSource, 'aria-describedby="scale-status"', 'scale input references helper text')
-assertContains(mainSource, 'role="status" aria-live="polite"', 'polite live status regions exist')
-assertContains(mainSource, 'role="status" aria-live="assertive"', 'assertive placement warning exists')
+assertContains(runtimeSource, 'role="application"', 'canvas exposes interactive application role')
+assertContains(runtimeSource, 'tabindex="0"', 'canvas is keyboard focusable')
+assertContains(runtimeSource, 'aria-describedby="scale-status"', 'scale input references helper text')
+assertContains(runtimeSource, 'role="status" aria-live="polite"', 'polite live status regions exist')
+assertContains(runtimeSource, 'role="status" aria-live="assertive"', 'assertive placement warning exists')
 
 assertContains(cssSource, 'grid-template-columns: minmax(0, 1fr) 320px;', 'desktop keeps large canvas with right inspector')
 assertContains(cssSource, 'max-height: 100vh;', 'desktop shell and inspector fit viewport height')

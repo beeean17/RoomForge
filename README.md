@@ -159,11 +159,15 @@ The current demo set shows the main web flow and the editor's 2D/3D workspace.
 
 | Projects | Reconstruction Review |
 | --- | --- |
-| ![RoomForge projects dashboard](images/demo-projects.png) | ![RoomForge reconstruction review workflow](images/demo-reconstruction1.png) |
+| ![RoomForge projects dashboard](images/demo-projects.png) | ![RoomForge reconstruction review workflow](images/demo-reconstruction.png) |
 
 | 2D Editor | 3D Editor |
 | --- | --- |
 | ![RoomForge 2D editor view](images/demo-editor1.png) | ![RoomForge 3D editor view](images/demo-editor2.png) |
+
+| Android |
+| --- |
+| ![RoomForge Android app screen](images/demo-android.png) |
 
 ## Deployment Plan
 

@@ -24,10 +24,14 @@ export function ReconstructionStatusPage() {
   const { project, status, error } = useProject(projectId)
   const [statusOverride, setStatusOverride] = useState<string | null>(null)
   const [showLogs, setShowLogs] = useState(false)
-  const effectiveStatus = statusOverride ?? project?.status
   const requestedConversion = searchParams.get('convert') === '1'
+  const requestedJobId = searchParams.get('job')
   const forceConversion = searchParams.get('rerun') === '1'
-  const sourceImageState = useEditorSourceImagePayload(project)
+  const conversionProject = project && requestedConversion && requestedJobId
+    ? { ...project, latestJobId: requestedJobId, status: 'created' as const }
+    : project
+  const effectiveStatus = statusOverride ?? conversionProject?.status
+  const sourceImageState = useEditorSourceImagePayload(conversionProject)
   const openCvResultState = useLatestOpenCvResultPayload(project)
   const sceneUnderstandingResultState = useLatestSceneUnderstandingResultPayload(project)
   const conversionDataLoading =
@@ -44,7 +48,7 @@ export function ReconstructionStatusPage() {
   const conversion = useOpenCvConversionWorker({
     active: isConversionActive,
     ownerUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
-    project,
+    project: conversionProject,
     sourceImageState,
   })
 

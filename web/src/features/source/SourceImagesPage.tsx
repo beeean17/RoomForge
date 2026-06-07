@@ -257,8 +257,8 @@ export function SourceImagesPage() {
     }
 
     try {
-      await createProjectReconstructionJob(currentProject, auth.user, parsedRoomDimensions)
-      navigate(`${routes.status(currentProject.id)}?convert=1`)
+      const jobId = await createProjectReconstructionJob(currentProject, auth.user, parsedRoomDimensions)
+      navigate(`${routes.status(currentProject.id)}?convert=1&job=${encodeURIComponent(jobId)}`)
     } catch (error) {
       setReconstructionQueued(false)
       setReconstructionError(error instanceof Error ? error.message : String(error))

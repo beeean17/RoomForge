@@ -154,11 +154,15 @@ README 데모 스크린샷은 저장소 루트의 `images/` 디렉터리에 둡�
 
 | 프로젝트 | 재구성 검토 |
 | --- | --- |
-| ![RoomForge 프로젝트 대시보드](images/demo-projects.png) | ![RoomForge 재구성 검토 흐름](images/demo-reconstruction1.png) |
+| ![RoomForge 프로젝트 대시보드](images/demo-projects.png) | ![RoomForge 재구성 검토 흐름](images/demo-reconstruction.png) |
 
 | 2D 편집기 | 3D 편집기 |
 | --- | --- |
 | ![RoomForge 2D 편집기 화면](images/demo-editor1.png) | ![RoomForge 3D 편집기 화면](images/demo-editor2.png) |
+
+| Android |
+| --- |
+| ![RoomForge Android 앱 화면](images/demo-android.png) |
 
 ## 배포 계획
 

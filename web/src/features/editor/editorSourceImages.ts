@@ -150,7 +150,9 @@ async function loadLatestSourceImageMetadata(
     const snapshot = await getDoc(
       doc(firestore, 'projects', project.id, 'source_images', project.latestSourceImageId),
     )
-    return snapshot.exists() ? sourceImageFromData(snapshot.data(), snapshot.id) : null
+    if (snapshot.exists()) {
+      return sourceImageFromData(snapshot.data(), snapshot.id)
+    }
   }
 
   const snapshot = await getDocs(

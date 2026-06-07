@@ -345,7 +345,14 @@ export async function createProjectReconstructionJob(
   }
 
   if (dimensions) {
-    await saveProjectRoomDimensions(project.id, owner, dimensions, 'web_source_form')
+    const dimensionsAlreadyExist = await projectRoomDimensionsExist(firestore, project.id)
+    try {
+      await saveProjectRoomDimensions(project.id, owner, dimensions, 'web_source_form')
+    } catch (error) {
+      if (!dimensionsAlreadyExist) {
+        throw error
+      }
+    }
   } else {
     await ensureDefaultRoomDimensions(firestore, project.id, owner.uid)
   }
@@ -370,6 +377,7 @@ export async function createProjectReconstructionJob(
     root_job_id: jobRef.id,
     retry_count: 0,
     latest_transition_id: transitionRef.id,
+    artifact_refs: [],
     created_at: timestamp,
     updated_at: timestamp,
     schema_version: 1,
@@ -387,17 +395,32 @@ export async function createProjectReconstructionJob(
     reason_message: 'Reconstruction job created from source image.',
     schema_version: 1,
   })
-  batch.update(projectRef, {
+  await batch.commit()
+  updateProjectReconstructionSummary(projectRef, sourceImageId, jobRef.id).catch(() => undefined)
+  return jobRef.id
+}
+
+async function projectRoomDimensionsExist(firestore: Firestore, projectId: string): Promise<boolean> {
+  try {
+    return (await getDoc(doc(firestore, 'projects', projectId, 'room_dimensions', 'current'))).exists()
+  } catch {
+    return false
+  }
+}
+
+async function updateProjectReconstructionSummary(
+  projectRef: ReturnType<typeof doc>,
+  sourceImageId: string,
+  jobId: string,
+) {
+  await updateDoc(projectRef, {
     latest_source_image_id: sourceImageId,
-    latest_job_id: jobRef.id,
+    latest_job_id: jobId,
     current_reconstruction_status: 'created',
     current_pipeline_step: 'status',
     pipeline_progress: 12,
-    updated_at: timestamp,
+    updated_at: serverTimestamp(),
   })
-
-  await batch.commit()
-  return jobRef.id
 }
 
 export async function saveProjectRoomDimensions(

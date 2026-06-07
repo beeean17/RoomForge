@@ -66,6 +66,12 @@ import {
   type PlacedObjectState,
   type PlacedObjectTransformField,
 } from './editorPlacedObjects'
+import {
+  structuralFixtureStateFromPayload,
+  type StructuralFixtureCandidateItem,
+  type StructuralFixtureItem,
+  type StructuralFixtureState,
+} from './editorStructuralFixtures'
 import { useEditorSourceImagePayload } from './editorSourceImages'
 
 type BridgeState = 'loading' | 'ready' | 'initializing' | 'initialized' | 'error'
@@ -163,6 +169,19 @@ const initialPlacedObjectState: PlacedObjectState = {
   },
 }
 
+const initialStructuralFixtureState: StructuralFixtureState = {
+  candidates: [],
+  fixtures: [],
+  selectedFixture: null,
+  counts: {
+    candidates: 0,
+    needsReview: 0,
+    placed: 0,
+    rejected: 0,
+    selected: 0,
+  },
+}
+
 const toolControls: Array<{ key: EditorTool; label: string; icon: typeof MousePointer2 }> = [
   { key: 'select', label: '선택', icon: MousePointer2 },
   { key: 'move', label: '이동', icon: Move },
@@ -220,6 +239,7 @@ export function EditorPage() {
   const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSceneSummary>(initialRuntimeSummary)
   const [candidateReviewState, setCandidateReviewState] = useState<CandidateReviewState>(initialCandidateReviewState)
   const [placedObjectState, setPlacedObjectState] = useState<PlacedObjectState>(initialPlacedObjectState)
+  const [structuralFixtureState, setStructuralFixtureState] = useState<StructuralFixtureState>(initialStructuralFixtureState)
   const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
     status: 'ignored',
     label: 'Waiting for CV events',
@@ -299,6 +319,11 @@ export function EditorPage() {
       setPlacedObjectState(nextPlacedObjectState)
     }
 
+    const nextStructuralFixtureState = structuralFixtureStateFromPayload(message.payload)
+    if (nextStructuralFixtureState) {
+      setStructuralFixtureState(nextStructuralFixtureState)
+    }
+
     if (!project) {
       return
     }
@@ -354,6 +379,7 @@ export function EditorPage() {
     setRuntimeSummary(initialRuntimeSummary)
     setCandidateReviewState(initialCandidateReviewState)
     setPlacedObjectState(initialPlacedObjectState)
+    setStructuralFixtureState(initialStructuralFixtureState)
   }, [])
 
   useEffect(() => {
@@ -700,6 +726,19 @@ export function EditorPage() {
                 sendRuntimeCommand('roomforge.furniture.updateTransform', { field, value })}
             />
 
+            <StructuralFixtureReview
+              disabled={!runtimeReady}
+              state={structuralFixtureState}
+              onEditAction={(action) =>
+                sendRuntimeCommand('roomforge.fixture.editSelected', { action })}
+              onPlaceCandidate={(candidateId) =>
+                sendRuntimeCommand('roomforge.fixture.placeCandidate', { candidateId })}
+              onRejectCandidate={(candidateId) =>
+                sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
+              onSelect={(fixtureId) =>
+                sendRuntimeCommand('roomforge.fixture.select', { fixtureId })}
+            />
+
             <section>
               <div className="editor-host-section-title">
                 <Cpu size={18} />
@@ -997,6 +1036,248 @@ function formatMeters(value: number): string {
 function formatInputNumber(value: number): string {
   return Number.isFinite(value) ? String(Number(value.toFixed(2))) : '0'
 }
+
+function StructuralFixtureReview({
+  disabled,
+  state,
+  onEditAction,
+  onPlaceCandidate,
+  onRejectCandidate,
+  onSelect,
+}: {
+  disabled: boolean
+  state: StructuralFixtureState
+  onEditAction: (action: string) => void
+  onPlaceCandidate: (candidateId: string) => void
+  onRejectCandidate: (candidateId: string) => void
+  onSelect: (fixtureId: string) => void
+}) {
+  return (
+    <section className="structural-fixture-review" aria-labelledby="react-structural-fixture-title">
+      <div className="editor-host-section-title">
+        <PackagePlus size={18} />
+        <h2 id="react-structural-fixture-title">Structural fixtures</h2>
+      </div>
+
+      <div className="fixture-review-counts" aria-label="Structural fixture counts">
+        <span><strong>{state.counts.candidates}</strong> candidates</span>
+        <span><strong>{state.counts.needsReview}</strong> Needs review</span>
+        <span><strong>{state.counts.placed}</strong> placed</span>
+        <span><strong>{state.fixtures.length}</strong> fixtures</span>
+      </div>
+
+      {state.candidates.length === 0 ? (
+        <p className="editor-host-empty">구조물 후보가 아직 없습니다.</p>
+      ) : (
+        <div className="fixture-candidate-list" role="list" aria-label="Structural fixture candidates">
+          {state.candidates.map((candidate) => (
+            <StructuralFixtureCandidateCard
+              candidate={candidate}
+              disabled={disabled}
+              key={candidate.candidateId}
+              onPlaceCandidate={onPlaceCandidate}
+              onRejectCandidate={onRejectCandidate}
+            />
+          ))}
+        </div>
+      )}
+
+      {state.fixtures.length === 0 ? (
+        <p className="editor-host-empty">배치된 구조 고정 요소가 없습니다.</p>
+      ) : (
+        <div className="fixture-object-list" role="list" aria-label="Placed structural fixtures">
+          {state.fixtures.map((fixture) => (
+            <StructuralFixtureCard
+              disabled={disabled}
+              fixture={fixture}
+              key={fixture.fixtureId}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
+
+      <SelectedStructuralFixtureControls
+        disabled={disabled}
+        fixture={state.selectedFixture}
+        onEditAction={onEditAction}
+      />
+    </section>
+  )
+}
+
+function StructuralFixtureCandidateCard({
+  candidate,
+  disabled,
+  onPlaceCandidate,
+  onRejectCandidate,
+}: {
+  candidate: StructuralFixtureCandidateItem
+  disabled: boolean
+  onPlaceCandidate: (candidateId: string) => void
+  onRejectCandidate: (candidateId: string) => void
+}) {
+  return (
+    <article
+      className={`fixture-candidate-card${candidate.needsReview ? ' is-review-required' : ''}${candidate.isPlaced ? ' is-placed' : ''}`}
+      role="listitem"
+    >
+      <div className="fixture-card-header">
+        <div>
+          <strong>{candidate.label}</strong>
+          <span>{candidate.category} · {candidate.sourceLabel}</span>
+        </div>
+        <span className={`state-pill ${candidate.isPlaced ? 'confirmed' : candidate.needsReview ? 'candidate' : 'selected'}`}>
+          {candidate.reviewLabel}
+        </span>
+      </div>
+      <dl className="fixture-meta-grid">
+        <div>
+          <dt>Confidence</dt>
+          <dd>{candidate.confidenceLabel}</dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd>{candidate.sourceLabel}</dd>
+        </div>
+      </dl>
+      <div className="fixture-review-actions">
+        <button
+          aria-label={`Reject fixture ${candidate.label}`}
+          className="rf-btn"
+          disabled={disabled || !candidate.canReject}
+          type="button"
+          onClick={() => onRejectCandidate(candidate.candidateId)}
+        >
+          <Ban size={15} />
+          Reject
+        </button>
+        <button
+          aria-label={`Place fixture ${candidate.label}`}
+          className="rf-btn rf-btn--primary"
+          disabled={disabled || !candidate.canPlace}
+          type="button"
+          onClick={() => onPlaceCandidate(candidate.candidateId)}
+        >
+          <CheckCircle2 size={15} />
+          Place
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function StructuralFixtureCard({
+  disabled,
+  fixture,
+  onSelect,
+}: {
+  disabled: boolean
+  fixture: StructuralFixtureItem
+  onSelect: (fixtureId: string) => void
+}) {
+  return (
+    <article role="listitem">
+      <button
+        aria-label={`Select fixture ${fixture.label}`}
+        aria-pressed={fixture.selected}
+        className={`fixture-object-card${fixture.selected ? ' is-selected' : ''}`}
+        disabled={disabled}
+        type="button"
+        onClick={() => onSelect(fixture.fixtureId)}
+      >
+        <span>
+          <strong>{fixture.label}</strong>
+          <small>{fixture.category} · {fixture.wallId}</small>
+        </span>
+        <span className="state-pill selected">{fixture.confidenceLabel}</span>
+      </button>
+    </article>
+  )
+}
+
+function SelectedStructuralFixtureControls({
+  disabled,
+  fixture,
+  onEditAction,
+}: {
+  disabled: boolean
+  fixture: StructuralFixtureItem | null
+  onEditAction: (action: string) => void
+}) {
+  if (!fixture) {
+    return (
+      <div className="fixture-selection-empty">
+        <PackagePlus size={16} />
+        <span>구조 고정 요소를 선택하면 wall, category, size를 조정할 수 있습니다.</span>
+      </div>
+    )
+  }
+
+  const editDisabled = disabled || !fixture.canEdit
+
+  return (
+    <div className="fixture-edit-panel" data-selected-fixture-id={fixture.fixtureId}>
+      <div className="fixture-card-header">
+        <div>
+          <strong>{fixture.label}</strong>
+          <span>{fixture.wallId} · {fixture.sourceLabel}</span>
+        </div>
+        <span className={`state-pill ${fixture.locked ? 'warning' : 'selected'}`}>
+          {fixture.locked ? 'Locked' : 'Selected'}
+        </span>
+      </div>
+
+      <dl className="fixture-meta-grid">
+        <div>
+          <dt>Offset</dt>
+          <dd>{formatMeters(fixture.offsetMeters)}</dd>
+        </div>
+        <div>
+          <dt>Size</dt>
+          <dd>{formatMeters(fixture.widthMeters)} x {formatMeters(fixture.heightMeters)}</dd>
+        </div>
+        <div>
+          <dt>Depth</dt>
+          <dd>{formatMeters(fixture.depthMeters)}</dd>
+        </div>
+        <div>
+          <dt>Rotation</dt>
+          <dd>{fixture.rotationDegrees.toFixed(0)} deg</dd>
+        </div>
+      </dl>
+
+      <div className="fixture-action-grid" aria-label="Selected structural fixture actions">
+        {fixtureEditActionButtons.map((action) => (
+          <button
+            aria-label={`${action.label} for ${fixture.label}`}
+            className={action.action === 'delete' ? 'danger-button' : 'rf-btn'}
+            disabled={disabled || (action.action !== 'delete' && editDisabled)}
+            key={action.action}
+            type="button"
+            onClick={() => onEditAction(action.action)}
+          >
+            {action.icon === 'trash' ? <Trash2 size={15} /> : <PackagePlus size={15} />}
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const fixtureEditActionButtons = [
+  { action: 'wall-previous', label: 'Prev wall', icon: 'fixture' },
+  { action: 'wall-next', label: 'Next wall', icon: 'fixture' },
+  { action: 'offset-decrease', label: 'Offset -', icon: 'fixture' },
+  { action: 'offset-increase', label: 'Offset +', icon: 'fixture' },
+  { action: 'narrower', label: 'Narrower', icon: 'fixture' },
+  { action: 'wider', label: 'Wider', icon: 'fixture' },
+  { action: 'shorter', label: 'Shorter', icon: 'fixture' },
+  { action: 'taller', label: 'Taller', icon: 'fixture' },
+  { action: 'category-next', label: 'Category', icon: 'fixture' },
+  { action: 'delete', label: 'Delete', icon: 'trash' },
+] as const
 
 function CandidateReviewTray({
   disabled,

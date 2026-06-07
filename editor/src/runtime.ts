@@ -39,6 +39,7 @@ import {
 } from './furnitureModel'
 import {
   editSelectedFixtureInModel,
+  placeFixtureCandidateInModel,
   selectFixtureInModel,
   selectedFixture as selectedFixtureFromModel,
   selectedFixtureSummary,
@@ -1093,6 +1094,30 @@ function handleBridgeCommand(message: BridgeMessage): void {
     const action = stringPayloadValue(message.payload, 'action')
     if (isFurnitureEditAction(action)) {
       editSelectedFurniture(action)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.fixture.placeCandidate') {
+    const candidateId = stringPayloadValue(message.payload, 'candidateId')
+    if (candidateId) {
+      placeFixtureCandidate(candidateId)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.fixture.select') {
+    selectFixture(stringPayloadValue(message.payload, 'fixtureId'))
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.fixture.editSelected') {
+    const action = stringPayloadValue(message.payload, 'action')
+    if (isFixtureEditAction(action)) {
+      editSelectedFixture(action)
     }
     respondToFlutter(message)
     return
@@ -2887,6 +2912,21 @@ function placeCandidate(candidateId: string): void {
   emitSceneState('roomforge.candidate.placed')
 }
 
+function placeFixtureCandidate(candidateId: string): void {
+  const nextModel = placeFixtureCandidateInModel(spatialModel, candidateId)
+  if (nextModel === spatialModel) {
+    return
+  }
+  spatialModel = nextModel
+  rebuildStructuralFixtures()
+  geometryStatusElement.textContent = t(
+    'Candidate placed as an editable structural fixture.',
+    '후보를 편집 가능한 구조 고정 요소로 배치했습니다.',
+  )
+  updateSpatialStatus()
+  emitSceneState('roomforge.fixture.placed')
+}
+
 function rejectCandidate(candidateId: string): void {
   const nextModel = rejectCandidateInModel(spatialModel, candidateId)
   if (nextModel === spatialModel) {
@@ -3182,6 +3222,9 @@ function editSelectedFixture(action: FixtureEditAction): void {
     return
   }
   spatialModel = result.model
+  if (result.deleted && selected.candidateId) {
+    spatialModel = releaseCandidatePlacementInModel(spatialModel, selected.candidateId)
+  }
   rebuildStructuralFixtures()
   geometryStatusElement.textContent = result.deleted
     ? t(`Deleted ${selected.label ?? selected.category}.`, `${localizedFixtureLabel(selected)} 삭제됨.`)

@@ -56,6 +56,7 @@ export function candidateReviewStateFromPayload(payload: Record<string, unknown>
     [
       ...listValue(source.placedObjects),
       ...listValue(source.furniture),
+      ...listValue(source.structuralFixtures),
     ]
       .map((item) => stringValue(recordValue(item).candidateId))
       .filter((candidateId): candidateId is string => Boolean(candidateId)),

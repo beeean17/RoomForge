@@ -23,6 +23,10 @@ class FirebaseUserProfileSyncException implements Exception {
 }
 
 abstract class FirebaseProjectRepository {
+  Future<List<FirebaseRoomProject>> listOwnedProjectsFromServer(
+    String ownerUid,
+  );
+
   Stream<List<FirebaseRoomProject>> watchOwnedProjects(String ownerUid);
 
   Future<FirebaseRoomProject> createProject({

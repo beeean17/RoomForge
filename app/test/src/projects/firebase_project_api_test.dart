@@ -40,6 +40,72 @@ void main() {
       expect(project.name, 'Studio');
       expect(project.description, 'North wall');
       expect(listed.map((project) => project.id), contains('project-1'));
+      expect(projects.serverListCount, 1);
+      expect(projects.watchCount, 0);
+    },
+  );
+
+  test(
+    'FirebaseProjectApi deletes projects through the callable Cloud Function',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final deleteFunction = _FakeProjectDeleteFunction();
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+        projectDeleteFunction: deleteFunction,
+      );
+
+      await api.deleteProject('project-1');
+
+      expect(deleteFunction.deletedProjectIds, ['project-1']);
+      expect(projects.softDeleteCount, 0);
+    },
+  );
+
+  test(
+    'FirebaseProjectApi surfaces callable delete permission failures',
+    () async {
+      final projects = _FakeProjectRepository();
+      await projects.createProject(ownerUid: 'user-1', name: 'Studio');
+      final deleteFunction = _FakeProjectDeleteFunction(
+        error: const ProjectApiException(
+          '이 프로젝트를 삭제할 권한이 없습니다.',
+          code: 'permission-denied',
+        ),
+      );
+      final api = FirebaseProjectApi(
+        authRepository: DisabledAuthRepository(),
+        session: _session(),
+        floorPlanRepository: _FakeFloorPlanRepository(),
+        geometryRepository: _FakeGeometryRepository(),
+        layoutRepository: _FakeLayoutRepository(),
+        projectRepository: projects,
+        reconstructionRepository: _FakeReconstructionRepository(),
+        roomDimensionsRepository: _FakeRoomDimensionsRepository(),
+        sourceImageRepository: _FakeSourceImageRepository(),
+        sourceImageUploader: _FakeSourceImageUploader(),
+        projectDeleteFunction: deleteFunction,
+      );
+
+      await expectLater(
+        api.deleteProject('project-1'),
+        throwsA(
+          isA<ProjectApiException>()
+              .having((error) => error.code, 'code', 'permission-denied')
+              .having((error) => error.message, 'message', contains('권한')),
+        ),
+      );
+      expect(projects.softDeleteCount, 0);
     },
   );
 
@@ -1811,9 +1877,26 @@ FirebaseFloorPlan _floorPlan() {
 
 class _FakeProjectRepository implements FirebaseProjectRepository {
   FirebaseRoomProject? project;
+  int serverListCount = 0;
+  int watchCount = 0;
+  int softDeleteCount = 0;
+
+  @override
+  Future<List<FirebaseRoomProject>> listOwnedProjectsFromServer(
+    String ownerUid,
+  ) async {
+    serverListCount += 1;
+    return [
+      if (project != null &&
+          project!.ownerUid == ownerUid &&
+          project!.deletedAt == null)
+        project!,
+    ];
+  }
 
   @override
   Stream<List<FirebaseRoomProject>> watchOwnedProjects(String ownerUid) {
+    watchCount += 1;
     return Stream.value([
       if (project != null && project!.ownerUid == ownerUid) project!,
     ]);
@@ -1856,7 +1939,23 @@ class _FakeProjectRepository implements FirebaseProjectRepository {
   Future<void> softDeleteProject({
     required String ownerUid,
     required String projectId,
-  }) async {}
+  }) async {
+    softDeleteCount += 1;
+  }
+}
+
+class _FakeProjectDeleteFunction implements FirebaseProjectDeleteFunction {
+  _FakeProjectDeleteFunction({this.error});
+
+  final Object? error;
+  final List<String> deletedProjectIds = [];
+
+  @override
+  Future<void> deleteProject(String projectId) async {
+    final deleteError = error;
+    if (deleteError != null) throw deleteError;
+    deletedProjectIds.add(projectId);
+  }
 }
 
 class _FakeRoomDimensionsRepository

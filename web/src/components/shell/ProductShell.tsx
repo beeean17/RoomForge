@@ -36,7 +36,7 @@ export function ProductShell({ active = 'projects', project, children }: Product
     { key: 'overview', label: '개요', to: routes.project(projectId), icon: Folder, badge: undefined, pulse: false },
     { key: 'room', label: '방 치수', to: routes.room(projectId), icon: Ruler, badge: undefined, pulse: false },
     { key: 'source', label: '소스 이미지', to: routes.source(projectId), icon: Images, badge: project?.imageCount ? String(project.imageCount) : undefined, pulse: false },
-    { key: 'status', label: '재구성 상태', to: routes.status(projectId), icon: Activity, badge: undefined, pulse: project?.status === 'processing' },
+    { key: 'status', label: '변환 상태', to: routes.status(projectId), icon: Activity, badge: undefined, pulse: project?.status === 'processing' },
     { key: 'editor', label: '에디터', to: routes.editor(projectId), icon: Layers, badge: undefined, pulse: true },
     { key: 'recovery', label: '복구', to: routes.recovery(projectId), icon: RefreshCw, badge: undefined, pulse: false },
   ] as const
@@ -196,10 +196,12 @@ export function ProductShell({ active = 'projects', project, children }: Product
           <>
             <div className="sidebar-rule" />
             <div className="current-project-card">
-              <span className="current-project-thumb" />
+              <span className="current-project-thumb">
+                <Images size={15} />
+              </span>
               <span className="workspace-copy">
                 <span>{project.name}</span>
-                <small>{project.statusLabel} · 편집 단계</small>
+                <small>이미지 {project.imageCount} · {project.statusLabel}</small>
               </span>
             </div>
           </>
@@ -207,7 +209,7 @@ export function ProductShell({ active = 'projects', project, children }: Product
 
         {project && (
           <nav className="sidebar-nav" aria-label="현재 프로젝트">
-            <p className="nav-grouptitle">촬영 · 재구성</p>
+            <p className="nav-grouptitle">촬영 · 변환</p>
             {projectLinks.map((link) => (
               link.key !== 'editor' && link.key !== 'recovery' ? (
                 <NavLink

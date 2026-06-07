@@ -2,6 +2,7 @@ import { roomBounds, type CandidateSceneObject, type FurnitureCategory, type Spa
 import {
   furnitureCategoryForValue,
   furnitureSizePriorForCategory,
+  structuralFixtureSizePriorForCategory,
 } from './sizePriors.ts'
 
 export type CandidateTrayItem = {
@@ -35,7 +36,9 @@ export function candidateTrayItems(model: SpatialModel): CandidateTrayItem[] {
     const lowConfidence =
       typeof candidate.confidenceScore === 'number' && candidate.confidenceScore < 0.7
     const rejected = candidate.reviewState === 'rejected'
-    const placed = model.furniture.some((item) => item.candidateId === candidate.candidateId)
+    const placed =
+      model.furniture.some((item) => item.candidateId === candidate.candidateId) ||
+      model.structuralFixtures.some((item) => item.candidateId === candidate.candidateId)
     return {
       candidateId: candidate.candidateId,
       label: candidate.label ?? candidateLabel(candidate),
@@ -189,7 +192,10 @@ export function updateCandidateCategoryInModel({
   if (!model.candidateObjects.some((candidate) => candidate.candidateId === candidateId)) {
     return model
   }
-  const prior = furnitureSizePriorForCategory(category)
+  const candidate = model.candidateObjects.find((item) => item.candidateId === candidateId)
+  const prior = candidate?.objectType === 'structural_fixture'
+    ? structuralFixtureSizePriorForCategory(category)
+    : furnitureSizePriorForCategory(category)
   return {
     ...model,
     hasUnsavedChanges: true,
@@ -201,7 +207,7 @@ export function updateCandidateCategoryInModel({
             reviewState: 'review_required',
             reviewLabel: 'Needs review',
             suggestedAssetId: prior.assetId,
-            suggestedSize: prior.suggestedSize,
+            suggestedSize: 'suggestedSize' in prior ? prior.suggestedSize : prior.size,
             notes: 'Category changed; suggested size and representative asset were recalculated from category priors.',
           }
         : candidate,

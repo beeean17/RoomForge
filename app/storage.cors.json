@@ -1,0 +1,25 @@
+[
+  {
+    "origin": [
+      "http://localhost:9239",
+      "http://127.0.0.1:9239",
+      "http://localhost:9240",
+      "http://127.0.0.1:9240",
+      "http://localhost:9241",
+      "http://127.0.0.1:9241",
+      "http://localhost:9242",
+      "http://127.0.0.1:9242",
+      "https://roomforge-cbbdd.web.app",
+      "https://roomforge-cbbdd.firebaseapp.com"
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": [
+      "Cache-Control",
+      "Content-Disposition",
+      "Content-Length",
+      "Content-Type",
+      "ETag"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

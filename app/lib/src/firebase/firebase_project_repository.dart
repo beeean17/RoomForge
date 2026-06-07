@@ -238,7 +238,16 @@ class FirebaseFirestoreSourceImageRepository
     final doc = _sourceImagesCollection(
       sourceImage.projectId,
     ).doc(sourceImage.sourceImageId);
-    await doc.set(sourceImage.toFirestoreJson());
+    final projectDoc = _firestore
+        .collection('projects')
+        .doc(sourceImage.projectId);
+    final batch = _firestore.batch()
+      ..set(doc, sourceImage.toFirestoreJson())
+      ..update(projectDoc, {
+        'latest_source_image_id': sourceImage.sourceImageId,
+        'updated_at': Timestamp.fromDate(sourceImage.updatedAt),
+      });
+    await batch.commit();
     return sourceImage;
   }
 

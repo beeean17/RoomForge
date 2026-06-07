@@ -201,6 +201,9 @@ export function detectorResult(
   const candidateObjects = mapped
     .filter((item) => item.kind === 'candidate')
     .map((item) => item.value)
+  const structuralFixtureCandidateObjects = candidateObjects.filter(
+    (candidate) => candidate.objectType === 'structural_fixture',
+  )
   const structuralFixtures = mapped
     .filter((item) => item.kind === 'fixture')
     .map((item) => item.value)
@@ -236,20 +239,25 @@ export function detectorResult(
     candidateObjects: mergedCandidateObjects,
     placedObjects: [],
     confirmedObjects: [],
-    structuralFixtures: structuralFixtures.length > 0 ? structuralFixtures : [
-      {
-        fixtureId: `fixture-${fixtureImage.captureImageId}-window`,
-        candidateId: `candidate-${fixtureImage.captureImageId}-window`,
-        category: 'window',
-        wallId: 'front-wall',
-        label: `Detected ${fallbackWindowPrior.category}`,
-        position: { x: 1.8, y: 1.1, z: 0 },
-        size: fallbackWindowPrior.size,
-        rotationDegrees: 0,
-        confidenceScore: 0.64,
-        locked: true,
-      },
-    ],
+    structuralFixtures:
+      structuralFixtures.length > 0
+        ? structuralFixtures
+        : structuralFixtureCandidateObjects.length > 0
+          ? []
+          : [
+              {
+                fixtureId: `fixture-${fixtureImage.captureImageId}-window`,
+                candidateId: `candidate-${fixtureImage.captureImageId}-window`,
+                category: 'window',
+                wallId: 'front-wall',
+                label: `Detected ${fallbackWindowPrior.category}`,
+                position: { x: 1.8, y: 1.1, z: 0 },
+                size: fallbackWindowPrior.size,
+                rotationDegrees: 0,
+                confidenceScore: 0.64,
+                locked: false,
+              },
+            ],
   }
 }
 
@@ -471,23 +479,25 @@ function detectionToCandidate(
   if (category === 'window' || category === 'door') {
     const prior = structuralFixtureSizePriorForCategory(category)
     return {
-      kind: 'fixture',
+      kind: 'candidate',
       value: {
-        fixtureId: `fixture-${image.captureImageId}-${category}-${index}`,
         candidateId: `candidate-${image.captureImageId}-${category}-${index}`,
+        objectType: 'structural_fixture',
         category,
+        label: `Detected ${prior.category}`,
         sourceImageId: image.sourceImageId,
         captureImageId: image.captureImageId,
         sourceImageRole: image.role,
         coordinateSpace: 'image_pixels',
         boundingBox: detection.box,
-        wallId: 'front-wall',
-        label: `Detected ${prior.category}`,
-        position: { x: 1 + index * 0.4, y: category === 'door' ? 1 : 1.1, z: 0 },
-        size: prior.size,
-        rotationDegrees: 0,
         confidenceScore: detection.score,
-        locked: true,
+        reviewState: detection.score < 0.7 ? 'review_required' : 'new',
+        reviewLabel: detection.score < 0.7 ? 'Needs review' : 'Candidate',
+        suggestedAssetId: prior.assetId,
+        suggestedPosition: { x: 1 + index * 0.4, y: 0, z: 0 },
+        suggestedWallId: wallIdForImageRole(image.role),
+        suggestedSize: prior.size,
+        suggestedRotationDegrees: rotationForWallId(wallIdForImageRole(image.role)),
       },
     }
   }
@@ -526,10 +536,28 @@ function categoryForClass(className: string): string {
     table: 'table',
     desk: 'desk',
     wardrobe: 'wardrobe',
+    closet: 'wardrobe',
+    cabinet: 'cabinet',
+    shelf: 'shelf',
+    bookshelf: 'shelf',
     window: 'window',
     door: 'door',
   }
   return mapping[normalized] ?? 'custom'
+}
+
+function wallIdForImageRole(role: string): string {
+  if (role === 'right_wall') return 'right-wall'
+  if (role === 'back_wall') return 'back-wall'
+  if (role === 'left_wall') return 'left-wall'
+  return 'front-wall'
+}
+
+function rotationForWallId(wallId: string): number {
+  if (wallId === 'right-wall') return 90
+  if (wallId === 'back-wall') return 180
+  if (wallId === 'left-wall') return 270
+  return 0
 }
 
 function imageForDetection(

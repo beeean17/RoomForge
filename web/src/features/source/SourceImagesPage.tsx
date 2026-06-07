@@ -1,14 +1,32 @@
-import { Camera, Plus, RotateCcw, Smartphone, Trash2, Upload } from 'lucide-react'
+import { Camera, Ruler, Save, Plus, RotateCcw, Smartphone, Trash2, Upload } from 'lucide-react'
+import {
+  collection,
+  getFirestore,
+  onSnapshot,
+  orderBy,
+  query,
+  type DocumentData,
+  type QueryDocumentSnapshot,
+} from 'firebase/firestore'
+import { getDownloadURL, getStorage, ref as storageRef } from 'firebase/storage'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
 import { StatePanel } from '../../components/ui/StatePanel'
 import { StatusPill } from '../../components/ui/StatusPill'
+import { roomForgeFirebaseApp } from '../../firebase/config'
 import { demoProjectId } from '../../lib/routes'
 import { routes } from '../../lib/routes'
+import { useAuth } from '../auth/AuthProvider'
 import { sourceDirections, type SourceDirection } from '../projects/projectData'
-import { useProject } from '../projects/projectRepository'
+import {
+  createProjectReconstructionJob,
+  saveProjectRoomDimensions,
+  useProject,
+  useProjectRoomDimensions,
+  type RoomDimensionsInput,
+} from '../projects/projectRepository'
 
 type SourceSlot = SourceDirection & {
   previewUrl?: string
@@ -21,15 +39,58 @@ type ExtraImage = {
   name: string
 }
 
+type RemoteSourceImagesState = {
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  images: RemoteSourceImage[]
+  error: string | null
+}
+
+type RemoteSourceImage = {
+  id: string
+  sourceImageId: string
+  storagePath: string
+  previewUrl?: string
+  name: string
+  role?: string
+}
+
+type RoomDimensionDraft = {
+  width: string
+  depth: string
+  height: string
+}
+
+const sourceRoleToSlotKey: Partial<Record<string, SourceDirection['key']>> = {
+  front_left_corner: 'NW',
+  front_wall: 'N',
+  front_right_corner: 'NE',
+  left_wall: 'W',
+  right_wall: 'E',
+  back_left_corner: 'SW',
+  back_wall: 'S',
+  back_right_corner: 'SE',
+}
+
 export function SourceImagesPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const navigate = useNavigate()
-  const { project, status, error } = useProject(projectId)
+  const auth = useAuth()
+  const { project, status, error, source } = useProject(projectId)
+  const roomDimensionsState = useProjectRoomDimensions(project?.id)
+  const remoteImages = useProjectSourceImages(projectId)
   const [sourceSlots, setSourceSlots] = useState<SourceSlot[]>([])
   const [extraImages, setExtraImages] = useState<ExtraImage[]>([])
+  const [roomDimensionDraft, setRoomDimensionDraft] = useState<RoomDimensionDraft>({
+    width: '5.20',
+    depth: '6.00',
+    height: '2.80',
+  })
+  const [roomDimensionSaveState, setRoomDimensionSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [roomDimensionError, setRoomDimensionError] = useState<string | null>(null)
   const [pendingSlotKey, setPendingSlotKey] = useState<SourceDirection['key'] | null>(null)
   const [mobileHandoffOpen, setMobileHandoffOpen] = useState(false)
   const [reconstructionQueued, setReconstructionQueued] = useState(false)
+  const [reconstructionError, setReconstructionError] = useState<string | null>(null)
   const sourceInputRef = useRef<HTMLInputElement | null>(null)
   const extraInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -40,17 +101,35 @@ export function SourceImagesPage() {
       return
     }
 
-    const nextSlots = initialSourceSlots(project.imageCount > 0)
-    const filledCount = nextSlots.filter((direction) => direction.filled && direction.key !== 'ROOM').length
-    setSourceSlots(nextSlots)
-    setExtraImages(
-      Array.from({ length: Math.max(0, project.imageCount - filledCount) }, (_, index) => ({
-        id: `demo-extra-${project.id}-${index}`,
-        src: '/assets/room.png',
-        name: `추가 사진 ${index + 1}`,
-      })),
-    )
-  }, [project])
+    if (source === 'firebase') {
+      const syncedImages = buildSourceDisplayState(remoteImages.images)
+      setSourceSlots(syncedImages.sourceSlots)
+      setExtraImages(syncedImages.extraImages)
+      return
+    }
+
+    setSourceSlots(initialSourceSlots(false))
+    setExtraImages([])
+  }, [project, remoteImages.images, source])
+
+  useEffect(() => {
+    if (roomDimensionsState.status !== 'ready' && roomDimensionsState.status !== 'empty') {
+      return
+    }
+
+    setRoomDimensionDraft({
+      width: formatDimensionInput(roomDimensionsState.dimensions.widthM),
+      depth: formatDimensionInput(roomDimensionsState.dimensions.depthM),
+      height: formatDimensionInput(roomDimensionsState.dimensions.heightM),
+    })
+    setRoomDimensionSaveState('idle')
+    setRoomDimensionError(null)
+  }, [
+    roomDimensionsState.dimensions.depthM,
+    roomDimensionsState.dimensions.heightM,
+    roomDimensionsState.dimensions.widthM,
+    roomDimensionsState.status,
+  ])
 
   if (!project && status === 'loading') {
     return <StatePanel eyebrow="Source" title="소스 이미지를 불러오는 중입니다" body="프로젝트 접근 권한과 업로드 상태를 확인하고 있습니다." />
@@ -71,7 +150,11 @@ export function SourceImagesPage() {
   const emptyCount = 8 - filledCount
   const extraImageCount = extraImages.length
   const hasSourceImages = filledCount > 0 || extraImageCount > 0
+  const hasPersistedSourceImages =
+    Boolean(project.latestSourceImageId) || project.imageCount > 0 || remoteImages.images.length > 0
   const mobileCaptureHref = `roomforge://projects/${project.id}/capture`
+  const parsedRoomDimensions = parseRoomDimensionDraft(roomDimensionDraft)
+  const roomDimensionsValid = parsedRoomDimensions !== null
 
   function openSourcePicker(slotKey: SourceDirection['key'] | null = null) {
     setPendingSlotKey(slotKey)
@@ -141,9 +224,69 @@ export function SourceImagesPage() {
     )
   }
 
-  function queueReconstruction() {
+  async function startConversion() {
+    const currentProject = project
+    if (!currentProject) {
+      return
+    }
+
     setReconstructionQueued(true)
-    window.setTimeout(() => navigate(routes.status(project!.id)), 650)
+    setReconstructionError(null)
+
+    if (!parsedRoomDimensions) {
+      setReconstructionQueued(false)
+      setRoomDimensionError('방 가로, 세로, 천장 높이를 0보다 큰 미터 값으로 입력하세요.')
+      return
+    }
+
+    if (source !== 'firebase') {
+      window.setTimeout(() => navigate(`${routes.status(currentProject.id)}?convert=1`), 650)
+      return
+    }
+
+    if (auth.status !== 'signed-in') {
+      navigate(routes.login)
+      return
+    }
+
+    try {
+      await createProjectReconstructionJob(currentProject, auth.user, parsedRoomDimensions)
+      navigate(`${routes.status(currentProject.id)}?convert=1`)
+    } catch (error) {
+      setReconstructionQueued(false)
+      setReconstructionError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  function updateRoomDimensionDraft(key: keyof RoomDimensionDraft, value: string) {
+    setRoomDimensionDraft((current) => ({ ...current, [key]: value }))
+    setRoomDimensionSaveState('idle')
+    setRoomDimensionError(null)
+  }
+
+  async function saveRoomDimensionsDraft() {
+    if (!project) {
+      return
+    }
+    if (!parsedRoomDimensions) {
+      setRoomDimensionSaveState('error')
+      setRoomDimensionError('방 가로, 세로, 천장 높이를 0보다 큰 미터 값으로 입력하세요.')
+      return
+    }
+    if (auth.status !== 'signed-in') {
+      navigate(routes.login)
+      return
+    }
+
+    setRoomDimensionSaveState('saving')
+    setRoomDimensionError(null)
+    try {
+      await saveProjectRoomDimensions(project.id, auth.user, parsedRoomDimensions)
+      setRoomDimensionSaveState('saved')
+    } catch (error) {
+      setRoomDimensionSaveState('error')
+      setRoomDimensionError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   return (
@@ -158,9 +301,14 @@ export function SourceImagesPage() {
             <Upload size={16} />
             업로드
           </button>
-          <button className="rf-btn rf-btn--primary" type="button" onClick={queueReconstruction} disabled={reconstructionQueued}>
+          <button
+            className="rf-btn rf-btn--primary"
+            type="button"
+            onClick={startConversion}
+            disabled={reconstructionQueued || !roomDimensionsValid || (source === 'firebase' && !hasPersistedSourceImages)}
+          >
             <RotateCcw size={15} />
-            {reconstructionQueued ? '재구성 큐 등록 중' : '재구성 다시 실행'}
+            {reconstructionQueued ? '변환 화면 준비 중' : '2D/3D로 변환'}
           </button>
         </div>
       </header>
@@ -189,11 +337,25 @@ export function SourceImagesPage() {
         </section>
       )}
 
+      {remoteImages.status === 'error' && (
+        <section className="data-notice data-notice--danger">
+          <strong>소스 이미지 동기화 실패</strong>
+          <span>{remoteImages.error}</span>
+        </section>
+      )}
+
+      {reconstructionError && (
+        <section className="data-notice data-notice--danger">
+          <strong>변환을 시작하지 못했습니다</strong>
+          <span>{reconstructionError}</span>
+        </section>
+      )}
+
       <section className="coverage-banner">
         <span className="coverage-icon"><Camera size={20} /></span>
         <div>
           <strong>8개 각도 중 {filledCount}개 촬영됨 · <span>{emptyCount}개</span>가 비어 있어요</strong>
-          <p>{hasSourceImages ? '현재 상태로 재구성은 가능하지만, 비어 있는 각도를 채우면 모서리 정확도가 올라갑니다.' : '첫 사진을 업로드하거나 모바일 앱 가이드 촬영으로 빈 슬롯을 채우세요.'}</p>
+          <p>{hasSourceImages ? '현재 상태로 2D/3D 변환은 가능하지만, 비어 있는 각도를 채우면 모서리 정확도가 올라갑니다.' : '첫 사진을 업로드하거나 모바일 앱 가이드 촬영으로 빈 슬롯을 채우세요.'}</p>
         </div>
         <button className="rf-btn" type="button" onClick={() => setMobileHandoffOpen(true)}>
           <Smartphone size={15} />
@@ -222,6 +384,76 @@ export function SourceImagesPage() {
         </div>
 
         <aside className="source-guide">
+          <article className="summary-card source-room-dimensions-card">
+            <header>
+              <span><Ruler size={18} /></span>
+              <div>
+                <h2>실제 방 치수</h2>
+                <p>가구와 문·창문 배치 스케일에 사용할 기준값입니다.</p>
+              </div>
+            </header>
+            <div className="dimension-field-grid">
+              <label>
+                <span>가로</span>
+                <input
+                  inputMode="decimal"
+                  min="0.1"
+                  step="0.01"
+                  type="number"
+                  value={roomDimensionDraft.width}
+                  onChange={(event) => updateRoomDimensionDraft('width', event.currentTarget.value)}
+                />
+                <small>m</small>
+              </label>
+              <label>
+                <span>세로</span>
+                <input
+                  inputMode="decimal"
+                  min="0.1"
+                  step="0.01"
+                  type="number"
+                  value={roomDimensionDraft.depth}
+                  onChange={(event) => updateRoomDimensionDraft('depth', event.currentTarget.value)}
+                />
+                <small>m</small>
+              </label>
+              <label>
+                <span>천장</span>
+                <input
+                  inputMode="decimal"
+                  min="0.1"
+                  step="0.01"
+                  type="number"
+                  value={roomDimensionDraft.height}
+                  onChange={(event) => updateRoomDimensionDraft('height', event.currentTarget.value)}
+                />
+                <small>m</small>
+              </label>
+            </div>
+            <div className="source-room-dimensions-actions">
+              <span>
+                {roomDimensionsState.status === 'loading'
+                  ? '저장된 치수를 불러오는 중'
+                  : roomDimensionSaveState === 'saved'
+                    ? '저장됨'
+                    : `${roomDimensionDraft.width || '-'} x ${roomDimensionDraft.depth || '-'} m`}
+              </span>
+              <button
+                className="rf-btn"
+                type="button"
+                onClick={saveRoomDimensionsDraft}
+                disabled={!roomDimensionsValid || roomDimensionSaveState === 'saving'}
+              >
+                <Save size={14} />
+                {roomDimensionSaveState === 'saving' ? '저장 중' : '치수 저장'}
+              </button>
+            </div>
+            {(roomDimensionError || roomDimensionsState.error) && (
+              <p className="source-room-dimensions-error">
+                {roomDimensionError ?? roomDimensionsState.error}
+              </p>
+            )}
+          </article>
           <article className="summary-card">
             <h2>왜 8개 각도인가요?</h2>
             <p>방을 위에서 보고 둘러싼 여덟 각도에서 고르게 찍으면, 벽·모서리·개구부가 빠짐없이 겹쳐 재구성 정확도가 올라갑니다.</p>
@@ -267,6 +499,25 @@ export function SourceImagesPage() {
   )
 }
 
+function parseRoomDimensionDraft(draft: RoomDimensionDraft): RoomDimensionsInput | null {
+  const widthM = positiveInputNumber(draft.width)
+  const depthM = positiveInputNumber(draft.depth)
+  const heightM = positiveInputNumber(draft.height)
+  if (!widthM || !depthM || !heightM) {
+    return null
+  }
+  return { widthM, depthM, heightM }
+}
+
+function positiveInputNumber(value: string) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function formatDimensionInput(value: number) {
+  return value.toFixed(2)
+}
+
 function initialSourceSlots(hasSourceImages: boolean): SourceSlot[] {
   if (hasSourceImages) {
     return sourceDirections
@@ -274,6 +525,137 @@ function initialSourceSlots(hasSourceImages: boolean): SourceSlot[] {
   return sourceDirections.map((direction) =>
     direction.key === 'ROOM' ? direction : { ...direction, filled: false, quality: undefined, brightness: undefined },
   )
+}
+
+function useProjectSourceImages(projectId: string | undefined): RemoteSourceImagesState {
+  const auth = useAuth()
+  const authUserId = auth.status === 'signed-in' ? auth.user.uid : null
+  const [state, setState] = useState<RemoteSourceImagesState>({
+    status: 'idle',
+    images: [],
+    error: null,
+  })
+
+  useEffect(() => {
+    if (!auth.isConfigured || auth.status !== 'signed-in' || !projectId) {
+      setState({ status: 'idle', images: [], error: null })
+      return undefined
+    }
+
+    const app = roomForgeFirebaseApp()
+    const firestore = getFirestore(app)
+    const storage = getStorage(app)
+    const sourceImages = query(
+      collection(firestore, 'projects', projectId, 'source_images'),
+      orderBy('uploaded_at', 'desc'),
+    )
+    let active = true
+    let snapshotVersion = 0
+
+    setState((current) => ({ status: 'loading', images: current.images, error: null }))
+
+    const unsubscribe = onSnapshot(
+      sourceImages,
+      (snapshot) => {
+        const version = ++snapshotVersion
+        const metadata = snapshot.docs
+          .map(remoteSourceImageFromSnapshot)
+          .filter(isRemoteSourceImage)
+
+        Promise.all(
+          metadata.map(async (image) => {
+            try {
+              return {
+                ...image,
+                previewUrl: await getDownloadURL(storageRef(storage, image.storagePath)),
+              }
+            } catch {
+              return image
+            }
+          }),
+        ).then((images) => {
+          if (!active || version !== snapshotVersion) return
+          setState({ status: 'ready', images, error: null })
+        })
+      },
+      (error) => {
+        if (!active) return
+        setState({ status: 'error', images: [], error: error.message })
+      },
+    )
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [auth.isConfigured, auth.status, authUserId, projectId])
+
+  return state
+}
+
+function buildSourceDisplayState(images: RemoteSourceImage[]) {
+  const sourceSlots = initialSourceSlots(false)
+  const extraImages: ExtraImage[] = []
+
+  images.forEach((image, index) => {
+    const slotKey = image.role ? sourceRoleToSlotKey[image.role] : undefined
+    const previewUrl = image.previewUrl
+    if (!previewUrl) {
+      return
+    }
+
+    if (slotKey) {
+      const slotIndex = sourceSlots.findIndex((slot) => slot.key === slotKey)
+      if (slotIndex >= 0 && !sourceSlots[slotIndex].filled) {
+        sourceSlots[slotIndex] = {
+          ...sourceSlots[slotIndex],
+          filled: true,
+          quality: 'ok',
+          brightness: 0.72 + (index % 5) * 0.05,
+          previewUrl,
+          fileName: image.name,
+        }
+        return
+      }
+    }
+
+    extraImages.push({
+      id: image.id,
+      src: previewUrl,
+      name: image.name,
+    })
+  })
+
+  return { sourceSlots, extraImages }
+}
+
+function remoteSourceImageFromSnapshot(
+  snapshot: QueryDocumentSnapshot<DocumentData>,
+): RemoteSourceImage | null {
+  const data = snapshot.data()
+  const storagePath = stringValue(data.storage_path)
+  if (!storagePath) {
+    return null
+  }
+
+  const sourceImageId = stringValue(data.source_image_id) ?? snapshot.id
+  return {
+    id: snapshot.id,
+    sourceImageId,
+    storagePath,
+    name: stringValue(data.original_filename)
+      ?? stringValue(data.stored_filename)
+      ?? `${sourceImageId}.jpg`,
+    role: stringValue(data.capture_image_role) ?? undefined,
+  }
+}
+
+function isRemoteSourceImage(image: RemoteSourceImage | null): image is RemoteSourceImage {
+  return image !== null
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 function CaptureCell({
@@ -313,7 +695,11 @@ function CaptureCell({
 
   return (
     <div className="capture-cell capture-cell--filled">
-      <img src={direction.previewUrl ?? '/assets/room.png'} alt="" style={{ filter: `brightness(${direction.brightness ?? 0.8}) saturate(.9)` }} />
+      {direction.previewUrl ? (
+        <img src={direction.previewUrl} alt="" style={{ filter: `brightness(${direction.brightness ?? 0.8}) saturate(.9)` }} />
+      ) : (
+        <span className="capture-cell-placeholder">이미지 없음</span>
+      )}
       {direction.quality === 'warn' && <StatusPill label="흐릿함" tone="warning" />}
       <div className="capture-actions">
         <button type="button" onClick={onReplace}>교체</button>

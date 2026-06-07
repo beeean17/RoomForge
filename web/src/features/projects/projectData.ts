@@ -22,6 +22,7 @@ export type WorkspaceProject = {
   imageCount: number
   latestSourceImageId?: string
   latestJobId?: string
+  updatedAtMs?: number
   updatedAtLabel: string
   roomEstimate?: string
   progress?: number
@@ -63,7 +64,7 @@ export const demoProjects: WorkspaceProject[] = [
     id: 'bedroom-a',
     name: '침실 A동',
     status: 'processing',
-    statusLabel: '재구성 중 62%',
+    statusLabel: '변환 중 62%',
     tone: 'accent',
     imageCount: 18,
     latestSourceImageId: 'demo-bedroom-source-image',
@@ -129,7 +130,7 @@ export type ProjectFilterKey = (typeof projectFilterLabels)[number]['key']
 
 export const pipelineSteps = [
   { key: 'source', label: '소스' },
-  { key: 'status', label: '재구성' },
+  { key: 'status', label: '변환' },
   { key: 'editor', label: '편집' },
 ] as const
 
@@ -201,7 +202,7 @@ export function projectLabelForStatus(status: ProjectStatus) {
   const labels: Record<ProjectStatus, string> = {
     created: '촬영 필요',
     uploading: '업로드 중',
-    processing: '재구성 중',
+    processing: '변환 중',
     review_required: 'Needs review',
     succeeded: '3D 완료',
     failed: '실패',

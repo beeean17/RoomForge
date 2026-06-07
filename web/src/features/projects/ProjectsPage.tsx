@@ -1,5 +1,5 @@
-import { Check, Folder, Grid2X2, List, MoreHorizontal, Plus, SlidersHorizontal } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Check, Folder, Grid2X2, List, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
@@ -7,7 +7,12 @@ import { StatusPill } from '../../components/ui/StatusPill'
 import { routes } from '../../lib/routes'
 import { useAuth } from '../auth/AuthProvider'
 import { getProjectFilters, type ProjectFilterKey, type WorkspaceProject } from './projectData'
-import { createWorkspaceProject, useProjects } from './projectRepository'
+import {
+  createWorkspaceProject,
+  deleteWorkspaceProject,
+  renameWorkspaceProject,
+  useProjects,
+} from './projectRepository'
 
 type ProjectViewMode = 'grid' | 'list'
 type ProjectSortKey = 'updated' | 'name' | 'status'
@@ -23,7 +28,7 @@ const projectScopeCopy: Record<ProjectScope, { eyebrow: string; title: string; d
   mine: {
     eyebrow: 'Workspace',
     title: '내 프로젝트',
-    description: '사진에서 시작한 공간 모델, 재구성 상태, 편집 진입점을 한 곳에서 관리합니다.',
+    description: '사진에서 시작한 공간 모델, 변환 상태, 편집 진입점을 한 곳에서 관리합니다.',
     emptyTitle: '프로젝트가 없습니다',
     emptyBody: '새 프로젝트를 만들고 첫 소스 이미지를 추가하세요.',
   },
@@ -55,7 +60,18 @@ export function ProjectsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const projectState = useProjects()
-  const projects = projectState.projects
+  const [demoProjectNames, setDemoProjectNames] = useState<Record<string, string>>({})
+  const [deletedDemoProjectIds, setDeletedDemoProjectIds] = useState<Set<string>>(() => new Set())
+  const projects = useMemo(
+    () =>
+      projectState.projects
+        .filter((project) => !deletedDemoProjectIds.has(project.id))
+        .map((project) => ({
+          ...project,
+          name: demoProjectNames[project.id] ?? project.name,
+        })),
+    [deletedDemoProjectIds, demoProjectNames, projectState.projects],
+  )
   const scope = parseProjectScope(searchParams.get('scope'))
   const searchQuery = (searchParams.get('q') ?? '').trim().toLowerCase()
   const scopeCopy = projectScopeCopy[scope]
@@ -65,7 +81,14 @@ export function ProjectsPage() {
   const [sortKey, setSortKey] = useState<ProjectSortKey>('updated')
   const [sortMenuOpen, setSortMenuOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createProjectName, setCreateProjectName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
+  const [projectActionError, setProjectActionError] = useState<string | null>(null)
+  const [projectActionBusy, setProjectActionBusy] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<WorkspaceProject | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<WorkspaceProject | null>(null)
   const sortMenuRef = useRef<HTMLDivElement | null>(null)
   const scopedProjects = scope === 'mine' ? projects : []
   const visibleProjects = sortProjects(scopedProjects.filter((project) => {
@@ -98,33 +121,133 @@ export function ProjectsPage() {
     return () => window.removeEventListener('pointerdown', closeOnOutsidePointer)
   }, [sortMenuOpen])
 
-  async function handleCreateProject() {
+  function openCreateProjectDialog() {
     if (isCreating) {
       return
     }
 
     setCreateError(null)
 
-    if (!auth.isConfigured) {
-      if (demoEmptyProjectId) {
-        navigate(routes.source(demoEmptyProjectId))
-      }
+    if (auth.isConfigured && auth.status === 'loading') {
       return
     }
 
-    if (auth.status !== 'signed-in') {
+    if (auth.isConfigured && auth.status !== 'signed-in') {
       navigate(routes.login)
       return
     }
 
+    setCreateProjectName('')
+    setCreateDialogOpen(true)
+  }
+
+  async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (isCreating) {
+      return
+    }
+
+    const nextName = createProjectName.trim()
+    if (!nextName) {
+      setCreateError('프로젝트 이름을 입력하세요.')
+      return
+    }
+
+    setCreateError(null)
+
     setIsCreating(true)
     try {
-      const projectId = await createWorkspaceProject(auth.user)
+      if (!auth.isConfigured) {
+        if (!demoEmptyProjectId) {
+          throw new Error('사용 가능한 데모 프로젝트가 없습니다.')
+        }
+        setDemoProjectNames((current) => ({ ...current, [demoEmptyProjectId]: nextName }))
+        setCreateDialogOpen(false)
+        setCreateProjectName('')
+        navigate(routes.source(demoEmptyProjectId))
+        return
+      }
+
+      if (auth.status !== 'signed-in') {
+        navigate(routes.login)
+        return
+      }
+
+      const projectId = await createWorkspaceProject(auth.user, nextName)
+      setCreateDialogOpen(false)
+      setCreateProjectName('')
       navigate(routes.source(projectId))
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error))
     } finally {
       setIsCreating(false)
+    }
+  }
+
+  function openRenameDialog(project: WorkspaceProject) {
+    setProjectActionError(null)
+    setRenameTarget(project)
+    setRenameValue(project.name)
+  }
+
+  function openDeleteDialog(project: WorkspaceProject) {
+    setProjectActionError(null)
+    setDeleteTarget(project)
+  }
+
+  async function handleRenameProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!renameTarget || projectActionBusy) {
+      return
+    }
+
+    const nextName = renameValue.trim()
+    if (!nextName) {
+      setProjectActionError('프로젝트 이름을 입력하세요.')
+      return
+    }
+
+    setProjectActionBusy(true)
+    setProjectActionError(null)
+    try {
+      if (!auth.isConfigured) {
+        setDemoProjectNames((current) => ({ ...current, [renameTarget.id]: nextName }))
+      } else if (auth.status === 'signed-in') {
+        await renameWorkspaceProject(renameTarget.id, nextName)
+      } else {
+        navigate(routes.login)
+        return
+      }
+      setRenameTarget(null)
+      setRenameValue('')
+    } catch (error) {
+      setProjectActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setProjectActionBusy(false)
+    }
+  }
+
+  async function handleDeleteProject() {
+    if (!deleteTarget || projectActionBusy) {
+      return
+    }
+
+    setProjectActionBusy(true)
+    setProjectActionError(null)
+    try {
+      if (!auth.isConfigured) {
+        setDeletedDemoProjectIds((current) => new Set([...current, deleteTarget.id]))
+      } else if (auth.status === 'signed-in') {
+        await deleteWorkspaceProject(deleteTarget.id)
+      } else {
+        navigate(routes.login)
+        return
+      }
+      setDeleteTarget(null)
+    } catch (error) {
+      setProjectActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setProjectActionBusy(false)
     }
   }
 
@@ -210,6 +333,13 @@ export function ProjectsPage() {
         </section>
       )}
 
+      {projectActionError && (
+        <section className="data-notice data-notice--danger">
+          <strong>프로젝트 작업을 완료하지 못했습니다</strong>
+          <span>{projectActionError}</span>
+        </section>
+      )}
+
       {searchQuery && (
         <section className="data-notice">
           <strong>검색 적용</strong>
@@ -236,7 +366,12 @@ export function ProjectsPage() {
 
       <section className={`project-grid ${viewMode === 'list' ? 'project-grid--list' : ''}`} aria-label="프로젝트 목록">
         {scope === 'mine' && (
-          <button className="create-project-card" type="button" onClick={handleCreateProject} disabled={isCreating}>
+          <button
+            className="create-project-card"
+            type="button"
+            onClick={openCreateProjectDialog}
+            disabled={isCreating || (auth.isConfigured && auth.status === 'loading')}
+          >
             <span className="create-icon"><Plus size={22} /></span>
             <span className="create-copy">
               <strong>{isCreating ? '프로젝트 생성 중' : '새 프로젝트'}</strong>
@@ -246,7 +381,12 @@ export function ProjectsPage() {
         )}
 
         {visibleProjects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
+          <ProjectCard
+            key={project.id}
+            project={project}
+            onRequestDelete={openDeleteDialog}
+            onRequestRename={openRenameDialog}
+          />
         ))}
       </section>
 
@@ -275,6 +415,46 @@ export function ProjectsPage() {
           </div>
         </section>
       )}
+
+      {createDialogOpen && (
+        <ProjectCreateDialog
+          busy={isCreating}
+          value={createProjectName}
+          onCancel={() => {
+            setCreateDialogOpen(false)
+            setCreateProjectName('')
+            setCreateError(null)
+          }}
+          onChange={(value) => {
+            setCreateProjectName(value)
+            setCreateError(null)
+          }}
+          onSubmit={handleCreateProject}
+        />
+      )}
+
+      {renameTarget && (
+        <ProjectRenameDialog
+          busy={projectActionBusy}
+          project={renameTarget}
+          value={renameValue}
+          onCancel={() => {
+            setRenameTarget(null)
+            setRenameValue('')
+          }}
+          onChange={setRenameValue}
+          onSubmit={handleRenameProject}
+        />
+      )}
+
+      {deleteTarget && (
+        <ProjectDeleteDialog
+          busy={projectActionBusy}
+          project={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteProject}
+        />
+      )}
     </ProductShell>
   )
 }
@@ -294,13 +474,23 @@ function sortProjects(projects: WorkspaceProject[], sortKey: ProjectSortKey) {
     if (sortKey === 'status') {
       return left.statusLabel.localeCompare(right.statusLabel, 'ko') || left.name.localeCompare(right.name, 'ko')
     }
-    return 0
+    return (right.updatedAtMs ?? 0) - (left.updatedAtMs ?? 0)
   })
 }
 
-function ProjectCard({ project }: { project: WorkspaceProject }) {
+function ProjectCard({
+  project,
+  onRequestDelete,
+  onRequestRename,
+}: {
+  project: WorkspaceProject
+  onRequestDelete: (project: WorkspaceProject) => void
+  onRequestRename: (project: WorkspaceProject) => void
+}) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const cardStage = projectCardStage(project)
+  const editorReady = projectReadyForEditor(project)
 
   useEffect(() => {
     if (!menuOpen) {
@@ -321,11 +511,11 @@ function ProjectCard({ project }: { project: WorkspaceProject }) {
     <article className="project-card">
       <Link className="project-card-media-link" to={routes.project(project.id)} aria-label={`${project.name} 개요 보기`}>
         <div className={`project-card-media project-card-media--${project.coverMode}`}>
-          {project.coverMode === 'image' ? (
-            <img src="/assets/room.png" alt="" />
-          ) : (
-            <span className="placeholder-camera">촬영 대기</span>
-          )}
+          <span className="project-card-stage-kicker">{cardStage.kicker}</span>
+          <div className="project-card-stage-copy">
+            <strong>{cardStage.title}</strong>
+            <span>{cardStage.body}</span>
+          </div>
           <StatusPill label={project.statusLabel} tone={project.tone} />
           {project.progress !== undefined && project.progress < 100 && (
             <span className="progress-rail" aria-hidden="true">
@@ -357,9 +547,39 @@ function ProjectCard({ project }: { project: WorkspaceProject }) {
                 <Link role="menuitem" to={routes.source(project.id)} onClick={() => setMenuOpen(false)}>
                   소스 이미지
                 </Link>
-                <Link role="menuitem" to={routes.editor(project.id)} onClick={() => setMenuOpen(false)}>
-                  에디터 열기
-                </Link>
+                {editorReady ? (
+                  <Link role="menuitem" to={routes.editor(project.id)} onClick={() => setMenuOpen(false)}>
+                    에디터 열기
+                  </Link>
+                ) : (
+                  <Link role="menuitem" to={routes.source(project.id)} onClick={() => setMenuOpen(false)}>
+                    변환 준비
+                  </Link>
+                )}
+                <span className="project-card-menu-separator" />
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onRequestRename(project)
+                  }}
+                >
+                  <Pencil size={14} />
+                  이름 변경
+                </button>
+                <button
+                  className="is-danger"
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onRequestDelete(project)
+                  }}
+                >
+                  <Trash2 size={14} />
+                  삭제
+                </button>
               </div>
             )}
           </div>
@@ -370,5 +590,183 @@ function ProjectCard({ project }: { project: WorkspaceProject }) {
         </Link>
       </div>
     </article>
+  )
+}
+
+function projectReadyForEditor(project: WorkspaceProject) {
+  return project.status === 'succeeded' || project.status === 'review_required'
+}
+
+function projectCardStage(project: WorkspaceProject) {
+  if (projectReadyForEditor(project)) {
+    return {
+      kicker: `소스 ${project.imageCount}장`,
+      title: '에디터 준비',
+      body: '변환 결과 확인 가능',
+    }
+  }
+
+  if (project.imageCount > 0) {
+    return {
+      kicker: `소스 ${project.imageCount}장`,
+      title: '변환 필요',
+      body: '소스 확인 후 worker 실행',
+    }
+  }
+
+  return {
+    kicker: '소스 없음',
+    title: '입력 대기',
+    body: '사진 업로드 또는 앱 촬영 필요',
+  }
+}
+
+function ProjectCreateDialog({
+  busy,
+  value,
+  onCancel,
+  onChange,
+  onSubmit,
+}: {
+  busy: boolean
+  value: string
+  onCancel: () => void
+  onChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+}) {
+  return (
+    <div className="project-action-backdrop" role="presentation">
+      <form
+        aria-labelledby="project-create-title"
+        aria-modal="true"
+        className="project-action-dialog project-action-dialog--create"
+        role="dialog"
+        onSubmit={onSubmit}
+      >
+        <header>
+          <span className="project-action-icon">
+            <Plus size={18} />
+          </span>
+          <div>
+            <p className="rf-eyebrow">Workspace</p>
+            <h2 id="project-create-title">새 프로젝트</h2>
+          </div>
+        </header>
+        <label className="project-action-field">
+          <span>프로젝트 이름</span>
+          <input
+            autoFocus
+            maxLength={80}
+            placeholder="예: 거실 리노베이션"
+            value={value}
+            onChange={(event) => onChange(event.currentTarget.value)}
+          />
+        </label>
+        <p className="project-action-copy">첫 소스 이미지를 추가할 공간 이름을 입력하세요.</p>
+        <footer>
+          <button className="rf-btn" disabled={busy} type="button" onClick={onCancel}>
+            취소
+          </button>
+          <button className="rf-btn rf-btn--primary" disabled={busy || !value.trim()} type="submit">
+            {busy ? '생성 중' : '만들기'}
+          </button>
+        </footer>
+      </form>
+    </div>
+  )
+}
+
+function ProjectRenameDialog({
+  busy,
+  project,
+  value,
+  onCancel,
+  onChange,
+  onSubmit,
+}: {
+  busy: boolean
+  project: WorkspaceProject
+  value: string
+  onCancel: () => void
+  onChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+}) {
+  return (
+    <div className="project-action-backdrop" role="presentation">
+      <form
+        aria-labelledby="project-rename-title"
+        aria-modal="true"
+        className="project-action-dialog"
+        role="dialog"
+        onSubmit={onSubmit}
+      >
+        <header>
+          <span className="project-action-icon">
+            <Pencil size={18} />
+          </span>
+          <div>
+            <p className="rf-eyebrow">Project settings</p>
+            <h2 id="project-rename-title">프로젝트 이름 변경</h2>
+          </div>
+        </header>
+        <label className="project-action-field">
+          <span>프로젝트 이름</span>
+          <input
+            autoFocus
+            maxLength={80}
+            value={value}
+            onChange={(event) => onChange(event.currentTarget.value)}
+          />
+        </label>
+        <p className="project-action-copy">현재 이름: {project.name}</p>
+        <footer>
+          <button className="rf-btn" disabled={busy} type="button" onClick={onCancel}>
+            취소
+          </button>
+          <button className="rf-btn rf-btn--primary" disabled={busy || !value.trim()} type="submit">
+            {busy ? '저장 중' : '저장'}
+          </button>
+        </footer>
+      </form>
+    </div>
+  )
+}
+
+function ProjectDeleteDialog({
+  busy,
+  project,
+  onCancel,
+  onConfirm,
+}: {
+  busy: boolean
+  project: WorkspaceProject
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="project-action-backdrop" role="presentation">
+      <section className="project-action-dialog project-action-dialog--danger" role="dialog" aria-modal="true" aria-labelledby="project-delete-title">
+        <header>
+          <span className="project-action-icon project-action-icon--danger">
+            <Trash2 size={18} />
+          </span>
+          <div>
+            <p className="rf-eyebrow">Danger zone</p>
+            <h2 id="project-delete-title">프로젝트 삭제</h2>
+          </div>
+        </header>
+        <p className="project-action-copy">
+          <strong>{project.name}</strong> 프로젝트를 삭제합니다. 이 작업은 목록에서 제거되며 되돌릴 수 없습니다.
+        </p>
+        <footer>
+          <button className="rf-btn" disabled={busy} type="button" onClick={onCancel}>
+            취소
+          </button>
+          <button className="danger-button" disabled={busy} type="button" onClick={onConfirm}>
+            {busy ? '삭제 중' : '삭제'}
+          </button>
+        </footer>
+      </section>
+    </div>
   )
 }

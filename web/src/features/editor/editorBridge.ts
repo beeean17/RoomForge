@@ -1,4 +1,5 @@
 import type { WorkspaceProject } from '../projects/projectData'
+import type { ProjectRoomDimensions } from '../projects/projectRepository'
 
 export const EDITOR_BRIDGE_VERSION = 1
 
@@ -16,6 +17,9 @@ type InitializeMessageOptions = {
   requestId: string
   route: string
   source?: EditorSourceImageBridgePayload
+  opencvResult?: EditorOpenCvResultBridgePayload
+  sceneUnderstandingResult?: EditorSceneUnderstandingResultBridgePayload
+  roomDimensions?: ProjectRoomDimensions
 }
 
 export type EditorSourceImageBridgePayload = {
@@ -48,6 +52,39 @@ export type EditorSourceImageBridgePayload = {
   }
 }
 
+export type EditorOpenCvResultBridgePayload = {
+  resultId: string
+  jobId: string
+  sourceImageId: string
+  coordinateSpace: 'image_pixels'
+  algorithm: string
+  openCvVersion?: string
+  confidence?: number
+  qualityStatus: 'success' | 'review_required' | 'failed'
+  reasonCode?: string
+  reasonMessage?: string
+  candidateGeometry: Record<string, unknown>
+}
+
+export type EditorSceneUnderstandingResultBridgePayload = {
+  resultId: string
+  captureSessionId: string
+  providerType: string
+  algorithmId: string
+  modelId?: string
+  runtime?: string
+  detectorScoreThreshold?: number
+  confidenceScore?: number
+  qualityStatus: 'success' | 'review_required' | 'failed'
+  failureReasonCode?: string
+  failureReason?: string
+  coverage?: Record<string, unknown>
+  candidateObjects: unknown[]
+  placedObjects: unknown[]
+  confirmedObjects: unknown[]
+  structuralFixtures: unknown[]
+}
+
 export function editorFrameSrc(projectId: string): string {
   const configuredUrl = import.meta.env.VITE_ROOMFORGE_EDITOR_URL as string | undefined
   const baseUrl = configuredUrl?.trim() || (import.meta.env.DEV ? 'http://127.0.0.1:9239/' : '/editor/')
@@ -66,7 +103,22 @@ export function createEditorInitializeMessage({
   requestId,
   route,
   source,
+  opencvResult,
+  sceneUnderstandingResult,
+  roomDimensions,
 }: InitializeMessageOptions): EditorBridgeMessage {
+  const metricRoom = roomDimensions ?? {
+    roomDimensionsId: 'current',
+    widthM: 4.2,
+    depthM: 3.6,
+    heightM: 2.7,
+    unit: 'meters',
+  }
+  const sceneCandidateObjects = sceneUnderstandingResult?.candidateObjects ?? []
+  const scenePlacedObjects = sceneUnderstandingResult?.placedObjects ?? []
+  const sceneConfirmedObjects = sceneUnderstandingResult?.confirmedObjects ?? []
+  const sceneStructuralFixtures = sceneUnderstandingResult?.structuralFixtures ?? []
+
   return {
     type: 'roomforge.scene.initialize',
     version: EDITOR_BRIDGE_VERSION,
@@ -91,6 +143,15 @@ export function createEditorInitializeMessage({
       },
       ...(source?.sourceImage ? { sourceImage: source.sourceImage } : {}),
       ...(source?.captureSession ? { captureSession: source.captureSession } : {}),
+      ...(opencvResult ? { opencvResult } : {}),
+      ...(sceneUnderstandingResult ? { sceneUnderstandingResult } : {}),
+      roomDimensions: {
+        roomDimensionsId: metricRoom.roomDimensionsId,
+        unit: metricRoom.unit,
+        widthMeters: metricRoom.widthM,
+        depthMeters: metricRoom.depthM,
+        heightMeters: metricRoom.heightM,
+      },
       scene: {
         sceneId: `${project.id}-editor-scene`,
         coordinateSpace: 'meters',
@@ -99,27 +160,29 @@ export function createEditorInitializeMessage({
         room: {
           objectId: 'room-shell',
           label: project.name,
-          heightMeters: 2.7,
+          heightMeters: metricRoom.heightM,
           floorPlan: {
             floorPlanId: `${project.id}-floor-plan`,
             metricGeometry: {
               coordinateSpace: 'meters',
               points: [
                 { x: 0, y: 0 },
-                { x: 4.2, y: 0 },
-                { x: 4.2, y: 3.6 },
-                { x: 0, y: 3.6 },
+                { x: metricRoom.widthM, y: 0 },
+                { x: metricRoom.widthM, y: metricRoom.depthM },
+                { x: 0, y: metricRoom.depthM },
               ],
             },
           },
         },
         furniture: [],
-        candidateObjects: [],
-        placedObjects: [],
-        confirmedObjects: [],
-        structuralFixtures: [],
+        candidateObjects: sceneCandidateObjects,
+        placedObjects: scenePlacedObjects,
+        confirmedObjects: sceneConfirmedObjects,
+        structuralFixtures: sceneStructuralFixtures,
         ...(source?.sourceImage ? { sourceImage: source.sourceImage } : {}),
         ...(source?.captureSession ? { captureSession: source.captureSession } : {}),
+        ...(opencvResult ? { opencvResult } : {}),
+        ...(sceneUnderstandingResult ? { sceneUnderstandingResult } : {}),
       },
     },
   }

@@ -1,4 +1,4 @@
-import { doc, getFirestore, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, getDoc, getFirestore, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore'
 
 import { roomForgeFirebaseApp } from '../../firebase/config'
 import type { WorkspaceProject } from '../projects/projectData'
@@ -71,9 +71,15 @@ async function persistOpenCvResult({
   const payload = recordValue(message.payload)
   const geometry = recordValue(payload.candidateGeometry)
   const firestore = getFirestore(roomForgeFirebaseApp())
+  const timestamp = serverTimestamp()
+  const latestRef = doc(firestore, 'projects', project.id, 'opencv_results', 'latest')
+  const latestSnapshot = await getDoc(latestRef)
+  const latestCreatedAt = latestSnapshot.exists()
+    ? latestSnapshot.data().created_at
+    : timestamp
 
-  await setDoc(doc(firestore, 'projects', project.id, 'opencv_results', resultId), withoutUndefined({
-    result_id: resultId,
+  const resultDocument = (documentId: string, createdAt: unknown) => withoutUndefined({
+    result_id: documentId,
     project_id: project.id,
     owner_uid: ownerUid,
     job_id: project.latestJobId,
@@ -94,11 +100,22 @@ async function persistOpenCvResult({
     failure_reason_code: failureReasonCode(payload.reasonCode, payload.qualityStatus),
     failure_reason: stringValue(payload.reasonMessage),
     artifact_refs: [],
-    processing_completed_at: serverTimestamp(),
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
+    processing_completed_at: timestamp,
+    created_at: createdAt,
+    updated_at: timestamp,
     schema_version: 1,
-  }))
+  })
+
+  const batch = writeBatch(firestore)
+  batch.set(
+    doc(firestore, 'projects', project.id, 'opencv_results', resultId),
+    resultDocument(resultId, timestamp),
+  )
+  batch.set(
+    latestRef,
+    resultDocument('latest', latestCreatedAt),
+  )
+  await batch.commit()
 
   return { status: 'stored', label: 'OpenCV result persisted' } as const
 }

@@ -115,6 +115,11 @@ const catalogFurnitureItems: Array<{
   { category: 'desk', label: 'Desk', labelKo: '책상', note: 'work surface', noteKo: '작업면' },
   { category: 'chair', label: 'Chair', labelKo: '의자', note: 'seating', noteKo: '좌석' },
   { category: 'wardrobe', label: 'Storage', labelKo: '수납장', note: 'wall aligned', noteKo: '벽면 정렬' },
+  { category: 'sofa', label: 'Sofa', labelKo: '소파', note: 'lounge seating', noteKo: '휴식 좌석' },
+  { category: 'table', label: 'Table', labelKo: '테이블', note: 'shared surface', noteKo: '공용 상판' },
+  { category: 'shelf', label: 'Shelf', labelKo: '선반', note: 'vertical storage', noteKo: '수직 수납' },
+  { category: 'cabinet', label: 'Cabinet', labelKo: '캐비닛', note: 'low storage', noteKo: '낮은 수납' },
+  { category: 'custom', label: 'Custom', labelKo: '커스텀', note: 'generic proxy', noteKo: '범용 프록시' },
 ]
 
 const furnitureCatalogMarkup = catalogFurnitureItems
@@ -279,13 +284,13 @@ app.innerHTML = `
     <section class="panel-section" aria-labelledby="candidate-tray-title">
       <div class="panel-section-header">
         <div>
-          <p class="eyebrow">${t('Scene candidates', '장면 후보')}</p>
-          <h2 id="candidate-tray-title">${t('Candidate tray', '후보 트레이')}</h2>
+          <p class="eyebrow">${t('Auto placement', '자동 배치')}</p>
+          <h2 id="candidate-tray-title">${t('Editable CV draft', '수정 가능한 CV 초안')}</h2>
         </div>
-        <span class="state-pill" id="candidate-tray-count">${t('0 candidates', '후보 0개')}</span>
+        <span class="state-pill" id="candidate-tray-count">${t('0 draft items', '초안 0개')}</span>
       </div>
-      <p class="helper-text" id="candidate-tray-status" role="status" aria-live="polite">${t('No CV candidates loaded.', '불러온 CV 후보가 없습니다.')}</p>
-      <div class="candidate-tray-list" id="candidate-tray-list" role="list" aria-label="${t('CV candidates', 'CV 후보')}"></div>
+      <p class="helper-text" id="candidate-tray-status" role="status" aria-live="polite">${t('No auto-placement draft loaded.', '불러온 자동 배치 초안이 없습니다.')}</p>
+      <div class="candidate-tray-list" id="candidate-tray-list" role="list" aria-label="${t('Editable CV draft items', '수정 가능한 CV 초안 항목')}"></div>
     </section>
     <section class="panel-section" aria-labelledby="scale-title">
       <div class="panel-section-header">
@@ -346,7 +351,7 @@ app.innerHTML = `
       <div class="warning-rail" id="floor-warning-rail" role="list" aria-label="${t('Floor plan warnings', '평면도 경고')}"></div>
       <div class="artifact-grid" id="floor-artifact-grid" aria-label="${t('Generated artifacts', '생성 아티팩트')}"></div>
       <div class="proceed-controls" aria-label="${t('Floor plan proceed controls', '평면도 진행 컨트롤')}">
-        <button id="review-candidates" type="button">${t('Review candidates', '후보 재검토')}</button>
+        <button id="review-candidates" type="button">${t('Review draft', '초안 재검토')}</button>
         <button id="return-correction" type="button">${t('Manual correction', '수동 보정')}</button>
         <button id="proceed-editor" type="button">${t('Proceed to editor', '편집기로 이동')}</button>
       </div>
@@ -1019,13 +1024,38 @@ function handleBridgeCommand(message: BridgeMessage): void {
   if (message.type === 'roomforge.scene.initialize') {
     sourceImageForExtraction = sourceImageFromPayload(message.payload)
     captureSessionForSceneUnderstanding = captureSessionFromBridgePayload(message.payload)
-    spatialModel = recalculateCandidatePlacements(spatialModelFromBridgePayload(message.payload))
+    const persistedOpenCvPayload = openCvCandidatePayloadFromBridgePayload(message.payload)
+    const persistedSceneUnderstandingPayload = sceneUnderstandingPayloadFromBridgePayload(message.payload)
+    const initializedModel = recalculateCandidatePlacements(spatialModelFromBridgePayload(message.payload))
+    spatialModel = hydrateFurnitureFromPlacedObjects(
+      persistedSceneUnderstandingPayload
+        ? autoPlaceDetectedCandidates(initializedModel)
+        : initializedModel,
+    )
     updateCaptureSessionStatus()
     applySpatialModel()
+    if (persistedOpenCvPayload) {
+      applyCandidateExtraction(persistedOpenCvPayload)
+      postCandidateQualityWarning()
+    }
+    if (persistedSceneUnderstandingPayload) {
+      candidateTrayStatusElement.textContent = t(
+        'Stored auto-placement draft loaded.',
+        '저장된 자동 배치 초안을 불러왔습니다.',
+      )
+      if (!persistedOpenCvPayload) {
+        opencvStatusElement.textContent = t(
+          'Stored conversion result loaded',
+          '저장된 변환 결과를 불러왔습니다',
+        )
+      }
+    }
     respondToFlutter(message)
     emitSceneState('roomforge.scene.initialized', message.requestId)
-    requestCandidateExtraction()
-    if (captureSessionForSceneUnderstanding?.images.length) {
+    if (!persistedOpenCvPayload && !persistedSceneUnderstandingPayload) {
+      requestCandidateExtraction()
+    }
+    if (!persistedSceneUnderstandingPayload && captureSessionForSceneUnderstanding?.images.length) {
       requestSceneUnderstanding(`scene-understanding-init-${Date.now()}`)
     }
     return
@@ -1645,6 +1675,11 @@ function ensureOpenCvWorker(): Worker {
     } else if (event.data.type === 'roomforge.opencv.runtimeFailed') {
       runtimeReady = false
       opencvStatusElement.textContent = t('OpenCV.js runtime failed', 'OpenCV.js 런타임 실패')
+    } else if (event.data.type === 'roomforge.opencv.progress') {
+      const progress = recordFromUnknown(event.data.payload)
+      const label = stringFromUnknown(progress.label) ?? 'OpenCV worker progress'
+      const percent = numberFromUnknown(progress.progress, 0)
+      opencvStatusElement.textContent = `${label} · ${Math.round(percent)}%`
     }
     postToParent(event.data)
     if (event.data.type === 'roomforge.opencv.runtimeLoaded') {
@@ -1675,11 +1710,16 @@ function ensureSceneUnderstandingWorker(): Worker {
     if (!isBridgeMessage(event.data)) {
       return
     }
+    let messageToParent = event.data
     if (event.data.type === 'roomforge.sceneUnderstanding.candidatesExtracted') {
-      applySceneUnderstandingResult(event.data.payload)
+      const appliedPayload = applySceneUnderstandingResult(event.data.payload)
+      messageToParent = {
+        ...event.data,
+        payload: appliedPayload,
+      }
       candidateTrayStatusElement.textContent = t(
-        'Scene understanding candidates loaded.',
-        '장면 이해 후보를 불러왔습니다.',
+        'Scene understanding candidates auto-placed.',
+        '장면 이해 후보를 자동 배치했습니다.',
       )
     } else if (event.data.type === 'roomforge.sceneUnderstanding.candidatesFailed') {
       const error = recordFromUnknown(event.data.payload.error)
@@ -1687,7 +1727,7 @@ function ensureSceneUnderstandingWorker(): Worker {
         stringFromUnknown(error.message) ??
         t('Scene understanding could not run.', '장면 이해를 실행할 수 없습니다.')
     }
-    postToParent(event.data)
+    postToParent(messageToParent)
   }
   return sceneUnderstandingWorker
 }
@@ -1706,24 +1746,43 @@ function requestSceneUnderstanding(requestId?: string, payload: BridgePayload = 
   } satisfies BridgeMessage)
 }
 
-function applySceneUnderstandingResult(payload: Record<string, unknown>): void {
+function applySceneUnderstandingResult(payload: Record<string, unknown>): Record<string, unknown> {
   const result = recordFromUnknown(payload.sceneUnderstandingResult)
   const nextModel = spatialModelFromBridgePayload({
-    scene: spatialModelPayload(),
+    scene: {
+      ...spatialModelPayload(),
+      candidateObjects: listFromUnknown(result.candidateObjects),
+      placedObjects: listFromUnknown(result.placedObjects),
+      confirmedObjects: listFromUnknown(result.confirmedObjects),
+      structuralFixtures: listFromUnknown(result.structuralFixtures),
+    },
     sceneUnderstandingResult: result,
   })
-  spatialModel = recalculateCandidatePlacements({
-    ...spatialModel,
-    hasUnsavedChanges: true,
-    candidateObjects: nextModel.candidateObjects,
-    placedObjects: nextModel.placedObjects,
-    confirmedObjects: nextModel.confirmedObjects,
-    structuralFixtures: nextModel.structuralFixtures,
-  })
+  spatialModel = hydrateFurnitureFromPlacedObjects(
+    autoPlaceDetectedCandidates(recalculateCandidatePlacements({
+      ...spatialModel,
+      hasUnsavedChanges: true,
+      candidateObjects: nextModel.candidateObjects,
+      placedObjects: nextModel.placedObjects,
+      confirmedObjects: nextModel.confirmedObjects,
+      structuralFixtures: nextModel.structuralFixtures,
+    })),
+  )
   rebuildStructuralFixtures()
   rebuildFurniture()
   updateSpatialStatus()
   emitSceneState('roomforge.sceneUnderstanding.applied')
+  return {
+    ...payload,
+    sceneUnderstandingResult: {
+      ...result,
+      candidateObjects: spatialModel.candidateObjects,
+      placedObjects: spatialModel.placedObjects,
+      confirmedObjects: spatialModel.confirmedObjects,
+      structuralFixtures: spatialModel.structuralFixtures,
+    },
+    spatialModel: spatialModelPayload(),
+  }
 }
 
 function recalculateCandidatePlacements(model: SpatialModel): SpatialModel {
@@ -1731,6 +1790,67 @@ function recalculateCandidatePlacements(model: SpatialModel): SpatialModel {
     model,
     images: captureSessionForSceneUnderstanding?.images ?? [],
   })
+}
+
+function autoPlaceDetectedCandidates(model: SpatialModel): SpatialModel {
+  return model.candidateObjects.reduce((nextModel, candidate) => {
+    if (candidate.reviewState === 'rejected' || candidate.reviewState === 'placed') {
+      return nextModel
+    }
+    if (candidate.objectType === 'structural_fixture') {
+      return placeFixtureCandidateInModel(nextModel, candidate.candidateId)
+    }
+    if (candidate.objectType === 'furniture') {
+      return placeCandidateInModel(nextModel, candidate.candidateId)
+    }
+    return nextModel
+  }, model)
+}
+
+function hydrateFurnitureFromPlacedObjects(model: SpatialModel): SpatialModel {
+  const bounds = roomBounds(model)
+  const furniture = [...model.furniture]
+
+  for (const placed of model.placedObjects) {
+    if (placed.objectType !== 'furniture' || furniture.some((item) => item.objectId === placed.objectId)) {
+      continue
+    }
+
+    const category = isFurnitureCategory(placed.category) ? placed.category : 'custom'
+    const prior = furnitureSizePriorForCategory(category)
+    const placedSize = placed.size
+    const placedPosition = placed.position
+    const widthMeters = Math.max(placedSize?.x ?? prior.size.widthMeters, 0.2)
+    const depthMeters = Math.max(placedSize?.z ?? prior.size.depthMeters, 0.2)
+    const heightMeters = Math.max(placedSize?.y ?? prior.size.heightMeters, 0.2)
+
+    furniture.push({
+      objectId: placed.objectId,
+      category,
+      candidateId: placed.candidateId,
+      source: 'cv_candidate',
+      label: placed.label ?? prior.label,
+      size: {
+        widthMeters,
+        depthMeters,
+        heightMeters,
+      },
+      position: {
+        x: clampNumber(placedPosition?.x ?? bounds.centerX, widthMeters / 2, bounds.widthMeters - widthMeters / 2),
+        y: clampNumber(placedPosition?.z ?? bounds.centerY, depthMeters / 2, bounds.depthMeters - depthMeters / 2),
+      },
+      rotationDegrees: placed.rotationDegrees,
+      color: prior.color,
+      locked: placed.locked,
+    })
+  }
+
+  return furniture.length === model.furniture.length
+    ? model
+    : {
+        ...model,
+        furniture,
+      }
 }
 
 syncLayerToggleButtons()
@@ -2810,12 +2930,12 @@ function updateCandidateTray(): void {
   const activeCount = items.filter((item) => !item.rejected).length
   const coverage = currentSceneCoverage()
   candidateTrayCountElement.textContent = usesKorean
-    ? `후보 ${items.length}개`
-    : `${items.length} ${items.length === 1 ? 'candidate' : 'candidates'}`
+    ? `초안 ${items.length}개`
+    : `${items.length} draft ${items.length === 1 ? 'item' : 'items'}`
   if (items.length === 0) {
     candidateTrayStatusElement.textContent = t(
-      'No CV candidates loaded.',
-      '불러온 CV 후보가 없습니다.',
+      'No auto-placement draft loaded.',
+      '불러온 자동 배치 초안이 없습니다.',
     )
     candidateTrayListElement.innerHTML = ''
     return
@@ -2823,8 +2943,8 @@ function updateCandidateTray(): void {
   const needsReviewCount = items.filter((item) => item.lowConfidence && !item.rejected).length
   const guidance = localizedCoverageGuidance(coverage)
   candidateTrayStatusElement.textContent = usesKorean
-    ? `활성 후보 ${activeCount}개; 검토 필요 ${needsReviewCount}개. ${guidance}`
-    : `${activeCount} active candidates; ${needsReviewCount} need review. ${guidance}`
+    ? `자동 배치 초안 ${activeCount}개; 검토 필요 ${needsReviewCount}개. ${guidance}`
+    : `${activeCount} auto-placed draft items; ${needsReviewCount} need review. ${guidance}`
   candidateTrayListElement.innerHTML = items.map(candidateTrayItemMarkup).join('')
 }
 
@@ -2868,7 +2988,7 @@ function candidateTrayItemMarkup(item: ReturnType<typeof candidateTrayItems>[num
       : ''
   const disabled = item.rejected ? ' disabled' : ''
   const placeDisabled = item.rejected || item.placed ? ' disabled' : ''
-  const placeText = item.placed ? t('Placed', '배치됨') : t('Place', '배치')
+  const placeText = item.placed ? t('Placed', '배치됨') : t('Add to draft', '초안에 추가')
   const rejectText = item.rejected ? t('Rejected', '거절됨') : t('Reject', '거절')
   return `
     <article class="candidate-card${item.rejected ? ' is-rejected' : ''}${cardStateClass}" role="listitem" data-candidate-id="${escapeAttribute(
@@ -3708,6 +3828,46 @@ function sourceImageFromPayload(payload: Record<string, unknown>): SourceImageFo
     widthPx,
     heightPx,
     contentType,
+  }
+}
+
+function sceneUnderstandingPayloadFromBridgePayload(payload: Record<string, unknown>): Record<string, unknown> | null {
+  const direct = recordFromUnknown(payload.sceneUnderstandingResult)
+  const scene = recordFromUnknown(payload.scene)
+  const fromScene = recordFromUnknown(scene.sceneUnderstandingResult)
+  const result = Object.keys(direct).length > 0 ? direct : fromScene
+  const hasResult =
+    Object.keys(result).length > 0 &&
+    (
+      listFromUnknown(result.candidateObjects).length > 0 ||
+      listFromUnknown(result.placedObjects).length > 0 ||
+      listFromUnknown(result.confirmedObjects).length > 0 ||
+      listFromUnknown(result.structuralFixtures).length > 0
+    )
+
+  return hasResult ? result : null
+}
+
+function openCvCandidatePayloadFromBridgePayload(payload: Record<string, unknown>): Record<string, unknown> | null {
+  const direct = recordFromUnknown(payload.opencvResult)
+  const scene = recordFromUnknown(payload.scene)
+  const fromScene = recordFromUnknown(scene.opencvResult)
+  const result = Object.keys(direct).length > 0 ? direct : fromScene
+  const geometry = recordFromUnknown(result.candidateGeometry)
+  if (Object.keys(result).length === 0 || Object.keys(geometry).length === 0) {
+    return null
+  }
+
+  return {
+    sourceImageId: stringFromUnknown(result.sourceImageId),
+    coordinateSpace: 'image_pixels',
+    confidence: numberFromUnknown(result.confidence, 0),
+    qualityStatus: stringFromUnknown(result.qualityStatus) ?? 'review_required',
+    reasonCode: stringFromUnknown(result.reasonCode),
+    reasonMessage: stringFromUnknown(result.reasonMessage),
+    algorithm: stringFromUnknown(result.algorithm) ?? 'opencv-js-canny-hough-v1',
+    openCvVersion: stringFromUnknown(result.openCvVersion),
+    candidateGeometry: geometry,
   }
 }
 

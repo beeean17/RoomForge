@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Layers, MoreHorizontal, Pencil, Plus } from 'lucide-react'
+import { ArrowRight, Check, MoreHorizontal, Pencil, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -57,7 +57,7 @@ export function ProjectOverviewPage() {
 
   const pipelineState = getPipelineState(project, 'status')
   const visibleName = displayName || project.name
-  const sourceThumbCount = Math.min(7, project.imageCount)
+  const workflow = overviewWorkflow(project)
 
   function saveProjectName(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -123,9 +123,13 @@ export function ProjectOverviewPage() {
           {moreOpen && (
             <div className="rf-popover rf-popover--right compact-menu" role="menu">
               <Link role="menuitem" to={routes.source(project.id)} onClick={() => setMoreOpen(false)}>소스 이미지</Link>
-              <Link role="menuitem" to={routes.status(project.id)} onClick={() => setMoreOpen(false)}>재구성 상태</Link>
+              <Link role="menuitem" to={routes.status(project.id)} onClick={() => setMoreOpen(false)}>변환 상태</Link>
               <Link role="menuitem" to={routes.recovery(project.id)} onClick={() => setMoreOpen(false)}>복구 상태</Link>
-              <Link role="menuitem" to={routes.editor(project.id)} onClick={() => setMoreOpen(false)}>에디터 열기</Link>
+              {canOpenEditor(project) ? (
+                <Link role="menuitem" to={routes.editor(project.id)} onClick={() => setMoreOpen(false)}>에디터 열기</Link>
+              ) : (
+                <Link role="menuitem" to={routes.source(project.id)} onClick={() => setMoreOpen(false)}>변환 준비</Link>
+              )}
             </div>
           )}
         </div>
@@ -150,30 +154,44 @@ export function ProjectOverviewPage() {
 
       <section className="project-overview-grid">
         <div className="project-main-column">
-          <article className="preview-card">
-            <div className="preview-media">
-              {project.coverMode === 'image' ? <img src="/assets/room.png" alt="" /> : <span className="preview-placeholder">촬영 대기</span>}
-              <StatusPill label="3D 재구성 프리뷰" tone="accent" />
-              <div className="preview-actions">
-                <Link className="rf-btn rf-btn--primary" to={routes.editor(project.id)}>
-                  <Layers size={15} />
-                  에디터 열기
+          <article className="workflow-card">
+            <header>
+              <p className="rf-eyebrow">{workflow.eyebrow}</p>
+              <StatusPill label={project.statusLabel} tone={project.tone} />
+            </header>
+            <div>
+              <h2>{workflow.title}</h2>
+              <p>{workflow.body}</p>
+            </div>
+            <div className="workflow-flow" aria-label="소스 입력부터 에디터까지의 작업 흐름">
+              {['소스 입력', '2D/3D 변환', '에디터'].map((label, index) => (
+                <span className={index === workflow.activeIndex ? 'is-active' : index < workflow.activeIndex ? 'is-done' : ''} key={label}>
+                  {index < workflow.activeIndex ? <Check size={13} /> : <i />}
+                  {label}
+                </span>
+              ))}
+            </div>
+            <div className="workflow-actions">
+              <Link className="rf-btn rf-btn--primary" to={workflow.primaryTo}>
+                {workflow.primaryLabel}
+                <ArrowRight size={15} />
+              </Link>
+              {workflow.secondaryTo && (
+                <Link className="rf-btn" to={workflow.secondaryTo}>
+                  {workflow.secondaryLabel}
                 </Link>
-                <Link className="rf-btn rf-btn--dark" to={routes.editor(project.id)}>
-                  2D 평면도
-                </Link>
-              </div>
+              )}
             </div>
           </article>
 
           <article className="next-step-card">
             <p className="rf-eyebrow">다음 단계</p>
             <div>
-              <h2>에디터에서 공간을 다듬으세요</h2>
-              <p>재구성된 벽·바닥·개구부를 직접 보정하고, 2D 평면도와 3D로 가구를 배치합니다.</p>
+              <h2>{workflow.nextTitle}</h2>
+              <p>{workflow.nextBody}</p>
             </div>
-            <Link className="rf-btn rf-btn--primary" to={routes.editor(project.id)}>
-              에디터 열기
+            <Link className="rf-btn rf-btn--primary" to={workflow.primaryTo}>
+              {workflow.primaryLabel}
               <ArrowRight size={15} />
             </Link>
           </article>
@@ -186,19 +204,19 @@ export function ProjectOverviewPage() {
               <span>{project.imageCount}장</span>
               <Link to={routes.source(project.id)}>전체 보기</Link>
             </header>
-            <div className="thumb-grid">
-              {Array.from({ length: sourceThumbCount }, (_, index) => (
-                <span className="source-thumb" key={index} style={{ filter: `brightness(${0.62 + index * 0.06}) saturate(.86)` }} />
-              ))}
-              <Link className="source-thumb source-thumb--add" to={routes.source(project.id)} aria-label="소스 이미지 추가">
+            <div className="source-count-card">
+              <strong>{project.imageCount}</strong>
+              <span>등록된 소스 이미지</span>
+              <Link className="rf-btn" to={routes.source(project.id)}>
                 <Plus size={16} />
+                관리
               </Link>
             </div>
           </article>
 
           <article className="summary-card">
             <header>
-              <h2>재구성 상태</h2>
+              <h2>변환 상태</h2>
               <Link to={routes.status(project.id)}>상세</Link>
             </header>
             <div className="status-summary-row">
@@ -223,8 +241,8 @@ export function ProjectOverviewPage() {
         <section className="empty-project-panel">
           <span className="create-icon"><Plus size={24} /></span>
           <div>
-            <h2>방을 재구성할 사진을 추가하세요</h2>
-            <p>사진을 업로드하거나 앱의 가이드 촬영으로 시작하면 자동으로 3D 재구성이 진행됩니다.</p>
+            <h2>방을 변환할 사진을 추가하세요</h2>
+            <p>사진을 업로드하거나 앱의 가이드 촬영으로 시작하면 2D/3D 변환을 진행할 수 있습니다.</p>
           </div>
           <div className="empty-actions">
             <Link className="rf-btn rf-btn--primary" to={routes.source(project.id)}>
@@ -238,4 +256,58 @@ export function ProjectOverviewPage() {
       )}
     </ProductShell>
   )
+}
+
+function canOpenEditor(project: { status: string }) {
+  return project.status === 'succeeded' || project.status === 'review_required'
+}
+
+function overviewWorkflow(project: {
+  id: string
+  status: string
+  imageCount: number
+  latestJobId?: string
+}) {
+  if (canOpenEditor(project)) {
+    return {
+      eyebrow: 'Editor ready',
+      title: '변환 데이터가 준비되었습니다',
+      body: '저장된 변환 결과를 바탕으로 에디터에서 경계와 배치 후보를 확인하고 수정합니다.',
+      activeIndex: 2,
+      primaryLabel: '완료 데이터로 에디터 열기',
+      primaryTo: routes.editor(project.id),
+      secondaryLabel: '변환 상태',
+      secondaryTo: routes.status(project.id),
+      nextTitle: '에디터에서 공간을 다듬으세요',
+      nextBody: '변환된 벽·바닥·개구부를 직접 보정하고, 2D 평면도와 3D로 가구를 배치합니다.',
+    }
+  }
+
+  if (project.imageCount > 0) {
+    return {
+      eyebrow: 'Conversion required',
+      title: '소스 이미지가 준비되었습니다',
+      body: '소스 화면에서 입력 이미지를 확인한 뒤 변환 화면으로 넘어가 OpenCV worker를 실행합니다.',
+      activeIndex: 1,
+      primaryLabel: '소스 확인 후 변환',
+      primaryTo: routes.source(project.id),
+      secondaryLabel: project.latestJobId ? '변환 상태' : undefined,
+      secondaryTo: project.latestJobId ? routes.status(project.id) : undefined,
+      nextTitle: '2D/3D 변환을 실행하세요',
+      nextBody: '변환 화면에서 worker 진행률을 확인하고 완료 후 에디터로 넘어갑니다.',
+    }
+  }
+
+  return {
+    eyebrow: 'Source required',
+    title: '소스 이미지를 먼저 입력하세요',
+    body: '소스 이미지 화면에서 사진을 업로드하거나 모바일 가이드 촬영으로 변환 입력을 준비합니다.',
+    activeIndex: 0,
+    primaryLabel: '소스 이미지 입력',
+    primaryTo: routes.source(project.id),
+    secondaryLabel: undefined,
+    secondaryTo: undefined,
+    nextTitle: '방을 변환할 사진을 추가하세요',
+    nextBody: '사진을 입력한 뒤 2D/3D 변환 화면에서 OpenCV worker를 실행합니다.',
+  }
 }

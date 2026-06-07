@@ -52,11 +52,25 @@ type LinePayload = {
   angleDegrees: number
 }
 
+type ProgressReporter = (stage: string, progress: number, label: string, detail?: string) => void
+
 const algorithmId = 'opencv-js-canny-hough-v1'
 const maxProcessDimension = 960
 
 let cvRuntimePromise: Promise<CvRuntime> | null = null
 let openCvVersion = 'opencv-js'
+let activeRequestId: string | undefined
+let activeWorkerStage = 'idle'
+
+self.addEventListener('error', (event: ErrorEvent) => {
+  postWorkerFailure('opencv_worker_error', workerErrorEventMessage(event))
+  event.preventDefault()
+})
+
+self.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  postWorkerFailure('opencv_worker_unhandled_rejection', errorMessage(event.reason))
+  event.preventDefault()
+})
 
 self.onmessage = (event: MessageEvent<BridgeMessage>) => {
   const message = event.data
@@ -64,21 +78,39 @@ self.onmessage = (event: MessageEvent<BridgeMessage>) => {
     return
   }
 
+  activeRequestId = message.requestId
+
   if (message.type === 'roomforge.opencv.loadRuntime') {
+    activeWorkerStage = 'runtime_loading'
     void loadRuntime(message)
     return
   }
 
   if (message.type === 'roomforge.opencv.extractCandidates') {
+    activeWorkerStage = 'extracting_candidates'
     void extractCandidates(message)
   }
 }
 
 async function loadRuntime(message: BridgeMessage): Promise<void> {
   try {
+    postProgress(
+      message.requestId,
+      'runtime_loading',
+      18,
+      'OpenCV runtime loading',
+      'Importing OpenCV.js inside the browser worker.',
+    )
     const cv = await cvRuntime()
     const buildInfo = cv.getBuildInformation?.() ?? ''
     openCvVersion = versionFromBuildInfo(buildInfo)
+    postProgress(
+      message.requestId,
+      'runtime_ready',
+      35,
+      'OpenCV runtime ready',
+      'OpenCV.js image-processing APIs are ready.',
+    )
     postBridge({
       type: 'roomforge.opencv.runtimeLoaded',
       version: BRIDGE_VERSION,
@@ -102,7 +134,16 @@ async function loadRuntime(message: BridgeMessage): Promise<void> {
 
 async function extractCandidates(message: BridgeMessage): Promise<void> {
   const sourceImage = sourceImagePayload(message.payload.sourceImage)
+  const reportProgress: ProgressReporter = (stage, progress, label, detail) => {
+    postProgress(message.requestId, stage, progress, label, detail)
+  }
   if (!sourceImage.dataUrl) {
+    reportProgress(
+      'source_image_missing',
+      100,
+      'Source image missing',
+      'Source image bytes were not provided to the OpenCV worker.',
+    )
     postBridge({
       type: 'roomforge.opencv.candidatesExtracted',
       version: BRIDGE_VERSION,
@@ -120,15 +161,39 @@ async function extractCandidates(message: BridgeMessage): Promise<void> {
   }
 
   try {
+    reportProgress(
+      'source_image_received',
+      40,
+      'Source image received',
+      'Source image payload reached the OpenCV worker.',
+    )
     const cv = await cvRuntime()
+    reportProgress(
+      'image_decoding',
+      48,
+      'Decoding source image',
+      'Creating an ImageBitmap and processing canvas.',
+    )
     const decoded = await decodeSourceImage(sourceImage)
+    reportProgress(
+      'image_decoded',
+      56,
+      'Source image decoded',
+      `${decoded.processedWidth} x ${decoded.processedHeight} pixels will be processed.`,
+    )
     const result = detectRoomBoundary(cv, decoded.imageData, {
       sourceImage,
       originalWidth: decoded.originalWidth,
       originalHeight: decoded.originalHeight,
       processedWidth: decoded.processedWidth,
       processedHeight: decoded.processedHeight,
-    })
+    }, reportProgress)
+    reportProgress(
+      'candidate_extraction_complete',
+      98,
+      'Candidate extraction complete',
+      'OpenCV candidate geometry payload is ready.',
+    )
 
     postBridge({
       type: 'roomforge.opencv.candidatesExtracted',
@@ -231,6 +296,7 @@ function detectRoomBoundary(
     processedWidth: number
     processedHeight: number
   },
+  reportProgress?: ProgressReporter,
 ): Record<string, unknown> {
   const src = cv.matFromImageData(imageData)
   const gray = new cv.Mat()
@@ -239,14 +305,38 @@ function detectRoomBoundary(
   const lines = new cv.Mat()
 
   try {
+    reportProgress?.(
+      'preprocessing',
+      62,
+      'Preprocessing image',
+      'Converting the source image to grayscale and smoothing noise.',
+    )
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
     cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT)
+    reportProgress?.(
+      'edge_detection',
+      70,
+      'Detecting edges',
+      'Running Canny edge detection on the preprocessed image.',
+    )
     cv.Canny(blurred, edges, 60, 160, 3, false)
 
     const minLineLength = Math.max(30, Math.min(metadata.processedWidth, metadata.processedHeight) * 0.16)
     const maxLineGap = Math.max(8, Math.min(metadata.processedWidth, metadata.processedHeight) * 0.035)
+    reportProgress?.(
+      'line_detection',
+      78,
+      'Detecting wall-like lines',
+      'Running probabilistic Hough line detection.',
+    )
     cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 42, minLineLength, maxLineGap)
 
+    reportProgress?.(
+      'geometry_building',
+      88,
+      'Building candidate geometry',
+      'Sampling edges and assembling boundary candidates.',
+    )
     const scaleX = metadata.originalWidth / metadata.processedWidth
     const scaleY = metadata.originalHeight / metadata.processedHeight
     const candidateLines = linePayloads(lines, scaleX, scaleY)
@@ -258,6 +348,12 @@ function detectRoomBoundary(
       lineCount: candidateLines.length,
       hasBoundary: boundaryPoints.length >= 4,
     })
+    reportProgress?.(
+      'quality_scoring',
+      94,
+      'Scoring candidate quality',
+      'Calculating confidence and review status.',
+    )
     const qualityStatus = qualityStatusFor(confidence, boundaryPoints.length, candidateLines.length)
     const reasonCode = reasonCodeFor(qualityStatus, edgeStats.edgeDensity, candidateLines.length, boundaryPoints.length)
     const reasonMessage = reasonMessageFor(reasonCode)
@@ -517,6 +613,45 @@ function failurePayload(reasonCode: string, reasonMessage: string): Record<strin
   }
 }
 
+function postProgress(
+  requestId: string | undefined,
+  stage: string,
+  progress: number,
+  label: string,
+  detail?: string,
+): void {
+  activeWorkerStage = stage
+  postBridge({
+    type: 'roomforge.opencv.progress',
+    version: BRIDGE_VERSION,
+    requestId,
+    payload: {
+      stage,
+      progress: clamp(progress, 0, 100),
+      label,
+      detail,
+      algorithm: algorithmId,
+      openCvVersion,
+    },
+  })
+}
+
+function postWorkerFailure(reasonCode: string, reasonMessage: string): void {
+  try {
+    postBridge({
+      type: 'roomforge.opencv.workerFailed',
+      version: BRIDGE_VERSION,
+      requestId: activeRequestId,
+      payload: {
+        ...failurePayload(reasonCode, reasonMessage),
+        stage: activeWorkerStage,
+      },
+    })
+  } catch {
+    // The worker may already be terminating; the host still receives Worker.onerror.
+  }
+}
+
 function versionFromBuildInfo(buildInfo: string): string {
   const line = buildInfo
     .split('\n')
@@ -547,4 +682,11 @@ function clamp(value: number, min: number, max: number): number {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function workerErrorEventMessage(event: ErrorEvent): string {
+  const location = event.filename
+    ? ` (${event.filename}:${event.lineno}:${event.colno})`
+    : ''
+  return `${event.message || 'Unhandled OpenCV worker error.'}${location}`
 }

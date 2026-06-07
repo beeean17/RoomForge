@@ -5,7 +5,10 @@ import {
   type MeterPoint3d,
   type SpatialModel,
 } from './spatialModel.ts'
-import { furnitureSizePriorForCategory } from './sizePriors.ts'
+import {
+  furnitureSizePriorForCategory,
+  structuralFixtureSizePriorForCategory,
+} from './sizePriors.ts'
 
 export type PlacementImageReference = {
   captureImageId?: string
@@ -61,7 +64,8 @@ export function estimateMetricPlacementForCandidate({
   const imageWidth = positiveNumber(image?.widthPx)
   const imageHeight = positiveNumber(image?.heightPx)
   const box = validBoundingBox(candidate.boundingBox)
-  const size = candidate.suggestedSize ?? furnitureSizePriorForCategory(candidate.category).suggestedSize
+  const prior = placementPriorForCandidate(candidate)
+  const size = candidate.suggestedSize ?? prior.suggestedSize
   const reviewReasons: string[] = []
 
   if (!role) {
@@ -158,7 +162,7 @@ function applyMetricPlacementToCandidate({
   model: SpatialModel
   images: PlacementImageReference[]
 }): CandidateSceneObject {
-  if (candidate.objectType !== 'furniture') {
+  if (candidate.objectType !== 'furniture' && candidate.objectType !== 'structural_fixture') {
     return candidate
   }
   if (candidate.reviewState === 'rejected' || candidate.reviewState === 'placed') {
@@ -169,6 +173,7 @@ function applyMetricPlacementToCandidate({
   return {
     ...candidate,
     suggestedPosition: estimate.suggestedPosition,
+    suggestedAssetId: candidate.suggestedAssetId ?? placementPriorForCandidate(candidate).assetId,
     suggestedSize: estimate.suggestedSize,
     suggestedRotationDegrees: estimate.suggestedRotationDegrees,
     suggestedWallId: estimate.suggestedWallId,
@@ -188,6 +193,19 @@ function applyMetricPlacementToCandidate({
       depthConfidence: estimate.depthConfidence,
     }),
   }
+}
+
+function placementPriorForCandidate(candidate: CandidateSceneObject): {
+  suggestedSize: MeterPoint3d
+  assetId: string
+} {
+  if (candidate.objectType === 'structural_fixture') {
+    const prior = structuralFixtureSizePriorForCategory(candidate.category)
+    return { suggestedSize: prior.size, assetId: prior.assetId }
+  }
+
+  const prior = furnitureSizePriorForCategory(candidate.category)
+  return { suggestedSize: prior.suggestedSize, assetId: prior.assetId }
 }
 
 function positionForWallRole({

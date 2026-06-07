@@ -18,7 +18,7 @@ import { useAuth } from '../auth/AuthProvider'
 import type { WorkspaceProject } from '../projects/projectData'
 import type { EditorSourceImageBridgePayload } from './editorBridge'
 
-type SourceImageState = {
+export type SourceImageState = {
   status: 'loading' | 'ready' | 'empty' | 'error'
   bridgePayload?: EditorSourceImageBridgePayload
   sourceImageId?: string

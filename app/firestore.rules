@@ -1118,8 +1118,13 @@ service cloud.firestore {
         && request.resource.data.result_id == resource.data.result_id
         && request.resource.data.project_id == resource.data.project_id
         && request.resource.data.owner_uid == resource.data.owner_uid
-        && request.resource.data.job_id == resource.data.job_id
-        && request.resource.data.source_image_id == resource.data.source_image_id
+        && (
+          resultId == 'latest'
+          || (
+            request.resource.data.job_id == resource.data.job_id
+            && request.resource.data.source_image_id == resource.data.source_image_id
+          )
+        )
         && request.resource.data.created_at == resource.data.created_at
         && request.resource.data.schema_version == resource.data.schema_version;
     }

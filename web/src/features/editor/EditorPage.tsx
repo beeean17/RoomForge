@@ -39,7 +39,7 @@ import { StatusPill } from '../../components/ui/StatusPill'
 import { demoProjectId, routes } from '../../lib/routes'
 import { useAuth } from '../auth/AuthProvider'
 import { pipelineSteps } from '../projects/projectData'
-import { useProject } from '../projects/projectRepository'
+import { useProject, useProjectRoomDimensions } from '../projects/projectRepository'
 import {
   EDITOR_BRIDGE_VERSION,
   createEditorInitializeMessage,
@@ -78,6 +78,8 @@ import {
   type StructuralFixtureItem,
   type StructuralFixtureState,
 } from './editorStructuralFixtures'
+import { useLatestOpenCvResultPayload } from './editorOpenCvResults'
+import { useLatestSceneUnderstandingResultPayload } from './editorSceneUnderstandingResults'
 import { useEditorSourceImagePayload } from './editorSourceImages'
 
 type BridgeState = 'loading' | 'ready' | 'initializing' | 'initialized' | 'error'
@@ -103,6 +105,8 @@ type EditorTool = 'select' | 'move' | 'furniture' | 'measure'
 type CandidateLayerKey = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
 
 type CanvasToggleKey = 'grid' | 'snap'
+
+type InspectorTab = 'selection' | 'candidates' | 'placement' | 'confirmation' | 'status'
 
 type LayerState = Record<CandidateLayerKey, boolean>
 
@@ -237,6 +241,14 @@ const furnitureEditActions = [
   { action: 'delete', label: '삭제', icon: Trash2 },
 ] as const
 
+const inspectorTabs: Array<{ key: InspectorTab; label: string; icon: typeof MousePointer2 }> = [
+  { key: 'selection', label: '선택', icon: MousePointer2 },
+  { key: 'candidates', label: '후보', icon: ListChecks },
+  { key: 'placement', label: '배치', icon: SlidersHorizontal },
+  { key: 'confirmation', label: '확정', icon: ShieldCheck },
+  { key: 'status', label: '상태', icon: Cpu },
+]
+
 export function EditorPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const location = useLocation()
@@ -254,6 +266,7 @@ export function EditorPage() {
   const [events, setEvents] = useState<BridgeEventRecord[]>([])
   const [viewMode, setViewMode] = useState<ViewModeControl>('2d')
   const [activeTool, setActiveTool] = useState<EditorTool>('select')
+  const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>('selection')
   const [layerState, setLayerState] = useState<LayerState>(initialLayerState)
   const [canvasToggleState, setCanvasToggleState] = useState<CanvasToggleState>(initialCanvasToggleState)
   const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSceneSummary>(initialRuntimeSummary)
@@ -267,6 +280,9 @@ export function EditorPage() {
   })
   const [cvSummary, setCvSummary] = useState<CvSummary>(initialCvSummary)
   const sourceImageState = useEditorSourceImagePayload(project)
+  const openCvResultState = useLatestOpenCvResultPayload(project)
+  const sceneUnderstandingResultState = useLatestSceneUnderstandingResultPayload(project)
+  const roomDimensionsState = useProjectRoomDimensions(project?.id)
 
   const standaloneEditorSrc = useMemo(() => editorFrameSrc(projectId), [projectId])
 
@@ -417,12 +433,29 @@ export function EditorPage() {
     if (sourceImageState.status === 'loading') {
       return
     }
+    if (openCvResultState.status === 'loading') {
+      return
+    }
+    if (sceneUnderstandingResultState.status === 'loading') {
+      return
+    }
+    if (roomDimensionsState.status === 'loading') {
+      return
+    }
 
     const initializeKey = [
       runtimeKey,
       project.id,
       sourceImageState.status,
       sourceImageState.sourceImageId ?? 'no-source-image',
+      openCvResultState.status,
+      openCvResultState.resultId ?? 'no-opencv-result',
+      sceneUnderstandingResultState.status,
+      sceneUnderstandingResultState.resultId ?? 'no-scene-understanding-result',
+      roomDimensionsState.status,
+      roomDimensionsState.dimensions.widthM,
+      roomDimensionsState.dimensions.depthM,
+      roomDimensionsState.dimensions.heightM,
     ].join(':')
     if (lastInitializeKeyRef.current === initializeKey) {
       return
@@ -434,11 +467,46 @@ export function EditorPage() {
       requestId: `react-editor-init-${project.id}-${Date.now()}`,
       route: `${location.pathname}${location.search}`,
       source: sourceImageState.bridgePayload,
+      opencvResult: openCvResultState.bridgePayload,
+      sceneUnderstandingResult: sceneUnderstandingResultState.bridgePayload,
+      roomDimensions: roomDimensionsState.dimensions,
     })
 
     setBridgeState('initializing')
     setInitializeMessage(withDevCandidateReviewFixture(message, location.search))
-  }, [location.pathname, location.search, project, runtimeKey, runtimeReady, sourceImageState])
+  }, [
+    location.pathname,
+    location.search,
+    openCvResultState,
+    project,
+    roomDimensionsState,
+    runtimeKey,
+    runtimeReady,
+    sceneUnderstandingResultState,
+    sourceImageState,
+  ])
+
+  useEffect(() => {
+    if (openCvResultState.status !== 'ready') {
+      return
+    }
+    setCvSummary((current) => ({
+      ...current,
+      opencvQuality: qualityLabel(openCvResultState.bridgePayload?.qualityStatus),
+    }))
+  }, [openCvResultState])
+
+  useEffect(() => {
+    if (sceneUnderstandingResultState.status !== 'ready') {
+      return
+    }
+    setCvSummary((current) => ({
+      ...current,
+      sceneQuality: qualityLabel(sceneUnderstandingResultState.bridgePayload?.qualityStatus),
+      candidateCount: sceneUnderstandingResultState.bridgePayload?.candidateObjects.length ?? current.candidateCount,
+      fixtureCount: sceneUnderstandingResultState.bridgePayload?.structuralFixtures.length ?? current.fixtureCount,
+    }))
+  }, [sceneUnderstandingResultState])
 
   if (!project && status === 'loading') {
     return (
@@ -671,195 +739,291 @@ export function EditorPage() {
           </header>
 
           <div className="editor-runtime-inspector-body">
-            <section>
-              <div className="editor-host-section-title">
-                <MousePointer2 size={18} />
-                <h2>Selection</h2>
-              </div>
-              <dl className="editor-host-status-list">
-                <div>
-                  <dt>선택</dt>
-                  <dd>{runtimeSummary.selectedLabel}</dd>
-                </div>
-                <div>
-                  <dt>유형</dt>
-                  <dd>{runtimeSummary.selectedType}</dd>
-                </div>
-                <div>
-                  <dt>보기</dt>
-                  <dd>{runtimeSummary.viewMode.toUpperCase()}</dd>
-                </div>
-                <div>
-                  <dt>저장 상태</dt>
-                  <dd>{runtimeSummary.saveLabel}</dd>
-                </div>
-              </dl>
-              <div className="editor-inspector-actions">
-                {furnitureQuickAdds.map((item) => (
+            <nav className="editor-inspector-tabs" aria-label="Inspector panels" role="tablist">
+              {inspectorTabs.map((tab) => {
+                const Icon = tab.icon
+                const isActive = activeInspectorTab === tab.key
+                return (
                   <button
-                    className="rf-btn"
-                    disabled={!runtimeReady}
-                    key={item.category}
+                    aria-controls={`editor-inspector-tab-${tab.key}`}
+                    aria-selected={isActive}
+                    className={isActive ? 'is-active' : ''}
+                    id={`editor-inspector-tab-control-${tab.key}`}
+                    key={tab.key}
+                    role="tab"
                     type="button"
-                    onClick={() => {
-                      setActiveTool('furniture')
-                      sendRuntimeCommand('roomforge.furniture.add', { category: item.category })
-                    }}
+                    onClick={() => setActiveInspectorTab(tab.key)}
                   >
-                    <Armchair size={15} />
-                    {item.label}
+                    <Icon size={15} />
+                    <span>{tab.label}</span>
+                    {inspectorTabBadge(tab.key, {
+                      candidateReviewState,
+                      confirmationHandoffState,
+                      placedObjectState,
+                      structuralFixtureState,
+                    })}
                   </button>
-                ))}
-              </div>
-              <div className="editor-inspector-icon-actions">
-                {furnitureEditActions.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <button
-                      aria-label={item.label}
-                      className="editor-icon-button"
-                      disabled={!runtimeReady}
-                      key={item.action}
-                      title={item.label}
-                      type="button"
-                      onClick={() => sendRuntimeCommand('roomforge.furniture.editSelected', { action: item.action })}
-                    >
-                      <Icon size={16} />
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
+                )
+              })}
+            </nav>
 
-            <CandidateReviewTray
-              disabled={!runtimeReady}
-              state={candidateReviewState}
-              onCategoryChange={(candidateId, category) =>
-                sendRuntimeCommand('roomforge.candidate.updateCategory', { candidateId, category })}
-              onPlace={(candidateId) =>
-                sendRuntimeCommand('roomforge.candidate.place', { candidateId })}
-              onReject={(candidateId) =>
-                sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
-            />
+            <div
+              aria-labelledby={`editor-inspector-tab-control-${activeInspectorTab}`}
+              className="editor-inspector-tab-panel"
+              id={`editor-inspector-tab-${activeInspectorTab}`}
+              role="tabpanel"
+            >
+              {activeInspectorTab === 'selection' && (
+                <section>
+                  <div className="editor-host-section-title">
+                    <MousePointer2 size={18} />
+                    <h2>Selection</h2>
+                  </div>
+                  <dl className="editor-host-status-list">
+                    <div>
+                      <dt>선택</dt>
+                      <dd>{runtimeSummary.selectedLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>유형</dt>
+                      <dd>{runtimeSummary.selectedType}</dd>
+                    </div>
+                    <div>
+                      <dt>보기</dt>
+                      <dd>{runtimeSummary.viewMode.toUpperCase()}</dd>
+                    </div>
+                    <div>
+                      <dt>저장 상태</dt>
+                      <dd>{runtimeSummary.saveLabel}</dd>
+                    </div>
+                  </dl>
+                  <div className="editor-inspector-actions">
+                    {furnitureQuickAdds.map((item) => (
+                      <button
+                        className="rf-btn"
+                        disabled={!runtimeReady}
+                        key={item.category}
+                        type="button"
+                        onClick={() => {
+                          setActiveTool('furniture')
+                          sendRuntimeCommand('roomforge.furniture.add', { category: item.category })
+                        }}
+                      >
+                        <Armchair size={15} />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="editor-inspector-icon-actions">
+                    {furnitureEditActions.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <button
+                          aria-label={item.label}
+                          className="editor-icon-button"
+                          disabled={!runtimeReady}
+                          key={item.action}
+                          title={item.label}
+                          type="button"
+                          onClick={() => sendRuntimeCommand('roomforge.furniture.editSelected', { action: item.action })}
+                        >
+                          <Icon size={16} />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
 
-            <PlacedObjectEditor
-              disabled={!runtimeReady}
-              state={placedObjectState}
-              onEditAction={(action) =>
-                sendRuntimeCommand('roomforge.furniture.editSelected', { action })}
-              onSelect={(objectId) =>
-                sendRuntimeCommand('roomforge.furniture.select', { objectId })}
-              onTransformChange={(field, value) =>
-                sendRuntimeCommand('roomforge.furniture.updateTransform', { field, value })}
-            />
+              {activeInspectorTab === 'candidates' && (
+                <>
+                  <CandidateReviewTray
+                    disabled={!runtimeReady}
+                    state={candidateReviewState}
+                    onCategoryChange={(candidateId, category) =>
+                      sendRuntimeCommand('roomforge.candidate.updateCategory', { candidateId, category })}
+                    onPlace={(candidateId) =>
+                      sendRuntimeCommand('roomforge.candidate.place', { candidateId })}
+                    onReject={(candidateId) =>
+                      sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
+                  />
 
-            <StructuralFixtureReview
-              disabled={!runtimeReady}
-              state={structuralFixtureState}
-              onEditAction={(action) =>
-                sendRuntimeCommand('roomforge.fixture.editSelected', { action })}
-              onPlaceCandidate={(candidateId) =>
-                sendRuntimeCommand('roomforge.fixture.placeCandidate', { candidateId })}
-              onRejectCandidate={(candidateId) =>
-                sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
-              onSelect={(fixtureId) =>
-                sendRuntimeCommand('roomforge.fixture.select', { fixtureId })}
-            />
+                  <StructuralFixtureReview
+                    disabled={!runtimeReady}
+                    mode="candidates"
+                    state={structuralFixtureState}
+                    onEditAction={(action) =>
+                      sendRuntimeCommand('roomforge.fixture.editSelected', { action })}
+                    onPlaceCandidate={(candidateId) =>
+                      sendRuntimeCommand('roomforge.fixture.placeCandidate', { candidateId })}
+                    onRejectCandidate={(candidateId) =>
+                      sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
+                    onSelect={(fixtureId) =>
+                      sendRuntimeCommand('roomforge.fixture.select', { fixtureId })}
+                  />
+                </>
+              )}
 
-            <ConfirmationHandoffPanel
-              disabled={!runtimeReady}
-              state={confirmationHandoffState}
-              onConfirmAll={() =>
-                sendRuntimeCommand('roomforge.confirmation.confirmAllPlaced', {
-                  confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
-                })}
-              onConfirmSelected={() =>
-                sendRuntimeCommand('roomforge.confirmation.confirmSelected', {
-                  confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
-                })}
-            />
+              {activeInspectorTab === 'placement' && (
+                <>
+                  <PlacedObjectEditor
+                    disabled={!runtimeReady}
+                    state={placedObjectState}
+                    onEditAction={(action) =>
+                      sendRuntimeCommand('roomforge.furniture.editSelected', { action })}
+                    onSelect={(objectId) =>
+                      sendRuntimeCommand('roomforge.furniture.select', { objectId })}
+                    onTransformChange={(field, value) =>
+                      sendRuntimeCommand('roomforge.furniture.updateTransform', { field, value })}
+                  />
 
-            <section>
-              <div className="editor-host-section-title">
-                <Cpu size={18} />
-                <h2>Bridge</h2>
-              </div>
-              <dl className="editor-host-status-list">
-                <div>
-                  <dt>상태</dt>
-                  <dd><StatusPill label={bridgeLabel} tone={bridgeTone} /></dd>
-                </div>
-                <div>
-                  <dt>마운트</dt>
-                  <dd>{runtimeReady ? 'React direct runtime' : 'Mounting runtime module'}</dd>
-                </div>
-                <div>
-                  <dt>메시지</dt>
-                  <dd>roomforge.scene.initialize</dd>
-                </div>
-                <div>
-                  <dt>소스 이미지</dt>
-                  <dd>{sourceImageStatusLabel(sourceImageState)}</dd>
-                </div>
-                <div>
-                  <dt>저장</dt>
-                  <dd>{persistenceState.label}</dd>
-                </div>
-              </dl>
-            </section>
+                  <StructuralFixtureReview
+                    disabled={!runtimeReady}
+                    mode="placed"
+                    state={structuralFixtureState}
+                    onEditAction={(action) =>
+                      sendRuntimeCommand('roomforge.fixture.editSelected', { action })}
+                    onPlaceCandidate={(candidateId) =>
+                      sendRuntimeCommand('roomforge.fixture.placeCandidate', { candidateId })}
+                    onRejectCandidate={(candidateId) =>
+                      sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
+                    onSelect={(fixtureId) =>
+                      sendRuntimeCommand('roomforge.fixture.select', { fixtureId })}
+                  />
+                </>
+              )}
 
-            <section>
-            <div className="editor-host-section-title">
-              <Layers size={18} />
-              <h2>CV 요약</h2>
+              {activeInspectorTab === 'confirmation' && (
+                <ConfirmationHandoffPanel
+                  disabled={!runtimeReady}
+                  state={confirmationHandoffState}
+                  onConfirmAll={() =>
+                    sendRuntimeCommand('roomforge.confirmation.confirmAllPlaced', {
+                      confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
+                    })}
+                  onConfirmSelected={() =>
+                    sendRuntimeCommand('roomforge.confirmation.confirmSelected', {
+                      confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
+                    })}
+                />
+              )}
+
+              {activeInspectorTab === 'status' && (
+                <>
+                  <section>
+                    <div className="editor-host-section-title">
+                      <Cpu size={18} />
+                      <h2>Bridge</h2>
+                    </div>
+                    <dl className="editor-host-status-list">
+                      <div>
+                        <dt>상태</dt>
+                        <dd><StatusPill label={bridgeLabel} tone={bridgeTone} /></dd>
+                      </div>
+                      <div>
+                        <dt>마운트</dt>
+                        <dd>{runtimeReady ? 'React direct runtime' : 'Mounting runtime module'}</dd>
+                      </div>
+                      <div>
+                        <dt>메시지</dt>
+                        <dd>roomforge.scene.initialize</dd>
+                      </div>
+                      <div>
+                        <dt>소스 이미지</dt>
+                        <dd>{sourceImageStatusLabel(sourceImageState)}</dd>
+                      </div>
+                      <div>
+                        <dt>저장</dt>
+                        <dd>{persistenceState.label}</dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <section>
+                    <div className="editor-host-section-title">
+                      <Layers size={18} />
+                      <h2>CV 요약</h2>
+                    </div>
+                    <dl className="editor-host-status-list">
+                      <div>
+                        <dt>OpenCV</dt>
+                        <dd>{cvSummary.opencvQuality}</dd>
+                      </div>
+                      <div>
+                        <dt>Scene</dt>
+                        <dd>{cvSummary.sceneQuality}</dd>
+                      </div>
+                      <div>
+                        <dt>오브젝트</dt>
+                        <dd>{runtimeSummary.furnitureCount} placed · {runtimeSummary.candidateCount} candidates</dd>
+                      </div>
+                      <div>
+                        <dt>고정 요소</dt>
+                        <dd>{runtimeSummary.fixtureCount} fixtures</dd>
+                      </div>
+                      <div>
+                        <dt>Coverage</dt>
+                        <dd>{cvSummary.coverageLabel}</dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <section>
+                    <div className="editor-host-section-title">
+                      <Layers size={18} />
+                      <h2>최근 이벤트</h2>
+                    </div>
+                    {events.length === 0 ? (
+                      <p className="editor-host-empty">아직 editor runtime 이벤트가 없습니다.</p>
+                    ) : (
+                      <ol className="editor-host-event-list">
+                        {events.map((event) => (
+                          <li key={event.id}>
+                            <strong>{event.type}</strong>
+                            <span>{event.receivedAt}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </section>
+                </>
+              )}
             </div>
-            <dl className="editor-host-status-list">
-              <div>
-                <dt>OpenCV</dt>
-                <dd>{cvSummary.opencvQuality}</dd>
-              </div>
-              <div>
-                <dt>Scene</dt>
-                <dd>{cvSummary.sceneQuality}</dd>
-              </div>
-              <div>
-                <dt>오브젝트</dt>
-                <dd>{runtimeSummary.furnitureCount} placed · {runtimeSummary.candidateCount} candidates</dd>
-              </div>
-              <div>
-                <dt>고정 요소</dt>
-                <dd>{runtimeSummary.fixtureCount} fixtures</dd>
-              </div>
-              <div>
-                <dt>Coverage</dt>
-                <dd>{cvSummary.coverageLabel}</dd>
-              </div>
-            </dl>
-            </section>
-
-            <section>
-            <div className="editor-host-section-title">
-              <Layers size={18} />
-              <h2>최근 이벤트</h2>
-            </div>
-            {events.length === 0 ? (
-              <p className="editor-host-empty">아직 editor runtime 이벤트가 없습니다.</p>
-            ) : (
-              <ol className="editor-host-event-list">
-                {events.map((event) => (
-                  <li key={event.id}>
-                    <strong>{event.type}</strong>
-                    <span>{event.receivedAt}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-            </section>
           </div>
         </aside>
       </section>
     </main>
   )
+}
+
+function inspectorTabBadge(
+  tab: InspectorTab,
+  {
+    candidateReviewState,
+    confirmationHandoffState,
+    placedObjectState,
+    structuralFixtureState,
+  }: {
+    candidateReviewState: CandidateReviewState
+    confirmationHandoffState: ConfirmationHandoffState
+    placedObjectState: PlacedObjectState
+    structuralFixtureState: StructuralFixtureState
+  },
+) {
+  const value =
+    tab === 'candidates'
+      ? candidateReviewState.counts.needsReview + structuralFixtureState.counts.needsReview
+      : tab === 'placement'
+        ? placedObjectState.counts.total + structuralFixtureState.fixtures.length
+      : tab === 'confirmation'
+        ? confirmationHandoffState.counts.unconfirmed
+        : undefined
+
+  if (value === undefined) {
+    return null
+  }
+
+  return <small aria-label={`${value} items`}>{value}</small>
 }
 
 function PlacedObjectEditor({
@@ -881,7 +1045,7 @@ function PlacedObjectEditor({
     <section className="placed-object-editor" aria-labelledby="react-placed-object-title">
       <div className="editor-host-section-title">
         <SlidersHorizontal size={18} />
-        <h2 id="react-placed-object-title">Placed objects</h2>
+        <h2 id="react-placed-object-title">Editable draft objects</h2>
       </div>
 
       <div className="placed-object-counts" aria-label="Placed object counts" aria-live="polite">
@@ -892,7 +1056,7 @@ function PlacedObjectEditor({
       </div>
 
       {state.items.length === 0 ? (
-        <p className="editor-host-empty">배치된 객체가 없습니다. 후보를 배치하거나 프리셋을 추가하세요.</p>
+        <p className="editor-host-empty">자동 배치된 객체가 없습니다. 변환을 실행하거나 프리셋을 추가하세요.</p>
       ) : (
         <div className="placed-object-list" role="list" aria-label="React placed object list">
           {state.items.map((item) => (
@@ -1079,6 +1243,7 @@ function formatInputNumber(value: number): string {
 
 function StructuralFixtureReview({
   disabled,
+  mode = 'all',
   state,
   onEditAction,
   onPlaceCandidate,
@@ -1086,17 +1251,27 @@ function StructuralFixtureReview({
   onSelect,
 }: {
   disabled: boolean
+  mode?: 'all' | 'candidates' | 'placed'
   state: StructuralFixtureState
   onEditAction: (action: string) => void
   onPlaceCandidate: (candidateId: string) => void
   onRejectCandidate: (candidateId: string) => void
   onSelect: (fixtureId: string) => void
 }) {
+  const showCandidates = mode !== 'placed'
+  const showPlaced = mode !== 'candidates'
+  const title =
+    mode === 'candidates'
+      ? 'Door and window candidates'
+      : mode === 'placed'
+        ? 'Placed doors and windows'
+        : 'Editable doors and windows'
+
   return (
     <section className="structural-fixture-review" aria-labelledby="react-structural-fixture-title">
       <div className="editor-host-section-title">
         <PackagePlus size={18} />
-        <h2 id="react-structural-fixture-title">Structural fixtures</h2>
+        <h2 id="react-structural-fixture-title">{title}</h2>
       </div>
 
       <div className="fixture-review-counts" aria-label="Structural fixture counts" aria-live="polite">
@@ -1106,42 +1281,48 @@ function StructuralFixtureReview({
         <span><strong>{state.fixtures.length}</strong> fixtures</span>
       </div>
 
-      {state.candidates.length === 0 ? (
-        <p className="editor-host-empty">구조물 후보가 아직 없습니다.</p>
-      ) : (
-        <div className="fixture-candidate-list" role="list" aria-label="Structural fixture candidates">
-          {state.candidates.map((candidate) => (
-            <StructuralFixtureCandidateCard
-              candidate={candidate}
-              disabled={disabled}
-              key={candidate.candidateId}
-              onPlaceCandidate={onPlaceCandidate}
-              onRejectCandidate={onRejectCandidate}
-            />
-          ))}
-        </div>
+      {showCandidates && (
+        state.candidates.length === 0 ? (
+          <p className="editor-host-empty">자동 배치할 문·창문 후보가 아직 없습니다.</p>
+        ) : (
+          <div className="fixture-candidate-list" role="list" aria-label="Structural fixture candidates">
+            {state.candidates.map((candidate) => (
+              <StructuralFixtureCandidateCard
+                candidate={candidate}
+                disabled={disabled}
+                key={candidate.candidateId}
+                onPlaceCandidate={onPlaceCandidate}
+                onRejectCandidate={onRejectCandidate}
+              />
+            ))}
+          </div>
+        )
       )}
 
-      {state.fixtures.length === 0 ? (
-        <p className="editor-host-empty">배치된 구조 고정 요소가 없습니다.</p>
-      ) : (
-        <div className="fixture-object-list" role="list" aria-label="Placed structural fixtures">
-          {state.fixtures.map((fixture) => (
-            <StructuralFixtureCard
-              disabled={disabled}
-              fixture={fixture}
-              key={fixture.fixtureId}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      )}
+      {showPlaced && (
+        <>
+          {state.fixtures.length === 0 ? (
+            <p className="editor-host-empty">자동 배치된 문·창문이 없습니다.</p>
+          ) : (
+            <div className="fixture-object-list" role="list" aria-label="Placed structural fixtures">
+              {state.fixtures.map((fixture) => (
+                <StructuralFixtureCard
+                  disabled={disabled}
+                  fixture={fixture}
+                  key={fixture.fixtureId}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
+          )}
 
-      <SelectedStructuralFixtureControls
-        disabled={disabled}
-        fixture={state.selectedFixture}
-        onEditAction={onEditAction}
-      />
+          <SelectedStructuralFixtureControls
+            disabled={disabled}
+            fixture={state.selectedFixture}
+            onEditAction={onEditAction}
+          />
+        </>
+      )}
     </section>
   )
 }
@@ -1200,7 +1381,7 @@ function StructuralFixtureCandidateCard({
           onClick={() => onPlaceCandidate(candidate.candidateId)}
         >
           <CheckCircle2 size={15} />
-          Place
+          Add to draft
         </button>
       </div>
     </article>
@@ -1442,7 +1623,7 @@ function CandidateReviewTray({
     <section className="candidate-review-tray" aria-labelledby="react-candidate-review-title">
       <div className="editor-host-section-title">
         <ListChecks size={18} />
-        <h2 id="react-candidate-review-title">Candidate review</h2>
+        <h2 id="react-candidate-review-title">CV draft review</h2>
       </div>
 
       <div className="candidate-review-counts" aria-label="CV candidate counts" aria-live="polite">
@@ -1453,7 +1634,7 @@ function CandidateReviewTray({
       </div>
 
       {state.items.length === 0 ? (
-        <p className="editor-host-empty">CV 후보가 아직 없습니다.</p>
+        <p className="editor-host-empty">자동 배치 초안에 연결된 CV 후보가 아직 없습니다.</p>
       ) : (
         <div className="candidate-review-list" role="list" aria-label="React CV candidate tray">
           {state.items.map((item) => (
@@ -1547,7 +1728,7 @@ function CandidateReviewCard({
           onClick={() => onPlace(item.candidateId)}
         >
           <CheckCircle2 size={15} />
-          Place
+          Add to draft
         </button>
       </div>
     </article>

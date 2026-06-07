@@ -1,11 +1,29 @@
 import {
+  Armchair,
   ArrowLeft,
+  Box,
+  Camera,
   Cpu,
+  Eye,
+  EyeOff,
   ExternalLink,
+  Grid3X3,
   Layers,
   LoaderCircle,
+  Lock,
+  Maximize2,
+  MousePointer2,
+  Move,
+  PackagePlus,
+  PanelRight,
   RefreshCw,
+  RotateCcw,
+  Ruler,
+  ScanLine,
   ShieldCheck,
+  Split,
+  Square,
+  Trash2,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -19,6 +37,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { pipelineSteps } from '../projects/projectData'
 import { useProject } from '../projects/projectRepository'
 import {
+  EDITOR_BRIDGE_VERSION,
   createEditorInitializeMessage,
   editorFrameSrc,
   type EditorBridgeMessage,
@@ -46,6 +65,28 @@ type CvSummary = {
   coverageLabel: string
 }
 
+type ViewModeControl = '2d' | '3d' | 'split'
+
+type EditorTool = 'select' | 'move' | 'furniture' | 'measure'
+
+type CandidateLayerKey = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
+
+type CanvasToggleKey = 'grid' | 'snap'
+
+type LayerState = Record<CandidateLayerKey, boolean>
+
+type CanvasToggleState = Record<CanvasToggleKey, boolean>
+
+type RuntimeSceneSummary = {
+  viewMode: ViewModeControl
+  selectedLabel: string
+  selectedType: string
+  furnitureCount: number
+  candidateCount: number
+  fixtureCount: number
+  saveLabel: string
+}
+
 const initialCvSummary: CvSummary = {
   opencvQuality: '대기 중',
   sceneQuality: '대기 중',
@@ -54,6 +95,63 @@ const initialCvSummary: CvSummary = {
   coverageLabel: '촬영 이미지 대기 중',
 }
 
+const initialLayerState: LayerState = {
+  furniture: true,
+  fixtures: true,
+  boundaries: true,
+  lowConfidence: true,
+}
+
+const initialCanvasToggleState: CanvasToggleState = {
+  grid: true,
+  snap: true,
+}
+
+const initialRuntimeSummary: RuntimeSceneSummary = {
+  viewMode: '2d',
+  selectedLabel: '방 외곽',
+  selectedType: 'room',
+  furnitureCount: 0,
+  candidateCount: 0,
+  fixtureCount: 0,
+  saveLabel: 'Saved',
+}
+
+const toolControls: Array<{ key: EditorTool; label: string; icon: typeof MousePointer2 }> = [
+  { key: 'select', label: '선택', icon: MousePointer2 },
+  { key: 'move', label: '이동', icon: Move },
+  { key: 'furniture', label: '가구', icon: Armchair },
+  { key: 'measure', label: '측정', icon: Ruler },
+]
+
+const cameraControls = [
+  { action: 'fit', label: '방에 맞춤', icon: Maximize2 },
+  { action: 'top', label: '상단', icon: Square },
+  { action: 'corner', label: '코너', icon: Box },
+  { action: 'eye', label: '눈높이', icon: Camera },
+] as const
+
+const layerControls: Array<{ key: CandidateLayerKey; label: string; icon: typeof Layers }> = [
+  { key: 'furniture', label: '가구', icon: Armchair },
+  { key: 'fixtures', label: '고정 요소', icon: PackagePlus },
+  { key: 'boundaries', label: '경계', icon: ScanLine },
+  { key: 'lowConfidence', label: '검토 후보', icon: Eye },
+]
+
+const furnitureQuickAdds = [
+  { category: 'sofa', label: '소파' },
+  { category: 'table', label: '테이블' },
+  { category: 'shelf', label: '선반' },
+  { category: 'custom', label: '커스텀' },
+] as const
+
+const furnitureEditActions = [
+  { action: 'rotate-left', label: '왼쪽 회전', icon: RotateCcw },
+  { action: 'wider', label: '너비 증가', icon: Maximize2 },
+  { action: 'toggle-lock', label: '잠금 전환', icon: Lock },
+  { action: 'delete', label: '삭제', icon: Trash2 },
+] as const
+
 export function EditorPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const location = useLocation()
@@ -61,12 +159,19 @@ export function EditorPage() {
   const { project, status, error } = useProject(projectId)
   const runtimeDispatchRef = useRef<EditorRuntimeDispatch | null>(null)
   const lastInitializeKeyRef = useRef<string | null>(null)
+  const commandCounterRef = useRef(0)
+  const eventCounterRef = useRef(0)
   const [bridgeState, setBridgeState] = useState<BridgeState>('loading')
   const [runtimeReady, setRuntimeReady] = useState(false)
   const [runtimeKey, setRuntimeKey] = useState(0)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [initializeMessage, setInitializeMessage] = useState<EditorBridgeMessage | null>(null)
   const [events, setEvents] = useState<BridgeEventRecord[]>([])
+  const [viewMode, setViewMode] = useState<ViewModeControl>('2d')
+  const [activeTool, setActiveTool] = useState<EditorTool>('select')
+  const [layerState, setLayerState] = useState<LayerState>(initialLayerState)
+  const [canvasToggleState, setCanvasToggleState] = useState<CanvasToggleState>(initialCanvasToggleState)
+  const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSceneSummary>(initialRuntimeSummary)
   const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
     status: 'ignored',
     label: 'Waiting for CV events',
@@ -76,10 +181,28 @@ export function EditorPage() {
 
   const standaloneEditorSrc = useMemo(() => editorFrameSrc(projectId), [projectId])
 
+  const sendRuntimeCommand = useCallback((type: string, payload: Record<string, unknown> = {}) => {
+    const dispatch = runtimeDispatchRef.current
+    if (!dispatch) {
+      return false
+    }
+
+    commandCounterRef.current += 1
+    dispatch({
+      type,
+      version: EDITOR_BRIDGE_VERSION,
+      requestId: `react-editor-command-${projectId}-${commandCounterRef.current}-${Date.now()}`,
+      payload,
+    })
+    return true
+  }, [projectId])
+
   const handleRuntimeMessage = useCallback((message: EditorBridgeMessage) => {
+    const eventSequence = eventCounterRef.current + 1
+    eventCounterRef.current = eventSequence
     setEvents((current) => [
       {
-        id: `${message.type}-${message.requestId ?? Date.now()}`,
+        id: `${message.type}-${message.requestId ?? 'event'}-${eventSequence}`,
         type: message.type,
         receivedAt: new Date().toLocaleTimeString(),
       },
@@ -100,6 +223,22 @@ export function EditorPage() {
     const nextCvSummary = cvSummaryFromMessage(message)
     if (nextCvSummary) {
       setCvSummary((current) => ({ ...current, ...nextCvSummary }))
+    }
+
+    const nextRuntimeSummary = runtimeSummaryFromPayload(message.payload)
+    if (nextRuntimeSummary) {
+      setRuntimeSummary(nextRuntimeSummary)
+      setViewMode(nextRuntimeSummary.viewMode)
+    }
+
+    const nextLayerState = layerStateFromPayload(message.payload)
+    if (nextLayerState) {
+      setLayerState(nextLayerState)
+    }
+
+    const nextCanvasToggleState = canvasToggleStateFromPayload(message.payload)
+    if (nextCanvasToggleState) {
+      setCanvasToggleState(nextCanvasToggleState)
     }
 
     if (!project) {
@@ -137,6 +276,24 @@ export function EditorPage() {
     setRuntimeReady(false)
     setRuntimeError(error.message)
     setBridgeState('error')
+  }, [])
+
+  const resetRuntime = useCallback(() => {
+    setBridgeState('loading')
+    setRuntimeReady(false)
+    setRuntimeError(null)
+    setInitializeMessage(null)
+    runtimeDispatchRef.current = null
+    lastInitializeKeyRef.current = null
+    eventCounterRef.current = 0
+    setRuntimeKey((key) => key + 1)
+    setEvents([])
+    setCvSummary(initialCvSummary)
+    setViewMode('2d')
+    setActiveTool('select')
+    setLayerState(initialLayerState)
+    setCanvasToggleState(initialCanvasToggleState)
+    setRuntimeSummary(initialRuntimeSummary)
   }, [])
 
   useEffect(() => {
@@ -224,37 +381,152 @@ export function EditorPage() {
         </div>
       </header>
 
-      <section className="editor-host-shell editor-host-shell--direct" aria-label="RoomForge CV editor host">
-        <div className="editor-host-frame-panel">
-          <div className="editor-host-frame-toolbar">
-            <div>
-              <p className="rf-eyebrow">CV editor runtime</p>
-              <h1>{project.name}</h1>
-            </div>
-            <div className="editor-host-actions">
+      <section className="editor-workbench editor-workbench--runtime" aria-label="RoomForge CV editor host">
+        <aside className="editor-rail editor-rail--runtime" aria-label="에디터 도구">
+          {toolControls.map((control) => {
+            const Icon = control.icon
+            const isActive = activeTool === control.key
+            return (
               <button
-                className="rf-btn"
+                aria-label={control.label}
+                aria-pressed={isActive}
+                className={`editor-tool${isActive ? ' is-active' : ''}`}
+                key={control.key}
+                title={control.label}
                 type="button"
                 onClick={() => {
-                  setBridgeState('loading')
-                  setRuntimeReady(false)
-                  setRuntimeError(null)
-                  setInitializeMessage(null)
-                  runtimeDispatchRef.current = null
-                  lastInitializeKeyRef.current = null
-                  setRuntimeKey((key) => key + 1)
-                  setEvents([])
-                  setCvSummary(initialCvSummary)
+                  setActiveTool(control.key)
+                  if (control.key === 'select') {
+                    sendRuntimeCommand('roomforge.selection.clear')
+                  }
                 }}
               >
-                <RefreshCw size={16} />
-                새로고침
+                <Icon size={18} />
               </button>
-              <a className="rf-btn" href={standaloneEditorSrc} target="_blank" rel="noreferrer">
-                <ExternalLink size={16} />
-                standalone
-              </a>
+            )
+          })}
+          <span className="editor-rail-rule" />
+          <button
+            aria-label="런타임 새로고침"
+            className="editor-tool"
+            title="런타임 새로고침"
+            type="button"
+            onClick={resetRuntime}
+          >
+            <RefreshCw size={18} />
+          </button>
+          <a
+            aria-label="standalone editor"
+            className="editor-tool editor-tool-link"
+            href={standaloneEditorSrc}
+            rel="noreferrer"
+            target="_blank"
+            title="standalone editor"
+          >
+            <ExternalLink size={18} />
+          </a>
+        </aside>
+
+        <section className="editor-canvas-shell editor-runtime-canvas-shell" aria-label="Editor canvas">
+          <div className="editor-toolbar editor-runtime-toolbar">
+            <div className="view-segment" aria-label="보기 모드">
+              {(['2d', '3d', 'split'] as const).map((mode) => (
+                <button
+                  className={viewMode === mode ? 'is-active' : ''}
+                  disabled={!runtimeReady}
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    setViewMode(mode)
+                    sendRuntimeCommand('roomforge.view.setMode', { viewMode: mode })
+                  }}
+                >
+                  {mode === 'split' ? <Split size={14} /> : null}
+                  {mode.toUpperCase()}
+                </button>
+              ))}
             </div>
+
+            <div className="toolbar-rule" />
+
+            <div className="editor-toolbar-group" aria-label="카메라 프리셋">
+              {cameraControls.map((control) => {
+                const Icon = control.icon
+                return (
+                  <button
+                    aria-label={control.label}
+                    className="editor-icon-button"
+                    disabled={!runtimeReady}
+                    key={control.action}
+                    title={control.label}
+                    type="button"
+                    onClick={() => {
+                      setViewMode('3d')
+                      sendRuntimeCommand('roomforge.camera.applyAction', { action: control.action })
+                    }}
+                  >
+                    <Icon size={16} />
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="toolbar-rule" />
+
+            <div className="editor-toolbar-group" aria-label="캔버스 옵션">
+              {(['grid', 'snap'] as const).map((key) => (
+                <button
+                  aria-label={key === 'grid' ? '그리드' : '스냅'}
+                  aria-pressed={canvasToggleState[key]}
+                  className={`editor-icon-button${canvasToggleState[key] ? ' is-active' : ''}`}
+                  disabled={!runtimeReady}
+                  key={key}
+                  title={key === 'grid' ? '그리드' : '스냅'}
+                  type="button"
+                  onClick={() => {
+                    const enabled = !canvasToggleState[key]
+                    setCanvasToggleState((current) => ({ ...current, [key]: enabled }))
+                    sendRuntimeCommand('roomforge.canvas.toggle', { key, enabled })
+                  }}
+                >
+                  {key === 'grid' ? <Grid3X3 size={16} /> : <ScanLine size={16} />}
+                </button>
+              ))}
+            </div>
+
+            <div className="toolbar-rule" />
+
+            <div className="editor-toolbar-group editor-layer-toggle-group" aria-label="레이어">
+              {layerControls.map((control) => {
+                const Icon = control.icon
+                const visible = layerState[control.key]
+                return (
+                  <button
+                    aria-label={control.label}
+                    aria-pressed={visible}
+                    className={`editor-layer-toggle${visible ? ' is-active' : ''}`}
+                    disabled={!runtimeReady}
+                    key={control.key}
+                    title={control.label}
+                    type="button"
+                    onClick={() => {
+                      const nextVisible = !visible
+                      setLayerState((current) => ({ ...current, [control.key]: nextVisible }))
+                      sendRuntimeCommand('roomforge.layer.toggle', {
+                        layer: control.key,
+                        visible: nextVisible,
+                      })
+                    }}
+                  >
+                    <Icon size={15} />
+                    {visible ? <Eye size={13} /> : <EyeOff size={13} />}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="editor-toolbar-spacer" />
+            <StatusPill label={bridgeLabel} tone={bridgeTone} />
           </div>
 
           <div className="editor-host-frame-wrap editor-host-frame-wrap--direct">
@@ -277,39 +549,105 @@ export function EditorPage() {
               onReady={handleRuntimeReady}
             />
           </div>
-        </div>
+        </section>
 
-        <aside className="editor-host-status-panel" aria-label="Editor bridge status">
-          <section>
-            <div className="editor-host-section-title">
-              <Cpu size={18} />
-              <h2>Bridge</h2>
-            </div>
-            <dl className="editor-host-status-list">
-              <div>
-                <dt>상태</dt>
-                <dd><StatusPill label={bridgeLabel} tone={bridgeTone} /></dd>
-              </div>
-              <div>
-                <dt>마운트</dt>
-                <dd>{runtimeReady ? 'React direct runtime' : 'Mounting runtime module'}</dd>
-              </div>
-              <div>
-                <dt>메시지</dt>
-                <dd>roomforge.scene.initialize</dd>
-              </div>
-              <div>
-                <dt>소스 이미지</dt>
-                <dd>{sourceImageStatusLabel(sourceImageState)}</dd>
-              </div>
-              <div>
-                <dt>저장</dt>
-                <dd>{persistenceState.label}</dd>
-              </div>
-            </dl>
-          </section>
+        <aside className="editor-inspector-panel editor-runtime-inspector" aria-label="Editor bridge status">
+          <header>
+            <PanelRight size={17} />
+            <h2>Inspector</h2>
+          </header>
 
-          <section>
+          <div className="editor-runtime-inspector-body">
+            <section>
+              <div className="editor-host-section-title">
+                <MousePointer2 size={18} />
+                <h2>Selection</h2>
+              </div>
+              <dl className="editor-host-status-list">
+                <div>
+                  <dt>선택</dt>
+                  <dd>{runtimeSummary.selectedLabel}</dd>
+                </div>
+                <div>
+                  <dt>유형</dt>
+                  <dd>{runtimeSummary.selectedType}</dd>
+                </div>
+                <div>
+                  <dt>보기</dt>
+                  <dd>{runtimeSummary.viewMode.toUpperCase()}</dd>
+                </div>
+                <div>
+                  <dt>저장 상태</dt>
+                  <dd>{runtimeSummary.saveLabel}</dd>
+                </div>
+              </dl>
+              <div className="editor-inspector-actions">
+                {furnitureQuickAdds.map((item) => (
+                  <button
+                    className="rf-btn"
+                    disabled={!runtimeReady}
+                    key={item.category}
+                    type="button"
+                    onClick={() => {
+                      setActiveTool('furniture')
+                      sendRuntimeCommand('roomforge.furniture.add', { category: item.category })
+                    }}
+                  >
+                    <Armchair size={15} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="editor-inspector-icon-actions">
+                {furnitureEditActions.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      aria-label={item.label}
+                      className="editor-icon-button"
+                      disabled={!runtimeReady}
+                      key={item.action}
+                      title={item.label}
+                      type="button"
+                      onClick={() => sendRuntimeCommand('roomforge.furniture.editSelected', { action: item.action })}
+                    >
+                      <Icon size={16} />
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section>
+              <div className="editor-host-section-title">
+                <Cpu size={18} />
+                <h2>Bridge</h2>
+              </div>
+              <dl className="editor-host-status-list">
+                <div>
+                  <dt>상태</dt>
+                  <dd><StatusPill label={bridgeLabel} tone={bridgeTone} /></dd>
+                </div>
+                <div>
+                  <dt>마운트</dt>
+                  <dd>{runtimeReady ? 'React direct runtime' : 'Mounting runtime module'}</dd>
+                </div>
+                <div>
+                  <dt>메시지</dt>
+                  <dd>roomforge.scene.initialize</dd>
+                </div>
+                <div>
+                  <dt>소스 이미지</dt>
+                  <dd>{sourceImageStatusLabel(sourceImageState)}</dd>
+                </div>
+                <div>
+                  <dt>저장</dt>
+                  <dd>{persistenceState.label}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section>
             <div className="editor-host-section-title">
               <Layers size={18} />
               <h2>CV 요약</h2>
@@ -324,19 +662,23 @@ export function EditorPage() {
                 <dd>{cvSummary.sceneQuality}</dd>
               </div>
               <div>
-                <dt>후보</dt>
-                <dd>{cvSummary.candidateCount} objects · {cvSummary.fixtureCount} fixtures</dd>
+                <dt>오브젝트</dt>
+                <dd>{runtimeSummary.furnitureCount} placed · {runtimeSummary.candidateCount} candidates</dd>
+              </div>
+              <div>
+                <dt>고정 요소</dt>
+                <dd>{runtimeSummary.fixtureCount} fixtures</dd>
               </div>
               <div>
                 <dt>Coverage</dt>
                 <dd>{cvSummary.coverageLabel}</dd>
               </div>
             </dl>
-          </section>
+            </section>
 
-          <section>
+            <section>
             <div className="editor-host-section-title">
-              <Cpu size={18} />
+              <Layers size={18} />
               <h2>최근 이벤트</h2>
             </div>
             {events.length === 0 ? (
@@ -351,7 +693,8 @@ export function EditorPage() {
                 ))}
               </ol>
             )}
-          </section>
+            </section>
+          </div>
         </aside>
       </section>
     </main>
@@ -381,6 +724,101 @@ function sourceImageStatusLabel(state: ReturnType<typeof useEditorSourceImagePay
   if (state.status === 'loading') return 'Loading private source image'
   if (state.status === 'error') return state.error ?? 'Source image load failed'
   return 'No source image bytes available'
+}
+
+function runtimeSummaryFromPayload(payload: Record<string, unknown>): RuntimeSceneSummary | null {
+  if (!('viewMode' in payload) && !('selected' in payload) && !('furniture' in payload)) {
+    return null
+  }
+
+  const furniture = listValue(payload.furniture)
+  const candidates = listValue(payload.candidateObjects)
+  const fixtures = listValue(payload.structuralFixtures)
+  const selected = recordValue(payload.selected)
+  const selectedObjectId = typeof selected.objectId === 'string' ? selected.objectId : undefined
+  const selectedType = typeof selected.objectType === 'string' ? selected.objectType : 'room'
+  const selectedLabel = selectedLabelFromPayload({
+    selectedObjectId,
+    selectedType,
+    furniture,
+    fixtures,
+    room: recordValue(payload.room),
+  })
+  const viewMode = payload.viewMode === '2d'
+    ? '2d'
+    : payload.splitViewActive === true
+      ? 'split'
+      : '3d'
+
+  return {
+    viewMode,
+    selectedLabel,
+    selectedType,
+    furnitureCount: furniture.length,
+    candidateCount: candidates.length,
+    fixtureCount: fixtures.length,
+    saveLabel: payload.hasUnsavedChanges === true ? 'Unsaved changes' : 'Saved',
+  }
+}
+
+function selectedLabelFromPayload({
+  selectedObjectId,
+  selectedType,
+  furniture,
+  fixtures,
+  room,
+}: {
+  selectedObjectId?: string
+  selectedType: string
+  furniture: unknown[]
+  fixtures: unknown[]
+  room: Record<string, unknown>
+}): string {
+  if (selectedType === 'furniture' && selectedObjectId) {
+    return labelForRecordList(furniture, selectedObjectId) ?? selectedObjectId
+  }
+  if (selectedType === 'fixture' && selectedObjectId) {
+    return labelForRecordList(fixtures, selectedObjectId) ?? selectedObjectId
+  }
+  return typeof room.label === 'string' ? room.label : '방 외곽'
+}
+
+function labelForRecordList(items: unknown[], objectId: string): string | undefined {
+  for (const item of items) {
+    const record = recordValue(item)
+    if (record.objectId === objectId && typeof record.label === 'string') {
+      return record.label
+    }
+  }
+  return undefined
+}
+
+function layerStateFromPayload(payload: Record<string, unknown>): LayerState | null {
+  const layerVisibility = recordValue(payload.layerVisibility)
+  if (Object.keys(layerVisibility).length === 0) {
+    return null
+  }
+  return {
+    furniture: booleanWithDefault(layerVisibility.furniture, true),
+    fixtures: booleanWithDefault(layerVisibility.fixtures, true),
+    boundaries: booleanWithDefault(layerVisibility.boundaries, true),
+    lowConfidence: booleanWithDefault(layerVisibility.lowConfidence, true),
+  }
+}
+
+function canvasToggleStateFromPayload(payload: Record<string, unknown>): CanvasToggleState | null {
+  const toggleState = recordValue(payload.canvasToggleState)
+  if (Object.keys(toggleState).length === 0) {
+    return null
+  }
+  return {
+    grid: booleanWithDefault(toggleState.grid, true),
+    snap: booleanWithDefault(toggleState.snap, true),
+  }
+}
+
+function booleanWithDefault(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
 }
 
 function cvSummaryFromMessage(message: { type: string; payload: Record<string, unknown> }): Partial<CvSummary> | null {

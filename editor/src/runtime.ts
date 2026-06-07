@@ -1028,8 +1028,89 @@ function handleBridgeCommand(message: BridgeMessage): void {
 
   if (message.type === 'roomforge.view.setMode') {
     const viewMode = message.payload.viewMode
-    if (viewMode === '2d' || viewMode === '3d') {
+    if (viewMode === 'split') {
+      setSplitViewMode()
+    } else if (viewMode === '2d' || viewMode === '3d') {
       setViewMode(viewMode)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.camera.applyAction') {
+    const action = stringPayloadValue(message.payload, 'action')
+    if (isCameraAction(action)) {
+      applyCameraAction(action)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.layer.toggle') {
+    const layer = stringPayloadValue(message.payload, 'layer')
+    if (isCandidateLayer(layer)) {
+      setLayerVisibility(layer, booleanPayloadValue(message.payload, 'visible'))
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.canvas.toggle') {
+    const key = stringPayloadValue(message.payload, 'key')
+    if (isCanvasToggleKey(key)) {
+      setCanvasToggle(key, booleanPayloadValue(message.payload, 'enabled'))
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.furniture.add') {
+    const category = stringPayloadValue(message.payload, 'category')
+    if (isFurnitureCategory(category)) {
+      addFurniture(category)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.furniture.editSelected') {
+    const action = stringPayloadValue(message.payload, 'action')
+    if (isFurnitureEditAction(action)) {
+      editSelectedFurniture(action)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.selection.clear') {
+    selectRoom()
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.candidate.place') {
+    const candidateId = stringPayloadValue(message.payload, 'candidateId')
+    if (candidateId) {
+      placeCandidate(candidateId)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.candidate.reject') {
+    const candidateId = stringPayloadValue(message.payload, 'candidateId')
+    if (candidateId) {
+      rejectCandidate(candidateId)
+    }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.candidate.updateCategory') {
+    const candidateId = stringPayloadValue(message.payload, 'candidateId')
+    const category = stringPayloadValue(message.payload, 'category')
+    if (candidateId && category) {
+      updateCandidateCategory(candidateId, category)
     }
     respondToFlutter(message)
     return
@@ -1097,28 +1178,17 @@ for (const button of toolRailButtonElements) {
 for (const button of canvasToggleButtonElements) {
   button.addEventListener('click', () => {
     const key = button.dataset.canvasToggle
-    if (key !== 'grid' && key !== 'snap') {
-      return
+    if (isCanvasToggleKey(key)) {
+      setCanvasToggle(key)
     }
-    canvasToggleState[key] = !canvasToggleState[key]
-    syncCanvasToggleButtons()
-    sceneStatusElement.textContent = usesKorean
-      ? `${key === 'grid' ? '그리드' : '스냅'} ${canvasToggleState[key] ? '켜짐' : '꺼짐'}`
-      : `${key} ${canvasToggleState[key] ? 'on' : 'off'}`
   })
 }
 for (const button of layerToggleButtonElements) {
   button.addEventListener('click', () => {
     const layer = button.dataset.layerToggle
-    if (!isCandidateLayer(layer)) {
-      return
+    if (isCandidateLayer(layer)) {
+      setLayerVisibility(layer)
     }
-    layerVisibility[layer] = !layerVisibility[layer]
-    syncLayerToggleButtons()
-    applyLayerVisibility()
-    geometryStatusElement.textContent = usesKorean
-      ? `${localizedLayerLabel(layer)} 레이어 ${layerVisibility[layer] ? '표시' : '숨김'}`
-      : `${localizedLayerLabel(layer)} layer ${layerVisibility[layer] ? 'shown' : 'hidden'}`
   })
 }
 for (const button of cameraActionButtons) {
@@ -1410,12 +1480,7 @@ editorCanvas.addEventListener('pointerdown', (event) => {
 
   const roomIntersections = raycaster.intersectObject(floor)
   if (roomIntersections.length > 0) {
-    spatialModel = {
-      ...spatialModel,
-      selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
-    }
-    updateSpatialStatus()
-    emitSceneState('roomforge.selection.changed')
+    selectRoom()
   }
 })
 
@@ -1499,13 +1564,7 @@ editorCanvas.addEventListener('keydown', (event) => {
     setViewMode('3d')
     event.preventDefault()
   } else if (event.key === 'Escape') {
-    spatialModel = {
-      ...spatialModel,
-      selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
-    }
-    rebuildFurniture()
-    updateSpatialStatus()
-    emitSceneState('roomforge.selection.changed')
+    selectRoom()
     event.preventDefault()
   }
 })
@@ -1687,8 +1746,41 @@ function applyViewModeCamera(): void {
   applyLayerVisibility()
 }
 
+function stringPayloadValue(payload: BridgePayload, key: string): string | undefined {
+  const value = payload[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function booleanPayloadValue(payload: BridgePayload, key: string): boolean | undefined {
+  const value = payload[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function isCanvasToggleKey(value: string | undefined): value is keyof typeof canvasToggleState {
+  return value === 'grid' || value === 'snap'
+}
+
+function setCanvasToggle(key: keyof typeof canvasToggleState, enabled = !canvasToggleState[key]): void {
+  canvasToggleState[key] = enabled
+  syncCanvasToggleButtons()
+  sceneStatusElement.textContent = usesKorean
+    ? `${key === 'grid' ? '그리드' : '스냅'} ${canvasToggleState[key] ? '켜짐' : '꺼짐'}`
+    : `${key} ${canvasToggleState[key] ? 'on' : 'off'}`
+  emitSceneState('roomforge.canvas.changed')
+}
+
 function isCandidateLayer(value: string | undefined): value is CandidateLayer {
   return value === 'furniture' || value === 'fixtures' || value === 'boundaries' || value === 'lowConfidence'
+}
+
+function setLayerVisibility(layer: CandidateLayer, visible = !layerVisibility[layer]): void {
+  layerVisibility[layer] = visible
+  syncLayerToggleButtons()
+  applyLayerVisibility()
+  geometryStatusElement.textContent = usesKorean
+    ? `${localizedLayerLabel(layer)} 레이어 ${layerVisibility[layer] ? '표시' : '숨김'}`
+    : `${localizedLayerLabel(layer)} layer ${layerVisibility[layer] ? 'shown' : 'hidden'}`
+  emitSceneState('roomforge.layer.changed')
 }
 
 function syncLayerToggleButtons(): void {
@@ -2874,6 +2966,9 @@ function spatialModelPayload(): Record<string, unknown> {
     coordinateSpace: spatialModel.coordinateSpace,
     unit: spatialModel.unit,
     viewMode: spatialModel.viewMode,
+    splitViewActive,
+    layerVisibility: { ...layerVisibility },
+    canvasToggleState: { ...canvasToggleState },
     selected: spatialModel.selected,
     hasUnsavedChanges: spatialModel.hasUnsavedChanges,
     scale: spatialModel.scale,
@@ -2909,6 +3004,17 @@ function selectFurniture(objectId: unknown): void {
   }
   spatialModel = nextModel
   rebuildFurniture()
+  updateSpatialStatus()
+  emitSceneState('roomforge.selection.changed')
+}
+
+function selectRoom(): void {
+  spatialModel = {
+    ...spatialModel,
+    selected: { objectId: spatialModel.room.objectId, objectType: 'room' },
+  }
+  rebuildFurniture()
+  rebuildStructuralFixtures()
   updateSpatialStatus()
   emitSceneState('roomforge.selection.changed')
 }

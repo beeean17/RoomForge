@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 
-import './style.css'
 import {
   BRIDGE_VERSION,
   isBridgeMessage,
@@ -68,11 +67,33 @@ import {
 } from './spatialModel'
 import { furnitureSizePriorForCategory } from './sizePriors.ts'
 
-const app = document.querySelector<HTMLDivElement>('#app')
-
-if (!app) {
-  throw new Error('Missing editor root element.')
+export type EditorRuntimeMountOptions = {
+  chrome?: 'full' | 'embedded'
+  postMessage?: (message: BridgeMessage) => void
 }
+
+export type EditorRuntimeHandle = {
+  dispatch: (message: BridgeMessage) => void
+  unmount: () => void
+}
+
+export function mountRoomForgeEditorRuntime(app: HTMLElement, options: EditorRuntimeMountOptions = {}): EditorRuntimeHandle {
+  if (!app) {
+    throw new Error('Missing editor root element.')
+  }
+
+  const cleanupCallbacks: Array<() => void> = []
+  let animationFrame: number | null = null
+  let mounted = true
+
+  function addWindowEventListener<K extends keyof WindowEventMap>(
+    type: K,
+    listener: (event: WindowEventMap[K]) => void,
+    listenerOptions?: boolean | AddEventListenerOptions,
+  ): void {
+    window.addEventListener(type, listener as EventListener, listenerOptions)
+    cleanupCallbacks.push(() => window.removeEventListener(type, listener as EventListener, listenerOptions))
+  }
 
 const localeOverride = new URLSearchParams(window.location.search).get('locale')?.toLowerCase() ?? ''
 const usesKorean = localeOverride.startsWith('ko') || navigator.language.toLowerCase().startsWith('ko')
@@ -105,7 +126,7 @@ const furnitureCatalogMarkup = catalogFurnitureItems
   .join('')
 
 app.innerHTML = `
-<section class="editor-shell">
+<section class="editor-shell" data-editor-chrome="${options.chrome === 'embedded' ? 'embedded' : 'full'}">
   <header class="editor-topbar" aria-label="${t('Editor top bar', '편집기 상단 바')}">
     <div class="editor-project">
       <strong>${t('Bedroom remodel', '침실 리모델링')}</strong>
@@ -494,104 +515,104 @@ app.innerHTML = `
 </section>
 `
 
-const canvas = document.querySelector<HTMLCanvasElement>('.editor-canvas')
-const bridgeStatus = document.querySelector<HTMLElement>('#bridge-status')
-const opencvStatus = document.querySelector<HTMLElement>('#opencv-status')
-const captureSessionStatus = document.querySelector<HTMLElement>('#capture-session-status')
-const viewportStatus = document.querySelector<HTMLElement>('#viewport-status')
-const geometryStatus = document.querySelector<HTMLElement>('#geometry-status')
-const spatialStatus = document.querySelector<HTMLElement>('#spatial-status')
-const inspectorStatus = document.querySelector<HTMLElement>('#inspector-status')
-const measurementStatus = document.querySelector<HTMLElement>('#measurement-status')
-const placementStatus = document.querySelector<HTMLElement>('#placement-status')
-const placementSummary = document.querySelector<HTMLElement>('#placement-summary')
-const sceneStatus = document.querySelector<HTMLElement>('#scene-status')
-const cameraStatus = document.querySelector<HTMLElement>('#camera-status')
-const candidateCount = document.querySelector<HTMLElement>('#candidate-count')
-const candidateConfidence = document.querySelector<HTMLElement>('#candidate-confidence')
-const candidateTrayCount = document.querySelector<HTMLElement>('#candidate-tray-count')
-const candidateTrayStatus = document.querySelector<HTMLElement>('#candidate-tray-status')
-const candidateTrayList = document.querySelector<HTMLElement>('#candidate-tray-list')
-const outlineValidityState = document.querySelector<HTMLElement>('#outline-validity-state')
-const outlineSummary = document.querySelector<HTMLElement>('#outline-summary')
-const undoGeometryButton = document.querySelector<HTMLButtonElement>('#undo-geometry')
-const redoGeometryButton = document.querySelector<HTMLButtonElement>('#redo-geometry')
-const confirmOutlineButton = document.querySelector<HTMLButtonElement>('#confirm-outline')
-const knownWallLengthInput = document.querySelector<HTMLInputElement>('#known-wall-length')
-const scaleStatus = document.querySelector<HTMLElement>('#scale-status')
-const scaleState = document.querySelector<HTMLElement>('#scale-state')
-const referenceLineList = document.querySelector<HTMLElement>('#reference-line-list')
-const scaleRatio = document.querySelector<HTMLElement>('#scale-ratio')
-const scaleError = document.querySelector<HTMLElement>('#scale-error')
-const scaleRecalculateNotice = document.querySelector<HTMLElement>('#scale-recalculate-notice')
-const floorPlanState = document.querySelector<HTMLElement>('#floor-plan-state')
-const reviewRoomSize = document.querySelector<HTMLElement>('#review-room-size')
-const reviewCoordinateSpace = document.querySelector<HTMLElement>('#review-coordinate-space')
-const floorWarningRail = document.querySelector<HTMLElement>('#floor-warning-rail')
-const floorArtifactGrid = document.querySelector<HTMLElement>('#floor-artifact-grid')
-const reviewCandidatesButton = document.querySelector<HTMLButtonElement>('#review-candidates')
-const returnCorrectionButton = document.querySelector<HTMLButtonElement>('#return-correction')
-const proceedEditorButton = document.querySelector<HTMLButtonElement>('#proceed-editor')
-const furnitureObjectList = document.querySelector<HTMLElement>('#furniture-object-list')
-const furnitureCount = document.querySelector<HTMLElement>('#furniture-count')
-const furnitureCatalogStatus = document.querySelector<HTMLElement>('#furniture-catalog-status')
-const selectionState = document.querySelector<HTMLElement>('#selection-state')
-const selectedObjectTitle = document.querySelector<HTMLElement>('#selected-object-title')
-const selectedObjectSource = document.querySelector<HTMLElement>('#selected-object-source')
-const transformXReadout = document.querySelector<HTMLElement>('#transform-x-readout')
-const transformYReadout = document.querySelector<HTMLElement>('#transform-y-readout')
-const transformRotationReadout = document.querySelector<HTMLElement>('#transform-rotation-readout')
-const transformSizeReadout = document.querySelector<HTMLElement>('#transform-size-readout')
-const furniturePlacementWarning = document.querySelector<HTMLElement>('#furniture-placement-warning')
-const view2dButton = document.querySelector<HTMLButtonElement>('#view-2d')
-const view3dButton = document.querySelector<HTMLButtonElement>('#view-3d')
-const viewSplitButton = document.querySelector<HTMLButtonElement>('#view-split')
-const topUndoButton = document.querySelector<HTMLButtonElement>('#top-undo')
-const topRedoButton = document.querySelector<HTMLButtonElement>('#top-redo')
-const saveLayoutButton = document.querySelector<HTMLButtonElement>('#save-layout')
-const editorSaveState = document.querySelector<HTMLElement>('#editor-save-state')
-const exportLayoutButton = document.querySelector<HTMLButtonElement>('#export-layout')
-const persistenceState = document.querySelector<HTMLElement>('#persistence-state')
-const saveBoard = document.querySelector<HTMLElement>('#save-board')
-const layoutLoadSelector = document.querySelector<HTMLElement>('#layout-load-selector')
-const layoutExportPreview = document.querySelector<HTMLElement>('#layout-export-preview')
-const roundTripNotice = document.querySelector<HTMLElement>('#round-trip-notice')
-const layoutValidity = document.querySelector<HTMLElement>('#layout-validity')
-const layoutCounts = document.querySelector<HTMLElement>('#layout-counts')
-const layoutArea = document.querySelector<HTMLElement>('#layout-area')
-const cursorCoords = document.querySelector<HTMLElement>('#cursor-coords')
+const canvas = app.querySelector<HTMLCanvasElement>('.editor-canvas')
+const bridgeStatus = app.querySelector<HTMLElement>('#bridge-status')
+const opencvStatus = app.querySelector<HTMLElement>('#opencv-status')
+const captureSessionStatus = app.querySelector<HTMLElement>('#capture-session-status')
+const viewportStatus = app.querySelector<HTMLElement>('#viewport-status')
+const geometryStatus = app.querySelector<HTMLElement>('#geometry-status')
+const spatialStatus = app.querySelector<HTMLElement>('#spatial-status')
+const inspectorStatus = app.querySelector<HTMLElement>('#inspector-status')
+const measurementStatus = app.querySelector<HTMLElement>('#measurement-status')
+const placementStatus = app.querySelector<HTMLElement>('#placement-status')
+const placementSummary = app.querySelector<HTMLElement>('#placement-summary')
+const sceneStatus = app.querySelector<HTMLElement>('#scene-status')
+const cameraStatus = app.querySelector<HTMLElement>('#camera-status')
+const candidateCount = app.querySelector<HTMLElement>('#candidate-count')
+const candidateConfidence = app.querySelector<HTMLElement>('#candidate-confidence')
+const candidateTrayCount = app.querySelector<HTMLElement>('#candidate-tray-count')
+const candidateTrayStatus = app.querySelector<HTMLElement>('#candidate-tray-status')
+const candidateTrayList = app.querySelector<HTMLElement>('#candidate-tray-list')
+const outlineValidityState = app.querySelector<HTMLElement>('#outline-validity-state')
+const outlineSummary = app.querySelector<HTMLElement>('#outline-summary')
+const undoGeometryButton = app.querySelector<HTMLButtonElement>('#undo-geometry')
+const redoGeometryButton = app.querySelector<HTMLButtonElement>('#redo-geometry')
+const confirmOutlineButton = app.querySelector<HTMLButtonElement>('#confirm-outline')
+const knownWallLengthInput = app.querySelector<HTMLInputElement>('#known-wall-length')
+const scaleStatus = app.querySelector<HTMLElement>('#scale-status')
+const scaleState = app.querySelector<HTMLElement>('#scale-state')
+const referenceLineList = app.querySelector<HTMLElement>('#reference-line-list')
+const scaleRatio = app.querySelector<HTMLElement>('#scale-ratio')
+const scaleError = app.querySelector<HTMLElement>('#scale-error')
+const scaleRecalculateNotice = app.querySelector<HTMLElement>('#scale-recalculate-notice')
+const floorPlanState = app.querySelector<HTMLElement>('#floor-plan-state')
+const reviewRoomSize = app.querySelector<HTMLElement>('#review-room-size')
+const reviewCoordinateSpace = app.querySelector<HTMLElement>('#review-coordinate-space')
+const floorWarningRail = app.querySelector<HTMLElement>('#floor-warning-rail')
+const floorArtifactGrid = app.querySelector<HTMLElement>('#floor-artifact-grid')
+const reviewCandidatesButton = app.querySelector<HTMLButtonElement>('#review-candidates')
+const returnCorrectionButton = app.querySelector<HTMLButtonElement>('#return-correction')
+const proceedEditorButton = app.querySelector<HTMLButtonElement>('#proceed-editor')
+const furnitureObjectList = app.querySelector<HTMLElement>('#furniture-object-list')
+const furnitureCount = app.querySelector<HTMLElement>('#furniture-count')
+const furnitureCatalogStatus = app.querySelector<HTMLElement>('#furniture-catalog-status')
+const selectionState = app.querySelector<HTMLElement>('#selection-state')
+const selectedObjectTitle = app.querySelector<HTMLElement>('#selected-object-title')
+const selectedObjectSource = app.querySelector<HTMLElement>('#selected-object-source')
+const transformXReadout = app.querySelector<HTMLElement>('#transform-x-readout')
+const transformYReadout = app.querySelector<HTMLElement>('#transform-y-readout')
+const transformRotationReadout = app.querySelector<HTMLElement>('#transform-rotation-readout')
+const transformSizeReadout = app.querySelector<HTMLElement>('#transform-size-readout')
+const furniturePlacementWarning = app.querySelector<HTMLElement>('#furniture-placement-warning')
+const view2dButton = app.querySelector<HTMLButtonElement>('#view-2d')
+const view3dButton = app.querySelector<HTMLButtonElement>('#view-3d')
+const viewSplitButton = app.querySelector<HTMLButtonElement>('#view-split')
+const topUndoButton = app.querySelector<HTMLButtonElement>('#top-undo')
+const topRedoButton = app.querySelector<HTMLButtonElement>('#top-redo')
+const saveLayoutButton = app.querySelector<HTMLButtonElement>('#save-layout')
+const editorSaveState = app.querySelector<HTMLElement>('#editor-save-state')
+const exportLayoutButton = app.querySelector<HTMLButtonElement>('#export-layout')
+const persistenceState = app.querySelector<HTMLElement>('#persistence-state')
+const saveBoard = app.querySelector<HTMLElement>('#save-board')
+const layoutLoadSelector = app.querySelector<HTMLElement>('#layout-load-selector')
+const layoutExportPreview = app.querySelector<HTMLElement>('#layout-export-preview')
+const roundTripNotice = app.querySelector<HTMLElement>('#round-trip-notice')
+const layoutValidity = app.querySelector<HTMLElement>('#layout-validity')
+const layoutCounts = app.querySelector<HTMLElement>('#layout-counts')
+const layoutArea = app.querySelector<HTMLElement>('#layout-area')
+const cursorCoords = app.querySelector<HTMLElement>('#cursor-coords')
 const toolRailButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-editor-tool]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-editor-tool]'),
 )
 const canvasToggleButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-canvas-toggle]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-canvas-toggle]'),
 )
 const layerToggleButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-layer-toggle]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-layer-toggle]'),
 )
 const cameraActionButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-camera-action]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-camera-action]'),
 )
 const furnitureCategoryButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-furniture-category]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-furniture-category]'),
 )
 const furnitureEditButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-furniture-edit]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-furniture-edit]'),
 )
 const transformInputs = Array.from(
-  document.querySelectorAll<HTMLInputElement>('[data-transform-field]'),
+  app.querySelectorAll<HTMLInputElement>('[data-transform-field]'),
 )
 const transformOutputs = Array.from(
-  document.querySelectorAll<HTMLOutputElement>('[data-transform-output]'),
+  app.querySelectorAll<HTMLOutputElement>('[data-transform-output]'),
 )
 const persistenceActionButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-persistence-action]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-persistence-action]'),
 )
 const layoutLoadSourceButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-load-source]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-load-source]'),
 )
 const fixtureEditButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-fixture-edit]'),
+  app.querySelectorAll<HTMLButtonElement>('[data-fixture-edit]'),
 )
 
 if (
@@ -948,12 +969,16 @@ function resizeRenderer(): void {
 }
 
 function render(): void {
+  if (!mounted) {
+    return
+  }
   updateCameraTransition()
   renderer.render(scene, camera)
-  requestAnimationFrame(render)
+  animationFrame = requestAnimationFrame(render)
 }
 
 function postToParent(message: BridgeMessage): void {
+  options.postMessage?.(message)
   if (window.parent && window.parent !== window) {
     postBridgeMessage(window.parent, message)
   }
@@ -1019,7 +1044,7 @@ function handleBridgeCommand(message: BridgeMessage): void {
   respondToFlutter(message)
 }
 
-window.addEventListener('message', (event: MessageEvent<unknown>) => {
+addWindowEventListener('message', (event: MessageEvent<unknown>) => {
   if (!isBridgeMessage(event.data)) {
     return
   }
@@ -1166,7 +1191,7 @@ candidateTrayListElement.addEventListener('change', (event) => {
   }
 })
 
-document.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
+app.querySelector<HTMLButtonElement>('#accept-candidate')?.addEventListener('click', () => {
   pushGeometryUndoState()
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Accepted OpenCV candidate.', 'OpenCV 후보를 적용했습니다.'))
@@ -1182,13 +1207,13 @@ confirmOutlineButtonElement.addEventListener('click', () => {
   updateConfirmedGeometry(t('Confirmed corrected room outline.', '보정된 방 윤곽을 확정했습니다.'))
 })
 
-document.querySelector<HTMLButtonElement>('#manual-outline')?.addEventListener('click', () => {
+app.querySelector<HTMLButtonElement>('#manual-outline')?.addEventListener('click', () => {
   pushGeometryUndoState()
   confirmedPoints = outlinePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Started from manual rectangle.', '수동 사각형에서 시작했습니다.'))
 })
 
-document.querySelector<HTMLButtonElement>('#orthogonalize-outline')?.addEventListener('click', () => {
+app.querySelector<HTMLButtonElement>('#orthogonalize-outline')?.addEventListener('click', () => {
   if (confirmedPoints.length < 3) {
     geometryStatusElement.textContent = t('At least three corners are required.', '최소 3개 꼭짓점이 필요합니다.')
     updateOutlineValidityPanel()
@@ -1199,7 +1224,7 @@ document.querySelector<HTMLButtonElement>('#orthogonalize-outline')?.addEventLis
   updateConfirmedGeometry(t('Orthogonalized the room outline.', '방 윤곽을 직각으로 보정했습니다.'))
 })
 
-document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('click', () => {
+app.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('click', () => {
   pushGeometryUndoState()
   const lastPoint = confirmedPoints[confirmedPoints.length - 1]
   const firstPoint = confirmedPoints[0]
@@ -1207,7 +1232,7 @@ document.querySelector<HTMLButtonElement>('#add-corner')?.addEventListener('clic
   updateConfirmedGeometry(t('Added a boundary corner.', '경계 꼭짓점을 추가했습니다.'))
 })
 
-document.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('click', () => {
+app.querySelector<HTMLButtonElement>('#delete-corner')?.addEventListener('click', () => {
   if (confirmedPoints.length <= 3) {
     geometryStatusElement.textContent = t('At least three corners are required.', '최소 3개 꼭짓점이 필요합니다.')
     updateOutlineValidityPanel()
@@ -1261,13 +1286,13 @@ proceedEditorButtonElement.addEventListener('click', () => {
   )
 })
 
-document.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
+app.querySelector<HTMLButtonElement>('#reset-candidate')?.addEventListener('click', () => {
   pushGeometryUndoState()
   confirmedPoints = candidatePoints.slice(0, 4).map((point) => point.clone())
   updateConfirmedGeometry(t('Reset to OpenCV candidate.', 'OpenCV 후보로 초기화했습니다.'))
 })
 
-document.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListener('click', () => {
+app.querySelector<HTMLButtonElement>('#generate-floor-plan')?.addEventListener('click', () => {
   if (confirmedPoints.length < 3) {
     geometryStatusElement.textContent = t(
       'Confirm at least three corners before generation.',
@@ -1595,7 +1620,7 @@ function recalculateCandidatePlacements(model: SpatialModel): SpatialModel {
 syncLayerToggleButtons()
 syncCanvasToggleButtons()
 applySpatialModel()
-window.addEventListener('resize', resizeRenderer)
+addWindowEventListener('resize', resizeRenderer)
 resizeRenderer()
 render()
 
@@ -1893,7 +1918,7 @@ function syncCanvasToggleButtons(): void {
     button.setAttribute('aria-pressed', String(active))
     button.classList.toggle('is-active', active)
   }
-  document.querySelector('.viewport')?.classList.toggle('is-grid-hidden', !canvasToggleState.grid)
+  app.querySelector('.viewport')?.classList.toggle('is-grid-hidden', !canvasToggleState.grid)
 }
 
 function updateScaleCalibrationPanel(): void {
@@ -3757,4 +3782,40 @@ function setPointerFromEvent(event: PointerEvent): void {
   const rect = editorCanvas.getBoundingClientRect()
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
   pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1)
+}
+
+
+  return {
+    dispatch: handleBridgeCommand,
+    unmount: () => {
+      mounted = false
+      for (const cleanup of cleanupCallbacks.splice(0)) {
+        cleanup()
+      }
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame)
+        animationFrame = null
+      }
+      worker?.terminate()
+      sceneUnderstandingWorker?.terminate()
+      renderer.dispose()
+      scene.traverse((object: THREE.Object3D) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose()
+          const meshMaterial = object.material
+          if (Array.isArray(meshMaterial)) {
+            meshMaterial.forEach((item) => item.dispose())
+          } else {
+            meshMaterial.dispose()
+          }
+        }
+      })
+      app.replaceChildren()
+    },
+  }
+}
+
+const defaultApp = document.querySelector<HTMLDivElement>('#app')
+if (defaultApp) {
+  mountRoomForgeEditorRuntime(defaultApp)
 }

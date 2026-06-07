@@ -580,6 +580,60 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
     }
   }
 
+  Future<void> _renameProject(RoomProject project) async {
+    final updatedName = await _showProjectNameDialog(
+      context,
+      title: '프로젝트 이름 변경',
+      initialName: project.name,
+      actionLabel: '저장',
+    );
+    if (updatedName == null || updatedName == project.name) return;
+
+    setState(() => _status = '프로젝트 이름을 변경하는 중입니다.');
+    try {
+      await widget.projectApi.updateProject(
+        projectId: project.id,
+        name: updatedName,
+        description: project.description,
+      );
+      if (!mounted) return;
+      setState(() {
+        _status = '프로젝트 이름을 변경했습니다.';
+        _projectsFuture = _loadProjects();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _status = '프로젝트 이름 변경 실패: $error');
+    }
+  }
+
+  Future<void> _deleteProject(RoomProject project) async {
+    final confirmed = await _confirmProjectDelete(context, project);
+    if (confirmed != true) return;
+
+    setState(() => _status = '프로젝트를 삭제하는 중입니다.');
+    try {
+      await widget.projectApi.deleteProject(project.id);
+      if (!mounted) return;
+      setState(() {
+        _status = '프로젝트를 삭제했습니다.';
+        _projectsFuture = _loadProjects();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _status = '프로젝트 삭제 실패: $error');
+    }
+  }
+
+  void _showProjectActions(RoomProject project) {
+    _showProjectActionsSheet(
+      context,
+      project: project,
+      onRename: () => unawaited(_renameProject(project)),
+      onDelete: () => unawaited(_deleteProject(project)),
+    );
+  }
+
   Future<void> _openCaptureFor(List<RoomProject> projects) async {
     if (projects.isEmpty) {
       await _createProject(openCapture: true);
@@ -687,6 +741,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                         ...projects.map(
                           (project) => _ProjectPreviewCard(
                             project: project,
+                            onMenu: () => _showProjectActions(project),
                             onOpen: () => _pushMobileRoute(
                               context,
                               _projectPath(project.id),
@@ -741,9 +796,11 @@ class _ProjectOverviewScreen extends StatefulWidget {
 }
 
 class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
+  final ImagePicker _imagePicker = ImagePicker();
   late Future<_ProjectDetails> _detailsFuture;
   String? _status;
-  String? _uploadingDraftRoleId;
+  final Set<String> _uploadingDraftRoleIds = <String>{};
+  Future<_ProjectDetails>? _uploadReadyDetailsFuture;
 
   @override
   void initState() {
@@ -802,6 +859,95 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
     setState(() => _detailsFuture = _loadDetails());
   }
 
+  Future<void> _renameProject(RoomProject project) async {
+    final updatedName = await _showProjectNameDialog(
+      context,
+      title: '프로젝트 이름 변경',
+      initialName: project.name,
+      actionLabel: '저장',
+    );
+    if (updatedName == null || updatedName == project.name) return;
+
+    setState(() => _status = '프로젝트 이름을 변경하는 중입니다.');
+    try {
+      await widget.projectApi.updateProject(
+        projectId: project.id,
+        name: updatedName,
+        description: project.description,
+      );
+      if (!mounted) return;
+      setState(() {
+        _status = '프로젝트 이름을 변경했습니다.';
+        _detailsFuture = _loadDetails();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _status = '프로젝트 이름 변경 실패: $error');
+    }
+  }
+
+  Future<void> _deleteProject(RoomProject project) async {
+    final confirmed = await _confirmProjectDelete(context, project);
+    if (confirmed != true) return;
+
+    setState(() => _status = '프로젝트를 삭제하는 중입니다.');
+    try {
+      await widget.projectApi.deleteProject(project.id);
+      if (!mounted) return;
+      context.go('/projects');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _status = '프로젝트 삭제 실패: $error');
+    }
+  }
+
+  void _showProjectActions(RoomProject project) {
+    _showProjectActionsSheet(
+      context,
+      project: project,
+      onRename: () => unawaited(_renameProject(project)),
+      onDelete: () => unawaited(_deleteProject(project)),
+      onDesktopLink: () =>
+          unawaited(_copyProjectLink(context, _desktopEditorLink(project.id))),
+    );
+  }
+
+  Future<void> _selectRoleImageFromDevice(String roleId) async {
+    if (_uploadingDraftRoleIds.contains(roleId)) return;
+
+    final role = _guidedCaptureRoleById(roleId);
+    if (role == null) return;
+
+    final roleLabel = _roleShortLabel(role.id);
+    setState(() => _status = '$roleLabel 이미지를 선택합니다.');
+
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        requestFullMetadata: false,
+      );
+      if (image == null) {
+        if (!mounted) return;
+        setState(() => _status = '$roleLabel 이미지 선택이 취소되었습니다.');
+        return;
+      }
+
+      _savePendingDraft(
+        widget.projectId,
+        await _pendingDraftFromImage(roleId: role.id, image: image),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _status = '$roleLabel 이미지가 선택되었습니다. 업로드하세요.';
+        _detailsFuture = _loadDetails();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _status = '$roleLabel 이미지 선택 실패: $error');
+    }
+  }
+
   Future<_ProjectDetails> _ensureCaptureSession(_ProjectDetails details) async {
     var dimensions = details.dimensions;
     var snapshot = details.captureSnapshot;
@@ -834,46 +980,74 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
     );
   }
 
+  Future<_ProjectDetails> _ensureUploadReadyDetails() {
+    final pending = _uploadReadyDetailsFuture;
+    if (pending != null) return pending;
+
+    late final Future<_ProjectDetails> readyDetails;
+    readyDetails = _loadDetails().then(_ensureCaptureSession).whenComplete(() {
+      if (_uploadReadyDetailsFuture == readyDetails) {
+        _uploadReadyDetailsFuture = null;
+      }
+    });
+    _uploadReadyDetailsFuture = readyDetails;
+    return readyDetails;
+  }
+
+  CaptureSession _captureSessionFromDetails(_ProjectDetails details) {
+    final session = details.captureSnapshot?.session;
+    if (session == null) {
+      throw const ProjectApiException(
+        '가이드 촬영 세션을 만들 수 없습니다.',
+        code: 'capture_session_unavailable',
+      );
+    }
+    return session;
+  }
+
+  Future<void> _uploadPendingDraft(
+    CaptureSession session,
+    _PendingCaptureDraft draft,
+  ) async {
+    final roleLabel = _roleShortLabel(draft.roleId);
+    await widget.projectApi.uploadCaptureImage(
+      projectId: widget.projectId,
+      captureSessionId: session.id,
+      role: draft.roleId,
+      filename: _captureFilename(draft.roleId, draft.filename),
+      contentType: draft.contentType,
+      bytes: draft.bytes,
+      widthPx: draft.widthPx,
+      heightPx: draft.heightPx,
+      captureOrder: _captureOrderForRole(draft.roleId),
+      onProgress: (progress) {
+        if (!mounted) return;
+        final activeUploads = _uploadingDraftRoleIds.length;
+        setState(() {
+          _status = activeUploads > 1
+              ? '$activeUploads개 이미지 업로드 중 · '
+                    '$roleLabel ${(progress * 100).round()}%'
+              : '$roleLabel 업로드 ${(progress * 100).round()}%';
+        });
+      },
+    );
+    _removePendingDraft(widget.projectId, draft.roleId);
+  }
+
   Future<void> _uploadPendingRole(String roleId) async {
     final draft = _pendingDraftForRole(widget.projectId, roleId);
-    if (draft == null || _uploadingDraftRoleId != null) return;
+    if (draft == null || _uploadingDraftRoleIds.contains(roleId)) return;
 
     final roleLabel = _roleShortLabel(roleId);
     setState(() {
-      _uploadingDraftRoleId = roleId;
+      _uploadingDraftRoleIds.add(roleId);
       _status = '$roleLabel 업로드를 준비합니다.';
     });
 
     try {
-      final details = await _loadDetails();
-      final ready = await _ensureCaptureSession(details);
-      final session = ready.captureSnapshot?.session;
-      if (session == null) {
-        throw const ProjectApiException(
-          '가이드 촬영 세션을 만들 수 없습니다.',
-          code: 'capture_session_unavailable',
-        );
-      }
+      final ready = await _ensureUploadReadyDetails();
+      await _uploadPendingDraft(_captureSessionFromDetails(ready), draft);
 
-      await widget.projectApi.uploadCaptureImage(
-        projectId: widget.projectId,
-        captureSessionId: session.id,
-        role: draft.roleId,
-        filename: _captureFilename(draft.roleId, draft.filename),
-        contentType: draft.contentType,
-        bytes: draft.bytes,
-        widthPx: draft.widthPx,
-        heightPx: draft.heightPx,
-        captureOrder: _captureOrderForRole(draft.roleId),
-        onProgress: (progress) {
-          if (!mounted) return;
-          setState(
-            () => _status = '$roleLabel 업로드 ${(progress * 100).round()}%',
-          );
-        },
-      );
-
-      _removePendingDraft(widget.projectId, roleId);
       if (!mounted) return;
       setState(() {
         _status = '$roleLabel 업로드가 완료되었습니다.';
@@ -883,11 +1057,71 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
       if (!mounted) return;
       setState(() => _status = '$roleLabel 업로드 실패: $error');
     } finally {
-      if (mounted) setState(() => _uploadingDraftRoleId = null);
+      if (mounted) {
+        setState(() => _uploadingDraftRoleIds.remove(roleId));
+      }
+    }
+  }
+
+  Future<void> _uploadAllPendingRoles() async {
+    final pendingDrafts = Map<String, _PendingCaptureDraft>.from(
+      _pendingDraftsForProject(widget.projectId),
+    );
+    final draftsToUpload = pendingDrafts.values
+        .where((draft) => !_uploadingDraftRoleIds.contains(draft.roleId))
+        .toList(growable: false);
+    if (draftsToUpload.isEmpty) return;
+
+    setState(() {
+      _uploadingDraftRoleIds.addAll(
+        draftsToUpload.map((draft) => draft.roleId),
+      );
+      _status = '${draftsToUpload.length}개 이미지 업로드를 준비합니다.';
+    });
+
+    final failures = <String, Object>{};
+    try {
+      final ready = await _ensureUploadReadyDetails();
+      final session = _captureSessionFromDetails(ready);
+      await Future.wait(
+        draftsToUpload.map((draft) async {
+          try {
+            await _uploadPendingDraft(session, draft);
+          } catch (error) {
+            failures[draft.roleId] = error;
+          } finally {
+            if (mounted) {
+              setState(() => _uploadingDraftRoleIds.remove(draft.roleId));
+            }
+          }
+        }),
+      );
+
+      if (!mounted) return;
+      final uploadedCount = draftsToUpload.length - failures.length;
+      setState(() {
+        if (failures.isEmpty) {
+          _status = '${draftsToUpload.length}개 이미지 업로드가 완료되었습니다.';
+        } else {
+          final failedLabels = failures.keys.map(_roleShortLabel).join(', ');
+          _status =
+              '$uploadedCount개 완료 · ${failures.length}개 실패: $failedLabels';
+        }
+        _detailsFuture = _loadDetails();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _uploadingDraftRoleIds.removeAll(
+          draftsToUpload.map((draft) => draft.roleId),
+        );
+        _status = '전체 업로드 실패: $error';
+      });
     }
   }
 
   void _discardPendingRole(String roleId) {
+    if (_uploadingDraftRoleIds.contains(roleId)) return;
     _removePendingDraft(widget.projectId, roleId);
     setState(() => _status = '${_roleShortLabel(roleId)} 촬영본을 삭제했습니다.');
   }
@@ -916,8 +1150,9 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
               actions: [
                 IconButton(
                   tooltip: '더보기',
-                  onPressed: () =>
-                      _showDesktopHandoff(context, widget.projectId),
+                  onPressed: details == null
+                      ? null
+                      : () => _showProjectActions(details.project),
                   icon: const Icon(Icons.more_horiz),
                 ),
               ],
@@ -944,11 +1179,14 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
                         pendingDrafts: _pendingDraftsForProject(
                           widget.projectId,
                         ),
-                        uploadingRoleId: _uploadingDraftRoleId,
+                        uploadingRoleIds: _uploadingDraftRoleIds,
+                        onSelectRoleImage: (roleId) =>
+                            unawaited(_selectRoleImageFromDevice(roleId)),
                         onCaptureRole: (roleId) =>
                             unawaited(_openCaptureRole(roleId)),
                         onUploadRole: (roleId) =>
                             unawaited(_uploadPendingRole(roleId)),
+                        onUploadAll: () => unawaited(_uploadAllPendingRoles()),
                         onDiscardDraft: _discardPendingRole,
                       ),
                       const SizedBox(height: 16),
@@ -975,7 +1213,7 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
               primaryLabel: workflow == null || !workflow.sourceComplete
                   ? '소스 촬영'
                   : workflow.editReady
-                  ? '편집 열기'
+                  ? '2D 보기'
                   : '재구성 보기',
               primaryIcon: workflow == null || !workflow.sourceComplete
                   ? Icons.photo_camera_outlined
@@ -1150,6 +1388,7 @@ class _GuidedCaptureCameraScreenState
     _ProjectDetails details,
     Future<XFile?> Function() selectImage, {
     required String sourceLabel,
+    required String stagedLabel,
   }) async {
     if (_busy) return;
     setState(() {
@@ -1173,20 +1412,9 @@ class _GuidedCaptureCameraScreenState
         return;
       }
 
-      final bytes = await photo.readAsBytes();
-      final imageSize = await _decodeImageSize(bytes);
-
       _savePendingDraft(
         widget.projectId,
-        _PendingCaptureDraft(
-          roleId: role.id,
-          filename: photo.name,
-          contentType: _imageContentType(photo),
-          bytes: bytes,
-          widthPx: imageSize.width,
-          heightPx: imageSize.height,
-          createdAt: DateTime.now().toUtc(),
-        ),
+        await _pendingDraftFromImage(roleId: role.id, image: photo),
       );
 
       if (!mounted) return;
@@ -1196,7 +1424,7 @@ class _GuidedCaptureCameraScreenState
       };
       final nextRequired = _nextRequiredRoleByIds(capturedOrUploaded);
       setState(() {
-        _status = '$roleLabel 사진이 촬영되었습니다. 소스 화면에서 수정하거나 업로드하세요.';
+        _status = '$roleLabel 사진이 $stagedLabel. 소스 화면에서 수정하거나 업로드하세요.';
         _selectedRoleId = nextRequired?.id ?? role.id;
       });
     } catch (error) {
@@ -1215,6 +1443,7 @@ class _GuidedCaptureCameraScreenState
         requestFullMetadata: false,
       ),
       sourceLabel: '선택',
+      stagedLabel: '선택되었습니다',
     );
   }
 
@@ -1233,10 +1462,15 @@ class _GuidedCaptureCameraScreenState
     }
 
     if (controller.value.isTakingPicture) return;
-    await _selectAndStageRoleImage(details, () async {
-      await controller!.lockCaptureOrientation(_captureScreenOrientation);
-      return controller.takePicture();
-    }, sourceLabel: '촬영');
+    await _selectAndStageRoleImage(
+      details,
+      () async {
+        await controller!.lockCaptureOrientation(_captureScreenOrientation);
+        return controller.takePicture();
+      },
+      sourceLabel: '촬영',
+      stagedLabel: '촬영되었습니다',
+    );
   }
 
   @override
@@ -1549,10 +1783,19 @@ class _ReconstructionStatusScreenState
                               context.go(_previewPath(widget.projectId)),
                         ),
                         const SizedBox(height: 16),
+                        if (workflow.sourceComplete && !workflow.editReady) ...[
+                          _ReconstructionDesktopHandoffCard(
+                            projectId: widget.projectId,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         _HandoffNote(
-                          icon: Icons.fact_check_outlined,
-                          text:
-                              '편집 단계는 재구성 상태가 성공으로 확인되거나 플로어 플랜이 저장된 뒤에만 열립니다.',
+                          icon: workflow.editReady
+                              ? Icons.map_outlined
+                              : Icons.desktop_windows_outlined,
+                          text: workflow.editReady
+                              ? '모바일에서는 완성된 2D 레이아웃만 확인합니다. 배치 변경과 3D 편집은 데스크탑 웹에서 진행하세요.'
+                              : '재구성 실행과 보정은 데스크탑 웹에서만 진행합니다. 모바일에서는 상태 확인과 링크 안내만 제공합니다.',
                         ),
                       ],
                     );
@@ -1565,12 +1808,12 @@ class _ReconstructionStatusScreenState
               primaryLabel: workflow == null || !workflow.sourceComplete
                   ? '소스 촬영'
                   : workflow.editReady
-                  ? '편집 열기'
+                  ? '2D 보기'
                   : '상태 새로고침',
               primaryIcon: workflow == null || !workflow.sourceComplete
                   ? Icons.photo_camera_outlined
                   : workflow.editReady
-                  ? Icons.view_in_ar_outlined
+                  ? Icons.map_outlined
                   : Icons.refresh,
               onPrimary: () {
                 if (workflow == null || !workflow.sourceComplete) {
@@ -1589,9 +1832,24 @@ class _ReconstructionStatusScreenState
                 }
                 _refresh();
               },
-              secondaryLabel: '소스 상태',
-              secondaryIcon: Icons.cloud_upload_outlined,
-              onSecondary: () => context.go(_uploadPath(widget.projectId)),
+              secondaryLabel: workflow != null && workflow.sourceComplete
+                  ? '웹 링크'
+                  : '소스 상태',
+              secondaryIcon: workflow != null && workflow.sourceComplete
+                  ? Icons.desktop_windows_outlined
+                  : Icons.cloud_upload_outlined,
+              onSecondary: () {
+                if (workflow != null && workflow.sourceComplete) {
+                  unawaited(
+                    _copyProjectLink(
+                      context,
+                      _desktopEditorLink(widget.projectId),
+                    ),
+                  );
+                  return;
+                }
+                context.go(_uploadPath(widget.projectId));
+              },
             ),
           );
         },
@@ -1639,11 +1897,12 @@ class _ReconstructionStageCard extends StatelessWidget {
       return (
         tone: _success,
         title: '재구성 완료',
-        body: '재구성 결과가 준비되었습니다. 이제 편집 단계에서 3D 미리보기와 데스크탑 편집 링크를 사용할 수 있습니다.',
+        body:
+            '재구성 결과가 준비되었습니다. 모바일에서는 2D 레이아웃만 확인하고, 배치 변경과 3D 편집은 데스크탑 웹에서 진행합니다.',
         action: FilledButton.icon(
           onPressed: onPreview,
-          icon: const Icon(Icons.view_in_ar_outlined),
-          label: const Text('편집 열기'),
+          icon: const Icon(Icons.map_outlined),
+          label: const Text('2D 미리보기'),
         ),
       );
     }
@@ -1652,7 +1911,8 @@ class _ReconstructionStageCard extends StatelessWidget {
       return (
         tone: _warning,
         title: '재구성 검토 필요',
-        body: '서버가 재구성 후보를 만들었지만 검토가 필요합니다. 검토가 끝나기 전에는 편집/3D 미리보기를 열지 않습니다.',
+        body:
+            '벽, 코너, 스케일 후보를 사람이 확인해야 합니다. 컴퓨터에서 웹 브라우저로 editor를 열어 보정하고 저장한 뒤, 모바일에서 상태를 새로고침하세요.',
         action: OutlinedButton.icon(
           onPressed: onRefresh,
           icon: const Icon(Icons.refresh),
@@ -1665,7 +1925,12 @@ class _ReconstructionStageCard extends StatelessWidget {
       return (
         tone: _danger,
         title: state.reconstructionStatusLabel,
-        body: '재구성 작업이 완료되지 않았습니다. 소스 입력을 확인하거나 재시도 작업이 생성된 뒤 상태를 다시 확인하세요.',
+        body: switch (state.reconstructionStatus) {
+          'timeout' =>
+            '재구성 시간이 초과됐습니다. 컴퓨터에서 웹 editor를 열어 입력 이미지를 확인하고 재시도한 뒤 상태를 새로고침하세요.',
+          'cancelled' => '재구성이 취소됐습니다. 필요한 경우 컴퓨터 웹에서 재구성을 다시 시작하세요.',
+          _ => '재구성에 실패했습니다. 소스 이미지 품질과 방 치수를 확인한 뒤 컴퓨터 웹에서 재시도하세요.',
+        },
         action: OutlinedButton.icon(
           onPressed: onRefresh,
           icon: const Icon(Icons.refresh),
@@ -1678,7 +1943,14 @@ class _ReconstructionStageCard extends StatelessWidget {
       return (
         tone: _primary,
         title: state.reconstructionStatusLabel,
-        body: '필수 소스 8개가 서버 재구성 단계에 들어갔습니다. 성공 상태가 확인될 때까지 편집 단계는 잠겨 있습니다.',
+        body: switch (state.reconstructionStatus) {
+          'uploading' =>
+            '소스 이미지가 재구성 입력으로 업로드되는 중입니다. 모바일에서는 상태만 확인하고, 보정은 컴퓨터 웹에서 진행합니다.',
+          'processing' =>
+            '재구성이 처리 중입니다. 완료되면 모바일에서 2D 결과를 볼 수 있고, 보정은 컴퓨터 웹에서 진행합니다.',
+          'retrying' => '재구성 재시도가 실행 중입니다. 완료 후 상태를 새로고침하세요.',
+          _ => '필수 소스 8개가 준비됐습니다. 컴퓨터 웹에서 재구성 실행과 보정을 진행하고 모바일에서는 상태를 확인합니다.',
+        },
         action: OutlinedButton.icon(
           onPressed: onRefresh,
           icon: const Icon(Icons.refresh),
@@ -1690,7 +1962,8 @@ class _ReconstructionStageCard extends StatelessWidget {
     return (
       tone: _warning,
       title: '재구성 대기',
-      body: '필수 소스 8개가 준비됐습니다. 서버 재구성 작업 상태가 생성되면 이 화면에서 진행 상태를 공유합니다.',
+      body:
+          '필수 소스 8개가 준비됐습니다. 컴퓨터에서 웹 브라우저로 접속해 재구성을 시작하세요. 완료되면 모바일에서 2D 레이아웃을 볼 수 있습니다.',
       action: OutlinedButton.icon(
         onPressed: onRefresh,
         icon: const Icon(Icons.refresh),
@@ -1744,12 +2017,7 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
   }
 
   Future<void> _copyDesktopLink(BuildContext context) async {
-    final path = '/projects/${Uri.encodeComponent(widget.projectId)}/editor';
-    await Clipboard.setData(ClipboardData(text: path));
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('데스크탑 편집 링크를 복사했습니다.')));
+    await _copyProjectLink(context, _desktopEditorLink(widget.projectId));
   }
 
   Widget _buildLockedPreviewScaffold(
@@ -1759,7 +2027,7 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
   ) {
     return Scaffold(
       appBar: _MobileTopBar(
-        title: const Text('편집'),
+        title: const Text('2D 보기'),
         workflow: workflow,
         leading: _RoundIconButton(
           tooltip: '뒤로',
@@ -1794,8 +2062,8 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
                     tone: sourceLocked ? _warning : workflow.reconstructionTone,
                     title: sourceLocked ? '소스 단계 필요' : '재구성 단계 필요',
                     body: sourceLocked
-                        ? '필수 소스 ${workflow.requiredTotal}개 중 ${workflow.uploadedRequiredCount}개만 준비됐습니다. 편집/3D 미리보기는 모든 소스가 채워진 뒤 재구성이 끝나야 열립니다.'
-                        : '${workflow.reconstructionStatusLabel} 상태입니다. 재구성 성공 또는 플로어 플랜 저장이 확인되기 전에는 3D 미리보기를 표시하지 않습니다.',
+                        ? '필수 소스 ${workflow.requiredTotal}개 중 ${workflow.uploadedRequiredCount}개만 준비됐습니다. 2D 미리보기는 모든 소스가 채워진 뒤 재구성이 끝나야 열립니다.'
+                        : '${workflow.reconstructionStatusLabel} 상태입니다. 재구성 성공 또는 플로어 플랜 저장이 확인되기 전에는 2D 미리보기를 표시하지 않습니다.',
                     action: OutlinedButton.icon(
                       onPressed: () => context.go(
                         sourceLocked
@@ -1816,8 +2084,7 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
                   const SizedBox(height: 16),
                   _HandoffNote(
                     icon: Icons.lock_outline,
-                    text:
-                        '이 화면은 편집 단계입니다. 이전 단계가 완료되지 않으면 3D 미리보기는 렌더링하지 않습니다.',
+                    text: '모바일 2D 보기는 이전 단계가 완료된 뒤에만 열립니다.',
                   ),
                 ],
               );
@@ -1867,110 +2134,38 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
             return _buildLockedPreviewScaffold(context, snapshot, workflow);
           }
           return Scaffold(
-            backgroundColor: const Color(0xFF0A0B0D),
-            body: Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _RoomPreviewPainter(
-                      roomDimensions: details?.dimensions,
-                      uploadedCount: _uploadedRoleIds(
-                        details?.captureSnapshot,
-                      ).length,
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.58),
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.74),
-                        ],
-                        stops: const [0, 0.36, 1],
-                      ),
-                    ),
-                  ),
-                ),
-                SafeArea(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                        child: Row(
-                          children: [
-                            _GlassIconButton(
-                              tooltip: '뒤로',
-                              icon: Icons.chevron_left,
-                              onPressed: () => _popOrGo(
-                                context,
-                                _projectPath(widget.projectId),
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text(
-                                    details?.project.name ?? '3D 미리보기',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  const Text(
-                                    '3D 미리보기',
-                                    style: TextStyle(
-                                      color: _muted,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _GlassIconButton(
-                              tooltip: '공유',
-                              icon: Icons.ios_share_outlined,
-                              onPressed: () =>
-                                  unawaited(_copyDesktopLink(context)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _WorkflowTitleProgress(state: workflow!),
-                      const SizedBox(height: 20),
-                      const _GlassPill(
-                        icon: Icons.swipe_outlined,
-                        label: '드래그하여 둘러보기',
-                      ),
-                      const Spacer(),
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _GlassPill(
-                            icon: Icons.grid_4x4_outlined,
-                            label: '평면도',
-                          ),
-                          SizedBox(width: 8),
-                          _GlassPill(
-                            icon: Icons.restart_alt_outlined,
-                            label: '시점 초기화',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 88),
-                    ],
-                  ),
+            appBar: _MobileTopBar(
+              title: Text(
+                details?.project.name ?? '2D 보기',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              workflow: workflow,
+              leading: _RoundIconButton(
+                tooltip: '뒤로',
+                icon: Icons.chevron_left,
+                onPressed: () =>
+                    _popOrGo(context, _projectPath(widget.projectId)),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: '데스크탑 링크',
+                  onPressed: () => unawaited(_copyDesktopLink(context)),
+                  icon: const Icon(Icons.desktop_windows_outlined),
                 ),
               ],
+            ),
+            body: _MobileBackdrop(
+              opacity: 0.06,
+              child: SafeArea(
+                top: false,
+                child: _Mobile2DLayoutViewer(
+                  projectId: widget.projectId,
+                  projectApi: widget.projectApi,
+                  details: details!,
+                  onDesktopLink: () => unawaited(_copyDesktopLink(context)),
+                ),
+              ),
             ),
             bottomNavigationBar: _ProjectActionBar(
               projectId: widget.projectId,
@@ -1986,6 +2181,978 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
       ),
     );
   }
+}
+
+class _Mobile2DLayoutViewer extends StatefulWidget {
+  const _Mobile2DLayoutViewer({
+    required this.projectId,
+    required this.projectApi,
+    required this.details,
+    required this.onDesktopLink,
+  });
+
+  final String projectId;
+  final ProjectApi projectApi;
+  final _ProjectDetails details;
+  final VoidCallback onDesktopLink;
+
+  @override
+  State<_Mobile2DLayoutViewer> createState() => _Mobile2DLayoutViewerState();
+}
+
+class _Mobile2DLayoutViewerState extends State<_Mobile2DLayoutViewer> {
+  late Future<SavedLayout?> _layoutFuture;
+  List<_Mobile2DFurnitureItem> _items = const [];
+  String? _selectedId;
+  String? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _layoutFuture = _loadLayout();
+  }
+
+  Future<SavedLayout?> _loadLayout() async {
+    try {
+      final layout = await widget.projectApi.loadLatestLayout(
+        projectId: widget.projectId,
+      );
+      _items = _Mobile2DFurnitureItem.fromSavedLayout(layout);
+      _selectedId = _items.isEmpty ? null : _items.first.id;
+      return layout;
+    } catch (error) {
+      _status = '저장된 2D 레이아웃이 없습니다. 데스크탑 웹에서 재구성을 완료한 뒤 다시 열어주세요.';
+      return null;
+    }
+  }
+
+  _Mobile2DFurnitureItem? get _selectedItem {
+    for (final item in _items) {
+      if (item.id == _selectedId) return item;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<SavedLayout?>(
+      future: _layoutFuture,
+      builder: (context, snapshot) {
+        final layout = snapshot.data;
+        final metrics = _Room2DMetrics.from(
+          layout?.roomDimensions,
+          widget.details.dimensions,
+        );
+        final floorPlan = _Mobile2DFloorPlan.fromLayout(layout, metrics);
+        final selected = _selectedItem;
+
+        return ListView(
+          key: const ValueKey('mobile-2d-layout-list'),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
+          children: [
+            Text(
+              '2D 레이아웃',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: _ink,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '완성된 2D 레이아웃을 확인합니다. 항목을 탭하면 위치와 크기 정보를 볼 수 있고, 배치 변경은 데스크탑 웹에서 진행합니다.',
+              style: const TextStyle(color: _muted, height: 1.45),
+            ),
+            const SizedBox(height: 14),
+            if (snapshot.connectionState == ConnectionState.waiting)
+              const _LoadingPanel(label: '2D 레이아웃을 불러오는 중')
+            else ...[
+              _Mobile2DCanvas(
+                metrics: metrics,
+                floorPlan: floorPlan,
+                items: _items,
+                selectedId: _selectedId,
+                onSelect: (itemId) => setState(() => _selectedId = itemId),
+              ),
+              const SizedBox(height: 14),
+              _Mobile2DFloorPlanSummary(floorPlan: floorPlan, metrics: metrics),
+              const SizedBox(height: 14),
+              if (_items.isEmpty)
+                _NoticeCard(
+                  tone: _warning,
+                  title: '표시할 항목 없음',
+                  body: '저장된 가구 항목이 없습니다. 데스크탑 웹에서 재구성과 배치를 완료한 뒤 다시 열어주세요.',
+                  action: OutlinedButton.icon(
+                    onPressed: widget.onDesktopLink,
+                    icon: const Icon(Icons.desktop_windows_outlined),
+                    label: const Text('데스크탑 링크 복사'),
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    _Mobile2DFurnitureList(
+                      items: _items,
+                      selectedId: _selectedId,
+                      onSelect: (itemId) =>
+                          setState(() => _selectedId = itemId),
+                    ),
+                    const SizedBox(height: 14),
+                    _Mobile2DSelectionSummary(
+                      item: selected,
+                      itemCount: _items.length,
+                    ),
+                  ],
+                ),
+            ],
+            if (_status != null) ...[
+              const SizedBox(height: 14),
+              _NoticeCard(tone: _primary, title: '상태', body: _status!),
+            ],
+            const SizedBox(height: 14),
+            _HandoffNote(
+              icon: Icons.desktop_windows_outlined,
+              text: '가구 배치 변경, 항목 추가, 3D 보기, 정밀 보정은 데스크탑 웹 editor에서 진행합니다.',
+            ),
+            const SizedBox(height: 14),
+            _DesktopConnectCard(projectId: widget.projectId),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Mobile2DCanvas extends StatelessWidget {
+  const _Mobile2DCanvas({
+    required this.metrics,
+    required this.floorPlan,
+    required this.items,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  final _Room2DMetrics metrics;
+  final _Mobile2DFloorPlan floorPlan;
+  final List<_Mobile2DFurnitureItem> items;
+  final String? selectedId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final aspect = metrics.widthMeters / metrics.depthMeters;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF090B0D),
+        border: Border.all(color: _borderStrong),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: AspectRatio(
+          aspectRatio: aspect.clamp(0.62, 1.45).toDouble(),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const padding = 18.0;
+              final scale = math.min(
+                (constraints.maxWidth - padding * 2) / metrics.widthMeters,
+                (constraints.maxHeight - padding * 2) / metrics.depthMeters,
+              );
+              final roomWidth = metrics.widthMeters * scale;
+              final roomDepth = metrics.depthMeters * scale;
+              final roomLeft = (constraints.maxWidth - roomWidth) / 2;
+              final roomTop = (constraints.maxHeight - roomDepth) / 2;
+
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _Mobile2DFloorPlanPainter(
+                        metrics: metrics,
+                        floorPlan: floorPlan,
+                        roomRect: Rect.fromLTWH(
+                          roomLeft,
+                          roomTop,
+                          roomWidth,
+                          roomDepth,
+                        ),
+                        scale: scale,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: roomLeft + 10,
+                    top: roomTop + 10,
+                    child: Text(
+                      '${metrics.widthMeters.toStringAsFixed(1)} x ${metrics.depthMeters.toStringAsFixed(1)} m',
+                      style: const TextStyle(
+                        color: _dim,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  for (final item in items)
+                    _Mobile2DFurnitureWidget(
+                      item: item,
+                      selected: item.id == selectedId,
+                      roomOffset: Offset(roomLeft, roomTop),
+                      scale: scale,
+                      onSelect: onSelect,
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Mobile2DFloorPlanPainter extends CustomPainter {
+  const _Mobile2DFloorPlanPainter({
+    required this.metrics,
+    required this.floorPlan,
+    required this.roomRect,
+    required this.scale,
+  });
+
+  final _Room2DMetrics metrics;
+  final _Mobile2DFloorPlan floorPlan;
+  final Rect roomRect;
+  final double scale;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()
+      ..color = Colors.white.withValues(alpha: 0.035)
+      ..style = PaintingStyle.fill;
+    final outline = Paint()
+      ..color = _borderStrong
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+    final grid = Paint()
+      ..color = Colors.white.withValues(alpha: 0.055)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
+    final wall = Paint()
+      ..color = Colors.white.withValues(alpha: 0.64)
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final door = Paint()
+      ..color = _warning
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final window = Paint()
+      ..color = _primary
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final corner = Paint()
+      ..color = _success
+      ..style = PaintingStyle.fill;
+
+    final roomPath = _pathFromPoints(floorPlan.points);
+    canvas.drawPath(roomPath, fill);
+    canvas.drawPath(roomPath, outline);
+
+    for (var x = 1.0; x < metrics.widthMeters; x += 1) {
+      final start = _pointToCanvas(Offset(x, 0));
+      final end = _pointToCanvas(Offset(x, metrics.depthMeters));
+      canvas.drawLine(start, end, grid);
+    }
+    for (var y = 1.0; y < metrics.depthMeters; y += 1) {
+      final start = _pointToCanvas(Offset(0, y));
+      final end = _pointToCanvas(Offset(metrics.widthMeters, y));
+      canvas.drawLine(start, end, grid);
+    }
+
+    for (var index = 0; index < floorPlan.points.length; index += 1) {
+      final start = _pointToCanvas(floorPlan.points[index]);
+      final end = _pointToCanvas(
+        floorPlan.points[(index + 1) % floorPlan.points.length],
+      );
+      canvas.drawLine(start, end, wall);
+      canvas.drawCircle(start, 3.4, corner);
+    }
+
+    for (final fixture in floorPlan.fixtures) {
+      final paint = fixture.category == 'window' ? window : door;
+      final center = _pointToCanvas(fixture.position);
+      final length = math.max(14.0, fixture.lengthMeters * scale);
+      final angle = fixture.rotationDegrees * math.pi / 180;
+      final direction = Offset(math.cos(angle), math.sin(angle));
+      final start = center - direction * (length / 2);
+      final end = center + direction * (length / 2);
+      canvas.drawLine(start, end, paint);
+    }
+  }
+
+  Path _pathFromPoints(List<Offset> points) {
+    final path = Path();
+    if (points.isEmpty) {
+      path.addRRect(
+        RRect.fromRectAndRadius(roomRect, const Radius.circular(8)),
+      );
+      return path;
+    }
+    path.moveTo(
+      _pointToCanvas(points.first).dx,
+      _pointToCanvas(points.first).dy,
+    );
+    for (final point in points.skip(1)) {
+      final canvasPoint = _pointToCanvas(point);
+      path.lineTo(canvasPoint.dx, canvasPoint.dy);
+    }
+    path.close();
+    return path;
+  }
+
+  Offset _pointToCanvas(Offset point) {
+    return Offset(
+      roomRect.left + point.dx * scale,
+      roomRect.top + point.dy * scale,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _Mobile2DFloorPlanPainter oldDelegate) {
+    return oldDelegate.metrics != metrics ||
+        oldDelegate.floorPlan != floorPlan ||
+        oldDelegate.roomRect != roomRect ||
+        oldDelegate.scale != scale;
+  }
+}
+
+class _Mobile2DFurnitureWidget extends StatelessWidget {
+  const _Mobile2DFurnitureWidget({
+    required this.item,
+    required this.selected,
+    required this.roomOffset,
+    required this.scale,
+    required this.onSelect,
+  });
+
+  final _Mobile2DFurnitureItem item;
+  final bool selected;
+  final Offset roomOffset;
+  final double scale;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = math.max(28.0, item.widthMeters * scale);
+    final height = math.max(28.0, item.depthMeters * scale);
+    final center = Offset(
+      roomOffset.dx + item.x * scale,
+      roomOffset.dy + item.y * scale,
+    );
+    final color = _colorFromHex(item.colorHex);
+
+    return Positioned(
+      left: center.dx - width / 2,
+      top: center.dy - height / 2,
+      width: width,
+      height: height,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onSelect(item.id),
+        child: Transform.rotate(
+          angle: item.rotationDegrees * math.pi / 180,
+          child: Semantics(
+            button: true,
+            label: '${item.label} 2D 항목 보기',
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: selected ? 0.78 : 0.54),
+                border: Border.all(
+                  color: selected
+                      ? _primary
+                      : Colors.white.withValues(alpha: 0.52),
+                  width: selected ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Center(
+                child: Text(
+                  item.shortLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Mobile2DFurnitureList extends StatelessWidget {
+  const _Mobile2DFurnitureList({
+    required this.items,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  final List<_Mobile2DFurnitureItem> items;
+  final String? selectedId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.list_alt_outlined, color: _primary, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                '가구 목록 ${items.length}',
+                style: const TextStyle(
+                  color: _ink,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final item in items) ...[
+            _Mobile2DFurnitureListRow(
+              item: item,
+              selected: item.id == selectedId,
+              onTap: () => onSelect(item.id),
+            ),
+            if (item != items.last) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Mobile2DFurnitureListRow extends StatelessWidget {
+  const _Mobile2DFurnitureListRow({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _Mobile2DFurnitureItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFromHex(item.colorHex);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? _primary.withValues(alpha: 0.13)
+              : Colors.white.withValues(alpha: 0.035),
+          border: Border.all(color: selected ? _primary : _border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: const SizedBox(width: 18, height: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _ink,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_mobileFurnitureLabel(item.category)} · ${item.widthMeters.toStringAsFixed(1)} x ${item.depthMeters.toStringAsFixed(1)} m',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(Icons.check_circle, color: _primary, size: 18)
+              else
+                const Icon(Icons.chevron_right, color: _dim, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Mobile2DFloorPlanSummary extends StatelessWidget {
+  const _Mobile2DFloorPlanSummary({
+    required this.floorPlan,
+    required this.metrics,
+  });
+
+  final _Mobile2DFloorPlan floorPlan;
+  final _Room2DMetrics metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final doors = floorPlan.fixtures
+        .where((fixture) => fixture.category == 'door')
+        .length;
+    final windows = floorPlan.fixtures
+        .where((fixture) => fixture.category == 'window')
+        .length;
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '평면도 요약',
+            style: TextStyle(color: _ink, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _summaryChip(
+                Icons.crop_square,
+                '${metrics.widthMeters.toStringAsFixed(1)} x ${metrics.depthMeters.toStringAsFixed(1)} m',
+              ),
+              _summaryChip(
+                Icons.polyline_outlined,
+                '코너 ${floorPlan.points.length}',
+              ),
+              _summaryChip(Icons.door_front_door_outlined, '문 $doors'),
+              _summaryChip(Icons.window_outlined, '창 $windows'),
+              if (floorPlan.qualityStatus != null)
+                _summaryChip(
+                  Icons.verified_outlined,
+                  _qualityStatusLabel(floorPlan.qualityStatus!),
+                ),
+            ],
+          ),
+          if (floorPlan.warnings.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              floorPlan.warnings.take(2).join(' · '),
+              style: const TextStyle(color: _warning, fontSize: 12.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryChip(IconData icon, String label) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.045),
+        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: _primary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: _ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Mobile2DSelectionSummary extends StatelessWidget {
+  const _Mobile2DSelectionSummary({
+    required this.item,
+    required this.itemCount,
+  });
+
+  final _Mobile2DFurnitureItem? item;
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = item;
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            selected == null ? '항목 정보' : selected.label,
+            style: const TextStyle(color: _ink, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            selected == null
+                ? '총 $itemCount개 항목이 표시됩니다. 캔버스의 항목을 탭하면 세부 정보를 볼 수 있습니다.'
+                : '모바일에서는 보기만 가능합니다. 배치 변경은 데스크탑 웹에서 진행하세요.',
+            style: const TextStyle(color: _muted, fontSize: 12.5),
+          ),
+          if (selected != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _chip(
+                  Icons.place_outlined,
+                  '위치 ${selected.x.toStringAsFixed(1)}, ${selected.y.toStringAsFixed(1)} m',
+                ),
+                _chip(
+                  Icons.straighten,
+                  '${selected.widthMeters.toStringAsFixed(1)} x ${selected.depthMeters.toStringAsFixed(1)} m',
+                ),
+                _chip(
+                  Icons.rotate_right,
+                  '${selected.rotationDegrees.round()}도',
+                ),
+                _chip(
+                  Icons.category_outlined,
+                  _mobileFurnitureLabel(selected.category),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(IconData icon, String label) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: _primary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: _ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Mobile2DFurnitureItem {
+  const _Mobile2DFurnitureItem({
+    required this.id,
+    required this.category,
+    required this.label,
+    required this.x,
+    required this.y,
+    required this.widthMeters,
+    required this.depthMeters,
+    required this.heightMeters,
+    required this.rotationDegrees,
+    required this.colorHex,
+    required this.locked,
+  });
+
+  final String id;
+  final String category;
+  final String label;
+  final double x;
+  final double y;
+  final double widthMeters;
+  final double depthMeters;
+  final double heightMeters;
+  final double rotationDegrees;
+  final String colorHex;
+  final bool locked;
+
+  String get shortLabel {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) {
+      return category.substring(0, math.min(2, category.length));
+    }
+    return trimmed.substring(0, math.min(2, trimmed.length));
+  }
+
+  static List<_Mobile2DFurnitureItem> fromSavedLayout(SavedLayout layout) {
+    final items = <_Mobile2DFurnitureItem>[];
+    for (final value in layout.furnitureObjects) {
+      final item = _Mobile2DFurnitureItem.fromJson(value);
+      if (item != null) items.add(item);
+    }
+    return items;
+  }
+
+  static _Mobile2DFurnitureItem? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final json = Map<String, Object?>.from(value);
+    final size = _recordValue(json['size']);
+    final position = _recordValue(json['position']);
+    final id = json['id']?.toString();
+    if (id == null || id.isEmpty) return null;
+    final category = json['category']?.toString() ?? 'furniture';
+    return _Mobile2DFurnitureItem(
+      id: id,
+      category: category,
+      label: json['label']?.toString() ?? _mobileFurnitureLabel(category),
+      x: _numberValue(position['x'], 1),
+      y: _numberValue(position['y'], 1),
+      widthMeters: _numberValue(size['width_meters'], 0.8),
+      depthMeters: _numberValue(size['depth_meters'], 0.8),
+      heightMeters: _numberValue(size['height_meters'], 0.8),
+      rotationDegrees: _numberValue(json['rotation_degrees'], 0),
+      colorHex: json['color']?.toString() ?? '#64748b',
+      locked: json['locked'] is bool ? json['locked'] as bool : false,
+    );
+  }
+}
+
+class _Mobile2DFloorPlan {
+  const _Mobile2DFloorPlan({
+    required this.points,
+    required this.fixtures,
+    required this.qualityStatus,
+    required this.warnings,
+  });
+
+  final List<Offset> points;
+  final List<_Mobile2DFixture> fixtures;
+  final String? qualityStatus;
+  final List<String> warnings;
+
+  static _Mobile2DFloorPlan fromLayout(
+    SavedLayout? layout,
+    _Room2DMetrics metrics,
+  ) {
+    final floorPlan = layout?.floorPlan;
+    final points = _floorPlanPoints(floorPlan);
+    return _Mobile2DFloorPlan(
+      points: points.length >= 3 ? points : _fallbackRoomPoints(metrics),
+      fixtures: _floorPlanFixtures(floorPlan),
+      qualityStatus: floorPlan?['quality_status']?.toString(),
+      warnings: _listValue(
+        floorPlan?['warnings'],
+      ).map((value) => value.toString()).toList(),
+    );
+  }
+}
+
+class _Mobile2DFixture {
+  const _Mobile2DFixture({
+    required this.category,
+    required this.position,
+    required this.lengthMeters,
+    required this.rotationDegrees,
+  });
+
+  final String category;
+  final Offset position;
+  final double lengthMeters;
+  final double rotationDegrees;
+}
+
+class _Room2DMetrics {
+  const _Room2DMetrics({required this.widthMeters, required this.depthMeters});
+
+  final double widthMeters;
+  final double depthMeters;
+
+  static _Room2DMetrics from(
+    Map<String, Object?>? roomDimensions,
+    RoomDimensions? fallback,
+  ) {
+    return _Room2DMetrics(
+      widthMeters: _numberValue(
+        roomDimensions?['width_value'],
+        fallback?.widthValue ?? 5.2,
+      ).clamp(1.0, 20.0).toDouble(),
+      depthMeters: _numberValue(
+        roomDimensions?['depth_value'],
+        fallback?.depthValue ?? 6.0,
+      ).clamp(1.0, 20.0).toDouble(),
+    );
+  }
+}
+
+List<Offset> _floorPlanPoints(Map<String, Object?>? floorPlan) {
+  if (floorPlan == null) return const [];
+  final metricGeometry = _recordValue(floorPlan['metric_geometry']);
+  final candidates = [
+    floorPlan['floor_polygon'],
+    floorPlan['points'],
+    metricGeometry['points'],
+  ];
+  for (final candidate in candidates) {
+    final points = _listValue(
+      candidate,
+    ).map(_point2DValue).whereType<Offset>().toList();
+    if (points.length >= 3) return points;
+  }
+  return const [];
+}
+
+List<Offset> _fallbackRoomPoints(_Room2DMetrics metrics) {
+  return [
+    Offset.zero,
+    Offset(metrics.widthMeters, 0),
+    Offset(metrics.widthMeters, metrics.depthMeters),
+    Offset(0, metrics.depthMeters),
+  ];
+}
+
+List<_Mobile2DFixture> _floorPlanFixtures(Map<String, Object?>? floorPlan) {
+  if (floorPlan == null) return const [];
+  final fixtures = <_Mobile2DFixture>[];
+  final directLists = [
+    floorPlan['structural_fixtures'],
+    floorPlan['fixtures'],
+    floorPlan['openings'],
+  ];
+  for (final list in directLists) {
+    for (final value in _listValue(list)) {
+      final fixture = _fixtureValue(value);
+      if (fixture != null) fixtures.add(fixture);
+    }
+  }
+  for (final wallValue in _listValue(floorPlan['walls'])) {
+    final wall = _recordValue(wallValue);
+    final wallFixture = _fixtureValue(wall);
+    if (wallFixture != null) fixtures.add(wallFixture);
+    for (final key in const ['fixtures', 'openings']) {
+      for (final value in _listValue(wall[key])) {
+        final fixture = _fixtureValue(value);
+        if (fixture != null) fixtures.add(fixture);
+      }
+    }
+  }
+  return fixtures;
+}
+
+_Mobile2DFixture? _fixtureValue(Object? value) {
+  final json = _recordValue(value);
+  if (json.isEmpty) return null;
+  final category = (json['category'] ?? json['type'] ?? '').toString();
+  if (category != 'door' && category != 'window') return null;
+  final position =
+      _point2DValue(json['position_m']) ??
+      _point2DValue(json['position']) ??
+      _point2DValue(json['center']);
+  if (position == null) return null;
+  final size = _recordValue(json['size_m']).isNotEmpty
+      ? _recordValue(json['size_m'])
+      : _recordValue(json['size']);
+  final length = math.max(
+    _numberValue(size['x'] ?? size['width_meters'] ?? size['width'], 0.8),
+    _numberValue(size['z'] ?? size['depth_meters'] ?? size['depth'], 0.2),
+  );
+  return _Mobile2DFixture(
+    category: category,
+    position: position,
+    lengthMeters: length,
+    rotationDegrees: _numberValue(
+      json['rotation_degrees'] ??
+          json['rotation_deg'] ??
+          json['rotationDegrees'],
+      0,
+    ),
+  );
+}
+
+Offset? _point2DValue(Object? value) {
+  final json = _recordValue(value);
+  if (json.isEmpty) return null;
+  final x = json['x'];
+  final y = json['y'] ?? json['z'];
+  if (x is! num || y is! num) return null;
+  return Offset(x.toDouble(), y.toDouble());
+}
+
+List<Object?> _listValue(Object? value) {
+  return value is List ? value.cast<Object?>() : const [];
+}
+
+Map<String, Object?> _recordValue(Object? value) {
+  return value is Map ? Map<String, Object?>.from(value) : {};
+}
+
+double _numberValue(Object? value, double fallback) {
+  return value is num ? value.toDouble() : fallback;
+}
+
+String _mobileFurnitureLabel(String category) {
+  return switch (category) {
+    'bed' => '침대',
+    'desk' => '책상',
+    'table' => '테이블',
+    'sofa' => '소파',
+    'chair' => '의자',
+    _ => '가구',
+  };
+}
+
+String _qualityStatusLabel(String status) {
+  return switch (status) {
+    'success' || 'succeeded' => '품질 확인됨',
+    'review_required' => '검토 필요',
+    'failed' => '품질 실패',
+    _ => status,
+  };
+}
+
+Color _colorFromHex(String value) {
+  final hex = value.replaceFirst('#', '');
+  if (hex.length != 6) return const Color(0xFF64748B);
+  final colorValue = int.tryParse('FF$hex', radix: 16);
+  if (colorValue == null) return const Color(0xFF64748B);
+  return Color(colorValue);
 }
 
 class _ProjectDetails {
@@ -2100,7 +3267,7 @@ class _MobileWorkflowState {
 
   String get progressCaption {
     if (!sourceComplete) return '소스 $filledRequiredCount/$requiredTotal';
-    if (reconstructionComplete) return '편집 준비됨';
+    if (reconstructionComplete) return '2D 보기 가능';
     return reconstructionStatusLabel;
   }
 
@@ -2148,7 +3315,7 @@ class _WorkflowTitleProgress extends StatelessWidget {
         active: state.activeStep == _MobileWorkflowStep.reconstruction,
       ),
       (
-        label: '편집',
+        label: '2D',
         complete: state.editReady,
         active: state.activeStep == _MobileWorkflowStep.edit,
       ),
@@ -2291,17 +3458,21 @@ class _SourceImagesCard extends StatelessWidget {
   const _SourceImagesCard({
     required this.details,
     required this.pendingDrafts,
-    required this.uploadingRoleId,
+    required this.uploadingRoleIds,
+    required this.onSelectRoleImage,
     required this.onCaptureRole,
     required this.onUploadRole,
+    required this.onUploadAll,
     required this.onDiscardDraft,
   });
 
   final _ProjectDetails details;
   final Map<String, _PendingCaptureDraft> pendingDrafts;
-  final String? uploadingRoleId;
+  final Set<String> uploadingRoleIds;
+  final ValueChanged<String> onSelectRoleImage;
   final ValueChanged<String> onCaptureRole;
   final ValueChanged<String> onUploadRole;
+  final VoidCallback onUploadAll;
   final ValueChanged<String> onDiscardDraft;
 
   @override
@@ -2327,6 +3498,10 @@ class _SourceImagesCard extends StatelessWidget {
             .intersection(capturedOrUploadedRoleIds)
             .length;
     final extraImages = images.where((image) => image.role == 'extra').toList();
+    final activePendingUploads = pendingDrafts.keys
+        .where(uploadingRoleIds.contains)
+        .length;
+    final uploadablePendingCount = pendingDrafts.length - activePendingUploads;
 
     return _Panel(
       child: Column(
@@ -2350,10 +3525,27 @@ class _SourceImagesCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '$uploadedRequired개 업로드됨 · $pendingRequired개 촬영 후 업로드 대기 · '
+            '$uploadedRequired개 업로드됨 · $pendingRequired개 업로드 대기 · '
             '$emptyRequired개가 비어 있어요',
             style: const TextStyle(color: _muted, fontSize: 12.5),
           ),
+          if (pendingDrafts.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: uploadablePendingCount == 0 ? null : onUploadAll,
+                icon: activePendingUploads > 0
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_upload_outlined),
+                label: const Text('모두 업로드'),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           GridView.builder(
             shrinkWrap: true,
@@ -2376,7 +3568,7 @@ class _SourceImagesCard extends StatelessWidget {
                   pendingDraft: pendingDrafts[role.id],
                   uploadedImage: imagesByRole[role.id],
                 ),
-                uploading: uploadingRoleId == role.id,
+                uploading: uploadingRoleIds.contains(role.id),
                 onPressed: () => _handleRolePressed(
                   context,
                   role: role,
@@ -2413,7 +3605,7 @@ class _SourceImagesCard extends StatelessWidget {
                 pendingDraft: pendingDrafts['extra'],
                 uploadedImage: extraImages.isEmpty ? null : extraImages.last,
               ),
-              uploading: uploadingRoleId == 'extra',
+              uploading: uploadingRoleIds.contains('extra'),
               compact: true,
               onPressed: () => _handleRolePressed(
                 context,
@@ -2443,8 +3635,9 @@ class _SourceImagesCard extends StatelessWidget {
     required _PendingCaptureDraft? pendingDraft,
     required CaptureImage? uploadedImage,
   }) {
+    final roleUploading = uploadingRoleIds.contains(role.id);
     if (pendingDraft == null && uploadedImage == null) {
-      onCaptureRole(role.id);
+      _showRoleImageSourceSheet(context, role: role);
       return;
     }
 
@@ -2469,23 +3662,36 @@ class _SourceImagesCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 pendingDraft != null
-                    ? '촬영됨 · 아직 Firebase에 업로드되지 않았습니다.'
+                    ? '선택/촬영됨 · 아직 Firebase에 업로드되지 않았습니다.'
                     : 'Firebase 업로드 완료',
                 style: const TextStyle(color: _muted),
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  onCaptureRole(role.id);
-                },
-                icon: const Icon(Icons.edit_outlined),
-                label: Text(pendingDraft == null ? '수정 촬영' : '수정'),
+                onPressed: roleUploading
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        onSelectRoleImage(role.id);
+                      },
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('이미지 선택'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: roleUploading
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        onCaptureRole(role.id);
+                      },
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: const Text('이미지 촬영'),
               ),
               if (pendingDraft != null) ...[
                 const SizedBox(height: 10),
                 FilledButton.icon(
-                  onPressed: uploadingRoleId == role.id
+                  onPressed: roleUploading
                       ? null
                       : () {
                           Navigator.of(context).pop();
@@ -2496,14 +3702,68 @@ class _SourceImagesCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 TextButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    onDiscardDraft(role.id);
-                  },
+                  onPressed: roleUploading
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                          onDiscardDraft(role.id);
+                        },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('촬영본 삭제'),
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRoleImageSourceSheet(
+    BuildContext context, {
+    required GuidedCaptureRoleInstruction role,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _panel,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                _roleShortLabel(role.id),
+                style: const TextStyle(
+                  color: _ink,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '기기에서 이미지를 선택하거나 새로 촬영하세요.',
+                style: TextStyle(color: _muted),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  onSelectRoleImage(role.id);
+                },
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('이미지 선택'),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  onCaptureRole(role.id);
+                },
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: const Text('이미지 촬영'),
+              ),
             ],
           ),
         ),
@@ -2567,8 +3827,8 @@ class _SourceImageRoleSlot extends StatelessWidget {
     };
     final stateLabel = switch (status) {
       _SourceImageSlotStatus.uploaded => '업로드됨',
-      _SourceImageSlotStatus.captured => '촬영됨',
-      _SourceImageSlotStatus.empty => '촬영 필요',
+      _SourceImageSlotStatus.captured => '업로드 대기',
+      _SourceImageSlotStatus.empty => '추가 필요',
     };
     return Semantics(
       button: true,
@@ -2693,6 +3953,115 @@ class _RoomPlanIconPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+class _ReconstructionDesktopHandoffCard extends StatelessWidget {
+  const _ReconstructionDesktopHandoffCard({required this.projectId});
+
+  final String projectId;
+
+  @override
+  Widget build(BuildContext context) {
+    final link = _desktopEditorLink(projectId);
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _IconTile(icon: Icons.desktop_windows_outlined),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '재구성은 데스크탑 웹에서',
+                      style: TextStyle(
+                        color: _ink,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '모바일에서는 상태 확인과 2D 결과 보기만 제공합니다. 컴퓨터에서 웹 브라우저로 접속해 재구성과 보정을 진행하세요.',
+                      style: TextStyle(color: _muted, height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SelectableText(link, style: const TextStyle(color: _dim)),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => unawaited(_copyProjectLink(context, link)),
+            icon: const Icon(Icons.copy),
+            label: const Text('웹 링크 복사'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopConnectCard extends StatelessWidget {
+  const _DesktopConnectCard({required this.projectId});
+
+  final String projectId;
+
+  @override
+  Widget build(BuildContext context) {
+    final link = _desktopEditorLink(projectId);
+    final path = _desktopEditorPath(projectId);
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _IconTile(icon: Icons.computer_outlined),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '컴퓨터에서 이어서 편집',
+                      style: TextStyle(
+                        color: _ink,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '모바일은 보기 전용입니다. 같은 계정으로 웹 브라우저에서 이 링크를 열면 재구성 보정과 편집을 이어갈 수 있습니다.',
+                      style: TextStyle(color: _muted, height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SelectableText(link, style: const TextStyle(color: _ink)),
+          if (link != path) ...[
+            const SizedBox(height: 5),
+            SelectableText(path, style: const TextStyle(color: _dim)),
+          ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => unawaited(_copyProjectLink(context, link)),
+            icon: const Icon(Icons.copy),
+            label: const Text('데스크탑 링크 복사'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DesktopHandoffCard extends StatelessWidget {
   const _DesktopHandoffCard({required this.projectId});
 
@@ -2789,10 +4158,15 @@ class _ProjectActionBar extends StatelessWidget {
 }
 
 class _ProjectPreviewCard extends StatelessWidget {
-  const _ProjectPreviewCard({required this.project, required this.onOpen});
+  const _ProjectPreviewCard({
+    required this.project,
+    required this.onOpen,
+    required this.onMenu,
+  });
 
   final RoomProject project;
   final VoidCallback onOpen;
+  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -2811,7 +4185,7 @@ class _ProjectPreviewCard extends StatelessWidget {
         ? _primary
         : _warning;
     final badgeLabel = editReady
-        ? '편집 가능'
+        ? '2D 보기 가능'
         : processing
         ? '재구성 중'
         : '소스 입력';
@@ -2879,26 +4253,45 @@ class _ProjectPreviewCard extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
-                child: Column(
+                padding: const EdgeInsets.fromLTRB(14, 10, 8, 14),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      project.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _ink,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              project.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _ink,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              project.description ?? '프로젝트 ${project.id}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _dim,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      project.description ?? '프로젝트 ${project.id}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _dim, fontSize: 12.5),
+                    IconButton(
+                      tooltip: '${project.name} 메뉴',
+                      onPressed: onMenu,
+                      icon: const Icon(Icons.more_horiz),
+                      color: _muted,
                     ),
                   ],
                 ),
@@ -4464,117 +5857,6 @@ class _IconTile extends StatelessWidget {
   }
 }
 
-class _RoomPreviewPainter extends CustomPainter {
-  const _RoomPreviewPainter({
-    required this.roomDimensions,
-    required this.uploadedCount,
-  });
-
-  final RoomDimensions? roomDimensions;
-  final int uploadedCount;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bg = Paint()..color = const Color(0xFF0A0B0D);
-    canvas.drawRect(Offset.zero & size, bg);
-
-    final center = Offset(size.width / 2, size.height * 0.52);
-    final roomWidth = size.width * 0.78;
-    final roomDepth = size.height * 0.36;
-    final floor = Path()
-      ..moveTo(center.dx - roomWidth * 0.5, center.dy + roomDepth * 0.28)
-      ..lineTo(center.dx + roomWidth * 0.5, center.dy + roomDepth * 0.28)
-      ..lineTo(center.dx + roomWidth * 0.34, center.dy - roomDepth * 0.36)
-      ..lineTo(center.dx - roomWidth * 0.34, center.dy - roomDepth * 0.36)
-      ..close();
-    canvas.drawPath(
-      floor,
-      Paint()
-        ..shader = const LinearGradient(
-          colors: [Color(0xFFCDBCA0), Color(0xFF9C8E76)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ).createShader(floor.getBounds()),
-    );
-
-    final wallPaint = Paint()..color = const Color(0xFFE7E8EC);
-    final backWall = Path()
-      ..moveTo(center.dx - roomWidth * 0.34, center.dy - roomDepth * 0.36)
-      ..lineTo(center.dx + roomWidth * 0.34, center.dy - roomDepth * 0.36)
-      ..lineTo(center.dx + roomWidth * 0.42, center.dy - roomDepth * 0.88)
-      ..lineTo(center.dx - roomWidth * 0.42, center.dy - roomDepth * 0.88)
-      ..close();
-    canvas.drawPath(backWall, wallPaint);
-    canvas.drawPath(
-      floor,
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.18)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-
-    void drawBox(Rect rect, Color color) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-        Paint()..color = color,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-        Paint()
-          ..color = Colors.black.withValues(alpha: 0.22)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2,
-      );
-    }
-
-    drawBox(
-      Rect.fromCenter(
-        center: center.translate(-roomWidth * 0.15, roomDepth * 0.02),
-        width: roomWidth * 0.52,
-        height: roomDepth * 0.34,
-      ),
-      const Color(0xFF2D2D33),
-    );
-    drawBox(
-      Rect.fromCenter(
-        center: center.translate(roomWidth * 0.28, -roomDepth * 0.08),
-        width: roomWidth * 0.16,
-        height: roomDepth * 0.52,
-      ),
-      const Color(0xFF17191C),
-    );
-    drawBox(
-      Rect.fromCenter(
-        center: center.translate(-roomWidth * 0.36, -roomDepth * 0.2),
-        width: roomWidth * 0.12,
-        height: roomDepth * 0.32,
-      ),
-      const Color(0xFF26262B),
-    );
-
-    final labelStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.76),
-      fontSize: 12,
-      fontWeight: FontWeight.w800,
-    );
-    final dimensions = roomDimensions;
-    final label = dimensions == null
-        ? 'Metric preview pending'
-        : '${dimensions.widthValue.toStringAsFixed(1)} x ${dimensions.depthValue.toStringAsFixed(1)} m';
-    final painter = TextPainter(
-      text: TextSpan(text: '$label · photos $uploadedCount', style: labelStyle),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: size.width - 40);
-    painter.paint(canvas, Offset(20, size.height - 168));
-  }
-
-  @override
-  bool shouldRepaint(covariant _RoomPreviewPainter oldDelegate) {
-    return roomDimensions != oldDelegate.roomDimensions ||
-        uploadedCount != oldDelegate.uploadedCount;
-  }
-}
-
 class _RouteErrorScreen extends StatelessWidget {
   const _RouteErrorScreen({required this.error});
 
@@ -4686,6 +5968,23 @@ Future<({int width, int height})> _decodeImageSize(List<int> bytes) async {
   }
 }
 
+Future<_PendingCaptureDraft> _pendingDraftFromImage({
+  required String roleId,
+  required XFile image,
+}) async {
+  final bytes = await image.readAsBytes();
+  final imageSize = await _decodeImageSize(bytes);
+  return _PendingCaptureDraft(
+    roleId: roleId,
+    filename: image.name,
+    contentType: _imageContentType(image),
+    bytes: bytes,
+    widthPx: imageSize.width,
+    heightPx: imageSize.height,
+    createdAt: DateTime.now().toUtc(),
+  );
+}
+
 String _imageContentType(XFile file) {
   final mimeType = file.mimeType;
   if (mimeType != null && mimeType.startsWith('image/')) {
@@ -4740,15 +6039,40 @@ int _captureOrderForRole(String role) {
   return order[role] ?? 99;
 }
 
-Future<void> _copyProjectLink(BuildContext context, String path) async {
-  await Clipboard.setData(ClipboardData(text: path));
+String _desktopEditorPath(String projectId) {
+  return '/projects/${Uri.encodeComponent(projectId)}/editor';
+}
+
+String _desktopEditorLink(String projectId) {
+  final path = _desktopEditorPath(projectId);
+  final base = Uri.base;
+  if ((base.scheme == 'http' || base.scheme == 'https') &&
+      base.host.isNotEmpty) {
+    return Uri(
+      scheme: base.scheme,
+      host: base.host,
+      port: base.hasPort ? base.port : null,
+      path: path,
+    ).toString();
+  }
+  return path;
+}
+
+Future<void> _copyProjectLink(BuildContext context, String link) async {
+  await Clipboard.setData(ClipboardData(text: link));
   if (!context.mounted) return;
   ScaffoldMessenger.of(
     context,
   ).showSnackBar(const SnackBar(content: Text('데스크탑 링크를 복사했습니다.')));
 }
 
-void _showDesktopHandoff(BuildContext context, String projectId) {
+void _showProjectActionsSheet(
+  BuildContext context, {
+  required RoomProject project,
+  required VoidCallback onRename,
+  required VoidCallback onDelete,
+  VoidCallback? onDesktopLink,
+}) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: _panel,
@@ -4757,35 +6081,159 @@ void _showDesktopHandoff(BuildContext context, String projectId) {
         padding: const EdgeInsets.all(18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              '데스크탑에서 계속',
-              style: TextStyle(
+            Text(
+              project.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 color: _ink,
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '/projects/$projectId/editor',
-              style: const TextStyle(color: _muted),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
-                unawaited(
-                  _copyProjectLink(context, '/projects/$projectId/editor'),
-                );
+                onRename();
               },
-              icon: const Icon(Icons.copy),
-              label: const Text('링크 복사'),
+              icon: const Icon(Icons.drive_file_rename_outline),
+              label: const Text('이름 변경'),
+            ),
+            if (onDesktopLink != null) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  onDesktopLink();
+                },
+                icon: const Icon(Icons.desktop_windows_outlined),
+                label: const Text('데스크탑 링크 복사'),
+              ),
+            ],
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onDelete();
+              },
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('삭제'),
+              style: TextButton.styleFrom(foregroundColor: _danger),
             ),
           ],
         ),
       ),
+    ),
+  );
+}
+
+Future<String?> _showProjectNameDialog(
+  BuildContext context, {
+  required String title,
+  required String initialName,
+  required String actionLabel,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (context) => _ProjectNameDialog(
+      title: title,
+      initialName: initialName,
+      actionLabel: actionLabel,
+    ),
+  );
+}
+
+class _ProjectNameDialog extends StatefulWidget {
+  const _ProjectNameDialog({
+    required this.title,
+    required this.initialName,
+    required this.actionLabel,
+  });
+
+  final String title;
+  final String initialName;
+  final String actionLabel;
+
+  @override
+  State<_ProjectNameDialog> createState() => _ProjectNameDialogState();
+}
+
+class _ProjectNameDialogState extends State<_ProjectNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final trimmed = _controller.text.trim();
+    if (trimmed.isNotEmpty) Navigator.of(context).pop(trimmed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: _panel,
+      title: Text(widget.title, style: const TextStyle(color: _ink)),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 80,
+        style: const TextStyle(color: _ink),
+        decoration: const InputDecoration(
+          labelText: '프로젝트 이름',
+          counterStyle: TextStyle(color: _dim),
+        ),
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+        FilledButton(onPressed: _submit, child: Text(widget.actionLabel)),
+      ],
+    );
+  }
+}
+
+Future<bool?> _confirmProjectDelete(BuildContext context, RoomProject project) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: _panel,
+      title: const Text('프로젝트 삭제', style: TextStyle(color: _ink)),
+      content: Text(
+        '${project.name} 프로젝트를 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
+        style: const TextStyle(color: _muted, height: 1.45),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('취소'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).pop(true),
+          icon: const Icon(Icons.delete_outline),
+          label: const Text('삭제'),
+          style: FilledButton.styleFrom(
+            backgroundColor: _danger,
+            foregroundColor: _paper,
+          ),
+        ),
+      ],
     ),
   );
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../auth/auth_repository.dart';
@@ -10,6 +11,25 @@ import '../firebase/firebase_repositories.dart';
 import '../firebase/firebase_serializers.dart';
 import 'firebase_source_image_upload.dart';
 import 'project_api.dart';
+
+abstract class FirebaseProjectDeleteFunction {
+  const FirebaseProjectDeleteFunction();
+
+  Future<void> deleteProject(String projectId);
+}
+
+class CallableFirebaseProjectDeleteFunction
+    implements FirebaseProjectDeleteFunction {
+  const CallableFirebaseProjectDeleteFunction();
+
+  @override
+  Future<void> deleteProject(String projectId) async {
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('deleteProject');
+    await callable.call(<String, dynamic>{'projectId': projectId});
+  }
+}
 
 class FirebaseProjectApi extends ProjectApi {
   FirebaseProjectApi({
@@ -24,6 +44,7 @@ class FirebaseProjectApi extends ProjectApi {
     FirebaseSceneUnderstandingRepository? sceneUnderstandingRepository,
     required FirebaseSourceImageRepository sourceImageRepository,
     required FirebaseSourceImageUploader sourceImageUploader,
+    FirebaseProjectDeleteFunction? projectDeleteFunction,
   }) : _session = session,
        _floorPlanRepository = floorPlanRepository,
        _geometryRepository = geometryRepository,
@@ -35,7 +56,10 @@ class FirebaseProjectApi extends ProjectApi {
            sceneUnderstandingRepository ??
            const _UnavailableSceneUnderstandingRepository(),
        _sourceImageRepository = sourceImageRepository,
-       _sourceImageUploader = sourceImageUploader;
+       _sourceImageUploader = sourceImageUploader,
+       _projectDeleteFunction =
+           projectDeleteFunction ??
+           const CallableFirebaseProjectDeleteFunction();
 
   final AuthSession _session;
   final FirebaseFloorPlanRepository _floorPlanRepository;
@@ -47,14 +71,15 @@ class FirebaseProjectApi extends ProjectApi {
   final FirebaseSceneUnderstandingRepository _sceneUnderstandingRepository;
   final FirebaseSourceImageRepository _sourceImageRepository;
   final FirebaseSourceImageUploader _sourceImageUploader;
+  final FirebaseProjectDeleteFunction _projectDeleteFunction;
   final FirebaseEditorBridgeMapper _editorBridgeMapper =
       const FirebaseEditorBridgeMapper();
 
   @override
   Future<List<RoomProject>> listProjects() async {
-    final snapshot = await _projectRepository
-        .watchOwnedProjects(_session.uid)
-        .first;
+    final snapshot = await _projectRepository.listOwnedProjectsFromServer(
+      _session.uid,
+    );
     return snapshot.map(_roomProjectFromFirebase).toList();
   }
 
@@ -112,11 +137,22 @@ class FirebaseProjectApi extends ProjectApi {
   }
 
   @override
-  Future<void> deleteProject(String projectId) {
-    return _projectRepository.softDeleteProject(
-      ownerUid: _session.uid,
-      projectId: projectId,
-    );
+  Future<void> deleteProject(String projectId) async {
+    try {
+      await _projectDeleteFunction.deleteProject(projectId);
+    } on ProjectApiException {
+      rethrow;
+    } on FirebaseFunctionsException catch (error) {
+      throw ProjectApiException(
+        _deleteProjectErrorMessage(error.code, error.message),
+        code: error.code,
+      );
+    } catch (error) {
+      throw ProjectApiException(
+        '프로젝트 삭제 요청에 실패했습니다. 잠시 후 다시 시도하세요.',
+        code: error.toString(),
+      );
+    }
   }
 
   @override
@@ -1887,6 +1923,19 @@ class FirebaseProjectApi extends ProjectApi {
   bool _isPermissionError(String code) {
     return code == 'permission-denied' || code == 'unauthorized';
   }
+}
+
+String _deleteProjectErrorMessage(String code, String? fallback) {
+  return switch (code) {
+    'permission-denied' => '이 프로젝트를 삭제할 권한이 없습니다. 소유자 또는 관리자만 삭제할 수 있습니다.',
+    'unauthenticated' => '로그인이 만료되었습니다. 다시 로그인한 뒤 삭제하세요.',
+    'not-found' => '이미 삭제되었거나 찾을 수 없는 프로젝트입니다.',
+    'invalid-argument' => '삭제할 프로젝트 정보가 올바르지 않습니다.',
+    _ =>
+      fallback == null || fallback.isEmpty
+          ? '프로젝트 삭제 요청에 실패했습니다. 잠시 후 다시 시도하세요.'
+          : '프로젝트 삭제 요청에 실패했습니다: $fallback',
+  };
 }
 
 class _UnavailableSceneUnderstandingRepository

@@ -15,20 +15,21 @@ class FirebaseFirestoreProjectRepository implements FirebaseProjectRepository {
       _firestore.collection('projects');
 
   @override
+  Future<List<FirebaseRoomProject>> listOwnedProjectsFromServer(
+    String ownerUid,
+  ) async {
+    final snapshot = await _projects
+        .where('owner_uid', isEqualTo: ownerUid)
+        .get(const GetOptions(source: Source.server));
+    return _sortedVisibleProjects(snapshot.docs);
+  }
+
+  @override
   Stream<List<FirebaseRoomProject>> watchOwnedProjects(String ownerUid) {
     return _projects.where('owner_uid', isEqualTo: ownerUid).snapshots().map((
       snapshot,
     ) {
-      final projects = snapshot.docs
-          .map(
-            (doc) => FirebaseModelSerializers.roomProjectFromFirestore(
-              _firestoreJson(doc.data()),
-            ),
-          )
-          .where((project) => project.deletedAt == null)
-          .toList();
-      projects.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return projects;
+      return _sortedVisibleProjects(snapshot.docs);
     });
   }
 
@@ -125,6 +126,21 @@ class FirebaseFirestoreProjectRepository implements FirebaseProjectRepository {
     return FirebaseModelSerializers.roomProjectFromFirestore(
       _firestoreJson(data),
     );
+  }
+
+  List<FirebaseRoomProject> _sortedVisibleProjects(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final projects = docs
+        .map(
+          (doc) => FirebaseModelSerializers.roomProjectFromFirestore(
+            _firestoreJson(doc.data()),
+          ),
+        )
+        .where((project) => project.deletedAt == null)
+        .toList();
+    projects.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return projects;
   }
 }
 
@@ -797,6 +813,13 @@ class FirebaseFirestoreSceneUnderstandingRepository
 
 class DisabledFirebaseProjectRepository implements FirebaseProjectRepository {
   const DisabledFirebaseProjectRepository();
+
+  @override
+  Future<List<FirebaseRoomProject>> listOwnedProjectsFromServer(
+    String ownerUid,
+  ) {
+    throw UnsupportedError('Firebase project access is unavailable.');
+  }
 
   @override
   Stream<List<FirebaseRoomProject>> watchOwnedProjects(String ownerUid) {

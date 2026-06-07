@@ -1,4 +1,4 @@
-import type { FurnitureCategory, FurnitureObject, SpatialModel } from './spatialModel'
+import type { FurnitureCategory, FurnitureObject, SpatialModel } from './spatialModel.ts'
 import { furnitureSizePriorForCategory } from './sizePriors.ts'
 
 export type FurnitureEditAction =
@@ -62,6 +62,7 @@ export function furnitureDefaults({
   return {
     objectId: id,
     category,
+    assetId: base.assetId,
     source: 'catalog',
     label: base.label,
     size: base.size,

@@ -406,6 +406,9 @@ service cloud.firestore {
     function furnitureObjectKeys() {
       return [
         'furniture_id',
+        'asset_id',
+        'candidate_id',
+        'source',
         'category',
         'position_m',
         'size_m',
@@ -515,7 +518,11 @@ service cloud.firestore {
         'bed',
         'desk',
         'chair',
+        'shelf',
+        'cabinet',
         'wardrobe',
+        'dresser',
+        'nightstand',
         'sofa',
         'table',
         'custom'
@@ -529,6 +536,11 @@ service cloud.firestore {
     function isSafePathSegment(value) {
       return value is string
         && value.matches('^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$');
+    }
+
+    function isSafeFurnitureMetadataString(value) {
+      return value is string
+        && value.matches('^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$');
     }
 
     function isAllowedActorType(actorType) {
@@ -1444,6 +1456,7 @@ service cloud.firestore {
 
     function validLayoutFurnitureObject(object) {
       return object is map
+        && object.keys().hasOnly(furnitureObjectKeys())
         && isSafePathSegment(object.furniture_id)
         && isAllowedFurnitureCategory(object.category)
         && validPoint3d(object.position_m)
@@ -1451,7 +1464,31 @@ service cloud.firestore {
         && object.size_m.x > 0
         && object.size_m.y > 0
         && object.size_m.z > 0
-        && isNumber(object.rotation_deg);
+        && isNumber(object.rotation_deg)
+        && (
+          !object.keys().hasAny(['asset_id'])
+          || isSafeFurnitureMetadataString(object.asset_id)
+        )
+        && (
+          !object.keys().hasAny(['candidate_id'])
+          || isSafeFurnitureMetadataString(object.candidate_id)
+        )
+        && (
+          !object.keys().hasAny(['source'])
+          || isSafeFurnitureMetadataString(object.source)
+        )
+        && (
+          !object.keys().hasAny(['color'])
+          || object.color is string
+        )
+        && (
+          !object.keys().hasAny(['label'])
+          || object.label is string
+        )
+        && (
+          !object.keys().hasAny(['locked'])
+          || object.locked is bool
+        );
     }
 
     function validLayoutFurnitureAt(index) {

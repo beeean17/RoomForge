@@ -619,6 +619,8 @@ class FirebaseEditorBridgeMapper {
       FirebaseFurnitureCategory.desk => 'Desk',
       FirebaseFurnitureCategory.chair => 'Chair',
       FirebaseFurnitureCategory.wardrobe => 'Wardrobe',
+      FirebaseFurnitureCategory.dresser => 'Dresser',
+      FirebaseFurnitureCategory.nightstand => 'Nightstand',
       FirebaseFurnitureCategory.sofa => 'Sofa',
       FirebaseFurnitureCategory.table => 'Table',
       FirebaseFurnitureCategory.shelf => 'Shelf',

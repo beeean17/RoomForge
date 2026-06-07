@@ -314,6 +314,8 @@ enum FirebaseFurnitureCategory {
   desk('desk'),
   chair('chair'),
   wardrobe('wardrobe'),
+  dresser('dresser'),
+  nightstand('nightstand'),
   sofa('sofa'),
   table('table'),
   shelf('shelf'),

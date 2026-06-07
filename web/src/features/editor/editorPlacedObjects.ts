@@ -11,7 +11,9 @@ export type PlacedObjectItem = {
   category: string
   label: string
   sourceLabel: string
+  assetId?: string
   candidateId?: string
+  source?: string
   selected: boolean
   locked: boolean
   outsideRoom: boolean
@@ -88,8 +90,8 @@ export function placedObjectStateFromPayload(payload: Record<string, unknown>): 
     selectedItem,
     counts: {
       total: items.length,
-      cvCandidates: items.filter((item) => item.sourceLabel === 'CV candidate').length,
-      catalog: items.filter((item) => item.sourceLabel === 'Catalog').length,
+      cvCandidates: items.filter(isCvCandidatePlacedObject).length,
+      catalog: items.filter((item) => !isCvCandidatePlacedObject(item)).length,
       locked: items.filter((item) => item.locked).length,
       outsideRoom: items.filter((item) => item.outsideRoom).length,
     },
@@ -155,7 +157,9 @@ function placedObjectItemFromRecord({
 
   const size = recordValue(item.size)
   const position = recordValue(item.position)
+  const assetId = stringValue(item.assetId)
   const candidateId = stringValue(item.candidateId)
+  const source = stringValue(item.source)
   const widthMeters = numberValue(size.widthMeters, 0.6)
   const depthMeters = numberValue(size.depthMeters, 0.6)
   const positionX = numberValue(position.x, 0)
@@ -166,8 +170,10 @@ function placedObjectItemFromRecord({
     objectId,
     category: stringValue(item.category) ?? 'custom',
     label: stringValue(item.label) ?? stringValue(item.category) ?? 'Furniture',
-    sourceLabel: item.source === 'cv_candidate' || candidateId ? 'CV candidate' : 'Catalog',
+    sourceLabel: sourceLabelForPlacedObject({ source, candidateId, assetId }),
+    assetId,
     candidateId,
+    source,
     selected: selectedType === 'furniture' && selectedObjectId === objectId,
     locked,
     outsideRoom: objectOutsideRoom({
@@ -188,6 +194,23 @@ function placedObjectItemFromRecord({
     canDelete: true,
     canToggleLock: true,
   }
+}
+
+function isCvCandidatePlacedObject(item: PlacedObjectItem): boolean {
+  return item.source === 'cv_candidate' || Boolean(item.candidateId)
+}
+
+function sourceLabelForPlacedObject({
+  source,
+  candidateId,
+  assetId,
+}: {
+  source?: string
+  candidateId?: string
+  assetId?: string
+}): string {
+  const baseLabel = source === 'cv_candidate' || candidateId ? 'CV candidate' : 'Catalog'
+  return assetId ? `${baseLabel} / ${assetId}` : baseLabel
 }
 
 function objectOutsideRoom({

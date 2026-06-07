@@ -14,6 +14,9 @@ List<LayoutJson> savedFurnitureToBridge(List<Object?> furnitureObjects) {
       _withoutNulls({
         'objectId': furniture['id']?.toString() ?? '',
         'category': category ?? 'chair',
+        'assetId': _optionalStringValue(furniture['asset_id']),
+        'candidateId': _optionalStringValue(furniture['candidate_id']),
+        'source': _optionalStringValue(furniture['source']),
         'label': furniture['label']?.toString() ?? _furnitureLabel(category),
         'size': {
           'widthMeters': _numberValue(size['width_meters'], 0.6),
@@ -59,6 +62,9 @@ List<LayoutJson> bridgeFurnitureToLayoutPayload(Object? furnitureObjects) {
         },
         'rotation_degrees': _numberValue(furniture['rotationDegrees'], 0),
         'color': furniture['color']?.toString() ?? '#64748b',
+        'asset_id': _optionalStringValue(furniture['assetId']),
+        'candidate_id': _optionalStringValue(furniture['candidateId']),
+        'source': _optionalStringValue(furniture['source']),
         'label': furniture['label']?.toString(),
         'locked': furniture['locked'] is bool
             ? furniture['locked'] as bool
@@ -71,9 +77,17 @@ List<LayoutJson> bridgeFurnitureToLayoutPayload(Object? furnitureObjects) {
 
 String _furnitureLabel(String? category) {
   return switch (category) {
+    'bed' => 'Bed',
+    'desk' => 'Desk',
+    'chair' => 'Chair',
+    'wardrobe' => 'Wardrobe',
+    'dresser' => 'Dresser',
+    'nightstand' => 'Nightstand',
     'table' => 'Table',
     'sofa' => 'Sofa',
-    _ => 'Chair',
+    'shelf' => 'Shelf',
+    'cabinet' => 'Cabinet',
+    _ => 'Furniture',
   };
 }
 
@@ -87,6 +101,14 @@ List<Object?> _listValue(Object? value) {
 
 double _numberValue(Object? value, double fallback) {
   return value is num ? value.toDouble() : fallback;
+}
+
+String? _optionalStringValue(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString();
+  return text.isEmpty ? null : text;
 }
 
 LayoutJson _withoutNulls(LayoutJson json) {

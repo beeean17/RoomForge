@@ -201,9 +201,6 @@ export function detectorResult(
   const candidateObjects = mapped
     .filter((item) => item.kind === 'candidate')
     .map((item) => item.value)
-  const structuralFixtureCandidateObjects = candidateObjects.filter(
-    (candidate) => candidate.objectType === 'structural_fixture',
-  )
   const structuralFixtures = mapped
     .filter((item) => item.kind === 'fixture')
     .map((item) => item.value)
@@ -242,22 +239,20 @@ export function detectorResult(
     structuralFixtures:
       structuralFixtures.length > 0
         ? structuralFixtures
-        : structuralFixtureCandidateObjects.length > 0
-          ? []
-          : [
-              {
-                fixtureId: `fixture-${fixtureImage.captureImageId}-window`,
-                candidateId: `candidate-${fixtureImage.captureImageId}-window`,
-                category: 'window',
-                wallId: 'front-wall',
-                label: `Detected ${fallbackWindowPrior.category}`,
-                position: { x: 1.8, y: 1.1, z: 0 },
-                size: fallbackWindowPrior.size,
-                rotationDegrees: 0,
-                confidenceScore: 0.64,
-                locked: false,
-              },
-            ],
+        : [
+            {
+              fixtureId: `fixture-${fixtureImage.captureImageId}-window`,
+              candidateId: `candidate-${fixtureImage.captureImageId}-window`,
+              category: 'window',
+              wallId: 'front-wall',
+              label: `Detected ${fallbackWindowPrior.category}`,
+              position: { x: 1.8, y: 1.1, z: 0 },
+              size: fallbackWindowPrior.size,
+              rotationDegrees: 0,
+              confidenceScore: 0.64,
+              locked: false,
+            },
+          ],
   }
 }
 
@@ -332,7 +327,18 @@ function imageDrivenDetectorOutputs(
   const widthPx = sourceImage.widthPx ?? image.widthPx ?? 1600
   const heightPx = sourceImage.heightPx ?? image.heightPx ?? 900
   const signature = sourceImageSignature(sourceImage.dataUrl ?? '')
-  const furnitureClasses = ['bed', 'sofa', 'desk', 'chair', 'wardrobe', 'table']
+  const furnitureClasses = [
+    'bed',
+    'sofa',
+    'desk',
+    'chair',
+    'wardrobe',
+    'dresser',
+    'nightstand',
+    'table',
+    'shelf',
+    'cabinet',
+  ]
   const furnitureClass = furnitureClasses[signature % furnitureClasses.length]
   const secondClass = furnitureClasses[(signature + 3) % furnitureClasses.length]
   const primaryWidth = Math.round(widthPx * (0.2 + ((signature % 4) * 0.035)))
@@ -478,26 +484,22 @@ function detectionToCandidate(
   const category = categoryForClass(detection.className)
   if (category === 'window' || category === 'door') {
     const prior = structuralFixtureSizePriorForCategory(category)
+    const wallId = wallIdForImageRole(image.role)
     return {
-      kind: 'candidate',
+      kind: 'fixture',
       value: {
+        fixtureId: `fixture-${image.captureImageId}-${category}-${index}`,
         candidateId: `candidate-${image.captureImageId}-${category}-${index}`,
-        objectType: 'structural_fixture',
         category,
         label: `Detected ${prior.category}`,
-        sourceImageId: image.sourceImageId,
-        captureImageId: image.captureImageId,
-        sourceImageRole: image.role,
-        coordinateSpace: 'image_pixels',
-        boundingBox: detection.box,
-        confidenceScore: detection.score,
-        reviewState: detection.score < 0.7 ? 'review_required' : 'new',
-        reviewLabel: detection.score < 0.7 ? 'Needs review' : 'Candidate',
-        suggestedAssetId: prior.assetId,
+        wallId,
         suggestedPosition: { x: 1 + index * 0.4, y: 0, z: 0 },
-        suggestedWallId: wallIdForImageRole(image.role),
+        position: { x: 1 + index * 0.4, y: Math.max(prior.size.y / 2, 0.5), z: 0 },
         suggestedSize: prior.size,
-        suggestedRotationDegrees: rotationForWallId(wallIdForImageRole(image.role)),
+        size: prior.size,
+        rotationDegrees: rotationForWallId(wallId),
+        confidenceScore: detection.score,
+        locked: false,
       },
     }
   }
@@ -537,6 +539,12 @@ function categoryForClass(className: string): string {
     desk: 'desk',
     wardrobe: 'wardrobe',
     closet: 'wardrobe',
+    dresser: 'dresser',
+    chest_of_drawers: 'dresser',
+    drawer: 'nightstand',
+    drawers: 'dresser',
+    nightstand: 'nightstand',
+    bedside_table: 'nightstand',
     cabinet: 'cabinet',
     shelf: 'shelf',
     bookshelf: 'shelf',

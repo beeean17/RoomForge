@@ -36,6 +36,8 @@ export const candidateReviewCategoryOptions = [
   'table',
   'sofa',
   'wardrobe',
+  'dresser',
+  'nightstand',
   'shelf',
   'cabinet',
   'window',

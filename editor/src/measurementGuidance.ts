@@ -1,4 +1,4 @@
-import type { FurnitureObject, SpatialModel } from './spatialModel'
+import type { FurnitureObject, SpatialModel } from './spatialModel.ts'
 
 function meters(value: number): string {
   return `${value.toFixed(2)} m`

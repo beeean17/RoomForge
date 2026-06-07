@@ -95,6 +95,8 @@ assert.ok(emptyState)
 assert.equal(emptyState.items.length, 0)
 
 assert.ok(candidateReviewCategoryOptions.includes('sofa'))
+assert.ok(candidateReviewCategoryOptions.includes('dresser'))
+assert.ok(candidateReviewCategoryOptions.includes('nightstand'))
 assert.ok(candidateReviewCategoryOptions.includes('window'))
 
 console.log('Web editor candidate review contract verified')

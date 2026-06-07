@@ -151,6 +151,16 @@ def layout_payload():
                 },
                 "rotation_degrees": 15,
                 "color": "#64748b",
+                "asset_id": "asset-dining-chair-modern",
+                "candidate_id": "candidate-chair-42",
+                "source": "cv_candidate",
+                "label": "Detected dining chair",
+                "locked": False,
+                "model_metadata": {
+                    "model_id": "furniture-detector-v1",
+                    "model_version": "2026.06",
+                    "confidence": 0.91,
+                },
             }
         ],
         "editor_scene": {"scene_id": "scene-1"},
@@ -179,6 +189,39 @@ def required_layout_fields(layout: dict) -> dict:
         "furniture_objects": layout["furniture_objects"],
         "editor_scene": layout["editor_scene"],
     }
+
+
+def assert_detected_furniture_metadata(furniture: dict) -> None:
+    assert furniture["asset_id"] == "asset-dining-chair-modern"
+    assert furniture["candidate_id"] == "candidate-chair-42"
+    assert furniture["source"] == "cv_candidate"
+    assert furniture["label"] == "Detected dining chair"
+    assert furniture["locked"] is False
+    assert furniture["model_metadata"] == {
+        "model_id": "furniture-detector-v1",
+        "model_version": "2026.06",
+        "confidence": 0.91,
+    }
+
+
+def layout_payload_without_detected_furniture_metadata() -> dict:
+    payload = layout_payload()
+    metadata_keys = {
+        "asset_id",
+        "candidate_id",
+        "source",
+        "label",
+        "locked",
+        "model_metadata",
+    }
+    payload["furniture_objects"] = [
+        {
+            key: value
+            for key, value in payload["furniture_objects"][0].items()
+            if key not in metadata_keys
+        }
+    ]
+    return payload
 
 
 def p95_seconds(durations: list[float]) -> float:
@@ -222,6 +265,7 @@ def test_save_layout_persists_room_floor_source_and_furniture_state() -> None:
     assert furniture["size"]["height_meters"] == 0.85
     assert furniture["rotation_degrees"] == 15
     assert furniture["color"] == "#64748b"
+    assert_detected_furniture_metadata(furniture)
     assert repository.saved[0].user_id == 42
     assert repository.saved[0].furniture_objects == layout_payload()["furniture_objects"]
 
@@ -237,6 +281,21 @@ def test_save_layout_rejects_cross_user_project() -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+def test_save_layout_keeps_detected_furniture_metadata_optional() -> None:
+    from fastapi.testclient import TestClient
+
+    payload = layout_payload_without_detected_furniture_metadata()
+    response = TestClient(configured_app(FakeLayoutRepository())).post(
+        "/room-projects/1/layouts",
+        headers={"Authorization": "Bearer valid-token"},
+        json=payload,
+    )
+
+    assert response.status_code == 201
+    furniture = response.json()["data"]["layout"]["furniture_objects"][0]
+    assert furniture == payload["furniture_objects"][0]
 
 
 def test_load_latest_layout_returns_saved_state() -> None:
@@ -262,6 +321,7 @@ def test_load_latest_layout_returns_saved_state() -> None:
     assert furniture["id"] == "furniture-chair-1"
     assert furniture["position"] == {"x": 1.2, "y": 1.4}
     assert furniture["size"]["height_meters"] == 0.85
+    assert_detected_furniture_metadata(furniture)
 
 
 def test_load_layout_rejects_cross_user_access() -> None:
@@ -311,6 +371,7 @@ def test_export_latest_layout_returns_json_export_payload() -> None:
     assert furniture["size"]["height_meters"] == 0.85
     assert furniture["rotation_degrees"] == 15
     assert furniture["color"] == "#64748b"
+    assert_detected_furniture_metadata(furniture)
 
 
 def test_export_layout_rejects_cross_user_access() -> None:

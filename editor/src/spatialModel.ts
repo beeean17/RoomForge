@@ -34,6 +34,8 @@ export type FurnitureCategory =
   | 'desk'
   | 'chair'
   | 'wardrobe'
+  | 'dresser'
+  | 'nightstand'
   | 'sofa'
   | 'table'
   | 'shelf'
@@ -44,6 +46,7 @@ export type FurnitureObject = {
   objectId: string
   category: FurnitureCategory
   candidateId?: string
+  assetId?: string
   source?: 'catalog' | 'cv_candidate'
   label: string
   size: {
@@ -489,6 +492,7 @@ function furnitureValue(value: unknown): FurnitureObject | null {
     color: stringValue(record.color, '#64748b'),
     locked: booleanValue(record.locked, false),
     candidateId: optionalStringValue(record.candidateId),
+    assetId: optionalStringValue(record.assetId),
     source: furnitureSourceValue(record.source),
   }
 }
@@ -539,6 +543,8 @@ function isFurnitureCategory(value: unknown): value is FurnitureCategory {
     value === 'desk' ||
     value === 'chair' ||
     value === 'wardrobe' ||
+    value === 'dresser' ||
+    value === 'nightstand' ||
     value === 'sofa' ||
     value === 'table' ||
     value === 'shelf' ||
@@ -557,6 +563,8 @@ function categoryLabel(category: FurnitureCategory): string {
     desk: 'Desk',
     chair: 'Chair',
     wardrobe: 'Wardrobe',
+    dresser: 'Dresser',
+    nightstand: 'Nightstand',
     sofa: 'Sofa',
     table: 'Table',
     shelf: 'Shelf',

@@ -3,7 +3,7 @@ import type {
   FurnitureObject,
   SpatialModel,
   StructuralFixtureObject,
-} from './spatialModel'
+} from './spatialModel.ts'
 
 export type ConfirmationResult = {
   model: SpatialModel
@@ -97,7 +97,7 @@ function confirmedFurnitureObject(
     candidateId: item.candidateId,
     objectType: 'furniture',
     category: item.category,
-    assetId: placed?.assetId,
+    assetId: placed?.assetId ?? item.assetId,
     label: item.label,
     position: { x: item.position.x, y: 0, z: item.position.y },
     size: {

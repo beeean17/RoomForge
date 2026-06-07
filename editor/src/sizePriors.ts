@@ -55,6 +55,22 @@ const furnitureSizePriors: Record<FurnitureCategory, FurnitureSizePrior> = {
     assetId: 'wardrobe.standard',
     color: '#64748b',
   },
+  dresser: {
+    category: 'dresser',
+    label: 'Dresser',
+    size: { widthMeters: 1.2, depthMeters: 0.5, heightMeters: 0.85 },
+    suggestedSize: { x: 1.2, y: 0.85, z: 0.5 },
+    assetId: 'dresser.standard',
+    color: '#7a6f61',
+  },
+  nightstand: {
+    category: 'nightstand',
+    label: 'Nightstand',
+    size: { widthMeters: 0.5, depthMeters: 0.42, heightMeters: 0.55 },
+    suggestedSize: { x: 0.5, y: 0.55, z: 0.42 },
+    assetId: 'drawer.nightstand',
+    color: '#6f7568',
+  },
   sofa: {
     category: 'sofa',
     label: 'Sofa',

@@ -54,6 +54,7 @@ import {
   measurementSummaryForModel,
   placementWarningForModel,
 } from './measurementGuidance'
+import { createRoomObjectAssetGroup } from './roomObjectAssets'
 import {
   computeSceneCoverage,
   coverageGuidanceText,
@@ -114,7 +115,9 @@ const catalogFurnitureItems: Array<{
   { category: 'bed', label: 'Bed', labelKo: '침대', note: 'sleep zone', noteKo: '수면 영역' },
   { category: 'desk', label: 'Desk', labelKo: '책상', note: 'work surface', noteKo: '작업면' },
   { category: 'chair', label: 'Chair', labelKo: '의자', note: 'seating', noteKo: '좌석' },
-  { category: 'wardrobe', label: 'Storage', labelKo: '수납장', note: 'wall aligned', noteKo: '벽면 정렬' },
+  { category: 'wardrobe', label: 'Wardrobe', labelKo: '옷장', note: 'wall aligned', noteKo: '벽면 정렬' },
+  { category: 'dresser', label: 'Dresser', labelKo: '서랍장', note: 'drawer storage', noteKo: '서랍 수납' },
+  { category: 'nightstand', label: 'Nightstand', labelKo: '협탁', note: 'bedside drawer', noteKo: '침대 옆 서랍' },
   { category: 'sofa', label: 'Sofa', labelKo: '소파', note: 'lounge seating', noteKo: '휴식 좌석' },
   { category: 'table', label: 'Table', labelKo: '테이블', note: 'shared surface', noteKo: '공용 상판' },
   { category: 'shelf', label: 'Shelf', labelKo: '선반', note: 'vertical storage', noteKo: '수직 수납' },
@@ -843,9 +846,9 @@ selectionLine.visible = true
 room.add(selectionLine)
 
 const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0xf4f1ea })
-const furnitureMeshes = new Map<string, THREE.Mesh>()
+const furnitureMeshes = new Map<string, THREE.Object3D>()
 const furnitureOutlineObjects: THREE.LineSegments[] = []
-const fixtureMeshes = new Map<string, THREE.Mesh>()
+const fixtureMeshes = new Map<string, THREE.Object3D>()
 const fixtureOutlineObjects: THREE.LineSegments[] = []
 
 const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0xd6a75b })
@@ -1536,13 +1539,13 @@ editorCanvas.addEventListener('pointerdown', (event) => {
     return
   }
 
-  const furnitureIntersections = raycaster.intersectObjects([...furnitureMeshes.values()])
+  const furnitureIntersections = raycaster.intersectObjects([...furnitureMeshes.values()], true)
   if (furnitureIntersections.length > 0) {
     selectFurniture(furnitureIntersections[0].object.userData.objectId)
     return
   }
 
-  const fixtureIntersections = raycaster.intersectObjects([...fixtureMeshes.values()])
+  const fixtureIntersections = raycaster.intersectObjects([...fixtureMeshes.values()], true)
   if (fixtureIntersections.length > 0) {
     selectFixture(fixtureIntersections[0].object.userData.objectId)
     return
@@ -1828,6 +1831,7 @@ function hydrateFurnitureFromPlacedObjects(model: SpatialModel): SpatialModel {
       objectId: placed.objectId,
       category,
       candidateId: placed.candidateId,
+      assetId: placed.assetId ?? prior.assetId,
       source: 'cv_candidate',
       label: placed.label ?? prior.label,
       size: {
@@ -2524,6 +2528,8 @@ function layoutExportPayload(): Record<string, unknown> {
     furniture_objects: spatialModel.furniture.map((item) => ({
       furniture_id: item.objectId,
       category: item.category,
+      asset_id: item.assetId ?? furnitureSizePriorForCategory(item.category).assetId,
+      candidate_id: item.candidateId,
       label: item.label,
       position_m: item.position,
       size_m: item.size,
@@ -2619,9 +2625,7 @@ function syncConfirmedGeometryMeshes(): void {
 function rebuildStructuralFixtures(): void {
   for (const child of [...fixtureGroup.children]) {
     fixtureGroup.remove(child)
-    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-      child.geometry.dispose()
-    }
+    disposeObject3D(child)
   }
   fixtureMeshes.clear()
   fixtureOutlineObjects.length = 0
@@ -2633,25 +2637,27 @@ function rebuildStructuralFixtures(): void {
     const size = fixture.size ?? { x: 0.8, y: 1, z: 0.1 }
     const height = spatialModel.viewMode === '2d' ? 0.07 : Math.max(size.y, 0.2)
     const depth = spatialModel.viewMode === '2d' ? 0.08 : Math.max(size.z, 0.06)
-    const geometry = new THREE.BoxGeometry(Math.max(size.x, 0.2), height, depth)
-    const material = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(fixtureColor(fixture.category)),
-      transparent: true,
-      opacity: fixture.confidenceScore !== undefined && fixture.confidenceScore < 0.7 ? 0.58 : 0.82,
+    const asset = createRoomObjectAssetGroup({
+      assetId: fixture.category === 'door' ? 'fixture.door.standard' : 'fixture.window.standard',
+      category: fixture.category,
+      dimensions: { x: Math.max(size.x, 0.2), y: height, z: depth },
     })
-    const mesh = new THREE.Mesh(geometry, material)
     const position = fixtureScenePosition(fixture, height)
-    mesh.position.copy(position)
-    mesh.rotation.y = fixtureWallRotation(fixture.wallId)
-    mesh.userData.objectId = fixture.fixtureId
-    mesh.userData.objectType = 'fixture'
-    fixtureGroup.add(mesh)
-    fixtureMeshes.set(fixture.fixtureId, mesh)
+    asset.position.copy(position)
+    asset.rotation.y = fixtureWallRotation(fixture.wallId)
+    tagSelectableObject(asset, fixture.fixtureId, 'fixture')
+    setObjectOpacity(
+      asset,
+      fixture.confidenceScore !== undefined && fixture.confidenceScore < 0.7 ? 0.58 : 0.9,
+    )
+    fixtureGroup.add(asset)
+    fixtureMeshes.set(fixture.fixtureId, asset)
 
     if (isSelected) {
+      const geometry = new THREE.BoxGeometry(Math.max(size.x, 0.2), height, depth)
       const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), furnitureSelectionMaterial)
-      outline.position.copy(position)
-      outline.rotation.copy(mesh.rotation)
+      outline.position.copy(position).setY(position.y + height / 2)
+      outline.rotation.copy(asset.rotation)
       outline.scale.setScalar(1.06)
       outline.userData.objectId = fixture.fixtureId
       outline.userData.objectType = 'fixture-outline'
@@ -2661,12 +2667,46 @@ function rebuildStructuralFixtures(): void {
   }
 }
 
-function rebuildFurniture(): void {
-  for (const child of [...furnitureGroup.children]) {
-    furnitureGroup.remove(child)
+function disposeObject3D(object: THREE.Object3D): void {
+  object.traverse((child) => {
     if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
       child.geometry.dispose()
     }
+    if (child instanceof THREE.Mesh) {
+      const meshMaterial = child.material
+      if (Array.isArray(meshMaterial)) {
+        meshMaterial.forEach((material) => material.dispose())
+      } else {
+        meshMaterial.dispose()
+      }
+    }
+  })
+}
+
+function tagSelectableObject(object: THREE.Object3D, objectId: string, objectType: string): void {
+  object.userData = { ...object.userData, objectId, objectType }
+  object.traverse((child) => {
+    child.userData = { ...child.userData, objectId, objectType }
+  })
+}
+
+function setObjectOpacity(object: THREE.Object3D, opacity: number): void {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) {
+      return
+    }
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    for (const material of materials) {
+      material.opacity = Math.min(material.opacity, opacity)
+      material.transparent = material.opacity < 1 || material.transparent
+    }
+  })
+}
+
+function rebuildFurniture(): void {
+  for (const child of [...furnitureGroup.children]) {
+    furnitureGroup.remove(child)
+    disposeObject3D(child)
   }
   furnitureMeshes.clear()
   furnitureOutlineObjects.length = 0
@@ -2675,27 +2715,30 @@ function rebuildFurniture(): void {
     const isSelected =
       spatialModel.selected?.objectType === 'furniture' &&
       spatialModel.selected.objectId === item.objectId
-    const height = spatialModel.viewMode === '2d' ? 0.08 : item.size.heightMeters
-    const geometry = new THREE.BoxGeometry(item.size.widthMeters, height, item.size.depthMeters)
-    const material = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(item.color),
-      transparent: true,
-      opacity: spatialModel.viewMode === '2d' ? 0.72 : 0.86,
+    const height = Math.max(item.size.heightMeters, 0.2)
+    const asset = createRoomObjectAssetGroup({
+      assetId: item.assetId,
+      category: item.category,
+      dimensions: {
+        x: item.size.widthMeters,
+        y: height,
+        z: item.size.depthMeters,
+      },
     })
-    const mesh = new THREE.Mesh(geometry, material)
-    const position = metricPointToScene(item.position.x, item.position.y, height / 2 + 0.03)
-    mesh.position.copy(position)
-    mesh.rotation.y = THREE.MathUtils.degToRad(item.rotationDegrees)
-    mesh.userData.objectId = item.objectId
-    mesh.userData.objectType = 'furniture'
-    furnitureGroup.add(mesh)
-    furnitureMeshes.set(item.objectId, mesh)
+    const position = metricPointToScene(item.position.x, item.position.y, 0.03)
+    asset.position.copy(position)
+    asset.rotation.y = THREE.MathUtils.degToRad(item.rotationDegrees)
+    tagSelectableObject(asset, item.objectId, 'furniture')
+    setObjectOpacity(asset, spatialModel.viewMode === '2d' ? 0.78 : 0.92)
+    furnitureGroup.add(asset)
+    furnitureMeshes.set(item.objectId, asset)
 
     if (isSelected) {
       const tokens = selectionVisualTokens({ selected: true })
+      const geometry = new THREE.BoxGeometry(item.size.widthMeters, height, item.size.depthMeters)
       const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), furnitureSelectionMaterial)
-      outline.position.copy(position)
-      outline.rotation.copy(mesh.rotation)
+      outline.position.copy(position).setY(position.y + height / 2)
+      outline.rotation.copy(asset.rotation)
       outline.scale.setScalar(tokens.scale)
       outline.userData.objectId = item.objectId
       outline.userData.objectType = tokens.marker
@@ -2805,10 +2848,7 @@ function updateFurnitureInspector(
 
   if (selected) {
     selectedObjectTitleElement.textContent = localizedFurnitureLabel(selected)
-    selectedObjectSourceElement.textContent =
-      selected.source === 'cv_candidate'
-        ? t('CV candidate proxy', 'CV 후보 프록시')
-        : t('catalog proxy', '카탈로그 프록시')
+    selectedObjectSourceElement.textContent = selectedFurnitureSourceLabel(selected)
   } else if (fixture) {
     selectedObjectTitleElement.textContent = localizedFixtureLabel(fixture)
     selectedObjectSourceElement.textContent = t('structural fixture', '구조 고정 요소')
@@ -2853,10 +2893,20 @@ function furnitureObjectListMarkup(): string {
         <span class="state-pill ${state.className}">${state.label}</span>
         <small>${item.size.widthMeters.toFixed(2)} x ${item.size.depthMeters.toFixed(
           2,
-        )} m · x ${item.position.x.toFixed(2)} · y ${item.position.y.toFixed(2)}</small>
+        )} m · ${escapeHtml(item.assetId ?? furnitureSizePriorForCategory(item.category).assetId)} · x ${item.position.x.toFixed(
+          2,
+        )} · y ${item.position.y.toFixed(2)}</small>
       </button>`
     })
     .join('')
+}
+
+function selectedFurnitureSourceLabel(item: FurnitureObject): string {
+  const assetId = item.assetId ?? furnitureSizePriorForCategory(item.category).assetId
+  const source = item.source === 'cv_candidate'
+    ? t('CV candidate model', 'CV 후보 모델')
+    : t('catalog model', '카탈로그 모델')
+  return `${source} · ${assetId}`
 }
 
 function furnitureObjectState(
@@ -3414,7 +3464,13 @@ function localizedFurnitureLabel(item: FurnitureObject): string {
     return '의자'
   }
   if (item.category === 'wardrobe') {
-    return '수납장'
+    return '옷장'
+  }
+  if (item.category === 'dresser') {
+    return '서랍장'
+  }
+  if (item.category === 'nightstand') {
+    return '협탁'
   }
   if (item.category === 'table') {
     return '테이블'
@@ -3615,7 +3671,7 @@ function fixtureScenePosition(fixture: StructuralFixtureObject, height: number):
   const size = fixture.size ?? { x: 0.8, y: 1, z: 0.1 }
   const position = fixture.position ?? { x: bounds.centerX, y: size.y / 2, z: 0 }
   const wallPoint = fixtureWallMetricPoint(fixture.wallId, position.x, bounds)
-  const y = spatialModel.viewMode === '2d' ? 0.11 : Math.max(position.y, height / 2)
+  const y = spatialModel.viewMode === '2d' ? 0.11 : Math.max(position.y - height / 2, 0.02)
   return metricPointToScene(wallPoint.x, wallPoint.y, y)
 }
 
@@ -3641,16 +3697,6 @@ function fixtureWallRotation(wallId: string): number {
     return Math.PI / 2
   }
   return 0
-}
-
-function fixtureColor(category: string): string {
-  if (category === 'door') {
-    return '#8b6f61'
-  }
-  if (category === 'built_in') {
-    return '#64748b'
-  }
-  return '#2563eb'
 }
 
 function scenePointToMetric(point: THREE.Vector3): { x: number; y: number } {
@@ -4061,6 +4107,8 @@ function isFurnitureCategory(value: string | undefined): value is FurnitureCateg
     value === 'desk' ||
     value === 'chair' ||
     value === 'wardrobe' ||
+    value === 'dresser' ||
+    value === 'nightstand' ||
     value === 'sofa' ||
     value === 'table' ||
     value === 'shelf' ||

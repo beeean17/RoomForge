@@ -11,14 +11,25 @@ import {
 } from '../src/sizePriors.ts'
 import { defaultSpatialModel } from '../src/spatialModel.ts'
 
-const requiredFurnitureCategories = ['bed', 'desk', 'chair', 'wardrobe', 'sofa', 'table']
+const requiredFurnitureCategories = [
+  'bed',
+  'desk',
+  'chair',
+  'wardrobe',
+  'dresser',
+  'nightstand',
+  'sofa',
+  'table',
+  'shelf',
+  'cabinet',
+]
 
 for (const category of requiredFurnitureCategories) {
   const prior = furnitureSizePriorForCategory(category)
   assert.equal(prior.category, category)
-  assert.ok(prior.size.widthMeters >= 0.5)
-  assert.ok(prior.size.depthMeters >= 0.5)
-  assert.ok(prior.size.heightMeters >= 0.5)
+  assert.ok(prior.size.widthMeters > 0)
+  assert.ok(prior.size.depthMeters > 0)
+  assert.ok(prior.size.heightMeters > 0)
   assert.deepEqual(prior.suggestedSize, {
     x: prior.size.widthMeters,
     y: prior.size.heightMeters,
@@ -31,6 +42,8 @@ const unknownPrior = furnitureSizePriorForCategory('floor_lamp')
 assert.equal(unknownPrior.category, 'custom')
 assert.equal(unknownPrior.assetId, 'custom.proxy')
 assert.deepEqual(unknownPrior.suggestedSize, { x: 0.8, y: 0.8, z: 0.8 })
+assert.equal(furnitureSizePriorForCategory('dresser').assetId, 'dresser.standard')
+assert.equal(furnitureSizePriorForCategory('nightstand').assetId, 'drawer.nightstand')
 
 assert.equal(structuralFixtureSizePriorForCategory('window').assetId, 'fixture.window.standard')
 assert.equal(structuralFixtureSizePriorForCategory('door').assetId, 'fixture.door.standard')

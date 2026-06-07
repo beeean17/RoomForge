@@ -1,4 +1,4 @@
-import { roomBounds, type CandidateSceneObject, type SpatialModel, type StructuralFixtureObject } from './spatialModel'
+import { roomBounds, type CandidateSceneObject, type SpatialModel, type StructuralFixtureObject } from './spatialModel.ts'
 
 export type FixtureEditAction =
   | 'wall-previous'

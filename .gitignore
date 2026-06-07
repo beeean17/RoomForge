@@ -55,6 +55,14 @@ storage-debug.log
 ui-debug.log
 *-debug.log
 service-account*.json
+serviceAccount*.json
+serviceAccountKey.json
+firebase-adminsdk-*.json
+*-firebase-adminsdk-*.json
+credentials.json
+secrets.json
+**/credentials.json
+**/secrets.json
 google-services.json
 GoogleService-Info.plist
 .firebase-emulator-data/

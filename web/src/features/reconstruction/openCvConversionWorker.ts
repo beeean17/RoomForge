@@ -100,6 +100,7 @@ export function useOpenCvConversionWorker({
     const runId = runIdRef.current
     let disposed = false
     let watchdogTimer: number | undefined
+    let workerErrorTimer: number | undefined
     let currentStage: OpenCvConversionStage = 'idle'
     let workerFailureReported = false
 
@@ -112,8 +113,13 @@ export function useOpenCvConversionWorker({
       setState(next)
     }
 
-    function fail(stage: OpenCvConversionStage, phaseLabel: string, detail: string) {
+    function clearFailureTimers() {
       window.clearTimeout(watchdogTimer)
+      window.clearTimeout(workerErrorTimer)
+    }
+
+    function fail(stage: OpenCvConversionStage, phaseLabel: string, detail: string) {
+      clearFailureTimers()
       workerRef.current?.terminate()
       workerRef.current = null
       update({
@@ -211,11 +217,16 @@ export function useOpenCvConversionWorker({
       if (workerFailureReported) {
         return
       }
-      fail(
-        failureStageFromCurrent(currentStage),
-        'OpenCV worker 오류',
-        workerErrorEventDetail(event),
-      )
+      event.preventDefault()
+      const stageAtError = failureStageFromCurrent(currentStage)
+      const detail = workerErrorEventDetail(event)
+      window.clearTimeout(workerErrorTimer)
+      workerErrorTimer = window.setTimeout(() => {
+        if (workerFailureReported || disposed || runId !== runIdRef.current) {
+          return
+        }
+        fail(stageAtError, 'OpenCV worker 오류', detail)
+      }, 120)
     }
 
     worker.onmessageerror = () => {
@@ -338,7 +349,7 @@ export function useOpenCvConversionWorker({
 
     return () => {
       disposed = true
-      window.clearTimeout(watchdogTimer)
+      clearFailureTimers()
       worker.terminate()
       if (workerRef.current === worker) {
         workerRef.current = null

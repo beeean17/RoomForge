@@ -21,6 +21,7 @@ function mediaBlock(query) {
 
 assertContains(runtimeSource, '<section class="editor-shell"', 'desktop shell exists')
 assertContains(runtimeSource, '<div class="viewport"', 'central viewport exists')
+assertContains(runtimeSource, '<aside class="left-tool-panel"', 'left tool panel exists for furniture presets')
 assertContains(runtimeSource, '<aside class="status-panel"', 'right inspector/status panel exists')
 assertContains(runtimeSource, 'class="viewport-toolbar"', 'persistent 2D/3D switcher exists')
 assertContains(runtimeSource, 'Show 2D planning view', '2D button has accessible name')
@@ -37,7 +38,8 @@ assertContains(runtimeSource, 'aria-describedby="scale-status"', 'scale input re
 assertContains(runtimeSource, 'role="status" aria-live="polite"', 'polite live status regions exist')
 assertContains(runtimeSource, 'role="status" aria-live="assertive"', 'assertive placement warning exists')
 
-assertContains(cssSource, 'grid-template-columns: minmax(0, 1fr) 320px;', 'desktop keeps large canvas with right inspector')
+assertContains(cssSource, 'grid-template-columns: 64px var(--rf-left-panel-width) minmax(0, 1fr) 320px;', 'desktop keeps rail, optional left panel, large canvas, and right inspector')
+assertContains(cssSource, '.editor-stage.is-left-panel-open', 'left furniture panel can expand from the rail')
 assertContains(cssSource, 'max-height: 100vh;', 'desktop shell and inspector fit viewport height')
 assertContains(cssSource, 'justify-content: flex-start;', 'right inspector scrolls from the first control group')
 assertContains(cssSource, 'overflow: auto;', 'right inspector can scroll')

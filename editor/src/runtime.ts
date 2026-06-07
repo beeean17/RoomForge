@@ -42,6 +42,13 @@ import {
   type FurnitureEditAction,
 } from './furnitureModel'
 import {
+  furnitureFootprintCornersAt,
+  furnitureMagneticSnapPosition,
+  signedPlanAngleDeltaDegrees,
+  snappedRotationDegrees as snappedRotationDegreesForPlan,
+} from './furniturePlacement'
+import {
+  clampFixtureOffsetForWall,
   editSelectedFixtureInModel,
   placeFixtureCandidateInModel,
   selectFixtureInModel,
@@ -71,7 +78,10 @@ import {
   type StructuralFixtureObject,
   type ViewMode,
 } from './spatialModel'
-import { furnitureSizePriorForCategory } from './sizePriors.ts'
+import {
+  furnitureSizePriorForCategory,
+  structuralFixtureSizePriorForCategory,
+} from './sizePriors.ts'
 
 export type EditorRuntimeMountOptions = {
   chrome?: 'full' | 'embedded'
@@ -141,6 +151,33 @@ const furnitureCatalogMarkup = catalogFurnitureItems
   })
   .join('')
 
+const fixtureCatalogItems: Array<{
+  category: 'window' | 'door'
+  label: string
+  labelKo: string
+  note: string
+  noteKo: string
+}> = [
+  { category: 'window', label: 'Window', labelKo: '창문', note: 'move along wall', noteKo: '벽을 따라 이동' },
+  { category: 'door', label: 'Door', labelKo: '문', note: 'wall opening', noteKo: '벽 개구부' },
+]
+
+const fixtureCatalogMarkup = fixtureCatalogItems
+  .map((item) => {
+    const prior = structuralFixtureSizePriorForCategory(item.category)
+    const label = t(item.label, item.labelKo)
+    const note = t(item.note, item.noteKo)
+    return `<button class="obj-tile fixture-tile" type="button" data-fixture-create="${item.category}" aria-label="${t(
+      `Add ${item.label} to the front wall`,
+      `${item.labelKo}을(를) 정면 벽에 추가`,
+    )}">
+      <strong>${label}</strong>
+      <span>${prior.size.x.toFixed(1)} x ${prior.size.y.toFixed(1)} m</span>
+      <small>${note} · ${t('click to add', '클릭 추가')}</small>
+    </button>`
+  })
+  .join('')
+
 app.innerHTML = `
 <section class="editor-shell" data-editor-chrome="${options.chrome === 'embedded' ? 'embedded' : 'full'}">
   <header class="editor-topbar" aria-label="${t('Editor top bar', '편집기 상단 바')}">
@@ -159,11 +196,32 @@ app.innerHTML = `
   <div class="editor-stage">
   <nav class="tool-rail" aria-label="${t('Editor tools', '편집 도구')}">
     <button type="button" data-editor-tool="select" aria-pressed="true" title="${t('Select', '선택')}" aria-label="${t('Select', '선택')}">S</button>
-    <button type="button" data-editor-tool="move" aria-pressed="false" title="${t('Move', '이동')}" aria-label="${t('Move', '이동')}">M</button>
-    <button type="button" data-editor-tool="furniture" aria-pressed="false" title="${t('Add furniture', '가구 추가')}" aria-label="${t('Add furniture', '가구 추가')}">F</button>
-    <button type="button" data-editor-tool="measure" aria-pressed="false" title="${t('Measure', '측정')}" aria-label="${t('Measure', '측정')}">R</button>
+    <button type="button" data-editor-tool="move" aria-pressed="false" title="${t('Move and rotate objects', '객체 이동 및 회전')}" aria-label="${t('Move and rotate objects', '객체 이동 및 회전')}">↔</button>
+    <button type="button" data-editor-tool="furniture" aria-controls="left-tool-panel" aria-expanded="false" aria-pressed="false" title="${t('Furniture catalog', '가구 카탈로그')}" aria-label="${t('Furniture catalog', '가구 카탈로그')}">${t('Obj', '가구')}</button>
+    <button type="button" data-editor-tool="measure" aria-pressed="false" title="${t('Measure distance', '거리 측정')}" aria-label="${t('Measure distance', '거리 측정')}">⌖</button>
     <button type="button" data-editor-tool="layers" aria-pressed="false" title="${t('Layers', '레이어')}" aria-label="${t('Layers', '레이어')}">L</button>
   </nav>
+  <aside class="left-tool-panel" id="left-tool-panel" aria-label="${t('Furniture and opening presets', '가구 및 개구부 프리셋')}" aria-hidden="true" hidden>
+    <div class="left-tool-panel-header">
+      <div>
+        <p class="eyebrow">${t('Objects', '오브젝트')}</p>
+        <h2>${t('Furniture candidates', '가구 후보')}</h2>
+      </div>
+      <span class="state-pill measurement">${t('drag/drop', '드래그/드롭')}</span>
+    </div>
+    <div class="object-catalog object-catalog-sidebar" aria-label="${t('Drag furniture presets onto the canvas', '캔버스로 드래그할 가구 프리셋')}">
+      ${furnitureCatalogMarkup}
+    </div>
+    <div class="left-tool-panel-header left-tool-panel-subhead">
+      <div>
+        <p class="eyebrow">${t('Openings', '개구부')}</p>
+        <h2>${t('Windows and doors', '창문과 문')}</h2>
+      </div>
+    </div>
+    <div class="object-catalog object-catalog-sidebar" aria-label="${t('Add structural openings to the wall', '벽에 구조 개구부 추가')}">
+      ${fixtureCatalogMarkup}
+    </div>
+  </aside>
   <div class="viewport" aria-label="${t('RoomForge editor viewport', 'RoomForge 편집기 뷰포트')}">
     <div class="viewport-toolbar" aria-label="${t('Planning view controls', '배치 보기 컨트롤')}">
       <button id="view-2d" type="button" aria-label="${t('Show 2D planning view', '2D 배치 보기 표시')}" aria-pressed="true">2D</button>
@@ -173,6 +231,8 @@ app.innerHTML = `
     <div class="canvas-toolbar" role="toolbar" aria-label="${t('Canvas tools', '캔버스 도구')}">
       <button type="button" data-camera-action="fit">${t('Fit', '맞춤')}</button>
       <button type="button" data-camera-action="reset">${t('Reset', '초기화')}</button>
+      <button type="button" data-zoom-action="out" aria-label="${t('Zoom out', '축소')}">-</button>
+      <button type="button" data-zoom-action="in" aria-label="${t('Zoom in', '확대')}">+</button>
       <button type="button" data-canvas-toggle="snap" aria-pressed="true">${t('Snap', '스냅')}</button>
       <button type="button" data-canvas-toggle="grid" aria-pressed="true">${t('Grid', '그리드')}</button>
     </div>
@@ -195,6 +255,51 @@ app.innerHTML = `
     </div>
     <div class="viewport-plan-hint" id="plan-hint" role="status" aria-live="polite">
       ${t('2D top plan: drag furniture from the catalog, then click and drag placed objects.', '2D 탑다운 평면도: 카탈로그 가구를 드래그해 배치하고, 배치된 가구를 클릭해 끌어 이동하세요.')}
+    </div>
+    <aside class="selected-furniture-panel" id="selected-furniture-panel" data-object-type="none" role="dialog" aria-modal="false" aria-labelledby="selected-furniture-panel-title" aria-label="${t('Selected object size controls', '선택 객체 크기 조절')}" hidden>
+      <div class="selected-furniture-panel-head">
+        <button type="button" data-selected-panel-action="back" aria-label="${t('Back to room selection', '방 선택으로 돌아가기')}">‹</button>
+        <div>
+          <strong id="selected-furniture-panel-title">${t('Furniture', '가구')}</strong>
+          <span id="selected-furniture-panel-source">${t('catalog model', '카탈로그 모델')}</span>
+        </div>
+      </div>
+      <div class="selected-furniture-preview" id="selected-furniture-preview" aria-hidden="true"></div>
+      <div class="selected-furniture-dimensions">
+        <span>${t('Dimensions', '크기')}</span>
+        <strong id="selected-furniture-panel-dimensions">--</strong>
+      </div>
+      <div class="selected-furniture-size-grid" aria-label="${t('Resize selected object', '선택 객체 크기 조절')}">
+        <label>
+          <span>${t('Width', '너비')}</span>
+          <input type="number" min="0.2" step="0.05" inputmode="decimal" data-selected-size-field="width" />
+          <output data-selected-size-output="width">--</output>
+        </label>
+        <label>
+          <span>${t('Depth', '깊이')}</span>
+          <input type="number" min="0.2" step="0.05" inputmode="decimal" data-selected-size-field="depth" />
+          <output data-selected-size-output="depth">--</output>
+        </label>
+        <label>
+          <span>${t('Height', '높이')}</span>
+          <input type="number" min="0.2" step="0.05" inputmode="decimal" data-selected-size-field="height" />
+          <output data-selected-size-output="height">--</output>
+        </label>
+      </div>
+      <div class="selected-furniture-panel-actions" aria-label="${t('Selected furniture actions', '선택 가구 작업')}">
+        <button type="button" data-furniture-edit="rotate-left" aria-label="${t('Rotate left', '왼쪽 회전')}">⟲</button>
+        <button type="button" data-furniture-edit="rotate-right" aria-label="${t('Rotate right', '오른쪽 회전')}">⟳</button>
+        <button type="button" data-furniture-edit="flip-horizontal" aria-label="${t('Flip horizontal', '좌우 뒤집기')}">⇋</button>
+        <button type="button" data-furniture-edit="flip-vertical" aria-label="${t('Flip vertical', '상하 뒤집기')}">⇅</button>
+        <button type="button" data-furniture-edit="delete" aria-label="${t('Delete selected furniture', '선택 가구 삭제')}">⌫</button>
+      </div>
+    </aside>
+    <div class="selected-furniture-toolbar" id="selected-furniture-toolbar" role="toolbar" aria-label="${t('Selected furniture quick actions', '선택 가구 빠른 작업')}" hidden>
+      <button type="button" data-furniture-edit="rotate-left" aria-label="${t('Rotate left', '왼쪽 회전')}">⟲</button>
+      <button type="button" data-furniture-edit="rotate-right" aria-label="${t('Rotate right', '오른쪽 회전')}">⟳</button>
+      <button type="button" data-furniture-edit="flip-horizontal" aria-label="${t('Flip horizontal', '좌우 뒤집기')}">⇋</button>
+      <button type="button" data-furniture-edit="flip-vertical" aria-label="${t('Flip vertical', '상하 뒤집기')}">⇅</button>
+      <button type="button" data-furniture-edit="delete" aria-label="${t('Delete selected furniture', '선택 가구 삭제')}">⌫</button>
     </div>
     <div class="viewport-warning" id="placement-status" role="status" aria-live="assertive" hidden>
       ${t('Placement warning', '배치 경고')}
@@ -535,6 +640,8 @@ app.innerHTML = `
 `
 
 const canvas = app.querySelector<HTMLCanvasElement>('.editor-canvas')
+const editorStage = app.querySelector<HTMLElement>('.editor-stage')
+const leftToolPanel = app.querySelector<HTMLElement>('#left-tool-panel')
 const viewport = app.querySelector<HTMLElement>('.viewport')
 const bridgeStatus = app.querySelector<HTMLElement>('#bridge-status')
 const opencvStatus = app.querySelector<HTMLElement>('#opencv-status')
@@ -545,6 +652,12 @@ const spatialStatus = app.querySelector<HTMLElement>('#spatial-status')
 const inspectorStatus = app.querySelector<HTMLElement>('#inspector-status')
 const measurementStatus = app.querySelector<HTMLElement>('#measurement-status')
 const planHint = app.querySelector<HTMLElement>('#plan-hint')
+const selectedFurniturePanel = app.querySelector<HTMLElement>('#selected-furniture-panel')
+const selectedFurnitureToolbar = app.querySelector<HTMLElement>('#selected-furniture-toolbar')
+const selectedFurniturePanelTitle = app.querySelector<HTMLElement>('#selected-furniture-panel-title')
+const selectedFurniturePanelSource = app.querySelector<HTMLElement>('#selected-furniture-panel-source')
+const selectedFurniturePanelDimensions = app.querySelector<HTMLElement>('#selected-furniture-panel-dimensions')
+const selectedFurniturePreview = app.querySelector<HTMLElement>('#selected-furniture-preview')
 const placementStatus = app.querySelector<HTMLElement>('#placement-status')
 const placementSummary = app.querySelector<HTMLElement>('#placement-summary')
 const sceneStatus = app.querySelector<HTMLElement>('#scene-status')
@@ -608,6 +721,9 @@ const toolRailButtons = Array.from(
 const canvasToggleButtons = Array.from(
   app.querySelectorAll<HTMLButtonElement>('[data-canvas-toggle]'),
 )
+const zoomActionButtons = Array.from(
+  app.querySelectorAll<HTMLButtonElement>('[data-zoom-action]'),
+)
 const layerToggleButtons = Array.from(
   app.querySelectorAll<HTMLButtonElement>('[data-layer-toggle]'),
 )
@@ -617,6 +733,9 @@ const cameraActionButtons = Array.from(
 const furnitureCategoryButtons = Array.from(
   app.querySelectorAll<HTMLButtonElement>('[data-furniture-category]'),
 )
+const fixtureCreateButtons = Array.from(
+  app.querySelectorAll<HTMLButtonElement>('[data-fixture-create]'),
+)
 const furnitureEditButtons = Array.from(
   app.querySelectorAll<HTMLButtonElement>('[data-furniture-edit]'),
 )
@@ -625,6 +744,15 @@ const transformInputs = Array.from(
 )
 const transformOutputs = Array.from(
   app.querySelectorAll<HTMLOutputElement>('[data-transform-output]'),
+)
+const selectedSizeInputs = Array.from(
+  app.querySelectorAll<HTMLInputElement>('[data-selected-size-field]'),
+)
+const selectedSizeOutputs = Array.from(
+  app.querySelectorAll<HTMLOutputElement>('[data-selected-size-output]'),
+)
+const selectedPanelActionButtons = Array.from(
+  app.querySelectorAll<HTMLButtonElement>('[data-selected-panel-action]'),
 )
 const persistenceActionButtons = Array.from(
   app.querySelectorAll<HTMLButtonElement>('[data-persistence-action]'),
@@ -638,6 +766,8 @@ const fixtureEditButtons = Array.from(
 
 if (
   !canvas ||
+  !editorStage ||
+  !leftToolPanel ||
   !viewport ||
   !bridgeStatus ||
   !opencvStatus ||
@@ -648,6 +778,12 @@ if (
   !inspectorStatus ||
   !measurementStatus ||
   !planHint ||
+  !selectedFurniturePanel ||
+  !selectedFurnitureToolbar ||
+  !selectedFurniturePanelTitle ||
+  !selectedFurniturePanelSource ||
+  !selectedFurniturePanelDimensions ||
+  !selectedFurniturePreview ||
   !placementStatus ||
   !placementSummary ||
   !sceneStatus ||
@@ -707,12 +843,17 @@ if (
   !cursorCoords ||
   toolRailButtons.length === 0 ||
   canvasToggleButtons.length === 0 ||
+  zoomActionButtons.length === 0 ||
   layerToggleButtons.length === 0 ||
   cameraActionButtons.length === 0 ||
   furnitureCategoryButtons.length === 0 ||
+  fixtureCreateButtons.length === 0 ||
   furnitureEditButtons.length === 0 ||
   transformInputs.length === 0 ||
   transformOutputs.length === 0 ||
+  selectedSizeInputs.length === 0 ||
+  selectedSizeOutputs.length === 0 ||
+  selectedPanelActionButtons.length === 0 ||
   persistenceActionButtons.length === 0 ||
   layoutLoadSourceButtons.length === 0 ||
   fixtureEditButtons.length === 0
@@ -721,6 +862,8 @@ if (
 }
 
 const editorCanvas = canvas
+const editorStageElement = editorStage
+const leftToolPanelElement = leftToolPanel
 const viewportElement = viewport
 const bridgeStatusElement = bridgeStatus
 const opencvStatusElement = opencvStatus
@@ -731,6 +874,12 @@ const spatialStatusElement = spatialStatus
 const inspectorStatusElement = inspectorStatus
 const measurementStatusElement = measurementStatus
 const planHintElement = planHint
+const selectedFurniturePanelElement = selectedFurniturePanel
+const selectedFurnitureToolbarElement = selectedFurnitureToolbar
+const selectedFurniturePanelTitleElement = selectedFurniturePanelTitle
+const selectedFurniturePanelSourceElement = selectedFurniturePanelSource
+const selectedFurniturePanelDimensionsElement = selectedFurniturePanelDimensions
+const selectedFurniturePreviewElement = selectedFurniturePreview
 const placementStatusElement = placementStatus
 const placementSummaryElement = placementSummary
 const sceneStatusElement = sceneStatus
@@ -790,9 +939,14 @@ const layoutAreaElement = layoutArea
 const cursorCoordsElement = cursorCoords
 const toolRailButtonElements = toolRailButtons
 const canvasToggleButtonElements = canvasToggleButtons
+const zoomActionButtonElements = zoomActionButtons
 const layerToggleButtonElements = layerToggleButtons
+const fixtureCreateButtonElements = fixtureCreateButtons
 const transformInputElements = transformInputs
 const transformOutputElements = transformOutputs
+const selectedSizeInputElements = selectedSizeInputs
+const selectedSizeOutputElements = selectedSizeOutputs
+const selectedPanelActionButtonElements = selectedPanelActionButtons
 const persistenceActionButtonElements = persistenceActionButtons
 const layoutLoadSourceButtonElements = layoutLoadSourceButtons
 const fixtureEditButtonElements = fixtureEditButtons
@@ -864,6 +1018,7 @@ room.add(selectionLine)
 const furnitureSelectionMaterial = new THREE.LineBasicMaterial({ color: 0xf4f1ea })
 const furnitureMeshes = new Map<string, THREE.Object3D>()
 const furnitureOutlineObjects: THREE.LineSegments[] = []
+const furnitureRotateHandleObjects: THREE.Object3D[] = []
 const fixtureMeshes = new Map<string, THREE.Object3D>()
 const fixtureOutlineObjects: THREE.LineSegments[] = []
 
@@ -915,8 +1070,11 @@ const pointer = new THREE.Vector2()
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02)
 const cameraTarget = new THREE.Vector3()
 const reducedMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
+const colorSchemeMedia = window.matchMedia('(prefers-color-scheme: light)')
 
 type CameraDragMode = 'orbit' | 'pan'
+
+type EditorTool = 'select' | 'move' | 'furniture' | 'measure' | 'layers'
 
 type SourceImageForExtraction = {
   dataUrl?: string
@@ -960,6 +1118,40 @@ type FurnitureDragState = {
   offset: { x: number; y: number }
 }
 
+type FurnitureRotationState = {
+  pointerId: number
+  objectId: string
+  center: { x: number; y: number }
+  startAngleDegrees: number
+  initialRotationDegrees: number
+}
+
+type FixtureDragState = {
+  pointerId: number
+  fixtureId: string
+}
+
+type MeasurementPoint = {
+  x: number
+  y: number
+  label: string
+  sourceType: 'room' | 'furniture' | 'free'
+  sourceId: string
+}
+
+type MeasurementSegment = {
+  start: MeasurementPoint
+  end: MeasurementPoint
+}
+
+type MeasurementBoundarySegment = {
+  start: { x: number; y: number }
+  end: { x: number; y: number }
+  label: string
+  sourceType: 'room' | 'furniture'
+  sourceId: string
+}
+
 let activeCameraDrag:
   | {
       pointerId: number
@@ -968,13 +1160,22 @@ let activeCameraDrag:
       lastY: number
     }
   | null = null
+let activeEditorTool: EditorTool = 'select'
+let editorTheme: 'dark' | 'light' = currentEditorTheme()
 let activeFurnitureDrag: FurnitureDragState | null = null
+let activeFurnitureRotation: FurnitureRotationState | null = null
+let activeFixtureDrag: FixtureDragState | null = null
+let measurementStartPoint: MeasurementPoint | null = null
+let measurementPreviewPoint: MeasurementPoint | null = null
+let measurementSegment: MeasurementSegment | null = null
 let cameraTransition: CameraTransition | null = null
 let furnitureIdCounter = 0
+let fixtureIdCounter = 0
 let selectedReferenceEdgeIndex = 0
 let scaleNeedsRecalculation = false
 let splitViewActive = false
 let persistenceStateValue: PersistenceState = 'saved'
+let layoutAutosaveTimer: number | undefined
 let selectedLoadSource: LoadSource = 'latest'
 const canvasToggleState: Record<'grid' | 'snap', boolean> = {
   grid: true,
@@ -1009,6 +1210,7 @@ function render(): void {
     return
   }
   updateCameraTransition()
+  updateSelectedFurnitureOverlayPosition()
   renderer.render(scene, camera)
   animationFrame = requestAnimationFrame(render)
 }
@@ -1250,6 +1452,14 @@ addWindowEventListener('message', (event: MessageEvent<unknown>) => {
   handleBridgeCommand(event.data)
 })
 
+const themeObserver = new MutationObserver(() => {
+  applyEditorTheme()
+})
+themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+cleanupCallbacks.push(() => themeObserver.disconnect())
+colorSchemeMedia.addEventListener('change', applyEditorTheme)
+cleanupCallbacks.push(() => colorSchemeMedia.removeEventListener('change', applyEditorTheme))
+
 view2dButtonElement.addEventListener('click', () => setViewMode('2d'))
 view3dButtonElement.addEventListener('click', () => setViewMode('3d'))
 viewSplitButtonElement.addEventListener('click', () => setSplitViewMode())
@@ -1281,11 +1491,10 @@ for (const button of persistenceActionButtonElements) {
 }
 for (const button of toolRailButtonElements) {
   button.addEventListener('click', () => {
-    for (const item of toolRailButtonElements) {
-      item.setAttribute('aria-pressed', String(item === button))
-      item.classList.toggle('is-active', item === button)
+    const tool = button.dataset.editorTool
+    if (isEditorTool(tool)) {
+      setEditorTool(tool)
     }
-    sceneStatusElement.textContent = `${button.textContent?.trim() ?? ''} ${t('tool selected', '도구 선택됨')}`
   })
 }
 for (const button of canvasToggleButtonElements) {
@@ -1293,6 +1502,14 @@ for (const button of canvasToggleButtonElements) {
     const key = button.dataset.canvasToggle
     if (isCanvasToggleKey(key)) {
       setCanvasToggle(key)
+    }
+  })
+}
+for (const button of zoomActionButtonElements) {
+  button.addEventListener('click', () => {
+    const action = button.dataset.zoomAction
+    if (action === 'in' || action === 'out') {
+      zoomCanvas(action)
     }
   })
 }
@@ -1336,11 +1553,26 @@ for (const button of furnitureCategoryButtons) {
     updatePlanHint()
   })
 }
+for (const button of fixtureCreateButtonElements) {
+  button.addEventListener('click', () => {
+    const category = button.dataset.fixtureCreate
+    if (isCreatableFixtureCategory(category)) {
+      addStructuralFixture(category)
+    }
+  })
+}
 for (const button of furnitureEditButtons) {
   button.addEventListener('click', () => {
     const action = button.dataset.furnitureEdit
     if (isFurnitureEditAction(action)) {
       editSelectedFurniture(action)
+    }
+  })
+}
+for (const button of selectedPanelActionButtonElements) {
+  button.addEventListener('click', () => {
+    if (button.dataset.selectedPanelAction === 'back') {
+      selectRoom()
     }
   })
 }
@@ -1354,6 +1586,14 @@ furnitureObjectListElement.addEventListener('click', (event) => {
 for (const input of transformInputElements) {
   input.addEventListener('input', () => {
     const field = input.dataset.transformField
+    if (isTransformField(field)) {
+      updateSelectedFurnitureTransform(field, input.valueAsNumber)
+    }
+  })
+}
+for (const input of selectedSizeInputElements) {
+  input.addEventListener('input', () => {
+    const field = input.dataset.selectedSizeField
     if (isTransformField(field)) {
       updateSelectedFurnitureTransform(field, input.valueAsNumber)
     }
@@ -1591,10 +1831,25 @@ editorCanvas.addEventListener('drop', (event) => {
 })
 
 editorCanvas.addEventListener('pointerdown', (event) => {
+  if (activeEditorTool === 'measure' && spatialModel.viewMode === '2d' && !splitViewActive) {
+    handleMeasurementPointerDown(event)
+    event.preventDefault()
+    return
+  }
+
   setPointerFromEvent(event)
   raycaster.setFromCamera(pointer, camera)
+  const rotationHandleIntersections = raycaster.intersectObjects(furnitureRotateHandleObjects, true)
+  if (rotationHandleIntersections.length > 0) {
+    const objectId = rotationHandleIntersections[0].object.userData.objectId
+    selectFurniture(objectId)
+    startFurnitureRotation(event, objectId)
+    event.preventDefault()
+    return
+  }
+
   const intersections = raycaster.intersectObjects(cornerMeshes)
-  if (intersections.length > 0) {
+  if (activeEditorTool === 'select' && intersections.length > 0) {
     const cornerIndex = cornerMeshes.indexOf(intersections[0].object as THREE.Mesh)
     if (cornerIndex < 0) {
       return
@@ -1610,14 +1865,21 @@ editorCanvas.addEventListener('pointerdown', (event) => {
   if (furnitureIntersections.length > 0) {
     const objectId = furnitureIntersections[0].object.userData.objectId
     selectFurniture(objectId)
-    startFurnitureDrag(event, objectId)
+    if (canDirectManipulateFurniture()) {
+      startFurnitureDrag(event, objectId)
+    }
     event.preventDefault()
     return
   }
 
   const fixtureIntersections = raycaster.intersectObjects([...fixtureMeshes.values()], true)
   if (fixtureIntersections.length > 0) {
-    selectFixture(fixtureIntersections[0].object.userData.objectId)
+    const objectId = fixtureIntersections[0].object.userData.objectId
+    selectFixture(objectId)
+    if (canDirectManipulateFixture()) {
+      startFixtureDrag(event, objectId)
+    }
+    event.preventDefault()
     return
   }
 
@@ -1646,8 +1908,23 @@ editorCanvas.addEventListener('pointerdown', (event) => {
 
 editorCanvas.addEventListener('pointermove', (event) => {
   updateCursorCoordinates(event)
+  if (activeEditorTool === 'measure' && measurementStartPoint) {
+    updateMeasurementPreview(event)
+  }
   if (activeFurnitureDrag) {
     updateFurnitureDrag(event)
+    event.preventDefault()
+    return
+  }
+
+  if (activeFurnitureRotation) {
+    updateFurnitureRotation(event)
+    event.preventDefault()
+    return
+  }
+
+  if (activeFixtureDrag) {
+    updateFixtureDrag(event)
     event.preventDefault()
     return
   }
@@ -1684,6 +1961,16 @@ editorCanvas.addEventListener('pointerup', (event) => {
     return
   }
 
+  if (activeFurnitureRotation?.pointerId === event.pointerId) {
+    finishFurnitureRotation(event)
+    return
+  }
+
+  if (activeFixtureDrag?.pointerId === event.pointerId) {
+    finishFixtureDrag(event)
+    return
+  }
+
   if (activeCameraDrag?.pointerId === event.pointerId) {
     if (editorCanvas.hasPointerCapture(event.pointerId)) {
       editorCanvas.releasePointerCapture(event.pointerId)
@@ -1708,6 +1995,12 @@ editorCanvas.addEventListener('pointercancel', (event) => {
   if (activeFurnitureDrag?.pointerId === event.pointerId) {
     cancelFurnitureDrag(event)
   }
+  if (activeFurnitureRotation?.pointerId === event.pointerId) {
+    cancelFurnitureRotation(event)
+  }
+  if (activeFixtureDrag?.pointerId === event.pointerId) {
+    cancelFixtureDrag(event)
+  }
   if (activeCameraDrag?.pointerId === event.pointerId) {
     activeCameraDrag = null
   }
@@ -1718,11 +2011,11 @@ editorCanvas.addEventListener('pointercancel', (event) => {
 editorCanvas.addEventListener(
   'wheel',
   (event) => {
-    if (spatialModel.viewMode !== '3d') {
-      return
-    }
     zoomCamera(event.deltaY)
-    cameraStatusElement.textContent = t('Zoomed 3D camera', '3D 카메라 확대/축소됨')
+    cameraStatusElement.textContent =
+      spatialModel.viewMode === '2d'
+        ? t('Zoomed 2D canvas', '2D 캔버스 확대/축소됨')
+        : t('Zoomed 3D camera', '3D 카메라 확대/축소됨')
     emitCameraChanged()
     event.preventDefault()
   },
@@ -1943,6 +2236,7 @@ function hydrateFurnitureFromPlacedObjects(model: SpatialModel): SpatialModel {
 
 syncLayerToggleButtons()
 syncCanvasToggleButtons()
+syncEditorToolState()
 applySpatialModel()
 addWindowEventListener('resize', resizeRenderer)
 resizeRenderer()
@@ -1983,6 +2277,7 @@ function applySpatialModel(): void {
 function setViewMode(viewMode: ViewMode): void {
   splitViewActive = false
   spatialModel = { ...spatialModel, viewMode }
+  syncEditorToolState()
   rebuildStructuralFixtures()
   rebuildFurniture()
   rebuildPlanMeasurementOverlay()
@@ -1994,6 +2289,7 @@ function setViewMode(viewMode: ViewMode): void {
 function setSplitViewMode(): void {
   splitViewActive = true
   spatialModel = { ...spatialModel, viewMode: '3d' }
+  syncEditorToolState()
   rebuildStructuralFixtures()
   rebuildFurniture()
   rebuildPlanMeasurementOverlay()
@@ -2018,7 +2314,8 @@ function applyViewModeCamera(): void {
 function applyViewPresentation(): void {
   const is2d = spatialModel.viewMode === '2d' && !splitViewActive
   viewportElement.dataset.viewMode = is2d ? '2d' : '3d'
-  renderer.setClearColor(is2d ? 0xf7f6f1 : 0x090a0c)
+  viewportElement.dataset.theme = editorTheme
+  renderer.setClearColor(is2d ? planCanvasClearColor() : 0x090a0c)
 
   const floorMaterial = floor.material
   if (floorMaterial instanceof THREE.MeshBasicMaterial) {
@@ -2034,6 +2331,27 @@ function applyViewPresentation(): void {
   updatePlanHint()
 }
 
+function currentEditorTheme(): 'dark' | 'light' {
+  const explicitTheme = document.documentElement.getAttribute('data-theme')
+  if (explicitTheme === 'light' || explicitTheme === 'dark') {
+    return explicitTheme
+  }
+  return colorSchemeMedia.matches ? 'light' : 'dark'
+}
+
+function applyEditorTheme(): void {
+  const nextTheme = currentEditorTheme()
+  if (editorTheme === nextTheme) {
+    return
+  }
+  editorTheme = nextTheme
+  applyViewPresentation()
+}
+
+function planCanvasClearColor(): number {
+  return editorTheme === 'light' ? 0xffffff : 0x000000
+}
+
 function stringPayloadValue(payload: BridgePayload, key: string): string | undefined {
   const value = payload[key]
   return typeof value === 'string' ? value : undefined
@@ -2047,6 +2365,64 @@ function booleanPayloadValue(payload: BridgePayload, key: string): boolean | und
 function numberPayloadValue(payload: BridgePayload, key: string): number | undefined {
   const value = payload[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function isEditorTool(value: string | undefined): value is EditorTool {
+  return (
+    value === 'select' ||
+    value === 'move' ||
+    value === 'furniture' ||
+    value === 'measure' ||
+    value === 'layers'
+  )
+}
+
+function setEditorTool(tool: EditorTool): void {
+  activeEditorTool = tool
+  activeFurnitureDrag = null
+  activeFurnitureRotation = null
+  measurementPreviewPoint = null
+  if (tool !== 'measure') {
+    measurementStartPoint = null
+  }
+  if ((tool === 'move' || tool === 'furniture' || tool === 'measure') && spatialModel.viewMode !== '2d') {
+    setViewMode('2d')
+  }
+  syncEditorToolState()
+  rebuildFurniture()
+  rebuildPlanMeasurementOverlay()
+  updatePlanHint()
+  sceneStatusElement.textContent = localizedToolSelectedMessage(tool)
+}
+
+function syncEditorToolState(): void {
+  const leftPanelOpen = activeEditorTool === 'furniture'
+  for (const button of toolRailButtonElements) {
+    const active = button.dataset.editorTool === activeEditorTool
+    button.setAttribute('aria-pressed', String(active))
+    button.classList.toggle('is-active', active)
+    if (button.dataset.editorTool === 'furniture') {
+      button.setAttribute('aria-expanded', String(leftPanelOpen))
+    }
+  }
+  editorStageElement.dataset.activeTool = activeEditorTool
+  viewportElement.dataset.activeTool = activeEditorTool
+  editorStageElement.classList.toggle('is-left-panel-open', leftPanelOpen)
+  leftToolPanelElement.hidden = !leftPanelOpen
+  leftToolPanelElement.setAttribute('aria-hidden', String(!leftPanelOpen))
+  measurementStatusElement.hidden =
+    activeEditorTool !== 'measure' || spatialModel.viewMode !== '2d' || splitViewActive
+}
+
+function localizedToolSelectedMessage(tool: EditorTool): string {
+  const labels: Record<EditorTool, string> = {
+    select: t('Select tool selected.', '선택 도구가 선택되었습니다.'),
+    move: t('Move tool selected. Drag the selected object or its rotation handle.', '이동 도구가 선택되었습니다. 선택 객체나 회전 핸들을 드래그하세요.'),
+    furniture: t('Furniture catalog opened. Drag a preset onto the 2D plan.', '가구 카탈로그가 열렸습니다. 프리셋을 2D 평면도로 드래그하세요.'),
+    measure: t('Measurement tool selected. Click two object boundaries to measure distance.', '측정 도구가 선택되었습니다. 객체 경계 두 곳을 클릭해 거리를 측정하세요.'),
+    layers: t('Layer tool selected.', '레이어 도구가 선택되었습니다.'),
+  }
+  return labels[tool]
 }
 
 function isCanvasToggleKey(value: string | undefined): value is keyof typeof canvasToggleState {
@@ -2091,7 +2467,8 @@ function syncLayerToggleButtons(): void {
 function applyLayerVisibility(): void {
   furnitureGroup.visible = layerVisibility.furniture
   fixtureGroup.visible = layerVisibility.fixtures
-  measurementOverlayGroup.visible = spatialModel.viewMode === '2d' && layerVisibility.boundaries
+  measurementOverlayGroup.visible =
+    spatialModel.viewMode === '2d' && layerVisibility.boundaries && activeEditorTool === 'measure'
   candidateLine.visible = layerVisibility.lowConfidence
   confirmedLine.visible = layerVisibility.boundaries
   for (const corner of cornerMeshes) {
@@ -2511,6 +2888,10 @@ function saveStateDisplay(): { className: string; label: string } {
 }
 
 function saveLayoutFromEditor(): void {
+  if (layoutAutosaveTimer !== undefined) {
+    window.clearTimeout(layoutAutosaveTimer)
+    layoutAutosaveTimer = undefined
+  }
   persistenceStateValue = 'saving'
   updateEditorStatusBar()
   updatePersistencePanel()
@@ -2520,7 +2901,14 @@ function saveLayoutFromEditor(): void {
     persistenceStateValue = 'saved'
     updateSpatialStatus()
     sceneStatusElement.textContent = t('Layout saved and ready to reload.', '레이아웃이 저장되어 다시 로드할 수 있습니다.')
-    emitSceneState('roomforge.layout.saved')
+    postToParent({
+      type: 'roomforge.layout.saved',
+      version: BRIDGE_VERSION,
+      payload: {
+        ...spatialModelPayload(),
+        layout: layoutExportPayload(),
+      },
+    })
   }, 180)
 }
 
@@ -2639,16 +3027,53 @@ function layoutExportPayload(): Record<string, unknown> {
       asset_id: item.assetId ?? furnitureSizePriorForCategory(item.category).assetId,
       candidate_id: item.candidateId,
       label: item.label,
-      position_m: item.position,
-      size_m: item.size,
+      position_m: {
+        x: Number(item.position.x.toFixed(2)),
+        y: 0,
+        z: Number(item.position.y.toFixed(2)),
+      },
+      size_m: {
+        x: Number(item.size.widthMeters.toFixed(2)),
+        y: Number(item.size.heightMeters.toFixed(2)),
+        z: Number(item.size.depthMeters.toFixed(2)),
+      },
       rotation_deg: item.rotationDegrees,
+      flip_x: item.flipX === true,
+      flip_y: item.flipY === true,
       locked: item.locked === true,
       source: item.source ?? 'catalog',
     })),
+    structural_fixture_objects: spatialModel.structuralFixtures.map((item) => {
+      const size = item.size ?? structuralFixtureSizePriorForCategory(item.category).size
+      const position = item.position ?? { x: size.x / 2, y: Math.max(size.y / 2, 0.5), z: 0 }
+      return {
+        fixture_id: item.fixtureId,
+        category: item.category,
+        asset_id: structuralFixtureSizePriorForCategory(item.category).assetId,
+        candidate_id: item.candidateId,
+        label: item.label,
+        wall_id: item.wallId,
+        position_m: {
+          x: Number(position.x.toFixed(2)),
+          y: Number(position.y.toFixed(2)),
+          z: Number(position.z.toFixed(2)),
+        },
+        size_m: {
+          x: Number(size.x.toFixed(2)),
+          y: Number(size.y.toFixed(2)),
+          z: Number(size.z.toFixed(2)),
+        },
+        rotation_deg: item.rotationDegrees,
+        locked: item.locked === true,
+      }
+    }),
     editor_scene: {
       view_mode: spatialModel.viewMode,
       selected: spatialModel.selected,
       has_unsaved_changes: spatialModel.hasUnsavedChanges,
+      room: spatialModel.room,
+      furniture: spatialModel.furniture,
+      structural_fixtures: spatialModel.structuralFixtures,
     },
     meta: {
       review_required: placementWarning(spatialModel) !== null,
@@ -2889,14 +3314,20 @@ function createFurniturePlanSymbol(item: FurnitureObject, isSelected: boolean): 
   }
 
   addPlanOutline(group, width, depth, isSelected ? '#0ea5e9' : accent)
-  const label = createPlanTextSprite(`${localizedFurnitureLabel(item)} · ${width.toFixed(2)} x ${depth.toFixed(2)} m`, {
-    background: isSelected ? 'rgba(14, 165, 233, 0.92)' : 'rgba(17, 24, 39, 0.82)',
-    color: '#ffffff',
-    fontSize: 40,
-  })
-  label.position.set(0, 0.22, Math.max(depth / 2 + 0.16, 0.32))
-  label.scale.set(Math.max(1.1, Math.min(2.2, width + 0.3)), 0.28, 1)
-  group.add(label)
+  if (activeEditorTool === 'measure' || isSelected) {
+    const labelText =
+      activeEditorTool === 'measure'
+        ? `${localizedFurnitureLabel(item)} · ${width.toFixed(2)} x ${depth.toFixed(2)} m`
+        : localizedFurnitureLabel(item)
+    const label = createPlanTextSprite(labelText, {
+      background: isSelected ? 'rgba(14, 165, 233, 0.92)' : 'rgba(17, 24, 39, 0.82)',
+      color: '#ffffff',
+      fontSize: activeEditorTool === 'measure' ? 40 : 44,
+    })
+    label.position.set(0, 0.22, Math.max(depth / 2 + 0.16, 0.32))
+    scalePlanTextSprite(label, 0.24, Math.max(1.2, width + 0.8))
+    group.add(label)
+  }
 
   return group
 }
@@ -2944,6 +3375,7 @@ function rebuildFurniture(): void {
   }
   furnitureMeshes.clear()
   furnitureOutlineObjects.length = 0
+  furnitureRotateHandleObjects.length = 0
 
   for (const item of spatialModel.furniture) {
     const isSelected =
@@ -2964,6 +3396,7 @@ function rebuildFurniture(): void {
     const position = metricPointToScene(item.position.x, item.position.y, 0.03)
     asset.position.copy(position)
     asset.rotation.y = THREE.MathUtils.degToRad(item.rotationDegrees)
+    asset.scale.set(item.flipX ? -1 : 1, 1, item.flipY ? -1 : 1)
     tagSelectableObject(asset, item.objectId, 'furniture')
     setObjectOpacity(asset, spatialModel.viewMode === '2d' ? 0.94 : 0.92)
     furnitureGroup.add(asset)
@@ -2980,8 +3413,73 @@ function rebuildFurniture(): void {
       outline.userData.objectType = tokens.marker
       furnitureGroup.add(outline)
       furnitureOutlineObjects.push(outline)
+
+      if (canDirectManipulateFurniture()) {
+        const handle = createFurnitureRotationHandle(item, position)
+        handle.rotation.copy(asset.rotation)
+        furnitureGroup.add(handle)
+      }
     }
   }
+}
+
+function createFurnitureRotationHandle(item: FurnitureObject, position: THREE.Vector3): THREE.Group {
+  const width = Math.max(item.size.widthMeters, 0.2)
+  const depth = Math.max(item.size.depthMeters, 0.2)
+  const handleOffset = Math.max(0.42, Math.min(0.7, depth * 0.34))
+  const group = new THREE.Group()
+  group.position.copy(position).setY(0.24)
+  group.userData.objectId = item.objectId
+  group.userData.objectType = 'furniture-rotate-handle'
+
+  const stem = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, -depth / 2),
+      new THREE.Vector3(0, 0, -depth / 2 - handleOffset),
+    ]),
+    new THREE.LineBasicMaterial({ color: 0x0ea5e9 }),
+  )
+  stem.userData.objectId = item.objectId
+  stem.userData.objectType = 'furniture-rotate-handle'
+  group.add(stem)
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.11, 0.17, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0x0ea5e9,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.96,
+      depthTest: false,
+    }),
+  )
+  ring.rotation.x = -Math.PI / 2
+  ring.position.set(0, 0.01, -depth / 2 - handleOffset)
+  ring.userData.objectId = item.objectId
+  ring.userData.objectType = 'furniture-rotate-handle'
+  group.add(ring)
+  furnitureRotateHandleObjects.push(ring)
+
+  const knob = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }),
+  )
+  knob.position.copy(ring.position).setY(0.04)
+  knob.userData.objectId = item.objectId
+  knob.userData.objectType = 'furniture-rotate-handle'
+  group.add(knob)
+  furnitureRotateHandleObjects.push(knob)
+
+  const gripLabel = createPlanTextSprite(t('rotate', '회전'), {
+    background: 'rgba(14, 165, 233, 0.92)',
+    color: '#ffffff',
+    fontSize: 38,
+  })
+  gripLabel.position.set(0, 0.18, -depth / 2 - handleOffset - 0.26)
+  scalePlanTextSprite(gripLabel, 0.2, Math.max(0.85, width * 0.7))
+  group.add(gripLabel)
+
+  return group
 }
 
 function rebuildPlanMeasurementOverlay(): void {
@@ -2990,7 +3488,7 @@ function rebuildPlanMeasurementOverlay(): void {
     disposeObject3D(child)
   }
 
-  if (spatialModel.viewMode !== '2d' || splitViewActive) {
+  if (spatialModel.viewMode !== '2d' || splitViewActive || activeEditorTool !== 'measure') {
     measurementOverlayGroup.visible = false
     return
   }
@@ -3040,8 +3538,9 @@ function rebuildPlanMeasurementOverlay(): void {
     },
   )
   areaLabel.position.copy(metricPointToScene(width / 2, depth / 2, 0.24))
-  areaLabel.scale.set(Math.max(1.7, width * 0.36), 0.3, 1)
+  scalePlanTextSprite(areaLabel, 0.28, Math.max(2.1, width * 0.72))
   measurementOverlayGroup.add(areaLabel)
+  addActiveMeasurementLine()
   measurementOverlayGroup.visible = true
 }
 
@@ -3096,11 +3595,221 @@ function addDimensionLine(options: {
   const label = createPlanTextSprite(options.label, {
     background: 'rgba(255, 255, 255, 0.92)',
     color: '#111827',
-    fontSize: 44,
+    fontSize: 56,
   })
   label.position.copy(metricPointToScene(options.labelAt.x, options.labelAt.y, options.height + 0.04))
-  label.scale.set(0.82, 0.22, 1)
+  scalePlanTextSprite(label, 0.3, 1.45)
   measurementOverlayGroup.add(label)
+}
+
+function addActiveMeasurementLine(): void {
+  const activeSegment =
+    measurementStartPoint && measurementPreviewPoint
+      ? { start: measurementStartPoint, end: measurementPreviewPoint }
+      : measurementSegment
+  if (!activeSegment) {
+    return
+  }
+  const distance = measurementDistance(activeSegment)
+  if (distance < 0.01) {
+    return
+  }
+  addMeasurementSegmentLine(activeSegment, `${distance.toFixed(2)} m`)
+}
+
+function addMeasurementSegmentLine(segment: MeasurementSegment, labelText: string): void {
+  const start = metricPointToScene(segment.start.x, segment.start.y, 0.34)
+  const end = metricPointToScene(segment.end.x, segment.end.y, 0.34)
+  const direction = end.clone().sub(start).setY(0)
+  if (direction.length() < 0.001) {
+    return
+  }
+  direction.normalize()
+  const perpendicular = new THREE.Vector3(-direction.z, 0, direction.x)
+  const points = [
+    start,
+    end,
+    start,
+    start.clone().add(perpendicular.clone().multiplyScalar(0.08)),
+    start,
+    start.clone().add(perpendicular.clone().multiplyScalar(-0.08)),
+    end,
+    end.clone().add(perpendicular.clone().multiplyScalar(0.08)),
+    end,
+    end.clone().add(perpendicular.clone().multiplyScalar(-0.08)),
+  ]
+  const line = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color: 0x0ea5e9 }),
+  )
+  measurementOverlayGroup.add(line)
+
+  const midpoint = {
+    x: (segment.start.x + segment.end.x) / 2,
+    y: (segment.start.y + segment.end.y) / 2,
+  }
+  const label = createPlanTextSprite(labelText, {
+    background: 'rgba(14, 165, 233, 0.94)',
+    color: '#ffffff',
+    fontSize: 56,
+  })
+  label.position.copy(
+    metricPointToScene(
+      midpoint.x + perpendicular.x * 0.18,
+      midpoint.y + perpendicular.z * 0.18,
+      0.42,
+    ),
+  )
+  scalePlanTextSprite(label, 0.3, 1.55)
+  measurementOverlayGroup.add(label)
+}
+
+function handleMeasurementPointerDown(event: PointerEvent): void {
+  const point = measurementPointFromCanvasEvent(event)
+  if (!point) {
+    measurementStatusElement.textContent = t(
+      'Click a room or furniture boundary to start measuring.',
+      '측정을 시작하려면 방 또는 가구 경계를 클릭하세요.',
+    )
+    return
+  }
+
+  if (!measurementStartPoint) {
+    measurementStartPoint = point
+    measurementPreviewPoint = null
+    measurementSegment = null
+    measurementStatusElement.textContent = t(
+      `Measurement start: ${point.label}. Click another boundary.`,
+      `측정 시작: ${point.label}. 다른 경계를 클릭하세요.`,
+    )
+    rebuildPlanMeasurementOverlay()
+    return
+  }
+
+  measurementSegment = {
+    start: measurementStartPoint,
+    end: point,
+  }
+  measurementStatusElement.textContent = t(
+    `Measured ${measurementDistance(measurementSegment).toFixed(2)} m between ${measurementStartPoint.label} and ${point.label}.`,
+    `${measurementStartPoint.label}와 ${point.label} 사이 ${measurementDistance(measurementSegment).toFixed(2)} m.`,
+  )
+  measurementStartPoint = null
+  measurementPreviewPoint = null
+  rebuildPlanMeasurementOverlay()
+}
+
+function updateMeasurementPreview(event: PointerEvent): void {
+  const point = measurementPointFromCanvasEvent(event, true)
+  if (!point) {
+    return
+  }
+  measurementPreviewPoint = point
+  rebuildPlanMeasurementOverlay()
+}
+
+function measurementPointFromCanvasEvent(event: MouseEvent | PointerEvent | DragEvent, allowFreePoint = false): MeasurementPoint | null {
+  const metricPoint = metricPointFromCanvasEvent(event)
+  if (!metricPoint) {
+    return null
+  }
+  const boundaryPoint = closestMeasurementBoundaryPoint(metricPoint)
+  if (boundaryPoint) {
+    return boundaryPoint
+  }
+  return allowFreePoint
+    ? {
+        ...metricPoint,
+        label: t('preview point', '미리보기 지점'),
+        sourceType: 'free',
+        sourceId: 'measurement-preview',
+      }
+    : null
+}
+
+function closestMeasurementBoundaryPoint(point: { x: number; y: number }): MeasurementPoint | null {
+  let closest:
+    | {
+        point: { x: number; y: number }
+        distance: number
+        segment: MeasurementBoundarySegment
+      }
+    | null = null
+
+  for (const segment of measurementBoundarySegments()) {
+    const projected = closestPointOnMetricSegment(point, segment.start, segment.end)
+    const distance = Math.hypot(projected.x - point.x, projected.y - point.y)
+    if (!closest || distance < closest.distance) {
+      closest = { point: projected, distance, segment }
+    }
+  }
+
+  if (!closest || closest.distance > 0.28) {
+    return null
+  }
+
+  return {
+    x: Number(closest.point.x.toFixed(2)),
+    y: Number(closest.point.y.toFixed(2)),
+    label: closest.segment.label,
+    sourceType: closest.segment.sourceType,
+    sourceId: closest.segment.sourceId,
+  }
+}
+
+function measurementBoundarySegments(): MeasurementBoundarySegment[] {
+  const roomPoints = spatialModel.room.floorPlan.metricGeometry.points
+  const roomSegments = roomPoints.map((point, index) => {
+    const next = roomPoints[(index + 1) % roomPoints.length]
+    return {
+      start: point,
+      end: next,
+      label: usesKorean ? `방 경계 ${index + 1}` : `room edge ${index + 1}`,
+      sourceType: 'room' as const,
+      sourceId: spatialModel.room.objectId,
+    }
+  })
+
+  const furnitureSegments = spatialModel.furniture.flatMap((item) => {
+    const corners = furnitureFootprintCorners(item)
+    return corners.map((point, index) => ({
+      start: point,
+      end: corners[(index + 1) % corners.length],
+      label: usesKorean
+        ? `${localizedFurnitureLabel(item)} 경계 ${index + 1}`
+        : `${localizedFurnitureLabel(item)} edge ${index + 1}`,
+      sourceType: 'furniture' as const,
+      sourceId: item.objectId,
+    }))
+  })
+
+  return [...roomSegments, ...furnitureSegments]
+}
+
+function furnitureFootprintCorners(item: FurnitureObject): Array<{ x: number; y: number }> {
+  return furnitureFootprintCornersAt(item, item.position)
+}
+
+function closestPointOnMetricSegment(
+  point: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): { x: number; y: number } {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared <= 0.0001) {
+    return start
+  }
+  const amount = clampNumber(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1)
+  return {
+    x: start.x + dx * amount,
+    y: start.y + dy * amount,
+  }
+}
+
+function measurementDistance(segment: MeasurementSegment): number {
+  return Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y)
 }
 
 function createPlanTextSprite(
@@ -3108,21 +3817,28 @@ function createPlanTextSprite(
   options: { background: string; color: string; fontSize: number },
 ): THREE.Sprite {
   const canvas = document.createElement('canvas')
-  canvas.width = 640
-  canvas.height = 160
+  const measureCanvas = document.createElement('canvas')
+  const measureContext = measureCanvas.getContext('2d')
+  if (!measureContext) {
+    throw new Error('Could not create plan label canvas context.')
+  }
+  const font = `700 ${options.fontSize}px Inter, system-ui, sans-serif`
+  measureContext.font = font
+  canvas.width = Math.ceil(clampNumber(measureContext.measureText(text).width + 88, 220, 720))
+  canvas.height = 128
   const context = canvas.getContext('2d')
   if (!context) {
     throw new Error('Could not create plan label canvas context.')
   }
   context.clearRect(0, 0, canvas.width, canvas.height)
   context.fillStyle = options.background
-  roundRect(context, 18, 28, canvas.width - 36, canvas.height - 56, 18)
+  roundRect(context, 12, 20, canvas.width - 24, canvas.height - 40, 14)
   context.fill()
   context.fillStyle = options.color
-  context.font = `700 ${options.fontSize}px Inter, system-ui, sans-serif`
+  context.font = font
   context.textAlign = 'center'
   context.textBaseline = 'middle'
-  context.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 72)
+  context.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 56)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -3134,7 +3850,13 @@ function createPlanTextSprite(
   })
   const sprite = new THREE.Sprite(material)
   sprite.userData.objectType = 'plan-label'
+  sprite.userData.aspectRatio = canvas.width / canvas.height
   return sprite
+}
+
+function scalePlanTextSprite(sprite: THREE.Sprite, height: number, maxWidth = Number.POSITIVE_INFINITY): void {
+  const aspectRatio = typeof sprite.userData.aspectRatio === 'number' ? sprite.userData.aspectRatio : 4
+  sprite.scale.set(Math.min(maxWidth, height * aspectRatio), height, 1)
 }
 
 function roundRect(
@@ -3255,7 +3977,8 @@ function updateFurnitureInspector(
   warning: string | null,
 ): void {
   furnitureObjectListElement.innerHTML = furnitureObjectListMarkup()
-  updateTransformControls(selected)
+  updateTransformControls(selected, fixture)
+  updateSelectedObjectOverlay(selected, fixture)
 
   if (selected) {
     selectedObjectTitleElement.textContent = localizedFurnitureLabel(selected)
@@ -3282,6 +4005,77 @@ function updateFurnitureInspector(
   furniturePlacementWarningElement.innerHTML = `<span class="state-pill ${stateClass}">${stateLabel}</span><span>${escapeHtml(
     warningMessage ?? t('All objects inside room bounds', '모든 객체가 방 경계 안에 있음'),
   )}</span>`
+}
+
+function updateSelectedObjectOverlay(
+  selected: FurnitureObject | null,
+  fixture: StructuralFixtureObject | null,
+): void {
+  const panelVisible = selected !== null || fixture !== null
+  const toolbarVisible = selected !== null && spatialModel.viewMode === '2d' && !splitViewActive
+  selectedFurniturePanelElement.hidden = !panelVisible
+  selectedFurnitureToolbarElement.hidden = !toolbarVisible
+  selectedFurniturePanelElement.dataset.objectType = selected ? 'furniture' : fixture ? 'fixture' : 'none'
+  if (!panelVisible) {
+    selectedFurniturePreviewElement.className = 'selected-furniture-preview'
+    selectedFurniturePreviewElement.style.removeProperty('--preview-color')
+    selectedFurniturePreviewElement.style.removeProperty('--preview-rotation')
+    return
+  }
+
+  if (selected) {
+    selectedFurniturePanelTitleElement.textContent = `${localizedFurnitureLabel(selected)} - ${selected.category}`
+    selectedFurniturePanelSourceElement.textContent = selectedFurnitureSourceLabel(selected)
+    selectedFurniturePanelDimensionsElement.textContent = furnitureDimensionsCentimeters(selected)
+    selectedFurniturePreviewElement.className = `selected-furniture-preview selected-furniture-preview--${selected.category}`
+    selectedFurniturePreviewElement.style.setProperty('--preview-color', selected.color)
+    selectedFurniturePreviewElement.style.setProperty('--preview-rotation', `${selected.rotationDegrees}deg`)
+    selectedFurniturePreviewElement.classList.toggle('is-flipped-x', selected.flipX === true)
+    selectedFurniturePreviewElement.classList.toggle('is-flipped-y', selected.flipY === true)
+  } else if (fixture) {
+    selectedFurniturePanelTitleElement.textContent = `${localizedFixtureLabel(fixture)} - ${fixture.category}`
+    selectedFurniturePanelSourceElement.textContent = selectedFixtureSourceLabel(fixture)
+    selectedFurniturePanelDimensionsElement.textContent = fixtureDimensionsCentimeters(fixture)
+    selectedFurniturePreviewElement.className = `selected-furniture-preview selected-furniture-preview--fixture selected-furniture-preview--${fixture.category}`
+    selectedFurniturePreviewElement.style.setProperty('--preview-color', fixturePreviewColor(fixture))
+    selectedFurniturePreviewElement.style.setProperty('--preview-rotation', `${fixture.rotationDegrees}deg`)
+    selectedFurniturePreviewElement.classList.remove('is-flipped-x', 'is-flipped-y')
+  }
+  updateSelectedFurnitureOverlayPosition()
+}
+
+function updateSelectedFurnitureOverlayPosition(): void {
+  const selected = selectedFurniture()
+  if (!selected || selectedFurnitureToolbarElement.hidden || spatialModel.viewMode !== '2d' || splitViewActive) {
+    return
+  }
+  const rect = viewportElement.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) {
+    return
+  }
+  const anchor = metricPointToScene(selected.position.x, selected.position.y, 0.38)
+  anchor.project(camera)
+  const x = (anchor.x * 0.5 + 0.5) * rect.width
+  const y = (-anchor.y * 0.5 + 0.5) * rect.height
+  const clampedX = clampNumber(x, 178, Math.max(178, rect.width - 178))
+  const clampedY = clampNumber(y - 36, 96, Math.max(96, rect.height - 32))
+  selectedFurnitureToolbarElement.style.left = `${clampedX}px`
+  selectedFurnitureToolbarElement.style.top = `${clampedY}px`
+}
+
+function furnitureDimensionsCentimeters(item: FurnitureObject): string {
+  const width = Math.round(item.size.widthMeters * 100)
+  const depth = Math.round(item.size.depthMeters * 100)
+  const height = Math.round(item.size.heightMeters * 100)
+  return `${width}cm x ${depth}cm x ${height}cm`
+}
+
+function fixtureDimensionsCentimeters(item: StructuralFixtureObject): string {
+  const size = item.size ?? structuralFixtureSizePriorForCategory(item.category).size
+  const width = Math.round(size.x * 100)
+  const depth = Math.round(size.z * 100)
+  const height = Math.round(size.y * 100)
+  return `${width}cm x ${depth}cm x ${height}cm`
 }
 
 function furnitureObjectListMarkup(): string {
@@ -3320,6 +4114,17 @@ function selectedFurnitureSourceLabel(item: FurnitureObject): string {
   return `${source} · ${assetId}`
 }
 
+function selectedFixtureSourceLabel(item: StructuralFixtureObject): string {
+  const assetId = structuralFixtureSizePriorForCategory(item.category).assetId
+  return `${t('structural fixture', '구조 고정 요소')} · ${item.wallId} · ${assetId}`
+}
+
+function fixturePreviewColor(item: StructuralFixtureObject): string {
+  if (item.category === 'window') return '#60a5fa'
+  if (item.category === 'door') return '#a16207'
+  return '#94a3b8'
+}
+
 function furnitureObjectState(
   item: FurnitureObject,
   selected: boolean,
@@ -3337,8 +4142,11 @@ function furnitureObjectState(
   return { className: 'confirmed', label: t('confirmed', '확정') }
 }
 
-function updateTransformControls(selected: FurnitureObject | null): void {
-  if (!selected) {
+function updateTransformControls(
+  selected: FurnitureObject | null,
+  fixture: StructuralFixtureObject | null,
+): void {
+  if (!selected && !fixture) {
     transformXReadoutElement.textContent = '--'
     transformYReadoutElement.textContent = '--'
     transformRotationReadoutElement.textContent = '--'
@@ -3349,22 +4157,62 @@ function updateTransformControls(selected: FurnitureObject | null): void {
     for (const output of transformOutputElements) {
       output.textContent = '--'
     }
+    for (const input of selectedSizeInputElements) {
+      input.disabled = true
+      input.value = ''
+    }
+    for (const output of selectedSizeOutputElements) {
+      output.textContent = '--'
+    }
     return
   }
 
   const bounds = roomBounds(spatialModel)
+  if (fixture && !selected) {
+    const size = fixture.size ?? structuralFixtureSizePriorForCategory(fixture.category).size
+    const position = fixture.position ?? { x: size.x / 2, y: Math.max(size.y / 2, 0.5), z: 0 }
+    const wallLength = fixture.wallId === 'right-wall' || fixture.wallId === 'left-wall'
+      ? bounds.depthMeters
+      : bounds.widthMeters
+    transformXReadoutElement.textContent = `${position.x.toFixed(2)} m`
+    transformYReadoutElement.textContent = `${position.y.toFixed(2)} m`
+    transformRotationReadoutElement.textContent = `${fixture.rotationDegrees.toFixed(0)} deg`
+    transformSizeReadoutElement.textContent = `${size.x.toFixed(2)} x ${size.z.toFixed(2)} x ${size.y.toFixed(2)} m`
+    setTransformControl('position-x', position.x, 0, Math.max(wallLength, 0.2), true)
+    setTransformControl('position-y', position.y, 0, Math.max(spatialModel.room.heightMeters, 0.2), true)
+    setTransformControl('rotation', fixture.rotationDegrees, 0, 345, true)
+    setTransformControl('width', size.x, 0.2, Math.max(wallLength, 0.2), false)
+    setTransformControl('depth', size.z, 0.05, 0.5, false)
+    setTransformControl('height', size.y, 0.2, Math.max(spatialModel.room.heightMeters, 0.2), false)
+    setSelectedSizeControl('width', size.x, 0.2, Math.max(wallLength, 0.2), false)
+    setSelectedSizeControl('depth', size.z, 0.05, 0.5, false)
+    setSelectedSizeControl('height', size.y, 0.2, Math.max(spatialModel.room.heightMeters, 0.2), false)
+    return
+  }
+
+  if (!selected) {
+    return
+  }
+
   transformXReadoutElement.textContent = `${selected.position.x.toFixed(2)} m`
   transformYReadoutElement.textContent = `${selected.position.y.toFixed(2)} m`
   transformRotationReadoutElement.textContent = `${selected.rotationDegrees.toFixed(0)} deg`
   transformSizeReadoutElement.textContent = `${selected.size.widthMeters.toFixed(
     2,
   )} x ${selected.size.depthMeters.toFixed(2)} x ${selected.size.heightMeters.toFixed(2)} m`
-  setTransformControl('position-x', selected.position.x, 0, bounds.widthMeters, false)
-  setTransformControl('position-y', selected.position.y, 0, bounds.depthMeters, false)
+  const positionXMin = Math.min(-bounds.widthMeters, selected.position.x - bounds.widthMeters)
+  const positionXMax = Math.max(bounds.widthMeters * 2, selected.position.x + bounds.widthMeters)
+  const positionYMin = Math.min(-bounds.depthMeters, selected.position.y - bounds.depthMeters)
+  const positionYMax = Math.max(bounds.depthMeters * 2, selected.position.y + bounds.depthMeters)
+  setTransformControl('position-x', selected.position.x, positionXMin, positionXMax, false)
+  setTransformControl('position-y', selected.position.y, positionYMin, positionYMax, false)
   setTransformControl('rotation', selected.rotationDegrees, 0, 345, false)
   setTransformControl('width', selected.size.widthMeters, 0.2, Math.max(bounds.widthMeters, 0.2), false)
   setTransformControl('depth', selected.size.depthMeters, 0.2, Math.max(bounds.depthMeters, 0.2), false)
   setTransformControl('height', selected.size.heightMeters, 0.2, Math.max(spatialModel.room.heightMeters, 0.2), false)
+  setSelectedSizeControl('width', selected.size.widthMeters, 0.2, Math.max(bounds.widthMeters, 0.2), selected.locked === true)
+  setSelectedSizeControl('depth', selected.size.depthMeters, 0.2, Math.max(bounds.depthMeters, 0.2), selected.locked === true)
+  setSelectedSizeControl('height', selected.size.heightMeters, 0.2, Math.max(spatialModel.room.heightMeters, 0.2), selected.locked === true)
 }
 
 function setTransformControl(
@@ -3374,16 +4222,37 @@ function setTransformControl(
   max: number,
   disabled: boolean,
 ): void {
-  const input = transformInputElements.find((item) => item.dataset.transformField === field)
-  const output = transformOutputElements.find((item) => item.dataset.transformOutput === field)
-  if (!input || !output) {
-    return
+  const inputs = transformInputElements.filter((item) => item.dataset.transformField === field)
+  const outputs = transformOutputElements.filter((item) => item.dataset.transformOutput === field)
+  for (const input of inputs) {
+    input.disabled = disabled
+    input.min = String(min)
+    input.max = String(max)
+    input.value = String(value)
   }
-  input.disabled = disabled
-  input.min = String(min)
-  input.max = String(max)
-  input.value = String(value)
-  output.textContent = field === 'rotation' ? `${Math.round(value)} deg` : `${value.toFixed(2)} m`
+  for (const output of outputs) {
+    output.textContent = field === 'rotation' ? `${Math.round(value)} deg` : `${value.toFixed(2)} m`
+  }
+}
+
+function setSelectedSizeControl(
+  field: Extract<TransformField, 'width' | 'depth' | 'height'>,
+  value: number,
+  min: number,
+  max: number,
+  disabled: boolean,
+): void {
+  const inputs = selectedSizeInputElements.filter((item) => item.dataset.selectedSizeField === field)
+  const outputs = selectedSizeOutputElements.filter((item) => item.dataset.selectedSizeOutput === field)
+  for (const input of inputs) {
+    input.disabled = disabled
+    input.min = String(min)
+    input.max = String(max)
+    input.value = value.toFixed(2)
+  }
+  for (const output of outputs) {
+    output.textContent = `${value.toFixed(2)} m`
+  }
 }
 
 function updateCandidateTray(): void {
@@ -3618,6 +4487,22 @@ function emitSceneState(type: string, requestId?: string): void {
     requestId,
     payload: spatialModelPayload(),
   })
+  scheduleLayoutAutosave()
+}
+
+function scheduleLayoutAutosave(): void {
+  if (!spatialModel.hasUnsavedChanges) {
+    return
+  }
+  if (layoutAutosaveTimer !== undefined) {
+    window.clearTimeout(layoutAutosaveTimer)
+  }
+  layoutAutosaveTimer = window.setTimeout(() => {
+    layoutAutosaveTimer = undefined
+    if (spatialModel.hasUnsavedChanges) {
+      saveLayoutFromEditor()
+    }
+  }, 650)
 }
 
 function spatialModelPayload(): Record<string, unknown> {
@@ -3651,7 +4536,7 @@ function addFurniture(category: FurnitureCategory, position?: { x: number; y: nu
   const item = position
     ? {
         ...defaults,
-        position: clampedFurniturePosition(defaults, position),
+        position: snappedFurniturePosition(defaults, position),
       }
     : defaults
   spatialModel = addFurnitureToModel(spatialModel, item)
@@ -3671,6 +4556,45 @@ function addFurniture(category: FurnitureCategory, position?: { x: number; y: nu
   emitSceneState('roomforge.selection.changed')
 }
 
+function addStructuralFixture(category: 'window' | 'door'): void {
+  fixtureIdCounter += 1
+  const prior = structuralFixtureSizePriorForCategory(category)
+  const fixtureId = `fixture-${category}-${Date.now()}-${fixtureIdCounter}`
+  const wallId = 'front-wall'
+  const bounds = roomBounds(spatialModel)
+  const verticalCenter = category === 'window'
+    ? Math.min(Math.max(prior.size.y / 2 + 0.8, 1.1), Math.max(spatialModel.room.heightMeters - prior.size.y / 2, 1.1))
+    : prior.size.y / 2
+  const fixture: StructuralFixtureObject = {
+    fixtureId,
+    category,
+    wallId,
+    label: prior.label,
+    position: {
+      x: clampFixtureOffsetForWall(bounds.widthMeters / 2, { wallId, size: prior.size }, spatialModel),
+      y: Number(verticalCenter.toFixed(2)),
+      z: 0,
+    },
+    size: { ...prior.size },
+    rotationDegrees: 0,
+    locked: false,
+  }
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    selected: { objectId: fixture.fixtureId, objectType: 'fixture' },
+    structuralFixtures: [...spatialModel.structuralFixtures, fixture],
+  }
+  rebuildStructuralFixtures()
+  updateSpatialStatus()
+  geometryStatusElement.textContent = t(
+    `Added ${prior.label} to the front wall. Drag it along the wall to reposition it.`,
+    `${localizedFixtureLabel(fixture)}을(를) 정면 벽에 추가했습니다. 벽을 따라 드래그해 위치를 바꾸세요.`,
+  )
+  updatePlanHint()
+  emitSceneState('roomforge.fixture.placed')
+}
+
 function draggedFurnitureCategory(dataTransfer: DataTransfer | null): FurnitureCategory | null {
   const raw =
     dataTransfer?.getData('application/x-roomforge-furniture-category') ||
@@ -3686,6 +4610,14 @@ function hasDraggedFurnitureCategory(dataTransfer: DataTransfer | null): boolean
   return types.includes('application/x-roomforge-furniture-category') || types.includes('text/plain')
 }
 
+function canDirectManipulateFurniture(): boolean {
+  return spatialModel.viewMode === '2d' && !splitViewActive && activeEditorTool !== 'measure'
+}
+
+function canDirectManipulateFixture(): boolean {
+  return spatialModel.viewMode === '2d' && !splitViewActive && activeEditorTool !== 'measure'
+}
+
 function metricPointFromCanvasEvent(event: MouseEvent | PointerEvent | DragEvent): { x: number; y: number } | null {
   setPointerFromEvent(event)
   raycaster.setFromCamera(pointer, camera)
@@ -3697,7 +4629,7 @@ function metricPointFromCanvasEvent(event: MouseEvent | PointerEvent | DragEvent
 }
 
 function startFurnitureDrag(event: PointerEvent, objectId: unknown): void {
-  if (spatialModel.viewMode !== '2d' || typeof objectId !== 'string') {
+  if (!canDirectManipulateFurniture() || typeof objectId !== 'string') {
     return
   }
   const selected = spatialModel.furniture.find((item) => item.objectId === objectId)
@@ -3727,6 +4659,101 @@ function startFurnitureDrag(event: PointerEvent, objectId: unknown): void {
   )
 }
 
+function startFurnitureRotation(event: PointerEvent, objectId: unknown): void {
+  if (!canDirectManipulateFurniture() || typeof objectId !== 'string') {
+    return
+  }
+  const selected = spatialModel.furniture.find((item) => item.objectId === objectId)
+  const metricPoint = metricPointFromCanvasEvent(event)
+  if (!selected || selected.locked || !metricPoint) {
+    if (selected?.locked) {
+      geometryStatusElement.textContent = t(
+        `${selected.label} is locked. Unlock it before rotating.`,
+        `${localizedFurnitureLabel(selected)}은 잠겨 있습니다. 회전 전에 잠금을 해제하세요.`,
+      )
+    }
+    return
+  }
+  activeFurnitureRotation = {
+    pointerId: event.pointerId,
+    objectId,
+    center: selected.position,
+    startAngleDegrees: angleDegreesBetweenPoints(selected.position, metricPoint),
+    initialRotationDegrees: selected.rotationDegrees,
+  }
+  viewportElement.classList.add('is-rotating-furniture')
+  editorCanvas.setPointerCapture(event.pointerId)
+  planHintElement.textContent = t(
+    'Dragging the rotation handle.',
+    '회전 핸들을 드래그 중입니다.',
+  )
+}
+
+function updateFurnitureRotation(event: PointerEvent): void {
+  if (!activeFurnitureRotation) {
+    return
+  }
+  const selected = spatialModel.furniture.find((item) => item.objectId === activeFurnitureRotation?.objectId)
+  const metricPoint = metricPointFromCanvasEvent(event)
+  if (!selected || !metricPoint) {
+    return
+  }
+  const angle = angleDegreesBetweenPoints(activeFurnitureRotation.center, metricPoint)
+  const delta = signedPlanAngleDeltaDegrees(activeFurnitureRotation.startAngleDegrees, angle)
+  const snappedRotation = snappedRotationDegrees(
+    activeFurnitureRotation.initialRotationDegrees - delta,
+  )
+  if (Math.abs(snappedRotation - selected.rotationDegrees) < 0.5) {
+    return
+  }
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    furniture: spatialModel.furniture.map((item) =>
+      item.objectId === selected.objectId ? { ...item, rotationDegrees: snappedRotation } : item,
+    ),
+  }
+  rebuildFurniture()
+  updateSpatialStatus()
+}
+
+function finishFurnitureRotation(event: PointerEvent): void {
+  const selected = activeFurnitureRotation
+    ? spatialModel.furniture.find((item) => item.objectId === activeFurnitureRotation?.objectId)
+    : null
+  if (editorCanvas.hasPointerCapture(event.pointerId)) {
+    editorCanvas.releasePointerCapture(event.pointerId)
+  }
+  activeFurnitureRotation = null
+  viewportElement.classList.remove('is-rotating-furniture')
+  if (selected) {
+    geometryStatusElement.textContent = t(
+      `Rotated ${selected.label} to ${selected.rotationDegrees.toFixed(0)} degrees.`,
+      `${localizedFurnitureLabel(selected)} 회전됨: ${selected.rotationDegrees.toFixed(0)}도.`,
+    )
+  }
+  updatePlanHint()
+  updateSpatialStatus()
+  emitSceneState('roomforge.scene.updated')
+}
+
+function cancelFurnitureRotation(event: PointerEvent): void {
+  if (editorCanvas.hasPointerCapture(event.pointerId)) {
+    editorCanvas.releasePointerCapture(event.pointerId)
+  }
+  activeFurnitureRotation = null
+  viewportElement.classList.remove('is-rotating-furniture')
+  updatePlanHint()
+}
+
+function angleDegreesBetweenPoints(center: { x: number; y: number }, point: { x: number; y: number }): number {
+  return THREE.MathUtils.radToDeg(Math.atan2(point.y - center.y, point.x - center.x))
+}
+
+function snappedRotationDegrees(value: number): number {
+  return snappedRotationDegreesForPlan(value, canvasToggleState.snap)
+}
+
 function updateFurnitureDrag(event: PointerEvent): void {
   if (!activeFurnitureDrag) {
     return
@@ -3736,7 +4763,7 @@ function updateFurnitureDrag(event: PointerEvent): void {
   if (!selected || !metricPoint) {
     return
   }
-  const nextPosition = clampedFurniturePosition(selected, {
+  const nextPosition = snappedFurniturePosition(selected, {
     x: metricPoint.x + activeFurnitureDrag.offset.x,
     y: metricPoint.y + activeFurnitureDrag.offset.y,
   })
@@ -3786,28 +4813,93 @@ function cancelFurnitureDrag(event: PointerEvent): void {
   updatePlanHint()
 }
 
-function clampedFurniturePosition(
-  item: Pick<FurnitureObject, 'size'>,
-  position: { x: number; y: number },
-): { x: number; y: number } {
-  const bounds = roomBounds(spatialModel)
-  const halfWidth = Math.max(item.size.widthMeters / 2, 0)
-  const halfDepth = Math.max(item.size.depthMeters / 2, 0)
-  const minX = Math.min(halfWidth, bounds.widthMeters / 2)
-  const maxX = Math.max(bounds.widthMeters - halfWidth, bounds.widthMeters / 2)
-  const minY = Math.min(halfDepth, bounds.depthMeters / 2)
-  const maxY = Math.max(bounds.depthMeters - halfDepth, bounds.depthMeters / 2)
-  return {
-    x: snappedNumber(clampNumber(position.x, minX, maxX)),
-    y: snappedNumber(clampNumber(position.y, minY, maxY)),
+function startFixtureDrag(event: PointerEvent, fixtureId: unknown): void {
+  if (!canDirectManipulateFixture() || typeof fixtureId !== 'string') {
+    return
   }
+  const selected = spatialModel.structuralFixtures.find((item) => item.fixtureId === fixtureId)
+  if (!selected || selected.locked) {
+    return
+  }
+  activeFixtureDrag = {
+    pointerId: event.pointerId,
+    fixtureId,
+  }
+  viewportElement.classList.add('is-dragging-fixture')
+  editorCanvas.setPointerCapture(event.pointerId)
+  planHintElement.textContent = t(
+    'Dragging the selected window or door along its wall.',
+    '선택한 창문 또는 문을 벽을 따라 드래그 중입니다.',
+  )
 }
 
-function snappedNumber(value: number): number {
-  if (!canvasToggleState.snap) {
-    return Number(value.toFixed(2))
+function updateFixtureDrag(event: PointerEvent): void {
+  if (!activeFixtureDrag) {
+    return
   }
-  return Number((Math.round(value / 0.05) * 0.05).toFixed(2))
+  const selected = spatialModel.structuralFixtures.find((item) => item.fixtureId === activeFixtureDrag?.fixtureId)
+  const metricPoint = metricPointFromCanvasEvent(event)
+  if (!selected || !metricPoint) {
+    return
+  }
+  const offset = fixtureOffsetFromMetricPoint(selected.wallId, metricPoint)
+  const nextOffset = clampFixtureOffsetForWall(offset, selected, spatialModel)
+  const currentOffset = selected.position?.x ?? 0
+  if (Math.abs(nextOffset - currentOffset) < 0.001) {
+    return
+  }
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    structuralFixtures: spatialModel.structuralFixtures.map((item) =>
+      item.fixtureId === selected.fixtureId
+        ? { ...item, position: { ...(item.position ?? { x: 0, y: 1, z: 0 }), x: nextOffset } }
+        : item,
+    ),
+  }
+  rebuildStructuralFixtures()
+  updateSpatialStatus()
+}
+
+function finishFixtureDrag(event: PointerEvent): void {
+  const selected = activeFixtureDrag
+    ? spatialModel.structuralFixtures.find((item) => item.fixtureId === activeFixtureDrag?.fixtureId)
+    : null
+  if (editorCanvas.hasPointerCapture(event.pointerId)) {
+    editorCanvas.releasePointerCapture(event.pointerId)
+  }
+  activeFixtureDrag = null
+  viewportElement.classList.remove('is-dragging-fixture')
+  if (selected) {
+    geometryStatusElement.textContent = t(
+      `Moved ${selected.label ?? selected.category} on ${selected.wallId}.`,
+      `${localizedFixtureLabel(selected)}을(를) ${selected.wallId}에서 이동했습니다.`,
+    )
+  }
+  updatePlanHint()
+  updateSpatialStatus()
+  emitSceneState('roomforge.fixture.updated')
+}
+
+function cancelFixtureDrag(event: PointerEvent): void {
+  if (editorCanvas.hasPointerCapture(event.pointerId)) {
+    editorCanvas.releasePointerCapture(event.pointerId)
+  }
+  activeFixtureDrag = null
+  viewportElement.classList.remove('is-dragging-fixture')
+  updatePlanHint()
+}
+
+function snappedFurniturePosition(
+  item: Pick<FurnitureObject, 'size' | 'rotationDegrees'>,
+  position: { x: number; y: number },
+): { x: number; y: number } {
+  return furnitureMagneticSnapPosition({
+    item,
+    position,
+    bounds: roomBounds(spatialModel),
+    snapEnabled: canvasToggleState.snap,
+  })
 }
 
 function selectFurniture(objectId: unknown): void {
@@ -3893,7 +4985,11 @@ function editSelectedFurniture(action: FurnitureEditAction): void {
 
 function updateSelectedFurnitureTransform(field: TransformField, value: number): void {
   const selected = selectedFurniture()
-  if (!selected || !Number.isFinite(value)) {
+  if (!selected) {
+    updateSelectedFixtureTransform(field, value)
+    return
+  }
+  if (!Number.isFinite(value)) {
     return
   }
   if (selected.locked) {
@@ -3924,6 +5020,38 @@ function updateSelectedFurnitureTransform(field: TransformField, value: number):
   emitSceneState('roomforge.scene.updated')
 }
 
+function updateSelectedFixtureTransform(field: TransformField, value: number): void {
+  const selected = selectedFixture()
+  if (!selected || !Number.isFinite(value)) {
+    return
+  }
+  if (selected.locked) {
+    geometryStatusElement.textContent = t(
+      `${selected.label ?? selected.category} is locked. Unlock it before editing.`,
+      `${localizedFixtureLabel(selected)}은 잠겨 있습니다. 편집 전에 잠금을 해제하세요.`,
+    )
+    updateSpatialStatus()
+    return
+  }
+
+  const nextItem = transformFixtureObject(selected, field, value)
+  spatialModel = {
+    ...spatialModel,
+    hasUnsavedChanges: true,
+    structuralFixtures: spatialModel.structuralFixtures.map((item) =>
+      item.fixtureId === selected.fixtureId ? nextItem : item,
+    ),
+  }
+  rebuildStructuralFixtures()
+  rebuildPlanMeasurementOverlay()
+  geometryStatusElement.textContent = t(
+    `Updated ${selected.label ?? selected.category} size.`,
+    `${localizedFixtureLabel(selected)} 크기를 업데이트했습니다.`,
+  )
+  updateSpatialStatus()
+  emitSceneState('roomforge.fixture.updated')
+}
+
 function transformFurnitureObject(
   item: FurnitureObject,
   field: TransformField,
@@ -3931,15 +5059,17 @@ function transformFurnitureObject(
   bounds: ReturnType<typeof roomBounds>,
 ): FurnitureObject {
   if (field === 'position-x') {
+    const position = snappedFurniturePosition(item, { ...item.position, x: value })
     return {
       ...item,
-      position: { ...item.position, x: Number(clampNumber(value, 0, bounds.widthMeters).toFixed(2)) },
+      position,
     }
   }
   if (field === 'position-y') {
+    const position = snappedFurniturePosition(item, { ...item.position, y: value })
     return {
       ...item,
-      position: { ...item.position, y: Number(clampNumber(value, 0, bounds.depthMeters).toFixed(2)) },
+      position,
     }
   }
   if (field === 'rotation') {
@@ -3970,6 +5100,42 @@ function transformFurnitureObject(
       heightMeters: Number(clampNumber(value, 0.2, Math.max(spatialModel.room.heightMeters, 0.2)).toFixed(2)),
     },
   }
+}
+
+function transformFixtureObject(
+  item: StructuralFixtureObject,
+  field: TransformField,
+  value: number,
+): StructuralFixtureObject {
+  const prior = structuralFixtureSizePriorForCategory(item.category)
+  const size = item.size ?? prior.size
+  const position = item.position ?? { x: size.x / 2, y: Math.max(size.y / 2, 0.5), z: 0 }
+  const bounds = roomBounds(spatialModel)
+  const wallLength = item.wallId === 'right-wall' || item.wallId === 'left-wall'
+    ? bounds.depthMeters
+    : bounds.widthMeters
+  const nextSize = { ...size }
+
+  if (field === 'width') {
+    nextSize.x = Number(clampNumber(value, 0.2, Math.max(wallLength, 0.2)).toFixed(2))
+  } else if (field === 'depth') {
+    nextSize.z = Number(clampNumber(value, 0.05, 0.5).toFixed(2))
+  } else if (field === 'height') {
+    nextSize.y = Number(clampNumber(value, 0.2, Math.max(spatialModel.room.heightMeters, 0.2)).toFixed(2))
+  } else {
+    return item
+  }
+
+  const nextItem = {
+    ...item,
+    size: nextSize,
+    position: {
+      ...position,
+      x: clampFixtureOffsetForWall(position.x, { ...item, size: nextSize }, spatialModel),
+      y: Number(Math.max(position.y, nextSize.y / 2).toFixed(2)),
+    },
+  }
+  return nextItem
 }
 
 function editSelectedFixture(action: FixtureEditAction): void {
@@ -4190,6 +5356,15 @@ function zoomCamera(deltaY: number): void {
   camera.updateProjectionMatrix()
 }
 
+function zoomCanvas(action: 'in' | 'out'): void {
+  zoomCamera(action === 'in' ? -260 : 260)
+  cameraStatusElement.textContent =
+    action === 'in'
+      ? t('Zoomed canvas in', '캔버스를 확대했습니다')
+      : t('Zoomed canvas out', '캔버스를 축소했습니다')
+  emitCameraChanged()
+}
+
 function emitCameraChanged(): void {
   postToParent({
     type: 'roomforge.camera.changed',
@@ -4261,6 +5436,20 @@ function fixtureWallMetricPoint(
     return { x: 0, y: clampNumber(bounds.depthMeters - offset, 0, bounds.depthMeters) }
   }
   return { x: clampNumber(offset, 0, bounds.widthMeters), y: 0 }
+}
+
+function fixtureOffsetFromMetricPoint(wallId: string, point: { x: number; y: number }): number {
+  const bounds = roomBounds(spatialModel)
+  if (wallId === 'right-wall') {
+    return point.y
+  }
+  if (wallId === 'back-wall') {
+    return bounds.widthMeters - point.x
+  }
+  if (wallId === 'left-wall') {
+    return bounds.depthMeters - point.y
+  }
+  return point.x
 }
 
 function fixtureWallRotation(wallId: string): number {
@@ -4688,6 +5877,10 @@ function isFurnitureCategory(value: string | undefined): value is FurnitureCateg
   )
 }
 
+function isCreatableFixtureCategory(value: string | undefined): value is 'window' | 'door' {
+  return value === 'window' || value === 'door'
+}
+
 function isTransformField(value: string | undefined): value is TransformField {
   return (
     value === 'position-x' ||
@@ -4711,17 +5904,40 @@ function updatePlanHint(): void {
     )
     return
   }
+  if (activeEditorTool === 'furniture') {
+    planHintElement.textContent = t(
+      'Drag a furniture candidate from the left panel onto the room.',
+      '왼쪽 패널의 가구 후보를 방 안으로 드래그하세요.',
+    )
+    return
+  }
+  if (activeEditorTool === 'measure') {
+    planHintElement.textContent = measurementStartPoint
+      ? t(
+          'Click a second room or object boundary to complete the measurement.',
+          '측정을 완료하려면 두 번째 방 또는 객체 경계를 클릭하세요.',
+        )
+      : t(
+          'Click a room or furniture boundary, then click another boundary.',
+          '방 또는 가구 경계를 클릭한 뒤 다른 경계를 다시 클릭하세요.',
+        )
+    return
+  }
   const selected = selectedFurniture()
   if (selected) {
     planHintElement.textContent = t(
-      `Selected ${selected.label}: drag it on the plan or use the transform controls.`,
-      `${localizedFurnitureLabel(selected)} 선택됨: 평면도에서 드래그하거나 변환 컨트롤을 사용하세요.`,
+      canDirectManipulateFurniture()
+        ? `Selected ${selected.label}: drag the object to move it, or drag the rotation handle above it.`
+        : `Selected ${selected.label}: switch to 2D select mode to drag or rotate it.`,
+      canDirectManipulateFurniture()
+        ? `${localizedFurnitureLabel(selected)} 선택됨: 객체를 드래그해 이동하거나 위 회전 핸들을 드래그하세요.`
+        : `${localizedFurnitureLabel(selected)} 선택됨: 2D 선택 모드에서 드래그/회전하세요.`,
     )
     return
   }
   planHintElement.textContent = t(
-    '2D top plan: drag furniture from the catalog, then click and drag placed objects.',
-    '2D 탑다운 평면도: 카탈로그 가구를 드래그해 배치하고, 배치된 가구를 클릭해 끌어 이동하세요.',
+    '2D top plan: open the furniture catalog, then click and drag a placed object.',
+    '2D 탑다운 평면도: 가구 카탈로그를 열고 배치된 객체를 클릭해 드래그하세요.',
   )
 }
 
@@ -4761,6 +5977,8 @@ function isFurnitureEditAction(value: string | undefined): value is FurnitureEdi
     value === 'move-right' ||
     value === 'rotate-left' ||
     value === 'rotate-right' ||
+    value === 'flip-horizontal' ||
+    value === 'flip-vertical' ||
     value === 'narrower' ||
     value === 'wider' ||
     value === 'shallower' ||

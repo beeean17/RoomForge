@@ -57,6 +57,8 @@ void main() {
     expect(find.text('내 프로젝트'), findsOneWidget);
     expect(find.text('거실 리노베이션'), findsOneWidget);
     expect(find.text('새 방 촬영'), findsOneWidget);
+    expect(find.text('활동'), findsNothing);
+    expect(find.text('설정'), findsNothing);
   });
 
   testWidgets('project cards expose rename and delete actions', (tester) async {
@@ -211,10 +213,12 @@ void main() {
       find.text('평면도 요약'),
       180,
       maxScrolls: 6,
-      scrollable: find.descendant(
-        of: find.byKey(const ValueKey('mobile-2d-layout-list')),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-2d-layout-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     expect(find.text('문 1'), findsOneWidget);
     expect(find.text('창 1'), findsOneWidget);
@@ -224,27 +228,57 @@ void main() {
       find.textContaining('모바일에서는 보기만 가능합니다'),
       220,
       maxScrolls: 8,
-      scrollable: find.descendant(
-        of: find.byKey(const ValueKey('mobile-2d-layout-list')),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-2d-layout-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     expect(find.text('의자'), findsWidgets);
     expect(find.text('가구 목록 1'), findsOneWidget);
     expect(find.textContaining('모바일에서는 보기만 가능합니다'), findsOneWidget);
-    expect(find.text('데스크탑에서 편집'), findsOneWidget);
+    expect(find.text('데스크탑에서 편집'), findsNothing);
     await tester.scrollUntilVisible(
       find.text('컴퓨터에서 이어서 편집'),
       220,
       maxScrolls: 8,
-      scrollable: find.descendant(
-        of: find.byKey(const ValueKey('mobile-2d-layout-list')),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-2d-layout-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     expect(find.text('/projects/project-1/editor'), findsWidgets);
     expect(api.saveLayoutCount, 0);
   });
+
+  testWidgets(
+    'opens preview when a floor plan exists without source snapshot',
+    (tester) async {
+      final authRepository = _FakeAuthRepository(session: _session);
+      final api = _FakeProjectApi(
+        authRepository: authRepository,
+        capturedRoleIds: const [],
+        latestFloorPlanId: 'floor-plan-1',
+      );
+
+      await tester.pumpWidget(
+        RoomForgeMobileApp(
+          bootstrap: _bootstrap(authRepository),
+          projectApiFactory: (_, session) => api,
+          availableCameras: _emptyCameras,
+          initialLocation: '/projects/project-1/preview',
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('소스 단계 필요'), findsNothing);
+      expect(find.text('2D 레이아웃'), findsOneWidget);
+    },
+  );
 
   testWidgets('opens the reconstruction route as the middle workflow step', (
     tester,
@@ -272,6 +306,39 @@ void main() {
     expect(find.text('웹 링크 복사'), findsOneWidget);
     expect(find.text('상태 새로고침'), findsWidgets);
   });
+
+  testWidgets(
+    'status refresh opens 2D preview when reconstruction is created',
+    (tester) async {
+      final authRepository = _FakeAuthRepository(session: _session);
+      final api = _FakeProjectApi(
+        authRepository: authRepository,
+        capturedRoleIds: _allRequiredRoleIds,
+        currentReconstructionStatus: 'processing',
+      );
+
+      await tester.pumpWidget(
+        RoomForgeMobileApp(
+          bootstrap: _bootstrap(authRepository),
+          projectApiFactory: (_, session) => api,
+          availableCameras: _emptyCameras,
+          initialLocation: '/projects/project-1/reconstruction',
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('재구성 중'), findsWidgets);
+      expect(find.text('2D 레이아웃'), findsNothing);
+
+      api.currentReconstructionStatus = 'created';
+
+      await tester.tap(find.widgetWithText(OutlinedButton, '상태 새로고침'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2D 레이아웃'), findsOneWidget);
+    },
+  );
 
   testWidgets('opens upload status as an eight-angle board', (tester) async {
     final authRepository = _FakeAuthRepository(session: _session);
@@ -606,8 +673,8 @@ class _FakeProjectApi extends ProjectApi {
 
   final now = DateTime.utc(2026, 6, 5, 12);
   final List<String> capturedRoleIds;
-  final String? currentReconstructionStatus;
-  final String? latestFloorPlanId;
+  String? currentReconstructionStatus;
+  String? latestFloorPlanId;
   final ProjectApiException? deleteError;
   final Completer<void>? uploadGate;
   final List<String> uploadedRoleIds = [];

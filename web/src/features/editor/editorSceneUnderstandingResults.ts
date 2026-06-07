@@ -1,5 +1,7 @@
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   getFirestore,
   limit,
@@ -86,6 +88,13 @@ async function loadLatestSceneUnderstandingResult(
   project: WorkspaceProject,
 ): Promise<EditorSceneUnderstandingResultBridgePayload | undefined> {
   const firestore = getFirestore(roomForgeFirebaseApp())
+  const latestSnapshot = await getDoc(
+    doc(firestore, 'projects', project.id, 'scene_understanding_results', 'latest'),
+  )
+  if (latestSnapshot.exists()) {
+    return sceneUnderstandingResultFromData(latestSnapshot.data(), latestSnapshot.id)
+  }
+
   const snapshot = await getDocs(
     query(
       collection(firestore, 'projects', project.id, 'scene_understanding_results'),

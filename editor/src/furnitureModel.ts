@@ -8,6 +8,8 @@ export type FurnitureEditAction =
   | 'move-right'
   | 'rotate-left'
   | 'rotate-right'
+  | 'flip-horizontal'
+  | 'flip-vertical'
   | 'narrower'
   | 'wider'
   | 'shallower'
@@ -115,11 +117,12 @@ export function selectedFurnitureSummary(model: SpatialModel): string {
     return 'No furniture selected'
   }
   const locked = item.locked ? '; locked' : ''
+  const flipped = item.flipX || item.flipY ? `; flipped ${item.flipX ? 'horizontal' : ''}${item.flipX && item.flipY ? '/' : ''}${item.flipY ? 'vertical' : ''}` : ''
   return `${item.label}; ${item.size.widthMeters.toFixed(2)} m x ${item.size.depthMeters.toFixed(
     2,
   )} m x ${item.size.heightMeters.toFixed(2)} m; position ${item.position.x.toFixed(
     2,
-  )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg${locked}`
+  )} m, ${item.position.y.toFixed(2)} m; rotation ${item.rotationDegrees.toFixed(0)} deg${flipped}${locked}`
 }
 
 export function editFurnitureObject(
@@ -143,6 +146,12 @@ export function editFurnitureObject(
   if (action === 'rotate-left' || action === 'rotate-right') {
     const delta = action === 'rotate-left' ? -15 : 15
     return { ...item, rotationDegrees: (item.rotationDegrees + delta + 360) % 360 }
+  }
+  if (action === 'flip-horizontal') {
+    return { ...item, flipX: !item.flipX }
+  }
+  if (action === 'flip-vertical') {
+    return { ...item, flipY: !item.flipY }
   }
   if (action === 'narrower' || action === 'wider') {
     const delta = action === 'narrower' ? -sizeStep : sizeStep

@@ -256,6 +256,8 @@ function StatusHero({
             ? 'success'
             : 'accent'
       const Icon = conversion.status === 'failed' ? AlertTriangle : conversion.status === 'complete' ? Check : RotateCcw
+      const failedWithStoredData = conversion.status === 'failed' && hasExistingConversionData
+      const completedOrRecoverable = conversion.status === 'complete' || failedWithStoredData
       return (
         <section className={`status-hero status-hero--${heroTone}`}>
           <span className={`status-hero-icon ${conversion.status === 'running' ? 'is-spinning' : ''}`}><Icon size={24} /></span>
@@ -267,13 +269,21 @@ function StatusHero({
                   ? '변환 실패'
                   : `${conversion.phaseLabel} · ${conversion.progress}%`}
             </h2>
-            <p>{conversion.detail}</p>
+            <p>
+              {failedWithStoredData
+                ? `${conversion.detail} 저장된 변환 데이터는 유지되어 에디터에서 열 수 있습니다.`
+                : conversion.detail}
+            </p>
           </div>
           {conversion.status === 'running' ? (
             <button className="rf-btn" type="button" onClick={onCancel}>취소</button>
           ) : (
-            <Link className="rf-btn rf-btn--primary" to={conversion.status === 'failed' ? routes.source(projectId) : routes.editor(projectId)}>
-              {conversion.status === 'failed' ? '소스 확인' : '완료 데이터로 에디터 열기'}
+            <Link className="rf-btn rf-btn--primary" to={completedOrRecoverable ? routes.editor(projectId) : routes.source(projectId)}>
+              {failedWithStoredData
+                ? '저장된 데이터로 에디터 열기'
+                : conversion.status === 'failed'
+                  ? '소스 확인'
+                  : '완료 데이터로 에디터 열기'}
               <ArrowRight size={15} />
             </Link>
           )}

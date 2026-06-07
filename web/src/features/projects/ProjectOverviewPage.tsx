@@ -6,7 +6,7 @@ import { ProductShell } from '../../components/shell/ProductShell'
 import { StatePanel } from '../../components/ui/StatePanel'
 import { StatusPill } from '../../components/ui/StatusPill'
 import { demoProjectId, routes } from '../../lib/routes'
-import { getPipelineState, pipelineSteps } from './projectData'
+import { getPipelineState, pipelineSteps, projectReadyForEditor, type WorkspaceProject } from './projectData'
 import { useProject } from './projectRepository'
 
 export function ProjectOverviewPage() {
@@ -125,7 +125,7 @@ export function ProjectOverviewPage() {
               <Link role="menuitem" to={routes.source(project.id)} onClick={() => setMoreOpen(false)}>소스 이미지</Link>
               <Link role="menuitem" to={routes.status(project.id)} onClick={() => setMoreOpen(false)}>변환 상태</Link>
               <Link role="menuitem" to={routes.recovery(project.id)} onClick={() => setMoreOpen(false)}>복구 상태</Link>
-              {canOpenEditor(project) ? (
+              {projectReadyForEditor(project) ? (
                 <Link role="menuitem" to={routes.editor(project.id)} onClick={() => setMoreOpen(false)}>에디터 열기</Link>
               ) : (
                 <Link role="menuitem" to={routes.source(project.id)} onClick={() => setMoreOpen(false)}>변환 준비</Link>
@@ -237,7 +237,7 @@ export function ProjectOverviewPage() {
         </aside>
       </section>
 
-      {project.status === 'created' && (
+      {project.status === 'created' && !projectReadyForEditor(project) && (
         <section className="empty-project-panel">
           <span className="create-icon"><Plus size={24} /></span>
           <div>
@@ -258,23 +258,14 @@ export function ProjectOverviewPage() {
   )
 }
 
-function canOpenEditor(project: { status: string }) {
-  return project.status === 'succeeded' || project.status === 'review_required'
-}
-
-function overviewWorkflow(project: {
-  id: string
-  status: string
-  imageCount: number
-  latestJobId?: string
-}) {
-  if (canOpenEditor(project)) {
+function overviewWorkflow(project: WorkspaceProject) {
+  if (projectReadyForEditor(project)) {
     return {
       eyebrow: 'Editor ready',
-      title: '변환 데이터가 준비되었습니다',
-      body: '저장된 변환 결과를 바탕으로 에디터에서 경계와 배치 후보를 확인하고 수정합니다.',
+      title: '에디터에서 이어서 작업할 수 있습니다',
+      body: '서버에 저장된 소스 이미지와 프로젝트 진행도 기준으로 소스 재입력 없이 에디터를 바로 엽니다.',
       activeIndex: 2,
-      primaryLabel: '완료 데이터로 에디터 열기',
+      primaryLabel: '에디터 바로 열기',
       primaryTo: routes.editor(project.id),
       secondaryLabel: '변환 상태',
       secondaryTo: routes.status(project.id),

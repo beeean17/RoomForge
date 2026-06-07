@@ -26,7 +26,10 @@ import { roomForgeFirebaseApp } from '../../firebase/config'
 import {
   demoProjects,
   projectLabelForStatus,
+  projectReadyForEditor,
+  requiredSourceImageCount,
   projectToneForStatus,
+  type ProjectPipelineStepKey,
   type ProjectStatus,
   type WorkspaceProject,
 } from './projectData'
@@ -40,6 +43,7 @@ type ProjectDataState = {
 
 type SourceImageSummary = {
   imageCount: number
+  sourceCaptureComplete: boolean
   latestSourceImageId?: string
   latestUploadedAt?: Date
 }
@@ -300,6 +304,10 @@ export async function createWorkspaceProject(owner: { uid: string }, name: strin
     name: projectName,
     description: '첫 소스 이미지를 추가하면 2D/3D 변환을 시작할 수 있습니다.',
     schema_version: 1,
+    source_image_count: 0,
+    source_capture_complete: false,
+    current_pipeline_step: 'source',
+    pipeline_progress: 0,
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
     deleted_at: null,
@@ -382,6 +390,8 @@ export async function createProjectReconstructionJob(
   batch.update(projectRef, {
     latest_job_id: jobRef.id,
     current_reconstruction_status: 'created',
+    current_pipeline_step: 'status',
+    pipeline_progress: 12,
     updated_at: timestamp,
   })
 
@@ -510,16 +520,23 @@ function syncSourceImageSubscriptions(
       (snapshot) => {
         const latest = snapshot.docs[0]
         const latestData = latest?.data()
+        const latestSourceImageId = latest
+          ? stringValue(latestData?.source_image_id) ?? latest.id
+          : undefined
+        const latestUploadedAt = dateFromFirestore(latestData?.uploaded_at) ?? undefined
+        const summary = {
+          imageCount: snapshot.size,
+          sourceCaptureComplete: snapshot.size >= requiredSourceImageCount,
+          latestSourceImageId,
+          latestUploadedAt,
+        }
         setSourceImageSummaries((current) => ({
           ...current,
-          [projectId]: {
-            imageCount: snapshot.size,
-            latestSourceImageId: latest
-              ? stringValue(latestData?.source_image_id) ?? latest.id
-              : undefined,
-            latestUploadedAt: dateFromFirestore(latestData?.uploaded_at) ?? undefined,
-          },
+          [projectId]: summary,
         }))
+        syncProjectProgressFromSourceImages(firestore, projectId, summary).catch(() => {
+          // Parent progress metadata is best-effort; source image display still uses the child collection.
+        })
       },
       () => {
         setSourceImageSummaries((current) => {
@@ -531,6 +548,61 @@ function syncSourceImageSubscriptions(
     )
     subscriptions.set(projectId, unsubscribe)
   }
+}
+
+async function syncProjectProgressFromSourceImages(
+  firestore: Firestore,
+  projectId: string,
+  summary: SourceImageSummary,
+) {
+  const projectRef = doc(firestore, 'projects', projectId)
+  const snapshot = await getDoc(projectRef)
+  if (!snapshot.exists()) {
+    return
+  }
+
+  const data = snapshot.data()
+  const status = parseProjectStatus(data.current_reconstruction_status)
+  const latestFloorPlanId = stringValue(data.latest_floor_plan_id) ?? undefined
+  const latestLayoutId = stringValue(data.latest_layout_id) ?? undefined
+  const nextPipelineStep = pipelineStepForProjectMetadata(
+    { status, latestFloorPlanId, latestLayoutId },
+    summary.imageCount,
+    summary.sourceCaptureComplete,
+  )
+  const nextProgress = progressForProjectMetadata(
+    status,
+    summary.imageCount,
+    summary.sourceCaptureComplete,
+    nextPipelineStep,
+  )
+  const nextLatestSourceImageId = summary.latestSourceImageId ?? null
+  const updates: Record<string, unknown> = {}
+
+  if (numberValue(data.source_image_count) !== summary.imageCount) {
+    updates.source_image_count = summary.imageCount
+  }
+  if (booleanValue(data.source_capture_complete) !== summary.sourceCaptureComplete) {
+    updates.source_capture_complete = summary.sourceCaptureComplete
+  }
+  if ((stringValue(data.latest_source_image_id) ?? null) !== nextLatestSourceImageId) {
+    updates.latest_source_image_id = nextLatestSourceImageId
+  }
+  if (pipelineStepValue(data.current_pipeline_step) !== nextPipelineStep) {
+    updates.current_pipeline_step = nextPipelineStep
+  }
+  if (normalizedProgressValue(data.pipeline_progress) !== nextProgress) {
+    updates.pipeline_progress = nextProgress
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return
+  }
+
+  await updateDoc(projectRef, {
+    ...updates,
+    updated_at: serverTimestamp(),
+  })
 }
 
 function unsubscribeAll(subscriptions: Map<string, Unsubscribe>) {
@@ -558,15 +630,21 @@ function mergeSourceImageSummary(
   const imageCount = Math.max(project.imageCount, summary.imageCount)
   const latestSourceImageId = summary.latestSourceImageId ?? project.latestSourceImageId
   const summaryIsNewer = latestUploadedAtMs !== undefined && latestUploadedAtMs > parentUpdatedAtMs
+  const sourceCaptureComplete = project.sourceCaptureComplete || summary.sourceCaptureComplete
+  const currentPipelineStep = pipelineStepForProjectMetadata(project, imageCount, sourceCaptureComplete)
+  const summaryProgress = progressForProjectMetadata(project.status, imageCount, sourceCaptureComplete, currentPipelineStep)
 
   return {
     ...project,
     imageCount,
+    sourceCaptureComplete,
     latestSourceImageId,
     updatedAtMs: Math.max(parentUpdatedAtMs, latestUploadedAtMs ?? 0),
     updatedAtLabel: summaryIsNewer && summary.latestUploadedAt
       ? relativeDateLabel(summary.latestUploadedAt)
       : project.updatedAtLabel,
+    progress: Math.max(project.progress ?? summaryProgress, summaryProgress),
+    currentPipelineStep,
     coverMode: 'image',
     description: project.status === 'created' && project.imageCount === 0
       ? '소스 이미지가 동기화되었습니다. 2D/3D 변환을 실행해 공간 모델을 생성하세요.'
@@ -578,6 +656,15 @@ function projectFromSnapshot(snapshot: ProjectSnapshot) {
   const data = (snapshot.data() ?? {}) as Record<string, unknown>
   const status = parseProjectStatus(data.current_reconstruction_status)
   const imageCount = numberValue(data.source_image_count) ?? numberValue(data.image_count) ?? 0
+  const sourceCaptureComplete = Boolean(booleanValue(data.source_capture_complete) || imageCount >= requiredSourceImageCount)
+  const latestFloorPlanId = stringValue(data.latest_floor_plan_id) ?? undefined
+  const latestLayoutId = stringValue(data.latest_layout_id) ?? undefined
+  const currentPipelineStep =
+    pipelineStepValue(data.current_pipeline_step) ??
+    pipelineStepForProjectMetadata({ status, latestFloorPlanId, latestLayoutId }, imageCount, sourceCaptureComplete)
+  const progress =
+    normalizedProgressValue(data.pipeline_progress) ??
+    progressForProjectMetadata(status, imageCount, sourceCaptureComplete, currentPipelineStep)
   const updatedAt = dateFromFirestore(data.updated_at)
 
   return {
@@ -587,12 +674,16 @@ function projectFromSnapshot(snapshot: ProjectSnapshot) {
     statusLabel: projectLabelForStatus(status),
     tone: projectToneForStatus(status),
     imageCount,
+    sourceCaptureComplete,
+    currentPipelineStep,
     latestSourceImageId: stringValue(data.latest_source_image_id) ?? undefined,
     latestJobId: stringValue(data.latest_job_id) ?? undefined,
+    latestFloorPlanId,
+    latestLayoutId,
     updatedAtMs: updatedAt?.getTime(),
     updatedAtLabel: updatedAt ? relativeDateLabel(updatedAt) : '업데이트 시간 없음',
     roomEstimate: stringValue(data.room_estimate_label) ?? undefined,
-    progress: progressForStatus(status),
+    progress,
     coverMode: data.latest_source_image_id || imageCount > 0 ? 'image' : 'placeholder',
     description: stringValue(data.description) ?? descriptionForStatus(status),
   } satisfies WorkspaceProject
@@ -614,6 +705,47 @@ function progressForStatus(status: ProjectStatus) {
   return undefined
 }
 
+function pipelineStepForProjectMetadata(
+  project: Pick<WorkspaceProject, 'status'> & Partial<Pick<WorkspaceProject, 'latestFloorPlanId' | 'latestLayoutId'>>,
+  imageCount: number,
+  sourceCaptureComplete: boolean,
+): ProjectPipelineStepKey {
+  if (projectReadyForEditor({
+    status: project.status,
+    imageCount,
+    sourceCaptureComplete,
+    latestFloorPlanId: project.latestFloorPlanId,
+    latestLayoutId: project.latestLayoutId,
+  })) {
+    return 'editor'
+  }
+  if (
+    project.status === 'uploading' ||
+    project.status === 'processing' ||
+    project.status === 'retrying' ||
+    project.status === 'failed' ||
+    project.status === 'timeout' ||
+    project.status === 'cancelled'
+  ) {
+    return 'status'
+  }
+  return 'source'
+}
+
+function progressForProjectMetadata(
+  status: ProjectStatus,
+  imageCount: number,
+  sourceCaptureComplete: boolean,
+  currentPipelineStep?: ProjectPipelineStepKey,
+) {
+  if (currentPipelineStep === 'editor') return 100
+  const statusProgress = progressForStatus(status)
+  if (statusProgress !== undefined) return statusProgress
+  if (sourceCaptureComplete) return 100
+  if (imageCount <= 0) return 0
+  return Math.min(95, Math.max(12, Math.round((imageCount / requiredSourceImageCount) * 56)))
+}
+
 function descriptionForStatus(status: ProjectStatus) {
   if (status === 'succeeded') return '2D/3D 변환이 완료되었고 에디터에서 배치가 가능합니다.'
   if (status === 'review_required') return '변환 후보에 사람 검토가 필요한 항목이 있습니다.'
@@ -628,6 +760,20 @@ function stringValue(value: unknown) {
 
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function booleanValue(value: unknown) {
+  return typeof value === 'boolean' ? value : null
+}
+
+function pipelineStepValue(value: unknown): ProjectPipelineStepKey | null {
+  return value === 'source' || value === 'status' || value === 'editor' ? value : null
+}
+
+function normalizedProgressValue(value: unknown) {
+  const numeric = numberValue(value)
+  if (numeric === null) return null
+  return Math.max(0, Math.min(100, Math.round(numeric)))
 }
 
 function dateFromFirestore(value: unknown) {

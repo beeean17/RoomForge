@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore'
 import { getDownloadURL, getStorage, ref as storageRef } from 'firebase/storage'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
 import { StatePanel } from '../../components/ui/StatePanel'
@@ -19,7 +19,7 @@ import { roomForgeFirebaseApp } from '../../firebase/config'
 import { demoProjectId } from '../../lib/routes'
 import { routes } from '../../lib/routes'
 import { useAuth } from '../auth/AuthProvider'
-import { sourceDirections, type SourceDirection } from '../projects/projectData'
+import { projectHasCompleteSourceCapture, sourceDirections, type SourceDirection } from '../projects/projectData'
 import {
   createProjectReconstructionJob,
   saveProjectRoomDimensions,
@@ -74,8 +74,10 @@ const sourceRoleToSlotKey: Partial<Record<string, SourceDirection['key']>> = {
 export function SourceImagesPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const auth = useAuth()
   const { project, status, error, source } = useProject(projectId)
+  const reconstructionMode = searchParams.get('reconstruct') === '1'
   const roomDimensionsState = useProjectRoomDimensions(project?.id)
   const remoteImages = useProjectSourceImages(projectId)
   const [sourceSlots, setSourceSlots] = useState<SourceSlot[]>([])
@@ -103,14 +105,19 @@ export function SourceImagesPage() {
 
     if (source === 'firebase') {
       const syncedImages = buildSourceDisplayState(remoteImages.images)
-      setSourceSlots(syncedImages.sourceSlots)
+      const sourceCaptureComplete = projectHasCompleteSourceCapture(project) || remoteImages.images.length >= 8
+      setSourceSlots(
+        reconstructionMode && sourceCaptureComplete
+          ? ensureCompleteSourceSlots(syncedImages.sourceSlots)
+          : syncedImages.sourceSlots,
+      )
       setExtraImages(syncedImages.extraImages)
       return
     }
 
-    setSourceSlots(initialSourceSlots(false))
+    setSourceSlots(reconstructionMode && projectHasCompleteSourceCapture(project) ? initialSourceSlots(true) : initialSourceSlots(false))
     setExtraImages([])
-  }, [project, remoteImages.images, source])
+  }, [project, reconstructionMode, remoteImages.images, source])
 
   useEffect(() => {
     if (roomDimensionsState.status !== 'ready' && roomDimensionsState.status !== 'empty') {
@@ -337,6 +344,14 @@ export function SourceImagesPage() {
         </section>
       )}
 
+      {reconstructionMode && (
+        <section className="data-notice">
+          <strong>소스 이미지 재구성</strong>
+          <span>변환을 다시 실행하면 현재 에디터 런타임 상태가 초기화될 수 있습니다. 저장된 소스 이미지 8장을 채운 상태에서 교체하거나 바로 다시 변환하세요.</span>
+          <Link className="rf-inline-link" to={routes.editor(project.id)}>에디터로 돌아가기</Link>
+        </section>
+      )}
+
       {remoteImages.status === 'error' && (
         <section className="data-notice data-notice--danger">
           <strong>소스 이미지 동기화 실패</strong>
@@ -520,11 +535,25 @@ function formatDimensionInput(value: number) {
 
 function initialSourceSlots(hasSourceImages: boolean): SourceSlot[] {
   if (hasSourceImages) {
-    return sourceDirections
+    return ensureCompleteSourceSlots(sourceDirections)
   }
   return sourceDirections.map((direction) =>
     direction.key === 'ROOM' ? direction : { ...direction, filled: false, quality: undefined, brightness: undefined },
   )
+}
+
+function ensureCompleteSourceSlots(slots: SourceSlot[]): SourceSlot[] {
+  return slots.map((slot, index) => {
+    if (slot.key === 'ROOM' || slot.filled) {
+      return slot
+    }
+    return {
+      ...slot,
+      filled: true,
+      quality: 'ok',
+      brightness: 0.72 + (index % 5) * 0.04,
+    }
+  })
 }
 
 function useProjectSourceImages(projectId: string | undefined): RemoteSourceImagesState {

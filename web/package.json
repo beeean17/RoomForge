@@ -12,6 +12,9 @@
     "test:editor-a11y": "node scripts/verify-editor-responsive-a11y.mjs",
     "test:editor-fixtures": "node --experimental-strip-types scripts/verify-editor-structural-fixtures.mjs",
     "test:editor-placed": "node --experimental-strip-types scripts/verify-editor-placed-objects.mjs",
+    "test:conversion-overwrite": "node scripts/verify-conversion-result-overwrite.mjs",
+    "test:project-progress": "node scripts/verify-project-progress-routing.mjs",
+    "test:reconstruction-worker": "node scripts/verify-reconstruction-worker-recovery.mjs",
     "typecheck": "tsc -b"
   },
   "dependencies": {

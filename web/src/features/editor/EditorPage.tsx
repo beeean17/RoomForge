@@ -30,7 +30,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { Brand } from '../../components/shell/Brand'
 import { ThemeToggle } from '../../components/shell/ThemeToggle'
@@ -105,8 +105,6 @@ type EditorTool = 'select' | 'move' | 'furniture' | 'measure'
 type CandidateLayerKey = 'furniture' | 'fixtures' | 'boundaries' | 'lowConfidence'
 
 type CanvasToggleKey = 'grid' | 'snap'
-
-type InspectorTab = 'selection' | 'candidates' | 'placement' | 'confirmation' | 'status'
 
 type LayerState = Record<CandidateLayerKey, boolean>
 
@@ -228,30 +226,19 @@ const layerControls: Array<{ key: CandidateLayerKey; label: string; icon: typeof
 ]
 
 const furnitureQuickAdds = [
+  { category: 'bed', label: '침대' },
+  { category: 'chair', label: '의자' },
+  { category: 'wardrobe', label: '옷장' },
   { category: 'sofa', label: '소파' },
   { category: 'table', label: '테이블' },
   { category: 'shelf', label: '선반' },
   { category: 'custom', label: '커스텀' },
 ] as const
 
-const furnitureEditActions = [
-  { action: 'rotate-left', label: '왼쪽 회전', icon: RotateCcw },
-  { action: 'wider', label: '너비 증가', icon: Maximize2 },
-  { action: 'toggle-lock', label: '잠금 전환', icon: Lock },
-  { action: 'delete', label: '삭제', icon: Trash2 },
-] as const
-
-const inspectorTabs: Array<{ key: InspectorTab; label: string; icon: typeof MousePointer2 }> = [
-  { key: 'selection', label: '선택', icon: MousePointer2 },
-  { key: 'candidates', label: '후보', icon: ListChecks },
-  { key: 'placement', label: '배치', icon: SlidersHorizontal },
-  { key: 'confirmation', label: '확정', icon: ShieldCheck },
-  { key: 'status', label: '상태', icon: Cpu },
-]
-
 export function EditorPage() {
   const projectId = useParams().projectId ?? demoProjectId
   const location = useLocation()
+  const navigate = useNavigate()
   const auth = useAuth()
   const { project, status, error } = useProject(projectId)
   const runtimeDispatchRef = useRef<EditorRuntimeDispatch | null>(null)
@@ -266,7 +253,6 @@ export function EditorPage() {
   const [events, setEvents] = useState<BridgeEventRecord[]>([])
   const [viewMode, setViewMode] = useState<ViewModeControl>('2d')
   const [activeTool, setActiveTool] = useState<EditorTool>('select')
-  const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>('selection')
   const [layerState, setLayerState] = useState<LayerState>(initialLayerState)
   const [canvasToggleState, setCanvasToggleState] = useState<CanvasToggleState>(initialCanvasToggleState)
   const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSceneSummary>(initialRuntimeSummary)
@@ -425,6 +411,19 @@ export function EditorPage() {
     setConfirmationHandoffState(initialConfirmationHandoffState)
   }, [])
 
+  const restartSourceReconstruction = useCallback(() => {
+    if (!project) {
+      return
+    }
+    const confirmed = window.confirm(
+      '소스 이미지 재구성을 시작하면 현재 에디터 런타임 상태가 초기화될 수 있습니다. 저장된 8장 소스 이미지가 채워진 소스 이미지 화면으로 이동할까요?',
+    )
+    if (!confirmed) {
+      return
+    }
+    navigate(`${routes.source(project.id)}?reconstruct=1`)
+  }, [navigate, project])
+
   useEffect(() => {
     if (!project || !runtimeReady || !runtimeDispatchRef.current) {
       return
@@ -555,6 +554,10 @@ export function EditorPage() {
         <div className="editor-top-actions">
           <StatusPill label={bridgeLabel} tone={bridgeTone} />
           <ThemeToggle />
+          <button className="rf-btn" type="button" onClick={restartSourceReconstruction}>
+            <RotateCcw size={16} />
+            소스 이미지 재구성
+          </button>
           <Link className="rf-btn" to={routes.project(project.id)}>
             <ArrowLeft size={16} />
             프로젝트
@@ -740,290 +743,117 @@ export function EditorPage() {
 
           <div className="editor-runtime-inspector-body">
             <nav className="editor-inspector-tabs" aria-label="Inspector panels" role="tablist">
-              {inspectorTabs.map((tab) => {
-                const Icon = tab.icon
-                const isActive = activeInspectorTab === tab.key
-                return (
-                  <button
-                    aria-controls={`editor-inspector-tab-${tab.key}`}
-                    aria-selected={isActive}
-                    className={isActive ? 'is-active' : ''}
-                    id={`editor-inspector-tab-control-${tab.key}`}
-                    key={tab.key}
-                    role="tab"
-                    type="button"
-                    onClick={() => setActiveInspectorTab(tab.key)}
-                  >
-                    <Icon size={15} />
-                    <span>{tab.label}</span>
-                    {inspectorTabBadge(tab.key, {
-                      candidateReviewState,
-                      confirmationHandoffState,
-                      placedObjectState,
-                      structuralFixtureState,
-                    })}
-                  </button>
-                )
-              })}
+              <button
+                aria-controls="editor-inspector-tab-selection"
+                aria-selected="true"
+                className="is-active"
+                id="editor-inspector-tab-control-selection"
+                role="tab"
+                type="button"
+              >
+                <MousePointer2 size={15} />
+                <span>선택</span>
+              </button>
             </nav>
 
             <div
-              aria-labelledby={`editor-inspector-tab-control-${activeInspectorTab}`}
+              aria-labelledby="editor-inspector-tab-control-selection"
               className="editor-inspector-tab-panel"
-              id={`editor-inspector-tab-${activeInspectorTab}`}
+              id="editor-inspector-tab-selection"
               role="tabpanel"
             >
-              {activeInspectorTab === 'selection' && (
-                <section>
-                  <div className="editor-host-section-title">
-                    <MousePointer2 size={18} />
-                    <h2>Selection</h2>
+              <section>
+                <div className="editor-host-section-title">
+                  <MousePointer2 size={18} />
+                  <h2>선택 항목</h2>
+                </div>
+                <dl className="editor-host-status-list">
+                  <div>
+                    <dt>선택</dt>
+                    <dd>{runtimeSummary.selectedLabel}</dd>
                   </div>
-                  <dl className="editor-host-status-list">
-                    <div>
-                      <dt>선택</dt>
-                      <dd>{runtimeSummary.selectedLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>유형</dt>
-                      <dd>{runtimeSummary.selectedType}</dd>
-                    </div>
-                    <div>
-                      <dt>보기</dt>
-                      <dd>{runtimeSummary.viewMode.toUpperCase()}</dd>
-                    </div>
-                    <div>
-                      <dt>저장 상태</dt>
-                      <dd>{runtimeSummary.saveLabel}</dd>
-                    </div>
-                  </dl>
-                  <div className="editor-inspector-actions">
-                    {furnitureQuickAdds.map((item) => (
-                      <button
-                        className="rf-btn"
+                  <div>
+                    <dt>유형</dt>
+                    <dd>{runtimeSummary.selectedType}</dd>
+                  </div>
+                  <div>
+                    <dt>보기</dt>
+                    <dd>{runtimeSummary.viewMode.toUpperCase()}</dd>
+                  </div>
+                  <div>
+                    <dt>저장 상태</dt>
+                    <dd>{runtimeSummary.saveLabel}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section>
+                <div className="editor-host-section-title">
+                  <Armchair size={18} />
+                  <h2>가구 추가</h2>
+                </div>
+                <div className="editor-inspector-actions">
+                  {furnitureQuickAdds.map((item) => (
+                    <button
+                      className="rf-btn"
+                      disabled={!runtimeReady}
+                      key={item.category}
+                      type="button"
+                      onClick={() => {
+                        setActiveTool('furniture')
+                        sendRuntimeCommand('roomforge.furniture.add', { category: item.category })
+                      }}
+                    >
+                      <Armchair size={15} />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <div className="editor-host-section-title">
+                  <SlidersHorizontal size={18} />
+                  <h2>크기 및 회전</h2>
+                </div>
+                <SelectedPlacedObjectControls
+                  disabled={!runtimeReady}
+                  roomBounds={placedObjectState.roomBounds}
+                  selected={placedObjectState.selectedItem}
+                  onEditAction={(action) =>
+                    sendRuntimeCommand('roomforge.furniture.editSelected', { action })}
+                  onTransformChange={(field, value) =>
+                    sendRuntimeCommand('roomforge.furniture.updateTransform', { field, value })}
+                />
+              </section>
+
+              <section>
+                <div className="editor-host-section-title">
+                  <ListChecks size={18} />
+                  <h2>배치된 가구</h2>
+                </div>
+                {placedObjectState.items.length === 0 ? (
+                  <p className="editor-host-empty">배치된 가구가 없습니다. 위의 프리셋을 추가하세요.</p>
+                ) : (
+                  <div className="placed-object-list" role="list" aria-label="Placed furniture list">
+                    {placedObjectState.items.map((item) => (
+                      <PlacedObjectCard
                         disabled={!runtimeReady}
-                        key={item.category}
-                        type="button"
-                        onClick={() => {
-                          setActiveTool('furniture')
-                          sendRuntimeCommand('roomforge.furniture.add', { category: item.category })
-                        }}
-                      >
-                        <Armchair size={15} />
-                        {item.label}
-                      </button>
+                        item={item}
+                        key={item.objectId}
+                        onSelect={(objectId) =>
+                          sendRuntimeCommand('roomforge.furniture.select', { objectId })}
+                      />
                     ))}
                   </div>
-                  <div className="editor-inspector-icon-actions">
-                    {furnitureEditActions.map((item) => {
-                      const Icon = item.icon
-                      return (
-                        <button
-                          aria-label={item.label}
-                          className="editor-icon-button"
-                          disabled={!runtimeReady}
-                          key={item.action}
-                          title={item.label}
-                          type="button"
-                          onClick={() => sendRuntimeCommand('roomforge.furniture.editSelected', { action: item.action })}
-                        >
-                          <Icon size={16} />
-                        </button>
-                      )
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {activeInspectorTab === 'candidates' && (
-                <>
-                  <CandidateReviewTray
-                    disabled={!runtimeReady}
-                    state={candidateReviewState}
-                    onCategoryChange={(candidateId, category) =>
-                      sendRuntimeCommand('roomforge.candidate.updateCategory', { candidateId, category })}
-                    onPlace={(candidateId) =>
-                      sendRuntimeCommand('roomforge.candidate.place', { candidateId })}
-                    onReject={(candidateId) =>
-                      sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
-                  />
-
-                  <StructuralFixtureReview
-                    disabled={!runtimeReady}
-                    mode="candidates"
-                    state={structuralFixtureState}
-                    onEditAction={(action) =>
-                      sendRuntimeCommand('roomforge.fixture.editSelected', { action })}
-                    onPlaceCandidate={(candidateId) =>
-                      sendRuntimeCommand('roomforge.fixture.placeCandidate', { candidateId })}
-                    onRejectCandidate={(candidateId) =>
-                      sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
-                    onSelect={(fixtureId) =>
-                      sendRuntimeCommand('roomforge.fixture.select', { fixtureId })}
-                  />
-                </>
-              )}
-
-              {activeInspectorTab === 'placement' && (
-                <>
-                  <PlacedObjectEditor
-                    disabled={!runtimeReady}
-                    state={placedObjectState}
-                    onEditAction={(action) =>
-                      sendRuntimeCommand('roomforge.furniture.editSelected', { action })}
-                    onSelect={(objectId) =>
-                      sendRuntimeCommand('roomforge.furniture.select', { objectId })}
-                    onTransformChange={(field, value) =>
-                      sendRuntimeCommand('roomforge.furniture.updateTransform', { field, value })}
-                  />
-
-                  <StructuralFixtureReview
-                    disabled={!runtimeReady}
-                    mode="placed"
-                    state={structuralFixtureState}
-                    onEditAction={(action) =>
-                      sendRuntimeCommand('roomforge.fixture.editSelected', { action })}
-                    onPlaceCandidate={(candidateId) =>
-                      sendRuntimeCommand('roomforge.fixture.placeCandidate', { candidateId })}
-                    onRejectCandidate={(candidateId) =>
-                      sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
-                    onSelect={(fixtureId) =>
-                      sendRuntimeCommand('roomforge.fixture.select', { fixtureId })}
-                  />
-                </>
-              )}
-
-              {activeInspectorTab === 'confirmation' && (
-                <ConfirmationHandoffPanel
-                  disabled={!runtimeReady}
-                  state={confirmationHandoffState}
-                  onConfirmAll={() =>
-                    sendRuntimeCommand('roomforge.confirmation.confirmAllPlaced', {
-                      confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
-                    })}
-                  onConfirmSelected={() =>
-                    sendRuntimeCommand('roomforge.confirmation.confirmSelected', {
-                      confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
-                    })}
-                />
-              )}
-
-              {activeInspectorTab === 'status' && (
-                <>
-                  <section>
-                    <div className="editor-host-section-title">
-                      <Cpu size={18} />
-                      <h2>Bridge</h2>
-                    </div>
-                    <dl className="editor-host-status-list">
-                      <div>
-                        <dt>상태</dt>
-                        <dd><StatusPill label={bridgeLabel} tone={bridgeTone} /></dd>
-                      </div>
-                      <div>
-                        <dt>마운트</dt>
-                        <dd>{runtimeReady ? 'React direct runtime' : 'Mounting runtime module'}</dd>
-                      </div>
-                      <div>
-                        <dt>메시지</dt>
-                        <dd>roomforge.scene.initialize</dd>
-                      </div>
-                      <div>
-                        <dt>소스 이미지</dt>
-                        <dd>{sourceImageStatusLabel(sourceImageState)}</dd>
-                      </div>
-                      <div>
-                        <dt>저장</dt>
-                        <dd>{persistenceState.label}</dd>
-                      </div>
-                    </dl>
-                  </section>
-
-                  <section>
-                    <div className="editor-host-section-title">
-                      <Layers size={18} />
-                      <h2>CV 요약</h2>
-                    </div>
-                    <dl className="editor-host-status-list">
-                      <div>
-                        <dt>OpenCV</dt>
-                        <dd>{cvSummary.opencvQuality}</dd>
-                      </div>
-                      <div>
-                        <dt>Scene</dt>
-                        <dd>{cvSummary.sceneQuality}</dd>
-                      </div>
-                      <div>
-                        <dt>오브젝트</dt>
-                        <dd>{runtimeSummary.furnitureCount} placed · {runtimeSummary.candidateCount} candidates</dd>
-                      </div>
-                      <div>
-                        <dt>고정 요소</dt>
-                        <dd>{runtimeSummary.fixtureCount} fixtures</dd>
-                      </div>
-                      <div>
-                        <dt>Coverage</dt>
-                        <dd>{cvSummary.coverageLabel}</dd>
-                      </div>
-                    </dl>
-                  </section>
-
-                  <section>
-                    <div className="editor-host-section-title">
-                      <Layers size={18} />
-                      <h2>최근 이벤트</h2>
-                    </div>
-                    {events.length === 0 ? (
-                      <p className="editor-host-empty">아직 editor runtime 이벤트가 없습니다.</p>
-                    ) : (
-                      <ol className="editor-host-event-list">
-                        {events.map((event) => (
-                          <li key={event.id}>
-                            <strong>{event.type}</strong>
-                            <span>{event.receivedAt}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                  </section>
-                </>
-              )}
+                )}
+              </section>
             </div>
           </div>
         </aside>
       </section>
     </main>
   )
-}
-
-function inspectorTabBadge(
-  tab: InspectorTab,
-  {
-    candidateReviewState,
-    confirmationHandoffState,
-    placedObjectState,
-    structuralFixtureState,
-  }: {
-    candidateReviewState: CandidateReviewState
-    confirmationHandoffState: ConfirmationHandoffState
-    placedObjectState: PlacedObjectState
-    structuralFixtureState: StructuralFixtureState
-  },
-) {
-  const value =
-    tab === 'candidates'
-      ? candidateReviewState.counts.needsReview + structuralFixtureState.counts.needsReview
-      : tab === 'placement'
-        ? placedObjectState.counts.total + structuralFixtureState.fixtures.length
-      : tab === 'confirmation'
-        ? confirmationHandoffState.counts.unconfirmed
-        : undefined
-
-  if (value === undefined) {
-    return null
-  }
-
-  return <small aria-label={`${value} items`}>{value}</small>
 }
 
 function PlacedObjectEditor({
@@ -1129,6 +959,15 @@ function SelectedPlacedObjectControls({
   onEditAction: (action: string) => void
   onTransformChange: (field: PlacedObjectTransformField, value: number) => void
 }) {
+  const [pendingSize, setPendingSize] = useState({ width: '', depth: '' })
+
+  useEffect(() => {
+    setPendingSize({
+      width: selected ? formatInputNumber(selected.widthMeters) : '',
+      depth: selected ? formatInputNumber(selected.depthMeters) : '',
+    })
+  }, [selected?.objectId, selected?.widthMeters, selected?.depthMeters])
+
   if (!selected) {
     return (
       <div className="placed-object-selection-empty">
@@ -1139,6 +978,22 @@ function SelectedPlacedObjectControls({
   }
 
   const transformDisabled = disabled || !selected.canEdit
+  const sizeFields = placedObjectTransformFields.filter((config) =>
+    config.field === 'width' || config.field === 'depth' || config.field === 'height')
+  const placementFields = placedObjectTransformFields.filter((config) =>
+    config.field === 'position-x' || config.field === 'position-y' || config.field === 'rotation')
+  const commitPendingSize = (field: 'width' | 'depth') => {
+    const nextValue = Number.parseFloat(pendingSize[field])
+    if (Number.isFinite(nextValue)) {
+      onTransformChange(field, nextValue)
+    }
+  }
+  const resetPendingSize = (field: 'width' | 'depth') => {
+    setPendingSize((current) => ({
+      ...current,
+      [field]: field === 'width' ? formatInputNumber(selected.widthMeters) : formatInputNumber(selected.depthMeters),
+    }))
+  }
 
   return (
     <div className="placed-object-transform-panel" data-selected-object-id={selected.objectId}>
@@ -1171,8 +1026,63 @@ function SelectedPlacedObjectControls({
         </div>
       </dl>
 
-      <div className="placed-object-transform-grid" aria-label="Selected placed object transform">
-        {placedObjectTransformFields.map((config) => {
+      <div className="placed-object-transform-section">
+        <h3>Size</h3>
+        <div className="placed-object-transform-grid" aria-label="Selected placed object size">
+          {sizeFields.map((config) => {
+            const value = transformValueForItem(selected, config.field)
+            const max = maxValueForField(config.field, roomBounds) || config.maxFallback
+            const enterCommitField = isEnterCommitSizeField(config.field) ? config.field : null
+            return (
+              <label key={config.field}>
+                <span>{config.label}</span>
+                <input
+                  aria-label={`${selected.label} ${config.label}`}
+                  data-selected-size-field={config.field}
+                  disabled={transformDisabled}
+                  inputMode="decimal"
+                  max={max}
+                  min={config.min}
+                  step={config.step}
+                  type="number"
+                  value={enterCommitField ? pendingSize[enterCommitField] : formatInputNumber(value)}
+                  onBlur={() => {
+                    if (enterCommitField) {
+                      resetPendingSize(enterCommitField)
+                    }
+                  }}
+                  onChange={(event) => {
+                    if (enterCommitField) {
+                      const nextDraftValue = event.currentTarget.value
+                      setPendingSize((current) => ({
+                        ...current,
+                        [enterCommitField]: nextDraftValue,
+                      }))
+                      return
+                    }
+                    const nextValue = event.currentTarget.valueAsNumber
+                    if (Number.isFinite(nextValue)) {
+                      onTransformChange(config.field, nextValue)
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (enterCommitField && event.key === 'Enter') {
+                      commitPendingSize(enterCommitField)
+                      event.preventDefault()
+                    }
+                  }}
+                />
+                <small>{config.unit}</small>
+              </label>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="placed-object-transform-section">
+        <h3>Position / Rotation</h3>
+        <div className="placed-object-transform-grid" aria-label="Selected placed object position and rotation">
+          {placementFields.map((config) => {
           const value = transformValueForItem(selected, config.field)
           const max = maxValueForField(config.field, roomBounds) || config.maxFallback
           return (
@@ -1197,7 +1107,8 @@ function SelectedPlacedObjectControls({
               <small>{config.unit}</small>
             </label>
           )
-        })}
+          })}
+        </div>
       </div>
 
       <div className="placed-object-actions">
@@ -1235,6 +1146,10 @@ function SelectedPlacedObjectControls({
 
 function formatMeters(value: number): string {
   return `${value.toFixed(2)} m`
+}
+
+function isEnterCommitSizeField(field: PlacedObjectTransformField): field is 'width' | 'depth' {
+  return field === 'width' || field === 'depth'
 }
 
 function formatInputNumber(value: number): string {

@@ -6,7 +6,7 @@ import { ProductShell } from '../../components/shell/ProductShell'
 import { StatusPill } from '../../components/ui/StatusPill'
 import { routes } from '../../lib/routes'
 import { useAuth } from '../auth/AuthProvider'
-import { getProjectFilters, type ProjectFilterKey, type WorkspaceProject } from './projectData'
+import { getProjectFilters, projectReadyForEditor, type ProjectFilterKey, type WorkspaceProject } from './projectData'
 import {
   createWorkspaceProject,
   deleteWorkspaceProject,
@@ -491,6 +491,8 @@ function ProjectCard({
   const menuRef = useRef<HTMLDivElement | null>(null)
   const cardStage = projectCardStage(project)
   const editorReady = projectReadyForEditor(project)
+  const primaryRoute = editorReady ? routes.editor(project.id) : routes.project(project.id)
+  const primaryLabel = editorReady ? `${project.name} 에디터 열기` : `${project.name} 개요 보기`
 
   useEffect(() => {
     if (!menuOpen) {
@@ -509,7 +511,7 @@ function ProjectCard({
 
   return (
     <article className="project-card">
-      <Link className="project-card-media-link" to={routes.project(project.id)} aria-label={`${project.name} 개요 보기`}>
+      <Link className="project-card-media-link" to={primaryRoute} aria-label={primaryLabel}>
         <div className={`project-card-media project-card-media--${project.coverMode}`}>
           <span className="project-card-stage-kicker">{cardStage.kicker}</span>
           <div className="project-card-stage-copy">
@@ -526,7 +528,7 @@ function ProjectCard({
       </Link>
       <div className="project-card-body">
         <div className="project-card-title">
-          <Link className="project-title-link" to={routes.project(project.id)}>
+          <Link className="project-title-link" to={primaryRoute}>
             <h2>{project.name}</h2>
           </Link>
           <div className="project-card-menu-wrap" ref={menuRef}>
@@ -591,10 +593,6 @@ function ProjectCard({
       </div>
     </article>
   )
-}
-
-function projectReadyForEditor(project: WorkspaceProject) {
-  return project.status === 'succeeded' || project.status === 'review_required'
 }
 
 function projectCardStage(project: WorkspaceProject) {

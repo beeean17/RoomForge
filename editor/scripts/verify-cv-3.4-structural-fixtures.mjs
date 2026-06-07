@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  clampFixtureOffsetForWall,
   editSelectedFixtureInModel,
   selectFixtureInModel,
   selectedFixture,
@@ -40,8 +41,22 @@ selectedModel = editSelectedFixtureInModel(selectedModel, 'wall-next').model
 assert.equal(selectedFixture(selectedModel)?.wallId, 'right-wall')
 selectedModel = editSelectedFixtureInModel(selectedModel, 'offset-increase').model
 assert.equal(selectedFixture(selectedModel)?.position?.x, 1.3)
+assert.equal(
+  clampFixtureOffsetForWall(-10, selectedFixture(selectedModel), selectedModel),
+  0.55,
+)
 selectedModel = editSelectedFixtureInModel(selectedModel, 'wider').model
 assert.equal(selectedFixture(selectedModel)?.size?.x, 1.2)
+selectedModel = {
+  ...selectedModel,
+  structuralFixtures: selectedModel.structuralFixtures.map((fixture) =>
+    fixture.fixtureId === 'fixture-window-1'
+      ? { ...fixture, position: { ...(fixture.position ?? { x: 0, y: 1, z: 0 }), x: 0.56 } }
+      : fixture,
+  ),
+}
+selectedModel = editSelectedFixtureInModel(selectedModel, 'offset-decrease').model
+assert.equal(selectedFixture(selectedModel)?.position?.x, 0.6)
 selectedModel = editSelectedFixtureInModel(selectedModel, 'taller').model
 assert.equal(selectedFixture(selectedModel)?.size?.y, 1)
 selectedModel = editSelectedFixtureInModel(selectedModel, 'category-next').model

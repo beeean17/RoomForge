@@ -75,6 +75,10 @@ service cloud.firestore {
         'latest_floor_plan_id',
         'latest_layout_id',
         'current_reconstruction_status',
+        'source_image_count',
+        'source_capture_complete',
+        'current_pipeline_step',
+        'pipeline_progress',
         'last_opened_at'
       ];
     }
@@ -90,6 +94,10 @@ service cloud.firestore {
         'latest_floor_plan_id',
         'latest_layout_id',
         'current_reconstruction_status',
+        'source_image_count',
+        'source_capture_complete',
+        'current_pipeline_step',
+        'pipeline_progress',
         'last_opened_at'
       ];
     }
@@ -394,6 +402,7 @@ service cloud.firestore {
         'floor_plan',
         'editor_scene',
         'furniture_objects',
+        'structural_fixture_objects',
         'base_floor_plan_updated_at',
         'saved_at',
         'created_at',
@@ -414,6 +423,21 @@ service cloud.firestore {
         'size_m',
         'rotation_deg',
         'color',
+        'label',
+        'locked'
+      ];
+    }
+
+    function structuralFixtureObjectKeys() {
+      return [
+        'fixture_id',
+        'asset_id',
+        'candidate_id',
+        'category',
+        'wall_id',
+        'position_m',
+        'size_m',
+        'rotation_deg',
         'label',
         'locked'
       ];
@@ -480,6 +504,10 @@ service cloud.firestore {
       ];
     }
 
+    function isAllowedProjectPipelineStep(step) {
+      return step in ['source', 'status', 'editor'];
+    }
+
     function isAllowedQualityStatus(status) {
       return status in ['success', 'review_required', 'failed'];
     }
@@ -529,6 +557,10 @@ service cloud.firestore {
       ];
     }
 
+    function isAllowedStructuralFixtureCategory(category) {
+      return category in ['window', 'door', 'built_in'];
+    }
+
     function isNumber(value) {
       return value is int || value is float;
     }
@@ -562,6 +594,33 @@ service cloud.firestore {
           && isAllowedJobStatus(data.current_reconstruction_status)
           && getAfter(reconstructionJobDocPath(data.project_id, data.latest_job_id)).data.owner_uid == data.owner_uid
           && getAfter(reconstructionJobDocPath(data.project_id, data.latest_job_id)).data.status == data.current_reconstruction_status
+        );
+    }
+
+    function validProjectProgressState(data) {
+      return (
+          !data.keys().hasAny(['source_image_count'])
+          || (
+            data.source_image_count is int
+            && data.source_image_count >= 0
+            && data.source_image_count <= 256
+          )
+        )
+        && (
+          !data.keys().hasAny(['source_capture_complete'])
+          || data.source_capture_complete is bool
+        )
+        && (
+          !data.keys().hasAny(['current_pipeline_step'])
+          || isAllowedProjectPipelineStep(data.current_pipeline_step)
+        )
+        && (
+          !data.keys().hasAny(['pipeline_progress'])
+          || (
+            data.pipeline_progress is int
+            && data.pipeline_progress >= 0
+            && data.pipeline_progress <= 100
+          )
         );
     }
 
@@ -648,6 +707,7 @@ service cloud.firestore {
         && request.resource.data.owner_uid == request.auth.uid
         && request.resource.data.schema_version == 1
         && validProjectReconstructionState(request.resource.data)
+        && validProjectProgressState(request.resource.data)
         && request.resource.data.keys().hasOnly(projectKeys())
         && request.resource.data.keys().hasAll([
           'project_id',
@@ -668,6 +728,7 @@ service cloud.firestore {
         && request.resource.data.created_at == resource.data.created_at
         && request.resource.data.schema_version == resource.data.schema_version
         && validProjectReconstructionState(request.resource.data)
+        && validProjectProgressState(request.resource.data)
         && request.resource.data.keys().hasOnly(projectKeys())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(mutableProjectKeys());
     }
@@ -1419,7 +1480,10 @@ service cloud.firestore {
         && request.resource.data.result_id == resource.data.result_id
         && request.resource.data.project_id == resource.data.project_id
         && request.resource.data.owner_uid == resource.data.owner_uid
-        && request.resource.data.capture_session_id == resource.data.capture_session_id
+        && (
+          resultId == 'latest'
+          || request.resource.data.capture_session_id == resource.data.capture_session_id
+        )
         && request.resource.data.created_at == resource.data.created_at
         && request.resource.data.schema_version == resource.data.schema_version;
     }
@@ -1511,6 +1575,84 @@ service cloud.firestore {
         && validLayoutFurnitureAt(7);
     }
 
+    function validLayoutStructuralFixtureObject(object) {
+      return object is map
+        && object.keys().hasOnly(structuralFixtureObjectKeys())
+        && isSafePathSegment(object.fixture_id)
+        && isAllowedStructuralFixtureCategory(object.category)
+        && object.wall_id in ['front-wall', 'right-wall', 'back-wall', 'left-wall']
+        && validPoint3d(object.position_m)
+        && validPoint3d(object.size_m)
+        && object.size_m.x > 0
+        && object.size_m.y > 0
+        && object.size_m.z > 0
+        && isNumber(object.rotation_deg)
+        && (
+          !object.keys().hasAny(['asset_id'])
+          || isSafeFurnitureMetadataString(object.asset_id)
+        )
+        && (
+          !object.keys().hasAny(['candidate_id'])
+          || isSafeFurnitureMetadataString(object.candidate_id)
+        )
+        && (
+          !object.keys().hasAny(['label'])
+          || object.label is string
+        )
+        && (
+          !object.keys().hasAny(['locked'])
+          || object.locked is bool
+        );
+    }
+
+    function validLayoutStructuralFixtureAt(index) {
+      return !request.resource.data.keys().hasAny(['structural_fixture_objects'])
+        || request.resource.data.structural_fixture_objects.size() <= index
+        || validLayoutStructuralFixtureObject(
+          request.resource.data.structural_fixture_objects[index]
+        );
+    }
+
+    function validLayoutStructuralFixtureObjects() {
+      return !request.resource.data.keys().hasAny(['structural_fixture_objects'])
+        || (
+          request.resource.data.structural_fixture_objects is list
+          && request.resource.data.structural_fixture_objects.size() <= 32
+          && validLayoutStructuralFixtureAt(0)
+          && validLayoutStructuralFixtureAt(1)
+          && validLayoutStructuralFixtureAt(2)
+          && validLayoutStructuralFixtureAt(3)
+          && validLayoutStructuralFixtureAt(4)
+          && validLayoutStructuralFixtureAt(5)
+          && validLayoutStructuralFixtureAt(6)
+          && validLayoutStructuralFixtureAt(7)
+          && validLayoutStructuralFixtureAt(8)
+          && validLayoutStructuralFixtureAt(9)
+          && validLayoutStructuralFixtureAt(10)
+          && validLayoutStructuralFixtureAt(11)
+          && validLayoutStructuralFixtureAt(12)
+          && validLayoutStructuralFixtureAt(13)
+          && validLayoutStructuralFixtureAt(14)
+          && validLayoutStructuralFixtureAt(15)
+          && validLayoutStructuralFixtureAt(16)
+          && validLayoutStructuralFixtureAt(17)
+          && validLayoutStructuralFixtureAt(18)
+          && validLayoutStructuralFixtureAt(19)
+          && validLayoutStructuralFixtureAt(20)
+          && validLayoutStructuralFixtureAt(21)
+          && validLayoutStructuralFixtureAt(22)
+          && validLayoutStructuralFixtureAt(23)
+          && validLayoutStructuralFixtureAt(24)
+          && validLayoutStructuralFixtureAt(25)
+          && validLayoutStructuralFixtureAt(26)
+          && validLayoutStructuralFixtureAt(27)
+          && validLayoutStructuralFixtureAt(28)
+          && validLayoutStructuralFixtureAt(29)
+          && validLayoutStructuralFixtureAt(30)
+          && validLayoutStructuralFixtureAt(31)
+        );
+    }
+
     function validLayoutExistingReferences(projectId) {
       let sourcePath = sourceImageDocPath(projectId, request.resource.data.source_image_id);
       let jobPath = reconstructionJobDocPath(projectId, request.resource.data.reconstruction_job_id);
@@ -1557,6 +1699,7 @@ service cloud.firestore {
         && validLayoutExistingReferences(projectId)
         && request.resource.data.editor_scene is map
         && validLayoutFurnitureObjects()
+        && validLayoutStructuralFixtureObjects()
         && validLayoutTimestamps()
         && request.resource.data.schema_version == 1
         && request.resource.data.export_version == 1;

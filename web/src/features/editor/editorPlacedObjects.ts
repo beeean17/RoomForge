@@ -55,12 +55,12 @@ export const placedObjectTransformFields: Array<{
   maxFallback: number
   step: number
 }> = [
-  { field: 'position-x', label: 'X', unit: 'm', min: 0, maxFallback: 10, step: 0.05 },
-  { field: 'position-y', label: 'Y', unit: 'm', min: 0, maxFallback: 10, step: 0.05 },
-  { field: 'rotation', label: 'Rotation', unit: 'deg', min: 0, maxFallback: 345, step: 15 },
-  { field: 'width', label: 'Width', unit: 'm', min: 0.2, maxFallback: 10, step: 0.05 },
-  { field: 'depth', label: 'Depth', unit: 'm', min: 0.2, maxFallback: 10, step: 0.05 },
-  { field: 'height', label: 'Height', unit: 'm', min: 0.2, maxFallback: 5, step: 0.05 },
+  { field: 'width', label: '너비', unit: 'm', min: 0.2, maxFallback: 10, step: 0.05 },
+  { field: 'depth', label: '깊이', unit: 'm', min: 0.2, maxFallback: 10, step: 0.05 },
+  { field: 'height', label: '높이', unit: 'm', min: 0.2, maxFallback: 5, step: 0.05 },
+  { field: 'position-x', label: 'X 위치', unit: 'm', min: 0, maxFallback: 10, step: 0.05 },
+  { field: 'position-y', label: 'Y 위치', unit: 'm', min: 0, maxFallback: 10, step: 0.05 },
+  { field: 'rotation', label: '회전', unit: 'deg', min: 0, maxFallback: 345, step: 15 },
 ]
 
 export function placedObjectStateFromPayload(payload: Record<string, unknown>): PlacedObjectState | null {

@@ -1,0 +1,17 @@
+{
+  "name": "RoomForge",
+  "short_name": "RoomForge",
+  "description": "Room reconstruction and furniture planning workspace.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "/assets/app_icon.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

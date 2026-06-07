@@ -347,10 +347,6 @@ String _capturePath(String projectId, {String? roleId}) {
   return Uri(path: base, queryParameters: queryParameters).toString();
 }
 
-String _uploadPath(String projectId) {
-  return '${_projectPath(projectId)}/upload';
-}
-
 String _reconstructionPath(String projectId) {
   return '${_projectPath(projectId)}/reconstruction';
 }
@@ -695,7 +691,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                 return RefreshIndicator(
                   onRefresh: _refresh,
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 124),
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 96),
                     children: [
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -776,7 +772,6 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
             );
           },
         ),
-        bottomNavigationBar: const _MobileTabBar(active: _MobileTab.projects),
       ),
     );
   }
@@ -1164,7 +1159,7 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
                 child: _AsyncDetailsView(
                   snapshot: snapshot,
                   builder: (context, loaded) => ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                     children: [
                       if (_status != null) ...[
                         _NoticeCard(
@@ -1207,35 +1202,6 @@ class _ProjectOverviewScreenState extends State<_ProjectOverviewScreen> {
                   ),
                 ),
               ),
-            ),
-            bottomNavigationBar: _ProjectActionBar(
-              projectId: widget.projectId,
-              primaryLabel: workflow == null || !workflow.sourceComplete
-                  ? '소스 촬영'
-                  : workflow.editReady
-                  ? '2D 보기'
-                  : '재구성 보기',
-              primaryIcon: workflow == null || !workflow.sourceComplete
-                  ? Icons.photo_camera_outlined
-                  : workflow.editReady
-                  ? Icons.view_in_ar_outlined
-                  : Icons.sync_outlined,
-              onPrimary: () {
-                if (workflow == null || !workflow.sourceComplete) {
-                  unawaited(_openCaptureRole(workflow?.nextRequiredRole?.id));
-                  return;
-                }
-                _pushMobileRoute(
-                  context,
-                  workflow.editReady
-                      ? _previewPath(widget.projectId)
-                      : _reconstructionPath(widget.projectId),
-                );
-              },
-              secondaryLabel: '소스 상태',
-              secondaryIcon: Icons.cloud_upload_outlined,
-              onSecondary: () =>
-                  _pushMobileRoute(context, _uploadPath(widget.projectId)),
             ),
           );
         },
@@ -1626,7 +1592,7 @@ class _UploadProgressScreenState extends State<_UploadProgressScreen> {
                     final value = total == 0 ? 0.0 : uploaded.length / total;
                     final complete = uploaded.length >= total;
                     return ListView(
-                      padding: const EdgeInsets.fromLTRB(18, 24, 18, 104),
+                      padding: const EdgeInsets.fromLTRB(18, 24, 18, 32),
                       children: [
                         _UploadStatusBoard(
                           uploadedRoleIds: uploaded,
@@ -1644,29 +1610,6 @@ class _UploadProgressScreenState extends State<_UploadProgressScreen> {
                       ],
                     );
                   },
-                ),
-              ),
-            ),
-            bottomNavigationBar: _ProjectActionBar(
-              projectId: widget.projectId,
-              primaryLabel: workflow?.sourceComplete == true ? '재구성으로' : '완료',
-              primaryIcon: workflow?.sourceComplete == true
-                  ? Icons.sync_outlined
-                  : Icons.check,
-              onPrimary: () {
-                if (workflow?.sourceComplete == true) {
-                  context.go(_reconstructionPath(widget.projectId));
-                  return;
-                }
-                _popOrGo(context, _projectPath(widget.projectId));
-              },
-              secondaryLabel: '계속 촬영',
-              secondaryIcon: Icons.photo_camera_outlined,
-              onSecondary: () => _pushMobileRoute(
-                context,
-                _capturePath(
-                  widget.projectId,
-                  roleId: workflow?.nextRequiredRole?.id,
                 ),
               ),
             ),
@@ -1726,8 +1669,23 @@ class _ReconstructionStatusScreenState
     );
   }
 
-  void _refresh() {
-    setState(() => _detailsFuture = _loadDetails());
+  Future<void> _refresh() async {
+    final nextDetailsFuture = _loadDetails();
+    setState(() {
+      _detailsFuture = nextDetailsFuture;
+    });
+
+    try {
+      final details = await nextDetailsFuture;
+      if (!mounted) return;
+      final workflow = _MobileWorkflowState.fromDetails(details);
+      if (workflow.editReady) {
+        context.go(_previewPath(widget.projectId));
+      }
+    } catch (_) {
+      // FutureBuilder renders the load error; the refresh action should not
+      // throw from the button handler.
+    }
   }
 
   @override
@@ -1767,7 +1725,7 @@ class _ReconstructionStatusScreenState
                   builder: (context, details) {
                     final workflow = _MobileWorkflowState.fromDetails(details);
                     return ListView(
-                      padding: const EdgeInsets.fromLTRB(18, 24, 18, 104),
+                      padding: const EdgeInsets.fromLTRB(18, 24, 18, 32),
                       children: [
                         _ReconstructionStageCard(
                           state: workflow,
@@ -1802,54 +1760,6 @@ class _ReconstructionStatusScreenState
                   },
                 ),
               ),
-            ),
-            bottomNavigationBar: _ProjectActionBar(
-              projectId: widget.projectId,
-              primaryLabel: workflow == null || !workflow.sourceComplete
-                  ? '소스 촬영'
-                  : workflow.editReady
-                  ? '2D 보기'
-                  : '상태 새로고침',
-              primaryIcon: workflow == null || !workflow.sourceComplete
-                  ? Icons.photo_camera_outlined
-                  : workflow.editReady
-                  ? Icons.map_outlined
-                  : Icons.refresh,
-              onPrimary: () {
-                if (workflow == null || !workflow.sourceComplete) {
-                  _pushMobileRoute(
-                    context,
-                    _capturePath(
-                      widget.projectId,
-                      roleId: workflow?.nextRequiredRole?.id,
-                    ),
-                  );
-                  return;
-                }
-                if (workflow.editReady) {
-                  context.go(_previewPath(widget.projectId));
-                  return;
-                }
-                _refresh();
-              },
-              secondaryLabel: workflow != null && workflow.sourceComplete
-                  ? '웹 링크'
-                  : '소스 상태',
-              secondaryIcon: workflow != null && workflow.sourceComplete
-                  ? Icons.desktop_windows_outlined
-                  : Icons.cloud_upload_outlined,
-              onSecondary: () {
-                if (workflow != null && workflow.sourceComplete) {
-                  unawaited(
-                    _copyProjectLink(
-                      context,
-                      _desktopEditorLink(widget.projectId),
-                    ),
-                  );
-                  return;
-                }
-                context.go(_uploadPath(widget.projectId));
-              },
             ),
           );
         },
@@ -2046,7 +1956,7 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
               final workflow = _MobileWorkflowState.fromDetails(details);
               final sourceLocked = !workflow.sourceComplete;
               return ListView(
-                padding: const EdgeInsets.fromLTRB(18, 24, 18, 104),
+                padding: const EdgeInsets.fromLTRB(18, 24, 18, 32),
                 children: [
                   Text(
                     details.project.name,
@@ -2091,30 +2001,6 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
             },
           ),
         ),
-      ),
-      bottomNavigationBar: _ProjectActionBar(
-        projectId: widget.projectId,
-        primaryLabel: workflow == null || !workflow.sourceComplete
-            ? '소스 촬영'
-            : '재구성 보기',
-        primaryIcon: workflow == null || !workflow.sourceComplete
-            ? Icons.photo_camera_outlined
-            : Icons.sync_outlined,
-        onPrimary: () {
-          if (workflow == null || !workflow.sourceComplete) {
-            context.go(
-              _capturePath(
-                widget.projectId,
-                roleId: workflow?.nextRequiredRole?.id,
-              ),
-            );
-            return;
-          }
-          context.go(_reconstructionPath(widget.projectId));
-        },
-        secondaryLabel: '소스 상태',
-        secondaryIcon: Icons.cloud_upload_outlined,
-        onSecondary: () => context.go(_uploadPath(widget.projectId)),
       ),
     );
   }
@@ -2166,15 +2052,6 @@ class _ModelPreviewScreenState extends State<_ModelPreviewScreen> {
                   onDesktopLink: () => unawaited(_copyDesktopLink(context)),
                 ),
               ),
-            ),
-            bottomNavigationBar: _ProjectActionBar(
-              projectId: widget.projectId,
-              secondaryLabel: '데스크탑 링크',
-              secondaryIcon: Icons.send_outlined,
-              onSecondary: () => unawaited(_copyDesktopLink(context)),
-              primaryLabel: '데스크탑에서 편집',
-              primaryIcon: Icons.desktop_windows_outlined,
-              onPrimary: () => unawaited(_copyDesktopLink(context)),
             ),
           );
         },
@@ -2248,7 +2125,7 @@ class _Mobile2DLayoutViewerState extends State<_Mobile2DLayoutViewer> {
 
         return ListView(
           key: const ValueKey('mobile-2d-layout-list'),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             Text(
               '2D 레이아웃',
@@ -3206,10 +3083,15 @@ class _MobileWorkflowState {
       math.max(0, requiredTotal - uploadedRequiredCount);
 
   bool get sourceComplete =>
-      requiredTotal > 0 && uploadedRequiredCount >= requiredTotal;
+      canOpen2DPreview ||
+      (requiredTotal > 0 && uploadedRequiredCount >= requiredTotal);
 
-  bool get reconstructionComplete =>
-      sourceComplete && (hasFloorPlan || reconstructionStatus == 'succeeded');
+  bool get canOpen2DPreview {
+    return hasFloorPlan ||
+        const {'created', 'succeeded'}.contains(reconstructionStatus);
+  }
+
+  bool get reconstructionComplete => canOpen2DPreview;
 
   bool get editReady => reconstructionComplete;
 
@@ -3427,14 +3309,14 @@ class _AsyncDetailsView extends StatelessWidget {
     if (snapshot.connectionState == ConnectionState.waiting &&
         snapshot.data == null) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(18, 28, 18, 120),
+        padding: const EdgeInsets.fromLTRB(18, 28, 18, 32),
         children: const [_LoadingPanel(label: '프로젝트 정보를 불러오는 중')],
       );
     }
 
     if (snapshot.hasError || snapshot.data == null) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(18, 28, 18, 120),
+        padding: const EdgeInsets.fromLTRB(18, 28, 18, 32),
         children: [
           _NoticeCard(
             tone: _danger,
@@ -4097,66 +3979,6 @@ class _DesktopHandoffCard extends StatelessWidget {
   }
 }
 
-class _ProjectActionBar extends StatelessWidget {
-  const _ProjectActionBar({
-    required this.projectId,
-    required this.primaryLabel,
-    required this.primaryIcon,
-    required this.onPrimary,
-    this.secondaryLabel = '데스크탑 링크',
-    this.secondaryIcon = Icons.send_outlined,
-    this.onSecondary,
-  });
-
-  final String projectId;
-  final String primaryLabel;
-  final IconData primaryIcon;
-  final VoidCallback onPrimary;
-  final String secondaryLabel;
-  final IconData secondaryIcon;
-  final VoidCallback? onSecondary;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Color(0xEE08090B),
-          border: Border(top: BorderSide(color: _border)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed:
-                      onSecondary ??
-                      () => _copyProjectLink(
-                        context,
-                        '/projects/$projectId/editor',
-                      ),
-                  icon: Icon(secondaryIcon),
-                  label: Text(secondaryLabel),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: onPrimary,
-                  icon: Icon(primaryIcon),
-                  label: Text(primaryLabel),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ProjectPreviewCard extends StatelessWidget {
   const _ProjectPreviewCard({
     required this.project,
@@ -4172,7 +3994,8 @@ class _ProjectPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = project.currentReconstructionStatus;
     final editReady =
-        project.latestFloorPlanId != null || status == 'succeeded';
+        project.latestFloorPlanId != null ||
+        const {'created', 'succeeded'}.contains(status);
     final processing = const {
       'created',
       'uploading',
@@ -4714,95 +4537,6 @@ class _Avatar extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w900,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-enum _MobileTab { projects, activity, settings }
-
-class _MobileTabBar extends StatelessWidget {
-  const _MobileTabBar({required this.active});
-
-  final _MobileTab active;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Color(0xEE08090B),
-          border: Border(top: BorderSide(color: _border)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          child: Row(
-            children: [
-              _TabItem(
-                active: active == _MobileTab.projects,
-                icon: Icons.dashboard_outlined,
-                label: '프로젝트',
-                onTap: () => context.go('/projects'),
-              ),
-              _TabItem(
-                active: active == _MobileTab.activity,
-                icon: Icons.notifications_none_outlined,
-                label: '활동',
-                onTap: () => _showUnavailable(context, '활동'),
-              ),
-              _TabItem(
-                active: active == _MobileTab.settings,
-                icon: Icons.person_outline,
-                label: '설정',
-                onTap: () => _showUnavailable(context, '설정'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TabItem extends StatelessWidget {
-  const _TabItem({
-    required this.active,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final bool active;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? _primary : _dim;
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
           ),
         ),
       ),
@@ -6236,10 +5970,4 @@ Future<bool?> _confirmProjectDelete(BuildContext context, RoomProject project) {
       ],
     ),
   );
-}
-
-void _showUnavailable(BuildContext context, String label) {
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text('$label 화면은 모바일 후속 단계에서 연결됩니다.')));
 }

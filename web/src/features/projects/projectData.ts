@@ -13,6 +13,8 @@ export type ProjectStatus =
   | 'cancelled'
   | 'retrying'
 
+export type ProjectPipelineStepKey = 'source' | 'status' | 'editor'
+
 export type WorkspaceProject = {
   id: string
   name: string
@@ -20,8 +22,12 @@ export type WorkspaceProject = {
   statusLabel: string
   tone: ProjectTone
   imageCount: number
+  sourceCaptureComplete?: boolean
+  currentPipelineStep?: ProjectPipelineStepKey
   latestSourceImageId?: string
   latestJobId?: string
+  latestFloorPlanId?: string
+  latestLayoutId?: string
   updatedAtMs?: number
   updatedAtLabel: string
   roomEstimate?: string
@@ -52,6 +58,8 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: '3D 완료',
     tone: 'success',
     imageCount: 24,
+    sourceCaptureComplete: true,
+    currentPipelineStep: 'editor',
     latestSourceImageId: 'demo-source-image',
     latestJobId: 'demo-reconstruction-job',
     updatedAtLabel: '2일 전 수정',
@@ -67,6 +75,8 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: '변환 중 62%',
     tone: 'accent',
     imageCount: 18,
+    sourceCaptureComplete: true,
+    currentPipelineStep: 'status',
     latestSourceImageId: 'demo-bedroom-source-image',
     latestJobId: 'demo-bedroom-reconstruction-job',
     updatedAtLabel: '방금 전 업데이트',
@@ -82,6 +92,8 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: 'Needs review',
     tone: 'warning',
     imageCount: 16,
+    sourceCaptureComplete: true,
+    currentPipelineStep: 'editor',
     latestSourceImageId: 'demo-meeting-room-source-image',
     latestJobId: 'demo-meeting-room-reconstruction-job',
     updatedAtLabel: '1일 전',
@@ -97,6 +109,8 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: '촬영 필요',
     tone: 'muted',
     imageCount: 0,
+    sourceCaptureComplete: false,
+    currentPipelineStep: 'source',
     updatedAtLabel: '방금 생성됨',
     coverMode: 'placeholder',
     description: '앱 가이드 촬영 또는 데스크탑 업로드로 첫 소스 이미지를 추가하세요.',
@@ -108,6 +122,8 @@ export const demoProjects: WorkspaceProject[] = [
     statusLabel: '3D 완료',
     tone: 'success',
     imageCount: 31,
+    sourceCaptureComplete: true,
+    currentPipelineStep: 'editor',
     latestSourceImageId: 'demo-balcony-source-image',
     latestJobId: 'demo-balcony-reconstruction-job',
     updatedAtLabel: '5일 전 수정',
@@ -133,6 +149,8 @@ export const pipelineSteps = [
   { key: 'status', label: '변환' },
   { key: 'editor', label: '편집' },
 ] as const
+
+export const requiredSourceImageCount = 8
 
 export const sourceDirections: SourceDirection[] = [
   { key: 'NW', label: 'NW', filled: true, quality: 'ok', brightness: 0.9 },
@@ -173,7 +191,7 @@ export function getProjectFilters(projects: WorkspaceProject[]) {
 }
 
 export function getPipelineState(project: WorkspaceProject, current: 'source' | 'status' | 'editor') {
-  if (project.status === 'succeeded') {
+  if (projectReadyForEditor(project)) {
     return { source: 'done', status: 'done', editor: current === 'editor' ? 'active' : 'pending' } as const
   }
   if (
@@ -188,6 +206,44 @@ export function getPipelineState(project: WorkspaceProject, current: 'source' | 
     return { source: 'done', status: current === 'status' ? 'active' : 'done', editor: 'pending' } as const
   }
   return { source: current === 'source' ? 'active' : 'pending', status: 'pending', editor: 'pending' } as const
+}
+
+export function projectHasCompleteSourceCapture(project: Pick<WorkspaceProject, 'imageCount' | 'sourceCaptureComplete'>) {
+  return Boolean(project.sourceCaptureComplete) || project.imageCount >= requiredSourceImageCount
+}
+
+export function projectReadyForEditor(
+  project: Pick<
+    WorkspaceProject,
+    'imageCount' | 'latestFloorPlanId' | 'latestLayoutId' | 'sourceCaptureComplete' | 'status'
+  >,
+) {
+  if (project.status === 'uploading' || project.status === 'processing' || project.status === 'retrying') {
+    return false
+  }
+  return (
+    project.status === 'succeeded' ||
+    project.status === 'review_required' ||
+    projectHasCompleteSourceCapture(project) ||
+    Boolean(project.latestFloorPlanId || project.latestLayoutId)
+  )
+}
+
+export function projectResumeStep(project: WorkspaceProject): ProjectPipelineStepKey {
+  if (projectReadyForEditor(project)) {
+    return 'editor'
+  }
+  if (
+    project.status === 'uploading' ||
+    project.status === 'processing' ||
+    project.status === 'retrying' ||
+    project.status === 'failed' ||
+    project.status === 'timeout' ||
+    project.status === 'cancelled'
+  ) {
+    return 'status'
+  }
+  return 'source'
 }
 
 export function projectToneForStatus(status: ProjectStatus): ProjectTone {

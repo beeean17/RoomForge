@@ -59,6 +59,8 @@ export type FurnitureObject = {
     y: number
   }
   rotationDegrees: number
+  flipX?: boolean
+  flipY?: boolean
   color: string
   locked?: boolean
 }
@@ -489,6 +491,8 @@ function furnitureValue(value: unknown): FurnitureObject | null {
       y: numberValue(position.y, 1),
     },
     rotationDegrees: numberValue(record.rotationDegrees, 0),
+    flipX: booleanValue(record.flipX, false),
+    flipY: booleanValue(record.flipY, false),
     color: stringValue(record.color, '#64748b'),
     locked: booleanValue(record.locked, false),
     candidateId: optionalStringValue(record.candidateId),

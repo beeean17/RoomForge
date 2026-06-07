@@ -113,7 +113,7 @@ export function editSelectedFixtureInModel(
       ...model,
       hasUnsavedChanges: true,
       structuralFixtures: model.structuralFixtures.map((fixture) =>
-        fixture.fixtureId === selected.fixtureId ? editFixtureObject(fixture, action) : fixture,
+        fixture.fixtureId === selected.fixtureId ? editFixtureObject(fixture, action, model) : fixture,
       ),
     },
     selected,
@@ -213,6 +213,7 @@ function fixtureLabel(category: string): string {
 function editFixtureObject(
   fixture: StructuralFixtureObject,
   action: FixtureEditAction,
+  model: SpatialModel,
 ): StructuralFixtureObject {
   const size = fixture.size ?? { x: 0.8, y: 1, z: 0.1 }
   const position = fixture.position ?? { x: 0.5, y: 1, z: 0 }
@@ -220,13 +221,23 @@ function editFixtureObject(
     const currentIndex = Math.max(fixtureWallIds.indexOf(fixture.wallId as (typeof fixtureWallIds)[number]), 0)
     const delta = action === 'wall-next' ? 1 : -1
     const wallId = fixtureWallIds[(currentIndex + delta + fixtureWallIds.length) % fixtureWallIds.length]
-    return { ...fixture, wallId }
+    return {
+      ...fixture,
+      wallId,
+      position: {
+        ...position,
+        x: clampFixtureOffsetForWall(position.x, { ...fixture, wallId }, model),
+      },
+    }
   }
   if (action === 'offset-decrease' || action === 'offset-increase') {
     const delta = action === 'offset-increase' ? 0.1 : -0.1
     return {
       ...fixture,
-      position: { ...position, x: Number(Math.max(0, position.x + delta).toFixed(2)) },
+      position: {
+        ...position,
+        x: clampFixtureOffsetForWall(position.x + delta, fixture, model),
+      },
     }
   }
   if (action === 'narrower' || action === 'wider') {
@@ -256,4 +267,24 @@ function editFixtureObject(
     }
   }
   return fixture
+}
+
+export function fixtureWallLength(wallId: string, model: SpatialModel): number {
+  const bounds = roomBounds(model)
+  return wallId === 'right-wall' || wallId === 'left-wall'
+    ? bounds.depthMeters
+    : bounds.widthMeters
+}
+
+export function clampFixtureOffsetForWall(
+  offset: number,
+  fixture: Pick<StructuralFixtureObject, 'wallId' | 'size'>,
+  model: SpatialModel,
+): number {
+  const wallLength = fixtureWallLength(fixture.wallId, model)
+  const size = fixture.size ?? { x: 0.8, y: 1, z: 0.1 }
+  const halfWidth = Math.max(size.x / 2, 0)
+  const min = Math.min(halfWidth, wallLength / 2)
+  const max = Math.max(wallLength - halfWidth, wallLength / 2)
+  return Number(Math.min(Math.max(offset, min), max).toFixed(2))
 }

@@ -1,4 +1,4 @@
-import { doc, getDoc, getFirestore, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, getFirestore, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 
 import { roomForgeFirebaseApp } from '../../firebase/config'
 import type { WorkspaceProject } from '../projects/projectData'
@@ -38,6 +38,10 @@ export async function persistEditorBridgeEvent({
     return persistSceneUnderstandingResult({ message, project, ownerUid, sourceImageId, source })
   }
 
+  if (message.type === 'roomforge.layout.saved') {
+    return persistLayoutResult({ message, project, ownerUid })
+  }
+
   if (!project.latestJobId) {
     return { status: 'skipped', label: 'Reconstruction job required before geometry persistence' }
   }
@@ -57,7 +61,8 @@ function isPersistableEditorEvent(type: string): boolean {
   return (
     type === 'roomforge.opencv.candidatesExtracted' ||
     type === 'roomforge.sceneUnderstanding.candidatesExtracted' ||
-    type === 'roomforge.geometry.confirmedChanged'
+    type === 'roomforge.geometry.confirmedChanged' ||
+    type === 'roomforge.layout.saved'
   )
 }
 
@@ -67,7 +72,7 @@ async function persistOpenCvResult({
   ownerUid,
   sourceImageId,
 }: PersistenceContext & { message: EditorBridgeMessage; ownerUid: string; sourceImageId: string }) {
-  const resultId = safeDocumentId(`opencv-${message.requestId ?? Date.now()}`)
+  const resultId = 'latest'
   const payload = recordValue(message.payload)
   const geometry = recordValue(payload.candidateGeometry)
   const firestore = getFirestore(roomForgeFirebaseApp())
@@ -106,18 +111,9 @@ async function persistOpenCvResult({
     schema_version: 1,
   })
 
-  const batch = writeBatch(firestore)
-  batch.set(
-    doc(firestore, 'projects', project.id, 'opencv_results', resultId),
-    resultDocument(resultId, timestamp),
-  )
-  batch.set(
-    latestRef,
-    resultDocument('latest', latestCreatedAt),
-  )
-  await batch.commit()
+  await setDoc(latestRef, resultDocument(resultId, latestCreatedAt))
 
-  return { status: 'stored', label: 'OpenCV result persisted' } as const
+  return { status: 'stored', label: 'OpenCV result overwritten' } as const
 }
 
 async function persistSceneUnderstandingResult({
@@ -128,11 +124,16 @@ async function persistSceneUnderstandingResult({
 }: PersistenceContext & { message: EditorBridgeMessage; ownerUid: string; sourceImageId: string }) {
   const payload = recordValue(message.payload)
   const result = recordValue(payload.sceneUnderstandingResult)
-  const resultId = safeDocumentId(stringValue(result.resultId) ?? `scene-understanding-${Date.now()}`)
+  const resultId = 'latest'
   const firestore = getFirestore(roomForgeFirebaseApp())
   const qualityStatus = qualityStatusValue(result.qualityStatus)
+  const resultRef = doc(firestore, 'projects', project.id, 'scene_understanding_results', resultId)
+  const existingSnapshot = await getDoc(resultRef)
+  const createdAt = existingSnapshot.exists()
+    ? existingSnapshot.data().created_at
+    : serverTimestamp()
 
-  await setDoc(doc(firestore, 'projects', project.id, 'scene_understanding_results', resultId), withoutUndefined({
+  await setDoc(resultRef, withoutUndefined({
     result_id: resultId,
     project_id: project.id,
     owner_uid: ownerUid,
@@ -155,12 +156,12 @@ async function persistSceneUnderstandingResult({
     structural_fixtures: toSnakeCaseDeep(listValue(result.structuralFixtures)),
     artifact_refs: [],
     processing_completed_at: serverTimestamp(),
-    created_at: serverTimestamp(),
+    created_at: createdAt,
     updated_at: serverTimestamp(),
     schema_version: 1,
   }))
 
-  return { status: 'stored', label: 'Scene understanding result persisted' } as const
+  return { status: 'stored', label: 'Scene understanding result overwritten' } as const
 }
 
 async function persistConfirmedGeometry({
@@ -194,6 +195,90 @@ async function persistConfirmedGeometry({
   }))
 
   return { status: 'stored', label: 'Confirmed geometry persisted' } as const
+}
+
+async function persistLayoutResult({
+  message,
+  project,
+  ownerUid,
+}: PersistenceContext & { message: EditorBridgeMessage; ownerUid: string }) {
+  const firestore = getFirestore(roomForgeFirebaseApp())
+  const payload = recordValue(message.payload)
+  const layout = recordValue(payload.layout)
+  const floorPlanId = stringValue(layout.floor_plan_id) ?? project.latestFloorPlanId
+  if (!floorPlanId) {
+    return { status: 'skipped', label: 'Metric floor plan required before layout sync' } as const
+  }
+
+  const floorPlanRef = doc(firestore, 'projects', project.id, 'floor_plans', floorPlanId)
+  const floorPlanSnapshot = await getDoc(floorPlanRef)
+  if (!floorPlanSnapshot.exists()) {
+    return { status: 'skipped', label: 'Latest floor plan not found for layout sync' } as const
+  }
+
+  const floorPlan = floorPlanSnapshot.data()
+  const sourceImageId = stringValue(floorPlan.source_image_id) ?? project.latestSourceImageId
+  const reconstructionJobId = stringValue(floorPlan.job_id) ?? project.latestJobId
+  if (!sourceImageId || !reconstructionJobId) {
+    return { status: 'skipped', label: 'Source image and reconstruction job required before layout sync' } as const
+  }
+
+  const sourceSnapshot = await getDoc(doc(firestore, 'projects', project.id, 'source_images', sourceImageId))
+  const jobSnapshot = await getDoc(doc(firestore, 'projects', project.id, 'reconstruction_jobs', reconstructionJobId))
+  if (!sourceSnapshot.exists() || !jobSnapshot.exists()) {
+    return { status: 'skipped', label: 'Source image or reconstruction job not found for layout sync' } as const
+  }
+
+  const source = sourceSnapshot.data()
+  const job = jobSnapshot.data()
+  const reconstructionStatus = stringValue(job.status) ?? project.status
+  const layoutId = 'latest'
+  const layoutRef = doc(firestore, 'projects', project.id, 'layouts', layoutId)
+  const existingLayout = await getDoc(layoutRef)
+  const timestamp = serverTimestamp()
+  const furnitureObjects = listValue(layout.furniture_objects)
+  const structuralFixtureObjects = listValue(layout.structural_fixture_objects)
+  const editorScene = recordValue(layout.editor_scene)
+  const reviewRequired = Boolean(recordValue(layout.meta).review_required) || reconstructionStatus === 'review_required'
+
+  await setDoc(layoutRef, withoutUndefined({
+    layout_id: layoutId,
+    project_id: project.id,
+    owner_uid: ownerUid,
+    name: 'Latest editor layout',
+    source_image_id: sourceImageId,
+    reconstruction_job_id: reconstructionJobId,
+    reconstruction_status: reconstructionStatus,
+    review_required: reviewRequired,
+    floor_plan_id: floorPlanId,
+    coordinate_space: 'meters',
+    room_dimensions: recordValue(floorPlan.room_dimensions),
+    source_metadata: withoutUndefined({
+      ...source,
+      reconstruction_job_id: reconstructionJobId,
+      reconstruction_status: reconstructionStatus,
+    }),
+    floor_plan: floorPlan,
+    editor_scene: toSnakeCaseDeep(editorScene),
+    furniture_objects: furnitureObjects,
+    structural_fixture_objects: structuralFixtureObjects,
+    base_floor_plan_updated_at: floorPlan.updated_at,
+    saved_at: timestamp,
+    created_at: existingLayout.exists() ? existingLayout.data().created_at : timestamp,
+    updated_at: timestamp,
+    schema_version: 1,
+    export_version: 1,
+  }))
+
+  await updateDoc(doc(firestore, 'projects', project.id), {
+    latest_layout_id: layoutId,
+    current_pipeline_step: 'editor',
+    pipeline_progress: 100,
+    source_capture_complete: true,
+    updated_at: serverTimestamp(),
+  })
+
+  return { status: 'stored', label: 'Layout synced to project data' } as const
 }
 
 function safeDocumentId(value: string): string {

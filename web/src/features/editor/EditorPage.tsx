@@ -24,6 +24,7 @@ import {
   Ruler,
   ScanLine,
   ShieldCheck,
+  SlidersHorizontal,
   Split,
   Square,
   Trash2,
@@ -56,6 +57,15 @@ import {
   type CandidateReviewItem,
   type CandidateReviewState,
 } from './editorCandidateReview'
+import {
+  maxValueForField,
+  placedObjectStateFromPayload,
+  placedObjectTransformFields,
+  transformValueForItem,
+  type PlacedObjectItem,
+  type PlacedObjectState,
+  type PlacedObjectTransformField,
+} from './editorPlacedObjects'
 import { useEditorSourceImagePayload } from './editorSourceImages'
 
 type BridgeState = 'loading' | 'ready' | 'initializing' | 'initialized' | 'error'
@@ -137,6 +147,22 @@ const initialCandidateReviewState: CandidateReviewState = {
   },
 }
 
+const initialPlacedObjectState: PlacedObjectState = {
+  items: [],
+  selectedItem: null,
+  counts: {
+    total: 0,
+    cvCandidates: 0,
+    catalog: 0,
+    locked: 0,
+    outsideRoom: 0,
+  },
+  roomBounds: {
+    widthMeters: 4.2,
+    depthMeters: 3.6,
+  },
+}
+
 const toolControls: Array<{ key: EditorTool; label: string; icon: typeof MousePointer2 }> = [
   { key: 'select', label: '선택', icon: MousePointer2 },
   { key: 'move', label: '이동', icon: Move },
@@ -193,6 +219,7 @@ export function EditorPage() {
   const [canvasToggleState, setCanvasToggleState] = useState<CanvasToggleState>(initialCanvasToggleState)
   const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSceneSummary>(initialRuntimeSummary)
   const [candidateReviewState, setCandidateReviewState] = useState<CandidateReviewState>(initialCandidateReviewState)
+  const [placedObjectState, setPlacedObjectState] = useState<PlacedObjectState>(initialPlacedObjectState)
   const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
     status: 'ignored',
     label: 'Waiting for CV events',
@@ -267,6 +294,11 @@ export function EditorPage() {
       setCandidateReviewState(nextCandidateReviewState)
     }
 
+    const nextPlacedObjectState = placedObjectStateFromPayload(message.payload)
+    if (nextPlacedObjectState) {
+      setPlacedObjectState(nextPlacedObjectState)
+    }
+
     if (!project) {
       return
     }
@@ -321,6 +353,7 @@ export function EditorPage() {
     setCanvasToggleState(initialCanvasToggleState)
     setRuntimeSummary(initialRuntimeSummary)
     setCandidateReviewState(initialCandidateReviewState)
+    setPlacedObjectState(initialPlacedObjectState)
   }, [])
 
   useEffect(() => {
@@ -656,6 +689,17 @@ export function EditorPage() {
                 sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
             />
 
+            <PlacedObjectEditor
+              disabled={!runtimeReady}
+              state={placedObjectState}
+              onEditAction={(action) =>
+                sendRuntimeCommand('roomforge.furniture.editSelected', { action })}
+              onSelect={(objectId) =>
+                sendRuntimeCommand('roomforge.furniture.select', { objectId })}
+              onTransformChange={(field, value) =>
+                sendRuntimeCommand('roomforge.furniture.updateTransform', { field, value })}
+            />
+
             <section>
               <div className="editor-host-section-title">
                 <Cpu size={18} />
@@ -737,6 +781,221 @@ export function EditorPage() {
       </section>
     </main>
   )
+}
+
+function PlacedObjectEditor({
+  disabled,
+  state,
+  onEditAction,
+  onSelect,
+  onTransformChange,
+}: {
+  disabled: boolean
+  state: PlacedObjectState
+  onEditAction: (action: string) => void
+  onSelect: (objectId: string) => void
+  onTransformChange: (field: PlacedObjectTransformField, value: number) => void
+}) {
+  const selected = state.selectedItem
+
+  return (
+    <section className="placed-object-editor" aria-labelledby="react-placed-object-title">
+      <div className="editor-host-section-title">
+        <SlidersHorizontal size={18} />
+        <h2 id="react-placed-object-title">Placed objects</h2>
+      </div>
+
+      <div className="placed-object-counts" aria-label="Placed object counts">
+        <span><strong>{state.counts.total}</strong> placed</span>
+        <span><strong>{state.counts.cvCandidates}</strong> CV</span>
+        <span><strong>{state.counts.locked}</strong> locked</span>
+        <span><strong>{state.counts.outsideRoom}</strong> outside</span>
+      </div>
+
+      {state.items.length === 0 ? (
+        <p className="editor-host-empty">배치된 객체가 없습니다. 후보를 배치하거나 프리셋을 추가하세요.</p>
+      ) : (
+        <div className="placed-object-list" role="list" aria-label="React placed object list">
+          {state.items.map((item) => (
+            <PlacedObjectCard
+              disabled={disabled}
+              item={item}
+              key={item.objectId}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
+
+      <SelectedPlacedObjectControls
+        disabled={disabled}
+        roomBounds={state.roomBounds}
+        selected={selected}
+        onEditAction={onEditAction}
+        onTransformChange={onTransformChange}
+      />
+    </section>
+  )
+}
+
+function PlacedObjectCard({
+  disabled,
+  item,
+  onSelect,
+}: {
+  disabled: boolean
+  item: PlacedObjectItem
+  onSelect: (objectId: string) => void
+}) {
+  return (
+    <article role="listitem">
+      <button
+        aria-label={`Select ${item.label}`}
+        aria-pressed={item.selected}
+        className={`placed-object-card${item.selected ? ' is-selected' : ''}${item.outsideRoom ? ' is-warning' : ''}`}
+        data-object-id={item.objectId}
+        disabled={disabled}
+        type="button"
+        onClick={() => onSelect(item.objectId)}
+      >
+        <span>
+          <strong>{item.label}</strong>
+          <small>{item.category} · {item.sourceLabel}</small>
+        </span>
+        <span className="placed-object-card-meta">
+          <span className={`state-pill ${item.locked ? 'warning' : 'confirmed'}`}>
+            {item.locked ? 'Locked' : 'Editable'}
+          </span>
+          {item.outsideRoom ? <span className="state-pill warning">Outside</span> : null}
+        </span>
+      </button>
+    </article>
+  )
+}
+
+function SelectedPlacedObjectControls({
+  disabled,
+  roomBounds,
+  selected,
+  onEditAction,
+  onTransformChange,
+}: {
+  disabled: boolean
+  roomBounds: PlacedObjectState['roomBounds']
+  selected: PlacedObjectItem | null
+  onEditAction: (action: string) => void
+  onTransformChange: (field: PlacedObjectTransformField, value: number) => void
+}) {
+  if (!selected) {
+    return (
+      <div className="placed-object-selection-empty">
+        <MousePointer2 size={16} />
+        <span>객체를 선택하면 미터 단위 transform을 편집할 수 있습니다.</span>
+      </div>
+    )
+  }
+
+  const transformDisabled = disabled || !selected.canEdit
+
+  return (
+    <div className="placed-object-transform-panel" data-selected-object-id={selected.objectId}>
+      <div className="placed-object-transform-header">
+        <div>
+          <strong>{selected.label}</strong>
+          <span>{selected.coordinateSpace} · {selected.sourceLabel}</span>
+        </div>
+        <span className={`state-pill ${selected.locked ? 'warning' : 'selected'}`}>
+          {selected.locked ? 'Locked' : 'Selected'}
+        </span>
+      </div>
+
+      <dl className="placed-object-summary-grid" aria-label="Selected placed object summary">
+        <div>
+          <dt>Position</dt>
+          <dd>{formatMeters(selected.positionX)}, {formatMeters(selected.positionY)}</dd>
+        </div>
+        <div>
+          <dt>Size</dt>
+          <dd>{formatMeters(selected.widthMeters)} x {formatMeters(selected.depthMeters)}</dd>
+        </div>
+        <div>
+          <dt>Height</dt>
+          <dd>{formatMeters(selected.heightMeters)}</dd>
+        </div>
+        <div>
+          <dt>Rotation</dt>
+          <dd>{selected.rotationDegrees.toFixed(0)} deg</dd>
+        </div>
+      </dl>
+
+      <div className="placed-object-transform-grid" aria-label="Selected placed object transform">
+        {placedObjectTransformFields.map((config) => {
+          const value = transformValueForItem(selected, config.field)
+          const max = maxValueForField(config.field, roomBounds) || config.maxFallback
+          return (
+            <label key={config.field}>
+              <span>{config.label}</span>
+              <input
+                aria-label={`${selected.label} ${config.label}`}
+                disabled={transformDisabled}
+                inputMode="decimal"
+                max={max}
+                min={config.min}
+                step={config.step}
+                type="number"
+                value={formatInputNumber(value)}
+                onChange={(event) => {
+                  const nextValue = event.currentTarget.valueAsNumber
+                  if (Number.isFinite(nextValue)) {
+                    onTransformChange(config.field, nextValue)
+                  }
+                }}
+              />
+              <small>{config.unit}</small>
+            </label>
+          )
+        })}
+      </div>
+
+      <div className="placed-object-actions">
+        <button
+          className="rf-btn"
+          disabled={disabled}
+          type="button"
+          onClick={() => onEditAction('toggle-lock')}
+        >
+          <Lock size={15} />
+          {selected.locked ? 'Unlock' : 'Lock'}
+        </button>
+        <button
+          className="rf-btn"
+          disabled={disabled}
+          type="button"
+          onClick={() => onEditAction('rotate-right')}
+        >
+          <RotateCcw size={15} />
+          Rotate
+        </button>
+        <button
+          className="danger-button"
+          disabled={disabled || !selected.canDelete}
+          type="button"
+          onClick={() => onEditAction('delete')}
+        >
+          <Trash2 size={15} />
+          Delete
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function formatMeters(value: number): string {
+  return `${value.toFixed(2)} m`
+}
+
+function formatInputNumber(value: number): string {
+  return Number.isFinite(value) ? String(Number(value.toFixed(2))) : '0'
 }
 
 function CandidateReviewTray({

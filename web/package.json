@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 9241",
     "test:editor-candidates": "node --experimental-strip-types scripts/verify-editor-candidate-review.mjs",
+    "test:editor-placed": "node --experimental-strip-types scripts/verify-editor-placed-objects.mjs",
     "typecheck": "tsc -b"
   },
   "dependencies": {

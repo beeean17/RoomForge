@@ -5,6 +5,10 @@ export type RuntimeSurface = 'desktop-web' | 'mobile-web'
 export function detectRuntimeSurface(): RuntimeSurface {
   if (typeof window === 'undefined') return 'desktop-web'
 
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('desktopFixture')) {
+    return 'desktop-web'
+  }
+
   const host = window.location.hostname.toLowerCase()
   const isMobileHost = host.startsWith('m.')
   const isMobileViewport = window.matchMedia('(max-width: 920px), (pointer: coarse)').matches

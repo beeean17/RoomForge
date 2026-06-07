@@ -5351,6 +5351,194 @@ button:disabled {
   padding-inline: 8px;
 }
 
+.placed-object-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.placed-object-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.placed-object-counts span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.placed-object-counts strong {
+  color: var(--text-main);
+  font-size: 0.96rem;
+}
+
+.placed-object-list {
+  display: grid;
+  gap: 8px;
+}
+
+.placed-object-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.placed-object-card:hover {
+  border-color: rgba(214, 167, 91, 0.42);
+  background: var(--surface-hover);
+}
+
+.placed-object-card.is-selected {
+  border-color: rgba(214, 167, 91, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(214, 167, 91, 0.2);
+}
+
+.placed-object-card.is-warning {
+  border-color: rgba(234, 179, 8, 0.42);
+}
+
+.placed-object-card strong,
+.placed-object-transform-header strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.placed-object-card small,
+.placed-object-transform-header span:not(.state-pill) {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.placed-object-card-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.placed-object-selection-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px;
+  border: 1px dashed var(--line-soft);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.placed-object-transform-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.placed-object-transform-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.placed-object-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.placed-object-summary-grid div {
+  min-width: 0;
+}
+
+.placed-object-summary-grid dt,
+.placed-object-transform-grid span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.placed-object-summary-grid dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: 0.78rem;
+}
+
+.placed-object-transform-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.placed-object-transform-grid label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 6px;
+  min-width: 0;
+}
+
+.placed-object-transform-grid label span {
+  grid-column: 1 / -1;
+}
+
+.placed-object-transform-grid input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.placed-object-transform-grid small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.placed-object-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.placed-object-actions .rf-btn,
+.placed-object-actions .danger-button {
+  min-width: 0;
+  min-height: 36px;
+  padding-inline: 8px;
+}
+
 .editor-host-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);

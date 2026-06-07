@@ -1073,6 +1073,22 @@ function handleBridgeCommand(message: BridgeMessage): void {
     return
   }
 
+  if (message.type === 'roomforge.furniture.select') {
+    selectFurniture(stringPayloadValue(message.payload, 'objectId'))
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.furniture.updateTransform') {
+    const field = stringPayloadValue(message.payload, 'field')
+    const value = numberPayloadValue(message.payload, 'value')
+    if (isTransformField(field) && value !== undefined) {
+      updateSelectedFurnitureTransform(field, value)
+    }
+    respondToFlutter(message)
+    return
+  }
+
   if (message.type === 'roomforge.furniture.editSelected') {
     const action = stringPayloadValue(message.payload, 'action')
     if (isFurnitureEditAction(action)) {
@@ -1754,6 +1770,11 @@ function stringPayloadValue(payload: BridgePayload, key: string): string | undef
 function booleanPayloadValue(payload: BridgePayload, key: string): boolean | undefined {
   const value = payload[key]
   return typeof value === 'boolean' ? value : undefined
+}
+
+function numberPayloadValue(payload: BridgePayload, key: string): number | undefined {
+  const value = payload[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function isCanvasToggleKey(value: string | undefined): value is keyof typeof canvasToggleState {

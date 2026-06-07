@@ -24,6 +24,8 @@ for (const marker of [
   "current_pipeline_step: 'source'",
   'syncProjectProgressFromSourceImages',
   'snapshot.size >= requiredSourceImageCount',
+  'const sourceImageId = await latestSourceImageIdForProject(firestore, project.id) ?? project.latestSourceImageId',
+  'latest_source_image_id: sourceImageId',
   'pipeline_progress',
 ]) {
   assert.ok(projectRepositorySource.includes(marker), `Missing project repository progress marker: ${marker}`)

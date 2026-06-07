@@ -151,17 +151,19 @@ firebase emulators:start --only auth,firestore,storage,hosting
 ## Demo Screenshots
 
 README demo screenshots should live in the repository root `images/` directory.
-The files have not been added yet; use these names when screenshots are ready:
+The current demo set shows the main web flow and the editor's 2D/3D workspace.
 
-```text
-images/
-  demo-landing.png
-  demo-login.png
-  demo-projects.png
-  demo-reconstruction.png
-  demo-editor.png
-  demo-android.png
-```
+| Landing | Login |
+| --- | --- |
+| ![RoomForge landing page](images/demo-landing.png) | ![RoomForge login page](images/demo-login.png) |
+
+| Projects | Reconstruction Review |
+| --- | --- |
+| ![RoomForge projects dashboard](images/demo-projects.png) | ![RoomForge reconstruction review workflow](images/demo-reconstruction1.png) |
+
+| 2D Editor | 3D Editor |
+| --- | --- |
+| ![RoomForge 2D editor view](images/demo-editor1.png) | ![RoomForge 3D editor view](images/demo-editor2.png) |
 
 ## Deployment Plan
 

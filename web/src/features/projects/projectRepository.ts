@@ -338,7 +338,7 @@ export async function createProjectReconstructionJob(
   dimensions?: RoomDimensionsInput,
 ) {
   const firestore = getFirestore(roomForgeFirebaseApp())
-  const sourceImageId = project.latestSourceImageId ?? await latestSourceImageIdForProject(firestore, project.id)
+  const sourceImageId = await latestSourceImageIdForProject(firestore, project.id) ?? project.latestSourceImageId
 
   if (!sourceImageId) {
     throw new Error('변환을 시작할 소스 이미지가 없습니다.')
@@ -388,6 +388,7 @@ export async function createProjectReconstructionJob(
     schema_version: 1,
   })
   batch.update(projectRef, {
+    latest_source_image_id: sourceImageId,
     latest_job_id: jobRef.id,
     current_reconstruction_status: 'created',
     current_pipeline_step: 'status',

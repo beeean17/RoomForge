@@ -145,19 +145,20 @@ firebase emulators:start --only auth,firestore,storage,hosting
 
 ## 데모 스크린샷
 
-README 데모 스크린샷은 저장소 루트의 `images/` 디렉터리에 둡니다. 아직
-이미지는 추가하지 않았고, 스크린샷을 준비하면 아래 이름을 기준으로 채워 넣을
-예정입니다.
+README 데모 스크린샷은 저장소 루트의 `images/` 디렉터리에 둡니다. 현재 데모
+이미지는 주요 웹 흐름과 편집기의 2D/3D 워크스페이스를 보여 줍니다.
 
-```text
-images/
-  demo-landing.png
-  demo-login.png
-  demo-projects.png
-  demo-reconstruction.png
-  demo-editor.png
-  demo-android.png
-```
+| 랜딩 | 로그인 |
+| --- | --- |
+| ![RoomForge 랜딩 페이지](images/demo-landing.png) | ![RoomForge 로그인 페이지](images/demo-login.png) |
+
+| 프로젝트 | 재구성 검토 |
+| --- | --- |
+| ![RoomForge 프로젝트 대시보드](images/demo-projects.png) | ![RoomForge 재구성 검토 흐름](images/demo-reconstruction1.png) |
+
+| 2D 편집기 | 3D 편집기 |
+| --- | --- |
+| ![RoomForge 2D 편집기 화면](images/demo-editor1.png) | ![RoomForge 3D 편집기 화면](images/demo-editor2.png) |
 
 ## 배포 계획
 

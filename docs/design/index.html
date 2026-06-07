@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge Screen Designs — Gallery</title>
+  <link rel="stylesheet" href="system/tokens.css" />
+  <link rel="stylesheet" href="system/base.css" />
+  <style>
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 48px 24px 80px; }
+    .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+    .head h1 { font-size: var(--rf-text-3xl); letter-spacing: 0; }
+    .head p { color: var(--rf-muted); max-width: 60ch; margin-top: 10px; }
+    .legend { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
+    .group { margin-bottom: 40px; }
+    .group h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--rf-subtle); margin-bottom: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .scard { padding: 16px; display: grid; gap: 12px; }
+    .scard .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .num { font-family: var(--rf-mono); font-size: 12px; color: var(--rf-subtle); font-weight: 700; }
+    .scard h3 { font-size: 16px; }
+    .scard .desc { color: var(--rf-muted); font-size: 13px; }
+    .links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .links a { text-decoration: none; }
+    .links .rf-btn--sm { min-height: 30px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="head" data-reveal>
+      <div>
+        <span class="rf-eyebrow">RoomForge Design System</span>
+        <h1>화면별 디자인 갤러리</h1>
+        <p>카탈로그의 21개 화면을 데스크톱·모바일 HTML 목업과 마크다운 스펙으로 구현했습니다. Charcoal surface와 muted accent 상태색을 모든 화면에 동일하게 적용합니다.</p>
+      </div>
+      <div class="rf-stack" style="gap:8px">
+        <a class="rf-btn rf-btn--sm rf-btn--primary" href="landing.html">홈페이지(랜딩) ↗</a>
+        <a class="rf-btn rf-btn--sm" href="README.md">시스템 문서</a>
+        <a class="rf-btn rf-btn--sm" href="screen-component-catalog.html">원본 카탈로그</a>
+      </div>
+    </header>
+    <div class="legend">
+      <span class="rf-chip rf-chip--confirmed"><span class="dot"></span>전체 구현됨</span>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+      <span class="rf-chip rf-chip--measure"><span class="dot"></span>mobile</span>
+      <span class="rf-chip rf-chip--admin"><span class="dot"></span>spec</span>
+    </div>
+
+    <section class="group">
+      <h2>P0 Core Flow</h2>
+      <div class="grid" data-stagger>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">01</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Sign In</h3><p class="desc">브랜드 패널 + Google 로그인, idle/signing/failed.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/01-sign-in.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/01-sign-in.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/01-sign-in.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">02</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Project Workspace</h3><p class="desc">프로젝트 목록 + 상세 패널, 검색·필터.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/02-project-workspace.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/02-project-workspace.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/02-project-workspace.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">03</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Project Dialog</h3><p class="desc">프로젝트 생성, 편집, 삭제 확인을 한 흐름 안에서 처리합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/03-project-dialog.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/03-project-dialog.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/03-project-dialog.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">04</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Room Dimensions</h3><p class="desc">방의 실제 가로, 세로, 높이를 meters 기준으로 입력하고 비율을 즉시 확인합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/04-room-dimensions.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/04-room-dimensions.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/04-room-dimensions.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">05</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Source Image Upload</h3><p class="desc">원본 방 이미지를 업로드하고 품질, 권한, 진행 상태를 한 화면에서 복구합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/05-source-image-upload.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/05-source-image-upload.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/05-source-image-upload.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">06</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Reconstruction Status</h3><p class="desc">재구성 job의 상태, 실패, 재시도, 검토 필요 전환을 타임라인으로 보여줍니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/06-reconstruction-status.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/06-reconstruction-status.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/06-reconstruction-status.md">Spec</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>CV Review &amp; Editor</h2>
+      <div class="grid" data-stagger>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">07</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>OpenCV Candidate Review</h3><p class="desc">원본 이미지 위에서 CV 후보를 검토하고, 틀린 후보를 즉시 수동 보정합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/07-opencv-candidate-review.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/07-opencv-candidate-review.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/07-opencv-candidate-review.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">08</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Geometry Correction</h3><p class="desc">방 윤곽 꼭짓점과 벽 세그먼트를 조정해 저장 가능한 폐곡선을 만듭니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/08-geometry-correction.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/08-geometry-correction.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/08-geometry-correction.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">09</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Scale Calibration</h3><p class="desc">이미지 픽셀 좌표를 meters 좌표계로 변환하기 위한 기준선을 설정합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/09-scale-calibration.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/09-scale-calibration.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/09-scale-calibration.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">10</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Floor Plan Review</h3><p class="desc">미터 기반 평면도, 경고, artifact 상태를 확인하고 편집기로 넘깁니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/10-floor-plan-review.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/10-floor-plan-review.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/10-floor-plan-review.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">11</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>2D / 3D Editor Shell</h3><p class="desc">레일·캔버스·검사기, 보기 전환.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/11-editor.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/11-editor.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/11-editor.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">12</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Furniture And Inspector</h3><p class="desc">가구 프록시를 추가하고 위치, 회전, 크기, 충돌 상태를 편집합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/12-furniture-inspector.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/12-furniture-inspector.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/12-furniture-inspector.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">13</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Layout Save / Load / Export</h3><p class="desc">저장, 로드, JSON 내보내기의 상태와 round-trip 검증을 표시합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/13-layout-save-export.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/13-layout-save-export.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/13-layout-save-export.md">Spec</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>Recovery &amp; Continuity</h2>
+      <div class="grid" data-stagger>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">14</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Draft Recovery And Conflict</h3><p class="desc">로컬 draft와 클라우드 저장본의 차이를 비교하고 명시적으로 복구합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/14-draft-recovery.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/14-draft-recovery.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/14-draft-recovery.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">15</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Sync Failed And Reupload</h3><p class="desc">네트워크, 권한, 서버 실패를 구분하고 재시도와 재업로드를 연결합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/15-sync-failed.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/15-sync-failed.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/15-sync-failed.md">Spec</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>Admin &amp; Support</h2>
+      <div class="grid" data-stagger>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">16</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Admin Route Guard</h3><p class="desc">관리자 권한 확인, 거부, stale role 상태를 민감 정보 없이 처리합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/16-admin-route-guard.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/16-admin-route-guard.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/16-admin-route-guard.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">17</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Admin Dashboard And Search</h3><p class="desc">운영자가 job을 검색, 필터, 스캔하고 실패 상태를 빠르게 찾는 화면입니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/17-admin-dashboard.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/17-admin-dashboard.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/17-admin-dashboard.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">18</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Admin Job Detail</h3><p class="desc">단일 재구성 job의 메타데이터, 상태 전환, artifact, CV 요약을 조사합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/18-admin-job-detail.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/18-admin-job-detail.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/18-admin-job-detail.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">19</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Admin Retry And Audit</h3><p class="desc">재시도 가능 조건을 확인하고 관리자 action receipt를 남깁니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/19-admin-retry-audit.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/19-admin-retry-audit.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/19-admin-retry-audit.md">Spec</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>Responsive &amp; Quality</h2>
+      <div class="grid" data-stagger>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">20</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Responsive Layouts</h3><p class="desc">모바일 촬영, 태블릿 리뷰, 데스크톱 정밀 편집의 layout 전환을 정리합니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/20-responsive-layouts.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/20-responsive-layouts.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/20-responsive-layouts.md">Spec</a>
+          </div>
+        </article>
+
+        <article class="rf-card scard">
+          <div class="top"><span class="num">21</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>구현됨</span></div>
+          <h3>Templates And A11y</h3><p class="desc">empty, loading, error, accessibility 상태 템플릿을 한 화면에 모읍니다.</p>
+          <div class="links">
+            <a class="rf-btn rf-btn--sm rf-btn--primary" href="screens/desktop/21-templates-a11y.html">Desktop</a>
+            <a class="rf-btn rf-btn--sm" href="screens/mobile/21-templates-a11y.html">Mobile</a>
+            <a class="rf-btn rf-btn--sm rf-btn--ghost" href="specs/21-templates-a11y.md">Spec</a>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+  <script src="system/motion.js"></script>
+</body>
+</html>

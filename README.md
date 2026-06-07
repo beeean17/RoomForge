@@ -41,13 +41,18 @@ RoomForge는 웹 기반의 방 재구성 및 가구 배치 계획 애플리케�
 ```text
 app/       Flutter app shell
 editor/    Vite + TypeScript spatial editor
-server/    Lightweight FastAPI API
+server/    Legacy FastAPI API, inactive unless legacy_api mode is explicit
 packages/  Shared schemas and design tokens
 docs/      Project documentation
 ```
 
-See [docs/project-structure.md](docs/project-structure.md) and [docs/baseline-verification.md](docs/baseline-verification.md).
-Firebase Auth setup is documented in [docs/firebase-auth-setup.md](docs/firebase-auth-setup.md).
+The default application backend is Firebase Auth, Firestore, and Storage. The
+FastAPI/Oracle path is retained as legacy/reference code only.
+
+Current Firebase refactor guidance starts at
+[docs/refactor/README.md](docs/refactor/README.md). Historical FastAPI/Oracle
+setup notes live under [docs/legacy/](docs/legacy/) and apply only when
+`legacy_api` mode is selected intentionally.
 
 ## Verification
 

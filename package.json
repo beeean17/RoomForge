@@ -1,0 +1,25 @@
+{
+  "scripts": {
+    "build:web": "cd web && npm run build",
+    "check:editor-firebase-boundary": "bash scripts/check-editor-firebase-boundary.sh",
+    "check:firebase-default-smoke": "bash scripts/check-firebase-default-smoke.sh",
+    "check:legacy-api-isolation": "bash scripts/check-legacy-api-isolation.sh",
+    "test:firebase-rules:projects": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-project-rules.mjs\"",
+    "test:firebase-rules:profile": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-profile-rules.mjs\"",
+    "test:firebase-rules:geometry": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-geometry-rules.mjs\"",
+    "test:firebase-rules:layouts": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-layout-rules.mjs\"",
+    "test:firebase-rules:floor-plans": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-floor-plan-rules.mjs\"",
+    "test:firebase-rules:reconstruction": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-reconstruction-rules.mjs\"",
+    "test:firebase-rules:source-images": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-source-image-rules.mjs\"",
+    "test:firebase-rules:admin": "cd app && firebase emulators:exec --only auth,firestore \"node ../scripts/firebase-admin-rules.mjs\"",
+    "test:firebase-rules:admin-storage": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-admin-storage-rules.mjs\"",
+    "test:firebase-rules:smoke": "cd app && firebase emulators:exec --only auth,firestore,storage \"node ../scripts/firebase-rules-smoke.mjs\"",
+    "test:firebase-rules:smoke:direct": "bash scripts/firebase-rules-smoke-direct.sh"
+  },
+  "dependencies": {
+    "firebase": "^12.13.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1"
+  }
+}

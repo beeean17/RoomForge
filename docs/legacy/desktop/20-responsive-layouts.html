@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>20 · Responsive Layouts — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>adaptive</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/20-responsive-layouts.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">20 · Responsive &amp; Quality</span>
+            <h1>Responsive Layouts</h1>
+            <p>모바일 촬영, 태블릿 리뷰, 데스크톱 정밀 편집의 layout 전환을 정리합니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">reduced motion 보기</button>
+            <button class="rf-btn rf-btn--primary">레이아웃 점검</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="responsive-scene">
+          <div class="break-card b0"><b>Mobile 390</b><span>capture first</span></div><div class="break-card b1"><b>Tablet 834</b><span>review tray</span></div><div class="break-card b2"><b>Desktop 1440</b><span>editor shell</span></div><div class="break-card b3"><b>Wide Ops</b><span>admin split</span></div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>mobile</span><span class="rf-chip rf-chip--measure"><span class="dot"></span>tablet</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>desktop</span><span class="rf-chip rf-chip--admin"><span class="dot"></span>reduced motion</span></div>
+        <ul class="component-list">
+          <li><strong>Mobile</strong><span>촬영, 업로드, 상태 확인. 큰 터치 타겟과 단일 컬럼.</span></li><li><strong>Tablet</strong><span>캔버스와 접히는 inspector. 후보 tray는 하단.</span></li><li><strong>Desktop</strong><span>넓은 캔버스, 좌측 도구, 우측 inspector, 하단 status.</span></li><li><strong>Wide</strong><span>admin table과 detail split view를 동시에 표시.</span></li><li><strong>Reduced motion</strong><span>카메라 easing과 panel transition을 최소화.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

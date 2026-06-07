@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge Admin — 대시보드</title>
+  <script>
+    (function () {
+      try { var s = localStorage.getItem('rf-theme');
+        var dark = s ? s === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <script src="../../system/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: ['selector', '[data-theme="dark"]'],
+      theme: { extend: {
+        colors: {
+          page: 'var(--page-bg)', surface: 'var(--surface)', 'surface-hi': 'var(--surface-hover)',
+          panel: 'var(--panel)', line: 'var(--line-soft)', 'line-hi': 'var(--line-strong)',
+          ink: 'var(--brand-ink)', main: 'var(--text-main)', muted: 'var(--text-muted)', dim: 'var(--text-dim)',
+          accent: 'var(--accent)', admin: 'var(--admin)',
+        },
+        fontFamily: { sans: ['var(--rf-sans)'] }, borderRadius: { card: '14px' },
+      } },
+    };
+  </script>
+  <style>
+    :root[data-theme="dark"] {
+      --page-bg:#070608; --text-main:#f8f8f5; --text-muted:rgba(248,248,245,.66); --text-dim:rgba(248,248,245,.42);
+      --brand-ink:#fff; --line-soft:rgba(214,226,236,.13); --line-strong:rgba(214,226,236,.30);
+      --surface:rgba(255,255,255,.04); --surface-hover:rgba(255,255,255,.09); --panel:rgba(255,255,255,.025);
+      --accent:#8fb4ff; --admin:#a78bfa; --bar-bg:rgba(12,9,16,.82);
+      --grid-tint:rgba(180,160,235,.05); --grid-tint-soft:rgba(180,160,235,.04); --grid-opacity:.5;
+    }
+    :root[data-theme="light"] {
+      --page-bg:#eceae8; --text-main:#15171c; --text-muted:rgba(21,23,28,.66); --text-dim:rgba(21,23,28,.46);
+      --brand-ink:#0a0c10; --line-soft:rgba(20,30,45,.12); --line-strong:rgba(20,30,45,.26);
+      --surface:rgba(15,20,30,.045); --surface-hover:rgba(15,20,30,.09); --panel:rgba(255,255,255,.55);
+      --accent:#3f6ad8; --admin:#7c5cd6; --bar-bg:rgba(243,240,247,.82);
+      --grid-tint:rgba(120,92,214,.06); --grid-tint-soft:rgba(120,92,214,.045); --grid-opacity:.4;
+    }
+    html, body { font-family: var(--rf-sans); }
+    body { background: var(--page-bg); color: var(--text-main); transition: background-color .6s ease, color .6s ease; }
+    body::before {
+      content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+      background:
+        linear-gradient(180deg, rgba(167,139,250,.06), transparent 22%, transparent 80%, rgba(143,180,255,.04)),
+        repeating-linear-gradient(90deg, var(--grid-tint) 0 1px, transparent 1px 92px),
+        repeating-linear-gradient(180deg, var(--grid-tint-soft) 0 1px, transparent 1px 92px);
+      opacity: var(--grid-opacity);
+    }
+    .theme-toggle { position:relative; width:38px; height:38px; border-radius:10px; overflow:hidden; }
+    .theme-toggle::after { content:""; position:absolute; inset:0; pointer-events:none; background: radial-gradient(circle at 50% 36%, transparent 42%, rgba(0,0,0,.28)); }
+    .theme-toggle .dial { position:absolute; left:50%; top:50%; width:16px; height:46px; transform: translate(-50%,-50%) rotate(0deg); transform-origin:50% 50%; will-change:transform; }
+    .theme-toggle .body { position:absolute; left:50%; width:15px; height:15px; border-radius:50%; transform: translateX(-50%); }
+    .theme-toggle .sun { top:0; background: radial-gradient(circle at 50% 45%, #ffe9b0, #ffb347 70%); box-shadow:0 0 10px rgba(255,196,90,.85); }
+    .theme-toggle .moon { bottom:0; background: radial-gradient(circle at 36% 34%, #f2f5ff, #b6c2e0 72%); box-shadow:0 0 8px rgba(180,196,232,.7); }
+    .nav-sec { display:flex; align-items:center; gap:12px; height:38px; padding:0 12px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--text-dim); transition: background .15s, color .15s; }
+    .nav-sec:hover { background: var(--surface); color: var(--text-main); }
+    .nav-sec.active { background: rgba(167,139,250,.14); color: var(--admin); }
+    .nav-grouptitle { padding: 14px 12px 6px; font-size:11px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; color: var(--text-dim); }
+    @media (prefers-reduced-motion: reduce) { .theme-toggle .dial { transition:none; } }
+  </style>
+</head>
+
+<body class="min-h-screen">
+  <div class="relative z-[1]">
+
+    <!-- ============================ <AdminTopBar/> ============================ -->
+    <header class="fixed top-0 inset-x-0 z-30 h-14 flex items-center gap-3 px-4 border-b border-line backdrop-blur-xl" style="background: var(--bar-bg);">
+      <a href="../../landing.html" class="flex items-center gap-2 font-extrabold text-[13px] uppercase tracking-tight text-main shrink-0">
+        <span class="w-4 h-4 rounded-[5px]" style="background:linear-gradient(135deg,#a78bfa,#8fb4ff); box-shadow: var(--rf-ring-inset);"></span> RoomForge
+      </a>
+      <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-md text-[11px] font-extrabold tracking-wide" style="background:rgba(167,139,250,.16); color:var(--admin); border:1px solid rgba(167,139,250,.4)">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>ADMIN
+      </span>
+      <label class="ml-3 hidden md:flex items-center gap-2 h-9 w-[clamp(200px,30vw,380px)] px-3 rounded-lg border border-line bg-surface text-sm">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" class="text-dim"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" placeholder="작업 ID · 프로젝트 · 사용자 검색" class="bg-transparent outline-none w-full text-main placeholder:text-dim" />
+      </label>
+      <div class="ml-auto flex items-center gap-2">
+        <button class="theme-toggle border border-line bg-surface hover:bg-surface-hi transition-colors" id="themeToggle" type="button" aria-label="낮/밤 테마 전환" aria-pressed="true"><span class="dial" aria-hidden="true"><span class="body sun"></span><span class="body moon"></span></span></button>
+        <button class="w-9 h-9 rounded-full grid place-items-center text-[12px] font-extrabold text-white" style="background:linear-gradient(135deg,#a78bfa,#8fb4ff);">SY</button>
+      </div>
+    </header>
+
+    <!-- ============================ <AdminSidebar/> ============================ -->
+    <aside class="fixed top-14 left-0 bottom-0 z-20 w-60 hidden lg:flex flex-col px-3 py-3 border-r border-line overflow-y-auto" style="background: var(--bar-bg);">
+      <nav class="flex flex-col gap-0.5">
+        <a class="nav-sec active" href="admin-dashboard.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> 대시보드</a>
+        <a class="nav-sec" href="admin-jobs.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> 작업 <span class="ml-auto text-[11px] font-bold text-dim">142</span></a>
+        <a class="nav-sec" href="admin-audit.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg> 감사 로그</a>
+      </nav>
+      <div class="h-px bg-line my-2"></div>
+      <nav class="flex flex-col gap-0.5">
+        <a class="nav-sec" href="#"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="6" rx="2"/><rect x="2" y="15" width="20" height="6" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg> 시스템</a>
+      </nav>
+      <a href="projects.html" class="mt-auto nav-sec"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M11 18l-6-6 6-6"/></svg> 제품으로 돌아가기</a>
+    </aside>
+
+    <!-- ============================ <Main> ============================ -->
+    <main class="pt-14 lg:pl-60">
+      <div class="mx-auto max-w-[1200px] px-5 sm:px-7 py-7">
+
+        <div class="flex flex-wrap items-end gap-4">
+          <div>
+            <p class="text-[11px] font-extrabold uppercase tracking-tight" style="color:var(--admin)">Operations</p>
+            <h1 class="mt-2 text-3xl sm:text-[32px] font-extrabold text-ink leading-none">대시보드</h1>
+          </div>
+          <div class="ml-auto flex items-center gap-2">
+            <button class="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-line bg-surface text-sm font-semibold text-muted hover:text-main transition-colors">최근 24시간 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+            <button class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-line bg-surface text-sm font-bold text-main hover:bg-surface-hi transition-colors"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 3v6h6"/></svg> 새로고침</button>
+          </div>
+        </div>
+
+        <!-- <KpiRow/> -->
+        <div class="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3" id="kpis"></div>
+
+        <div class="mt-5 grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-5">
+          <!-- main: recent jobs -->
+          <div class="rounded-card border border-line overflow-hidden" style="background: var(--panel);">
+            <div class="flex items-center gap-2 px-5 h-12 border-b border-line">
+              <h3 class="text-[14px] font-bold text-main">최근 작업</h3>
+              <a href="admin-jobs.html" class="ml-auto text-[12px] font-bold" style="color:var(--admin)">전체 보기 →</a>
+            </div>
+            <table class="w-full text-[12.5px]">
+              <thead class="text-dim">
+                <tr class="border-b border-line">
+                  <th class="text-left font-semibold px-5 py-2.5">작업</th>
+                  <th class="text-left font-semibold py-2.5">프로젝트</th>
+                  <th class="text-left font-semibold py-2.5">상태</th>
+                  <th class="text-right font-semibold px-5 py-2.5">시각</th>
+                </tr>
+              </thead>
+              <tbody id="recentRows"></tbody>
+            </table>
+          </div>
+
+          <!-- aside -->
+          <div class="flex flex-col gap-5">
+            <!-- throughput -->
+            <div class="rounded-card border border-line p-5" style="background: var(--panel);">
+              <div class="flex items-center gap-2"><h3 class="text-[14px] font-bold text-main">최근 7일 처리량</h3><span class="ml-auto text-[12px] text-dim">완료 작업</span></div>
+              <div class="mt-4 flex items-end justify-between gap-2 h-28" id="chart"></div>
+            </div>
+            <!-- system health -->
+            <div class="rounded-card border border-line p-5" style="background: var(--panel);">
+              <h3 class="text-[14px] font-bold text-main">시스템 상태</h3>
+              <ul class="mt-3 flex flex-col gap-3 text-[12.5px]">
+                <li class="flex items-center gap-2.5"><span class="w-2 h-2 rounded-full" style="background:#48d39a"></span><span class="text-muted">재구성 워커</span><span class="ml-auto text-main font-semibold">정상 · 4/4</span></li>
+                <li class="flex items-center gap-2.5"><span class="w-2 h-2 rounded-full" style="background:#48d39a"></span><span class="text-muted">큐 길이</span><span class="ml-auto text-main font-semibold">8 대기</span></li>
+                <li class="flex items-center gap-2.5"><span class="w-2 h-2 rounded-full" style="background:#f0be5a"></span><span class="text-muted">평균 처리</span><span class="ml-auto text-main font-semibold">4m 21s ↑</span></li>
+                <li class="flex items-center gap-2.5"><span class="w-2 h-2 rounded-full" style="background:#48d39a"></span><span class="text-muted">24h 에러율</span><span class="ml-auto text-main font-semibold">3.1%</span></li>
+              </ul>
+            </div>
+            <!-- attention -->
+            <div class="rounded-card border p-4" style="background:rgba(240,114,106,.06);border-color:rgba(240,114,106,.3)">
+              <div class="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f0726a" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/></svg>
+                <h3 class="text-[13.5px] font-bold text-main">주의가 필요한 작업</h3>
+                <span class="ml-auto text-[12px] font-bold text-[#f0726a]">3</span>
+              </div>
+              <p class="mt-1.5 text-[12px] text-muted">실패 2건 · 재시도 한도 초과 1건. 작업 목록에서 확인하세요.</p>
+              <a href="admin-jobs.html" class="mt-2.5 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-bold text-white" style="background:var(--admin)">실패 작업 보기 <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+  // ===== KPIs =====
+  (function () {
+    var kpis = [
+      { l: '대기 중', v: '8', d: '큐', c: 'var(--text-dim)', t: '' },
+      { l: '진행 중', v: '4', d: '워커 가동', c: 'var(--accent)', t: '' },
+      { l: '오늘 완료', v: '126', d: '+18%', c: '#48d39a', t: 'up' },
+      { l: '실패 · 24h', v: '4', d: '3.1% 에러율', c: '#f0726a', t: 'down' },
+    ];
+    document.getElementById('kpis').innerHTML = kpis.map(function (k) {
+      return '<div class="rounded-card border border-line p-4" style="background:var(--panel)">' +
+        '<p class="text-[12px] font-semibold text-dim">' + k.l + '</p>' +
+        '<p class="mt-2 text-[30px] font-extrabold leading-none text-ink">' + k.v + '</p>' +
+        '<p class="mt-2 text-[12px] font-bold" style="color:' + k.c + '">' + k.d + '</p></div>';
+    }).join('');
+  })();
+  // ===== chart =====
+  (function () {
+    var data = [88, 102, 76, 119, 95, 134, 126];
+    var max = Math.max.apply(null, data);
+    document.getElementById('chart').innerHTML = data.map(function (v, i) {
+      var h = Math.round(v / max * 100);
+      var last = i === data.length - 1;
+      return '<div class="flex-1 h-full flex flex-col items-center gap-1.5"><div class="flex-1 w-full flex items-end"><div class="w-full rounded-t-[3px]" style="height:' + h + '%;background:' + (last ? 'linear-gradient(180deg,#a78bfa,#8fb4ff)' : 'rgba(167,139,250,.28)') + '"></div></div><span class="text-[10px] text-dim">' + ['월', '화', '수', '목', '금', '토', '일'][i] + '</span></div>';
+    }).join('');
+  })();
+  // ===== recent jobs table =====
+  (function () {
+    function badge(s) {
+      var map = {
+        'completed': ['완료', '#48d39a', 'rgba(72,211,154,.14)'], 'processing': ['진행 중', 'var(--accent)', 'rgba(143,180,255,.14)'],
+        'review_required': ['검토 필요', '#f0be5a', 'rgba(240,190,90,.14)'], 'failed': ['실패', '#f0726a', 'rgba(240,114,106,.14)'],
+        'queued': ['대기', 'var(--text-dim)', 'var(--surface)']
+      };
+      var m = map[s];
+      return '<span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-md text-[11px] font-bold" style="background:' + m[2] + ';color:' + m[1] + '"><span class="w-1.5 h-1.5 rounded-full" style="background:' + m[1] + '"></span>' + m[0] + '</span>';
+    }
+    var rows = [
+      ['J-2061', '침실 A동', 'processing', '방금'], ['J-2060', '사무실 회의실', 'review_required', '3분 전'],
+      ['J-2059', '거실 리노베이션', 'completed', '12분 전'], ['J-2058', '원룸 스튜디오', 'failed', '20분 전'],
+      ['J-2057', '발코니 확장', 'completed', '34분 전'], ['J-2056', '주방 리모델링', 'queued', '1시간 전'],
+    ];
+    document.getElementById('recentRows').innerHTML = rows.map(function (r) {
+      return '<tr class="border-b border-line hover:bg-surface transition-colors cursor-pointer">' +
+        '<td class="px-5 py-3 font-bold text-main tabular-nums">#' + r[0] + '</td>' +
+        '<td class="py-3 text-muted">' + r[1] + '</td>' +
+        '<td class="py-3">' + badge(r[2]) + '</td>' +
+        '<td class="px-5 py-3 text-right text-dim">' + r[3] + '</td></tr>';
+    }).join('');
+  })();
+  // ===== theme toggle =====
+  (function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var root = document.documentElement, KEY = 'rf-theme';
+    var saved = (function () { try { return localStorage.getItem(KEY); } catch (e) { return null; } })();
+    var manual = saved !== null;
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var curP = theme === 'dark' ? 1 : 0;
+    var toggle = document.getElementById('themeToggle'), dial = toggle.querySelector('.dial');
+    function render(p) { curP = p; dial.style.transform = 'translate(-50%,-50%) rotate(' + (p * 180).toFixed(2) + 'deg)'; }
+    function setPage(d) { root.setAttribute('data-theme', d ? 'dark' : 'light'); }
+    function animate(toDark) {
+      var to = toDark ? 1 : 0, from = curP, start = performance.now(), dur = reduce ? 0 : 820, sw = false;
+      var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+      if (!dur) { render(to); setPage(toDark); return; }
+      (function step(now) { var k = Math.min(1, (now - start) / dur), e = from + (to - from) * ease(k); render(e);
+        if (!sw && ((to > from && e >= 0.5) || (to < from && e <= 0.5))) { setPage(toDark); sw = true; }
+        if (k < 1) requestAnimationFrame(step); else setPage(toDark); })(performance.now());
+    }
+    toggle.setAttribute('aria-pressed', theme === 'dark');
+    toggle.addEventListener('click', function () { manual = true; theme = theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(KEY, theme); } catch (e) {}
+      toggle.setAttribute('aria-pressed', theme === 'dark'); animate(theme === 'dark'); });
+    var osq = window.matchMedia('(prefers-color-scheme: dark)');
+    var oh = function (e) { if (manual) return; theme = e.matches ? 'dark' : 'light'; toggle.setAttribute('aria-pressed', theme === 'dark'); animate(e.matches); };
+    if (osq.addEventListener) osq.addEventListener('change', oh); else if (osq.addListener) osq.addListener(oh);
+    render(curP);
+  })();
+  </script>
+</body>
+</html>

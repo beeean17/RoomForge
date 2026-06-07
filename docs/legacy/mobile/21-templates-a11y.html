@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>21 · Templates And A11y — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>21</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">Responsive &amp; Quality</span>
+          <h1>Templates And A11y</h1>
+          <p>empty, loading, error, accessibility 상태 템플릿을 한 화면에 모읍니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="template-scene">
+          <div class="template-card"><span class="rf-chip rf-chip--admin"><span class="dot"></span>empty</span><b>아직 후보가 없습니다</b><span>수동으로 추가하거나 사진을 다시 업로드하세요.</span></div>
+          <div class="template-card"><div class="rf-skeleton" style="height:76px"></div><span class="rf-chip rf-chip--save"><span class="dot"></span>loading</span></div>
+          <div class="template-card"><span class="rf-chip rf-chip--error"><span class="dot"></span>error</span><b>저장을 완료하지 못했어요</b><span>네트워크가 복구되면 다시 시도할 수 있습니다.</span></div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--admin"><span class="dot"></span>empty</span><span class="rf-chip rf-chip--save"><span class="dot"></span>loading</span><span class="rf-chip rf-chip--error"><span class="dot"></span>error</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>accessible</span></div>
+          <ul class="component-list">
+            <li><strong>Empty template</strong><span>빈 프로젝트, 빈 admin 결과, 빈 candidate tray에 각각 구체 CTA 제공.</span></li><li><strong>Loading template</strong><span>skeleton, progress text, 오래 걸릴 때 상태 설명.</span></li><li><strong>Error template</strong><span>재시도 가능/불가능, 권한/네트워크/검증 오류를 구분.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">템플릿 적용</button>
+        <button class="rf-btn rf-btn--block">포커스 순서 보기</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

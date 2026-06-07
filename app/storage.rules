@@ -1,0 +1,195 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isNewObject() {
+      return resource == null;
+    }
+
+    function isPathOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAllowedSourceImageContentType() {
+      return request.resource != null
+        && request.resource.contentType in [
+          'image/jpeg',
+          'image/png',
+          'image/webp'
+        ];
+    }
+
+    function isAllowedSourceImageSize() {
+      return request.resource != null
+        && request.resource.size <= 10 * 1024 * 1024;
+    }
+
+    function isAllowedCaptureImageRole() {
+      return request.resource != null
+        && request.resource.metadata.role in [
+          'overview',
+          'front_wall',
+          'front_right_corner',
+          'right_wall',
+          'back_right_corner',
+          'back_wall',
+          'back_left_corner',
+          'left_wall',
+          'front_left_corner',
+          'extra'
+        ];
+    }
+
+    function isAllowedArtifactContentType() {
+      return request.resource != null
+        && request.resource.contentType in [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'application/json'
+        ];
+    }
+
+    function isAllowedArtifactSize() {
+      return request.resource != null
+        && (
+          (
+            request.resource.contentType == 'application/json'
+            && request.resource.size <= 2 * 1024 * 1024
+          )
+          || (
+            request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp']
+            && request.resource.size <= 10 * 1024 * 1024
+          )
+        );
+    }
+
+    function ownedProjectPath(projectId) {
+      return /databases/(default)/documents/projects/$(projectId);
+    }
+
+    function userPath(uid) {
+      return /databases/(default)/documents/users/$(uid);
+    }
+
+    function reconstructionJobPath(projectId, jobId) {
+      return /databases/(default)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId);
+    }
+
+    function captureSessionPath(projectId, captureSessionId) {
+      return /databases/(default)/documents/projects/$(projectId)/capture_sessions/$(captureSessionId);
+    }
+
+    function ownsProject(projectId) {
+      return firestore.exists(ownedProjectPath(projectId))
+        && firestore.get(ownedProjectPath(projectId)).data.owner_uid == request.auth.uid;
+    }
+
+    function pathProjectOwner(uid, projectId) {
+      return firestore.exists(ownedProjectPath(projectId))
+        && firestore.get(ownedProjectPath(projectId)).data.owner_uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && firestore.exists(userPath(request.auth.uid))
+        && firestore.get(userPath(request.auth.uid)).data.keys().hasAny(['role'])
+        && firestore.get(userPath(request.auth.uid)).data.role == 'admin';
+    }
+
+    function validArtifactMetadata(uid, projectId, jobId, artifactId) {
+      return request.resource.metadata.owner_uid == uid
+        && request.resource.metadata.project_id == projectId
+        && request.resource.metadata.job_id == jobId
+        && request.resource.metadata.artifact_id == artifactId
+        && request.resource.metadata.uploaded_by_uid == request.auth.uid;
+    }
+
+    function validCaptureArtifactMetadata(uid, projectId, captureSessionId, artifactId) {
+      return request.resource.metadata.keys().hasAll([
+          'owner_uid',
+          'project_id',
+          'capture_session_id',
+          'artifact_id',
+          'uploaded_by_uid'
+        ])
+        && request.resource.metadata.owner_uid == uid
+        && request.resource.metadata.project_id == projectId
+        && request.resource.metadata.capture_session_id == captureSessionId
+        && request.resource.metadata.artifact_id == artifactId
+        && request.resource.metadata.uploaded_by_uid == request.auth.uid;
+    }
+
+    function validCaptureSessionStorageLink(uid, projectId, captureSessionId) {
+      return firestore.exists(captureSessionPath(projectId, captureSessionId))
+        && firestore.get(captureSessionPath(projectId, captureSessionId)).data.owner_uid == uid;
+    }
+
+    match /users/{uid}/projects/{projectId}/source-images/{sourceImageId}/{filename} {
+      allow read: if isPathOwner(uid) && ownsProject(projectId);
+      allow write: if isNewObject()
+        && isPathOwner(uid)
+        && ownsProject(projectId)
+        && isAllowedSourceImageContentType()
+        && isAllowedSourceImageSize()
+        && request.resource.metadata.owner_uid == uid
+        && request.resource.metadata.project_id == projectId
+        && request.resource.metadata.source_image_id == sourceImageId
+        && request.resource.metadata.uploaded_by_uid == request.auth.uid;
+    }
+
+    match /users/{uid}/projects/{projectId}/capture-sessions/{captureSessionId}/images/{captureImageId}/{filename} {
+      allow read: if isPathOwner(uid) && ownsProject(projectId);
+      allow write: if isNewObject()
+        && isPathOwner(uid)
+        && ownsProject(projectId)
+        && validCaptureSessionStorageLink(uid, projectId, captureSessionId)
+        && isAllowedSourceImageContentType()
+        && isAllowedSourceImageSize()
+        && isAllowedCaptureImageRole()
+        && request.resource.metadata.owner_uid == uid
+        && request.resource.metadata.project_id == projectId
+        && request.resource.metadata.capture_session_id == captureSessionId
+        && request.resource.metadata.capture_image_id == captureImageId
+        && request.resource.metadata.source_image_id is string
+        && request.resource.metadata.uploaded_by_uid == request.auth.uid;
+    }
+
+    match /users/{uid}/projects/{projectId}/capture-sessions/{captureSessionId}/artifacts/{artifactId}/{filename} {
+      allow read: if (
+        (isPathOwner(uid) && ownsProject(projectId))
+        || (isAdmin() && pathProjectOwner(uid, projectId))
+      );
+      allow write: if isNewObject()
+        && isPathOwner(uid)
+        && ownsProject(projectId)
+        && validCaptureSessionStorageLink(uid, projectId, captureSessionId)
+        && isAllowedArtifactContentType()
+        && isAllowedArtifactSize()
+        && validCaptureArtifactMetadata(uid, projectId, captureSessionId, artifactId);
+    }
+
+    match /users/{uid}/projects/{projectId}/artifacts/{jobId}/{artifactId}/{filename} {
+      allow read: if (
+        (isPathOwner(uid) && ownsProject(projectId))
+        || (isAdmin() && pathProjectOwner(uid, projectId))
+      );
+      allow write: if isNewObject()
+        && isPathOwner(uid)
+        && ownsProject(projectId)
+        && firestore.exists(reconstructionJobPath(projectId, jobId))
+        && firestore.get(reconstructionJobPath(projectId, jobId)).data.owner_uid == uid
+        && isAllowedArtifactContentType()
+        && isAllowedArtifactSize()
+        && validArtifactMetadata(uid, projectId, jobId, artifactId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

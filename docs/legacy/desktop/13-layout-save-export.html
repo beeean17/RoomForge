@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>13 · Layout Save / Load / Export — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>persistence</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/13-layout-save-export.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">13 · CV Review &amp; Editor</span>
+            <h1>Layout Save / Load / Export</h1>
+            <p>저장, 로드, JSON 내보내기의 상태와 round-trip 검증을 표시합니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">이전 저장본 열기</button>
+            <button class="rf-btn rf-btn--primary">JSON 내보내기</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="persist-scene">
+          <div class="save-board">
+            <div><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>saved</span><b>cloud layout v12</b><span>방금 전 · 5 objects · meters</span></div>
+            <div><span class="rf-chip rf-chip--warning"><span class="dot"></span>local draft</span><b>local draft</b><span>2분 전 · 충돌 없음</span></div>
+            <div><span class="rf-chip rf-chip--admin"><span class="dot"></span>export</span><b>layout-export.json</b><span>room, furniture, camera, meta</span></div>
+          </div>
+          <pre class="json-preview">{
+  "coordinate_space": "meters",
+  "room": { "width": 3.6, "depth": 4.2 },
+  "furniture": 5
+}</pre>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--warning"><span class="dot"></span>unsaved</span><span class="rf-chip rf-chip--save"><span class="dot"></span>saving</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>saved</span><span class="rf-chip rf-chip--error"><span class="dot"></span>export failed</span></div>
+        <ul class="component-list">
+          <li><strong>Save status</strong><span>unsaved, saving, saved, remote failed를 상단과 하단 모두에서 확인.</span></li><li><strong>Load selector</strong><span>최신 저장본, 로컬 draft, 이전 export를 명확히 구분.</span></li><li><strong>Export preview</strong><span>JSON 내보내기 전 포함 데이터, 좌표계, 누락 경고 표시.</span></li><li><strong>Round-trip notice</strong><span>저장/로드/내보내기 결과가 일관적인지 검증 상태를 표시.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

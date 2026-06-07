@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge — 사진이 방이 되는 순간</title>
+  <!-- Set theme before paint to avoid a flash (device theme + saved override) -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('rf-theme');
+        var dark = saved ? saved === 'dark'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="system/tokens.css" />
+  <link rel="stylesheet" href="system/base.css" />
+  <style>
+    /* ---------- Theme palettes (device theme + sun/moon toggle) ---------- */
+    :root[data-theme="dark"] {
+      --page-bg: #050505;
+      --text-main: #f8f8f5;
+      --text-muted: rgba(248,248,245,0.66);
+      --text-dim: rgba(248,248,245,0.42);
+      --brand-ink: #ffffff;
+      --line-soft: rgba(214,226,236,0.13);
+      --line-strong: rgba(214,226,236,0.30);
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.09);
+      --nav-bg: rgba(5,5,5,0.58);
+      --nav-bg-scrolled: rgba(5,5,5,0.90);
+      --metric-bg: rgba(5,5,5,0.78);
+      --feat-grad: linear-gradient(135deg, rgba(255,255,255,0.08), transparent 42%),
+                   linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02));
+      --vignette: linear-gradient(90deg, rgba(0,0,0,0.82), transparent 18%, transparent 82%, rgba(0,0,0,0.82));
+      --grid-tint: rgba(185,204,220,0.05);
+      --grid-tint-soft: rgba(185,204,220,0.038);
+      --grid-opacity: 0.55;
+    }
+    :root[data-theme="light"] {
+      --page-bg: #ecebe4;
+      --text-main: #15171c;
+      --text-muted: rgba(21,23,28,0.66);
+      --text-dim: rgba(21,23,28,0.46);
+      --brand-ink: #0a0c10;
+      --line-soft: rgba(20,30,45,0.12);
+      --line-strong: rgba(20,30,45,0.26);
+      --surface: rgba(15,20,30,0.045);
+      --surface-hover: rgba(15,20,30,0.09);
+      --nav-bg: rgba(241,240,233,0.62);
+      --nav-bg-scrolled: rgba(241,240,233,0.90);
+      --metric-bg: rgba(255,255,255,0.70);
+      --feat-grad: linear-gradient(135deg, rgba(15,20,30,0.06), transparent 42%),
+                   linear-gradient(180deg, rgba(15,20,30,0.04), rgba(15,20,30,0.015));
+      --vignette: linear-gradient(90deg, rgba(150,150,140,0.22), transparent 16%, transparent 84%, rgba(150,150,140,0.22));
+      --grid-tint: rgba(60,80,110,0.06);
+      --grid-tint-soft: rgba(60,80,110,0.045);
+      --grid-opacity: 0.42;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--page-bg);
+      color: var(--text-main);
+      overflow-x: hidden;
+      transition: background-color 0.6s ease, color 0.6s ease;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(143,180,255,0.075), transparent 24%, transparent 76%, rgba(128,199,194,0.052)),
+        repeating-linear-gradient(90deg, var(--grid-tint) 0 1px, transparent 1px 92px),
+        repeating-linear-gradient(180deg, var(--grid-tint-soft) 0 1px, transparent 1px 92px);
+      opacity: var(--grid-opacity);
+      transition: opacity 0.6s ease;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background: var(--vignette);
+      transition: background 0.6s ease;
+    }
+
+    .rf-btn {
+      border-radius: 8px;
+      border-color: var(--line-soft);
+      background: var(--surface);
+      color: var(--text-main);
+      box-shadow: none;
+      transition: background var(--rf-dur-2), border-color var(--rf-dur-2), color var(--rf-dur-2), box-shadow var(--rf-dur-2), transform var(--rf-dur-2);
+    }
+    .rf-btn svg { width: 16px; height: 16px; transition: transform var(--rf-dur-2) var(--rf-ease-out); }
+    .rf-btn:hover {
+      border-color: var(--line-strong);
+      background: var(--surface-hover);
+      box-shadow: 0 18px 45px rgba(0,0,0,0.34);
+    }
+    .rf-btn:hover svg { transform: translateX(2px); }
+    .rf-btn--primary {
+      border-color: rgba(220,232,255,0.86);
+      background: var(--rf-grad-primary);
+      color: #050505;
+      box-shadow: 0 18px 44px rgba(143,180,255,0.20);
+    }
+    .rf-btn--primary:hover {
+      border-color: rgba(220,232,255,0.96);
+      background: var(--rf-grad-primary);
+      box-shadow: 0 22px 58px rgba(143,180,255,0.28);
+    }
+
+    /* ---------- Nav ---------- */
+    .lnav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 14px 28px;
+      background: var(--nav-bg);
+      border-bottom: 1px solid transparent;
+      backdrop-filter: blur(18px);
+      transition: background 0.6s ease, border-color var(--rf-dur-3), padding var(--rf-dur-3);
+    }
+    .lnav.is-scrolled { background: var(--nav-bg-scrolled); border-color: var(--line-soft); padding-block: 10px; }
+    .lnav .rf-brand {
+      color: var(--text-main);
+      font-size: 13px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .lnav .rf-brand-mark {
+      width: 16px;
+      height: 16px;
+      border-radius: 5px;
+      background: var(--rf-grad-brand);
+      box-shadow: var(--rf-ring-inset);
+    }
+    .lnav .links { display: flex; gap: 2px; margin-left: 10px; }
+    .lnav .links a {
+      position: relative;
+      padding: 8px 11px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-decoration: none;
+      transition: color var(--rf-dur-2), background var(--rf-dur-2), transform var(--rf-dur-2);
+    }
+    .lnav .links a::after {
+      content: "";
+      position: absolute;
+      left: 11px;
+      right: 11px;
+      bottom: 6px;
+      height: 1px;
+      background: currentColor;
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform var(--rf-dur-2) var(--rf-ease-out);
+    }
+    .lnav .links a:hover { color: var(--text-main); background: var(--surface); }
+    .lnav .links a:hover::after { transform: scaleX(1); }
+    .lnav .cta { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .lnav .ghost { background: transparent; border-color: var(--line-soft); color: var(--text-main); }
+    .lnav .ghost:hover { background: var(--surface-hover); }
+
+    /* ---------- Sun / Moon theme toggle ---------- */
+    .theme-toggle {
+      position: relative;
+      width: 42px;
+      height: 42px;
+      flex: none;
+      border-radius: 11px;
+      border: 1px solid var(--line-soft);
+      background: var(--surface);
+      overflow: hidden;
+      cursor: pointer;
+      transition: background var(--rf-dur-2), border-color var(--rf-dur-2);
+    }
+    .theme-toggle:hover { background: var(--surface-hover); border-color: var(--line-strong); }
+    .theme-toggle::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 36%, transparent 42%, rgba(0,0,0,0.28));
+    }
+    .theme-toggle .dial {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 52px;
+      transform: translate(-50%, -50%) rotate(0deg);
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    .theme-toggle .body {
+      position: absolute;
+      left: 50%;
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      transform: translateX(-50%);
+    }
+    .theme-toggle .sun {
+      top: 0;
+      background: radial-gradient(circle at 50% 45%, #ffe9b0, #ffb347 70%);
+      box-shadow: 0 0 11px rgba(255,196,90,0.85);
+    }
+    .theme-toggle .moon {
+      bottom: 0;
+      background: radial-gradient(circle at 36% 34%, #f2f5ff, #b6c2e0 72%);
+      box-shadow: 0 0 9px rgba(180,196,232,0.7);
+    }
+
+    /* =====================================================================
+       INTRO: a blurred full-bleed photo sharpens and docks into the viewer
+       ===================================================================== */
+    .intro { position: relative; height: 440vh; }
+    .intro-pin {
+      position: sticky;
+      top: 0;
+      height: 100svh;
+      overflow: hidden;
+    }
+
+    /* the viewer frame — JS animates left/top/width/height/border/radius/shadow */
+    .viewer {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      isolation: isolate;
+      background: #080808;
+      border: 1px solid transparent;
+      cursor: grab;
+      will-change: left, top, width, height;
+    }
+    .viewer.grabbing { cursor: grabbing; }
+    .viewer::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.08), transparent 18%, transparent 82%, rgba(255,255,255,0.06)),
+        linear-gradient(180deg, rgba(255,255,255,0.12), transparent 15%, transparent 86%, rgba(0,0,0,0.48));
+      mix-blend-mode: screen;
+      opacity: calc(0.5 * var(--dock, 0));
+    }
+    .viewer::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(143,180,255,0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(143,180,255,0.09) 1px, transparent 1px);
+      background-size: 44px 44px;
+      opacity: var(--grid, 0);
+    }
+    .layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .layer img, .layer canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+    .layer-photo { z-index: 1; }
+    .layer-photo img { filter: saturate(0.5) contrast(1.08) brightness(0.45) blur(14px); }
+    .layer-proc { z-index: 2; will-change: clip-path; filter: saturate(0.9) contrast(1.06) brightness(0.96); }
+
+    /* atmospheric sun/moon glow that arcs through the room (driven by --rot) */
+    .sky {
+      position: absolute;
+      left: 50%;
+      bottom: -58%;
+      width: 130%;
+      aspect-ratio: 1;
+      z-index: 3;
+      pointer-events: none;
+      transform: translateX(-50%) rotate(var(--rot, 0deg));
+      transform-origin: 50% 50%;
+      will-change: transform;
+      opacity: var(--dock, 0);
+    }
+    .sky .orb {
+      position: absolute;
+      left: 50%;
+      width: 36%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      filter: blur(7px);
+      mix-blend-mode: screen;
+    }
+    .sky .orb.sun { top: -3%; background: radial-gradient(circle, rgba(255,226,162,0.92), rgba(255,182,92,0.28) 46%, transparent 66%); }
+    .sky .orb.moon { bottom: -3%; background: radial-gradient(circle, rgba(220,232,255,0.8), rgba(150,172,214,0.22) 46%, transparent 66%); }
+
+    .scan {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      z-index: 7;
+      width: 1px;
+      transform: translateX(-1px);
+      background: linear-gradient(180deg, transparent, rgba(220,232,255,0.95) 10%, #8fb4ff 50%, rgba(128,199,194,0.95) 90%, transparent);
+      box-shadow: 0 0 0 1px rgba(143,180,255,0.26), 0 0 34px rgba(143,180,255,0.44);
+      will-change: left;
+      opacity: 0;
+      transition: opacity var(--rf-dur-3);
+    }
+    .scan::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -54px;
+      width: 108px;
+      background: linear-gradient(90deg, transparent, rgba(143,180,255,0.16), transparent);
+    }
+    .handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      background: rgba(5,5,5,0.78);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.72);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.48);
+      transform: translate(-50%,-50%);
+    }
+    .handle svg { width: 20px; height: 20px; }
+
+    .mode-badge,
+    .photo-badge,
+    .dimtag {
+      position: absolute;
+      z-index: 8;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      background: rgba(5,5,5,0.72);
+      backdrop-filter: blur(12px);
+      color: rgba(255,255,255,0.92);
+      border: 1px solid rgba(214,226,236,0.16);
+      white-space: nowrap;
+      opacity: 0;
+    }
+    .mode-badge { top: 16px; left: 50%; transform: translateX(-50%); box-shadow: 0 14px 28px rgba(0,0,0,0.38); }
+    .photo-badge { top: 16px; right: 16px; }
+    .dimtag {
+      z-index: 6;
+      text-transform: none;
+      font-weight: 700;
+      color: rgba(234,240,255,0.94);
+      border-color: rgba(143,180,255,0.34);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.4);
+      transition: opacity 0.25s var(--rf-ease-out);
+    }
+    .dimtag::before {
+      content: "";
+      display: inline-block;
+      width: 7px; height: 7px; margin-right: 7px;
+      border-radius: 50%;
+      background: var(--rf-candidate, #8fb4ff);
+      vertical-align: 1px;
+    }
+    .dimtag.d1 { left: 50%; bottom: 18%; transform: translateX(-50%); }
+    .dimtag.d2 { left: 16px; top: 48px; }
+
+    .glow {
+      position: absolute;
+      z-index: 5;
+      top: 0;
+      bottom: 0;
+      width: 190px;
+      pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.16), transparent);
+      transform: translateX(-50%);
+      mix-blend-mode: screen;
+      will-change: left;
+      opacity: 0;
+      transition: opacity var(--rf-dur-3);
+    }
+
+    .hint {
+      position: absolute;
+      z-index: 8;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      color: rgba(255,255,255,0.86);
+      background: rgba(5,5,5,0.68);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(214,226,236,0.16);
+      transition: opacity var(--rf-dur-4), transform var(--rf-dur-4);
+    }
+    .hint.gone { opacity: 0; transform: translate(-50%, 8px); pointer-events: none; }
+    @keyframes nudge { 0%,100% { transform: translateY(0);} 50% { transform: translateY(3px);} }
+    .hint .arrows svg { width: 14px; height: 14px; animation: nudge 1.3s var(--rf-ease-standard) infinite; }
+
+    /* ---- hero text overlaid on the full-bleed photo (always light for legibility) ---- */
+    .hero-text {
+      position: absolute;
+      inset: 0;
+      z-index: 9;
+      display: grid;
+      align-content: end;
+      padding: 0 28px 9vh;
+      color: #f8f8f5;
+      pointer-events: none;
+      will-change: opacity, transform;
+    }
+    .hero-text.faded { pointer-events: none; }
+    .hero-text.faded .rf-btn { pointer-events: none; }
+    .ht-inner { width: min(1220px, 100%); margin: 0 auto; }
+    .hero-copy {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+      align-items: end;
+      gap: 28px;
+    }
+    .eyebrow {
+      margin: 0 0 14px;
+      color: rgba(248,248,245,0.55);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .hero-text h1 {
+      font-size: clamp(52px, 9vw, 132px);
+      line-height: 0.88;
+      letter-spacing: 0;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    }
+    .hero-text .sub {
+      margin: 0;
+      max-width: 39ch;
+      font-size: clamp(15px, 1.5vw, 18px);
+      color: rgba(248,248,245,0.76);
+    }
+    .hero-actions { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; pointer-events: auto; }
+    .hero-text .rf-btn:not(.rf-btn--primary) {
+      background: rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.20);
+      color: #fff;
+    }
+    .hero-text .rf-btn:not(.rf-btn--primary):hover { background: rgba(255,255,255,0.18); }
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      margin-top: 20px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.14);
+    }
+    .metric { min-height: 68px; padding: 12px; background: rgba(5,5,5,0.45); }
+    .metric strong { display: block; color: #fff; font-size: 18px; line-height: 1; }
+    .metric span { display: block; margin-top: 8px; color: rgba(248,248,245,0.5); font-size: 11px; font-weight: 700; }
+    .scrollcue {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-top: 26px; color: rgba(248,248,245,0.6);
+      font-size: 11px; font-weight: 800; letter-spacing: 0; text-transform: uppercase;
+    }
+    .scrollcue .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rf-candidate, #8fb4ff); animation: cuePulse 1.8s var(--rf-ease-standard) infinite; }
+    @keyframes cuePulse { 0%,100% { opacity: .35; transform: translateY(0);} 50% { opacity: 1; transform: translateY(2px);} }
+
+    /* legibility scrim over the full-bleed photo, fades as it docks */
+    .intro-scrim {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(5,5,5,0.5), transparent 36%, transparent 50%, rgba(5,5,5,0.82));
+      opacity: var(--introScrim, 1);
+    }
+
+    /* step indicator + credit that appear once the viewer has docked */
+    .dockbar {
+      position: absolute;
+      left: 0; right: 0;
+      bottom: 3vh;
+      z-index: 9;
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      opacity: var(--dockbar, 0);
+      pointer-events: none;
+    }
+    .stagebar { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
+    .step { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; color: rgba(248,248,245,0.5); transition: color var(--rf-dur-2), transform var(--rf-dur-2); }
+    .step .led { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.24); transition: background var(--rf-dur-2), box-shadow var(--rf-dur-2); }
+    .step.on { color: #eaf0ff; transform: translateY(-1px); }
+    .step.on .led { background: var(--rf-candidate, #8fb4ff); box-shadow: 0 0 0 4px rgba(143,180,255,0.16); }
+    .credit { text-align: center; font-size: 11px; color: rgba(248,248,245,0.42); max-width: 60ch; }
+
+    /* ---------- Sections ---------- */
+    .section {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 88px 28px;
+      border-top: 1px solid var(--line-soft);
+    }
+    .section h2 { max-width: 760px; font-size: clamp(28px, 4vw, 52px); letter-spacing: 0; text-align: left; color: var(--brand-ink); }
+    .section .lead { color: var(--text-muted); max-width: 64ch; margin: 16px 0 0; font-size: 16px; }
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 38px; }
+    .feat {
+      --tilt-x: 0deg;
+      --tilt-y: 0deg;
+      position: relative;
+      min-height: 236px;
+      padding: 22px;
+      border-radius: 8px;
+      background: var(--feat-grad);
+      border: 1px solid var(--line-soft);
+      overflow: hidden;
+      transform: perspective(900px) rotateX(var(--tilt-y)) rotateY(var(--tilt-x));
+      transition: transform var(--rf-dur-2) var(--rf-ease-out), border-color var(--rf-dur-2), background 0.6s ease;
+    }
+    .feat::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(120deg, transparent, rgba(143,180,255,0.12), transparent);
+      transform: translateX(-120%);
+      transition: transform 620ms var(--rf-ease-out);
+    }
+    .feat:hover { border-color: var(--line-strong); }
+    .feat:hover::before { transform: translateX(120%); }
+    .feat .num { display: block; margin-bottom: 44px; color: var(--text-dim); font-size: 11px; font-weight: 800; }
+    .feat .ic {
+      width: 42px; height: 42px;
+      border-radius: 8px;
+      display: grid; place-items: center;
+      margin-bottom: 16px;
+      background: var(--surface);
+      border: 1px solid var(--line-soft);
+      color: var(--text-main);
+    }
+    .feat .ic svg { width: 21px; height: 21px; }
+    .feat h3 { font-size: 18px; letter-spacing: 0; color: var(--brand-ink); }
+    .feat p { color: var(--text-muted); font-size: 14px; margin: 9px 0 0; }
+
+    .finalcta { position: relative; text-align: center; padding: 104px 28px 118px; border-top: 1px solid var(--line-soft); }
+    .finalcta h2 { font-size: clamp(36px, 6vw, 76px); letter-spacing: 0; color: var(--brand-ink); }
+    .finalcta p { max-width: 52ch; margin: 16px auto 0; color: var(--text-muted); }
+    .finalcta .row { display: flex; gap: 12px; justify-content: center; margin-top: 28px; flex-wrap: wrap; }
+    .btn-big { min-height: 54px; padding: 0 24px; font-size: 15px; }
+    .lfoot { text-align: center; padding: 28px; color: var(--text-dim); font-size: 12px; border-top: 1px solid var(--line-soft); }
+
+    @media (max-width: 900px) {
+      .hero-copy { grid-template-columns: 1fr; gap: 18px; }
+      .hero-text .sub { max-width: 58ch; }
+      .features { grid-template-columns: 1fr; }
+      .feat { min-height: 210px; }
+    }
+    @media (max-width: 760px) {
+      .lnav { padding: 12px 16px; gap: 10px; }
+      .lnav .links { display: none; }
+      .lnav .cta { gap: 6px; }
+      .lnav .rf-btn { min-height: 36px; padding-inline: 11px; font-size: 12px; }
+      .theme-toggle { width: 38px; height: 38px; }
+      .intro { height: 380vh; }
+      .hero-text { padding: 0 16px 12vh; }
+      .hero-text h1 { font-size: clamp(50px, 17vw, 86px); line-height: 0.92; }
+      .hero-metrics { grid-template-columns: 1fr; }
+      .mode-badge, .photo-badge, .hint, .dimtag { font-size: 10px; }
+      .section { padding: 70px 16px; }
+      .finalcta { padding: 82px 16px 94px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .feat, .rf-btn svg { transition: none; }
+      .hint .arrows svg, .scrollcue .dot { animation: none; }
+      .theme-toggle .dial { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="lnav" id="lnav">
+    <div class="rf-brand"><span class="rf-brand-mark"></span> RoomForge</div>
+    <div class="links"><a data-magnetic href="#how">작동 방식</a><a data-magnetic href="#features">기능</a><a data-magnetic href="index.html">디자인</a></div>
+    <div class="cta">
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="낮/밤 테마 전환" aria-pressed="true" title="낮 / 밤 전환">
+        <span class="dial" aria-hidden="true"><span class="body sun"></span><span class="body moon"></span></span>
+      </button>
+      <a class="rf-btn ghost" data-magnetic href="screens/desktop/login.html">로그인</a>
+      <a class="rf-btn rf-btn--primary" data-magnetic href="screens/desktop/login.html">시작하기<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </div>
+  </nav>
+
+  <!-- Intro: blurred full-bleed photo sharpens and docks into the viewer as you scroll -->
+  <section class="intro" id="intro">
+    <div class="intro-pin" id="introPin">
+      <div class="viewer" id="stage" role="img" aria-label="흐릿한 실제 방 사진이 선명해지며 3D 뷰어로 들어오고, 재구성·회전으로 이어지는 데모.">
+        <div class="layer layer-photo"><img id="photoImg" src="assets/room.png" alt="실제 침실 사진" /></div>
+        <div class="layer layer-proc" id="layerProc"><canvas id="rfcanvas"></canvas></div>
+        <div class="sky" id="sky"><span class="orb sun"></span><span class="orb moon"></span></div>
+        <div class="glow" id="glow"></div>
+        <div class="photo-badge" id="photoBadge">Original photo</div>
+        <div class="mode-badge" id="modeBadge">원본 사진</div>
+        <div class="dimtag d1" id="dim1">침대 · 2.3 × 2.75 m</div>
+        <div class="dimtag d2" id="dim2">방 · 5.2 × 6.0 m</div>
+        <div class="scan" id="scan"><span class="handle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7 3 12l5 5M16 7l5 5-5 5"/></svg></span></div>
+        <div class="hint gone" id="hint"><span class="arrows"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M8 7 3 12l5 5M16 7l5 5-5 5"/></svg></span> 드래그하여 회전</div>
+      </div>
+
+      <div class="intro-scrim" aria-hidden="true"></div>
+
+      <div class="hero-text" id="heroText">
+        <div class="ht-inner">
+          <div class="hero-copy">
+            <div>
+              <p class="eyebrow">Photo to metric room model</p>
+              <h1>RoomForge</h1>
+            </div>
+            <div>
+              <p class="sub">실제 방 사진을 치수 기반 3D 공간으로 전환합니다. 원본 이미지, 후보 geometry, 확인된 공간 모델을 한 흐름에서 검토하고 바로 배치까지 이어갑니다.</p>
+              <div class="hero-actions">
+                <a class="rf-btn rf-btn--primary btn-big" data-magnetic href="screens/desktop/login.html">공간 만들기<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+                <a class="rf-btn btn-big" data-magnetic href="#how">데모 보기</a>
+              </div>
+              <div class="hero-metrics" aria-label="RoomForge 핵심 지표">
+                <div class="metric"><strong>3D</strong><span>실시간 공간 뷰</span></div>
+                <div class="metric"><strong>m</strong><span>미터 좌표 보정</span></div>
+                <div class="metric"><strong>CV</strong><span>후보 geometry 검토</span></div>
+              </div>
+              <span class="scrollcue"><span class="dot"></span>스크롤하여 뷰어로 들어가기</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dockbar" id="dockbar" aria-hidden="true">
+        <div class="stagebar">
+          <span class="step on" data-step="0"><span class="led"></span>원본 사진</span>
+          <span class="step" data-step="1"><span class="led"></span>재구성</span>
+          <span class="step" data-step="2"><span class="led"></span>3D 공간</span>
+        </div>
+        <p class="credit">흐릿한 배경은 업로드한 원본 사진, 뷰어 안은 Three.js 재구성 결과입니다. 제품에서는 사용자의 사진과 재구성이 이 흐름에 연결됩니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how" data-reveal>
+    <h2>검토 가능한 재구성 결과를 첫 화면에서 바로 보여줍니다</h2>
+    <p class="lead">흐릿하게 깔린 원본 사진이 스크롤과 함께 선명해지며 뷰어 안으로 들어오고, 후보 geometry로 분해된 뒤 배치 가능한 3D 공간으로 이어집니다. 3D 영역은 드래그로 직접 회전하고, 우상단 토글로 낮·밤 조명을 바꿀 수 있습니다.</p>
+  </section>
+
+  <section class="section" id="features">
+    <h2>사진, 좌표, 가구 배치가 하나의 공간 모델로 이어집니다</h2>
+    <div class="features" data-stagger>
+      <article class="feat" data-tilt><span class="num">01</span><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div><h3>후보 geometry 추출</h3><p>벽, 바닥, 문, 창문, 가구 후보를 원본 이미지 좌표로 분리해 사용자가 검토할 수 있게 만듭니다.</p></article>
+      <article class="feat" data-tilt><span class="num">02</span><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 3v18M3 9h18"/></svg></div><h3>미터 스케일 보정</h3><p>확인된 기준 길이를 바탕으로 픽셀 좌표를 실제 미터 좌표로 전환하고 배치 가능한 평면을 만듭니다.</p></article>
+      <article class="feat" data-tilt><span class="num">03</span><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></svg></div><h3>2D와 3D 배치</h3><p>확정된 공간 위에서 프록시 가구를 이동, 회전, 크기 조정하고 저장 가능한 layout 상태로 이어갑니다.</p></article>
+    </div>
+  </section>
+
+  <section class="finalcta" data-reveal>
+    <h2>사진을 공간 모델로 바꾸는 가장 짧은 경로</h2>
+    <p>RoomForge는 방 재구성, 검토, 배치를 한 화면 흐름으로 묶어 실제 공간 의사결정에 바로 사용할 수 있게 합니다.</p>
+    <div class="row">
+      <a class="rf-btn rf-btn--primary btn-big" data-magnetic href="screens/desktop/login.html">무료로 시작하기<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="rf-btn ghost btn-big" data-magnetic href="index.html">디자인 갤러리 보기</a>
+    </div>
+  </section>
+  <footer class="lfoot">© RoomForge · 사진이 방이 되는 순간</footer>
+
+  <script src="assets/vendor/three.min.js"></script>
+  <script src="system/motion.js"></script>
+  <script>
+  (function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var finePointer = window.matchMedia('(pointer: fine)').matches;
+
+    var stage = document.getElementById('stage');
+    var proc = document.getElementById('layerProc');
+    var photoImg = document.getElementById('photoImg');
+    var scan = document.getElementById('scan');
+    var glow = document.getElementById('glow');
+    var badge = document.getElementById('modeBadge');
+    var photoBadge = document.getElementById('photoBadge');
+    var hint = document.getElementById('hint');
+    var sky = document.getElementById('sky');
+    var dim1 = document.getElementById('dim1');
+    var dim2 = document.getElementById('dim2');
+    var canvas = document.getElementById('rfcanvas');
+    var introSec = document.getElementById('intro');
+    var introPin = document.getElementById('introPin');
+    var heroText = document.getElementById('heroText');
+    var dockbar = document.getElementById('dockbar');
+    var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
+    var root = document.documentElement;
+
+    function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+    function smooth(t, a, b) { var x = clamp((t - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); }
+
+    /* ---- pointer flourishes on nav buttons / feature cards ---- */
+    if (!reduce && finePointer) {
+      document.querySelectorAll('[data-magnetic]').forEach(function (el) {
+        el.addEventListener('pointermove', function (e) {
+          var r = el.getBoundingClientRect();
+          var x = (e.clientX - r.left - r.width / 2) / r.width;
+          var y = (e.clientY - r.top - r.height / 2) / r.height;
+          el.style.transform = 'translate(' + (x * 8).toFixed(2) + 'px,' + (y * 5).toFixed(2) + 'px)';
+        });
+        el.addEventListener('pointerleave', function () { el.style.transform = ''; });
+      });
+      document.querySelectorAll('[data-tilt]').forEach(function (card) {
+        card.addEventListener('pointermove', function (e) {
+          var r = card.getBoundingClientRect();
+          var x = (e.clientX - r.left) / r.width;
+          var y = (e.clientY - r.top) / r.height;
+          card.style.setProperty('--tilt-x', ((x - 0.5) * 5).toFixed(2) + 'deg');
+          card.style.setProperty('--tilt-y', ((0.5 - y) * 4).toFixed(2) + 'deg');
+        });
+        card.addEventListener('pointerleave', function () {
+          card.style.setProperty('--tilt-x', '0deg');
+          card.style.setProperty('--tilt-y', '0deg');
+        });
+      });
+    }
+
+    /* =====================================================================
+       Three.js room — stylized reconstruction of the photographed bedroom.
+       ===================================================================== */
+    var renderer, scene, camera, has3D = false;
+    var sunLight, hemi, ceil, lampL, lampR, winMat;
+    var orbitTarget, R0 = 8.607, P0 = 0.0791;
+
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+      renderer.setPixelRatio(1);
+      renderer.setClearColor(0x080808, 1);
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(38.4, 1.5, 0.1, 100);
+
+      function box(w, h, d, color, o) {
+        o = o || {};
+        var mat = new THREE.MeshStandardMaterial({
+          color: color, roughness: o.rough != null ? o.rough : 0.85, metalness: o.metal || 0,
+          emissive: o.emissive != null ? o.emissive : 0x000000, emissiveIntensity: o.emi != null ? o.emi : 1
+        });
+        var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        m.position.set(o.x || 0, o.y || 0, o.z || 0);
+        if (o.ry) m.rotation.y = o.ry;
+        scene.add(m); return m;
+      }
+      function plane(w, h, color, o) {
+        o = o || {};
+        var mat = new THREE.MeshStandardMaterial({
+          color: color, roughness: o.rough != null ? o.rough : 0.9, metalness: 0, side: THREE.DoubleSide,
+          emissive: o.emissive != null ? o.emissive : 0x000000, emissiveIntensity: o.emi != null ? o.emi : 1
+        });
+        var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+        m.position.set(o.x || 0, o.y || 0, o.z || 0);
+        if (o.rx) m.rotation.x = o.rx; if (o.ry) m.rotation.y = o.ry;
+        scene.add(m); return m;
+      }
+
+      var HW = 2.6, BK = -3.0, FR = 3.0, HT = 2.8;
+      plane(5.2, 6.0, 0xcdbca0, { rx: -Math.PI / 2, y: 0, z: 0, rough: 0.95 });
+      plane(2.6, 1.7, 0x9a9aa0, { rx: -Math.PI / 2, y: 0.01, z: 0.4, rough: 1 });
+      plane(5.2, HT, 0xcfd0d4, { y: HT / 2, z: BK });
+      plane(6.0, HT, 0xeef0f3, { ry: Math.PI / 2, x: -HW, y: HT / 2 });
+      plane(6.0, HT, 0xe7e8ec, { ry: -Math.PI / 2, x: HW, y: HT / 2 });
+      plane(5.2, 6.0, 0xf2f3f5, { rx: Math.PI / 2, y: HT, z: 0, rough: 1 });
+      plane(2.6, 1.1, 0xbfc3c9, { y: 1.9, z: BK + 0.02, emissive: 0xffffff, emi: 0.18 });
+      box(1.5, 0.85, 0.05, 0x111114, { y: 1.85, z: BK + 0.05 });
+      plane(1.35, 0.72, 0x2b3340, { y: 1.85, z: BK + 0.08, emissive: 0x2b3340, emi: 0.25 });
+      box(2.4, 0.04, 0.12, 0xffffff, { y: HT - 0.02, z: 0.2, emissive: 0xffffff, emi: 0.8 });
+
+      box(2.30, 0.30, 2.75, 0x2a2a30, { y: 0.15, z: -1.40 });
+      box(2.18, 0.24, 2.55, 0x35353c, { y: 0.42, z: -1.48 });
+      box(2.20, 0.12, 1.45, 0x232328, { y: 0.55, z: -0.95 });
+      box(2.34, 1.15, 0.14, 0x2d2d33, { y: 0.74, z: BK + 0.12 });
+      box(0.74, 0.20, 0.44, 0xc9cad0, { y: 0.60, z: -2.45, x: -0.5 });
+      box(0.74, 0.20, 0.44, 0xb9bac2, { y: 0.60, z: -2.45, x: 0.5 });
+      box(0.50, 0.18, 0.38, 0x6a6a72, { y: 0.63, z: -2.15, x: 0 });
+
+      [[-1.45, 0x1e1e23], [1.45, 0x1e1e23]].forEach(function (n) {
+        box(0.5, 0.46, 0.42, n[1], { x: n[0], y: 0.23, z: BK + 0.55 });
+        box(0.16, 0.22, 0.16, 0x141417, { x: n[0], y: 0.62, z: BK + 0.55 });
+        box(0.26, 0.18, 0.26, 0xfff3d6, { x: n[0], y: 0.80, z: BK + 0.55, emissive: 0xffcf80, emi: 0.7 });
+      });
+
+      var DX = -2.18;
+      box(0.62, 0.05, 1.7, 0x26262b, { x: DX, y: 0.74, z: -0.9 });
+      box(0.05, 0.72, 0.05, 0x17171a, { x: DX - 0.26, y: 0.37, z: -1.65 });
+      box(0.05, 0.72, 0.05, 0x17171a, { x: DX - 0.26, y: 0.37, z: -0.15 });
+      box(0.42, 0.30, 0.04, 0x101013, { x: DX + 0.02, y: 1.06, z: -1.5, ry: Math.PI / 2 });
+      plane(0.40, 0.26, 0x16263f, { x: DX + 0.05, y: 1.06, z: -1.5, ry: -Math.PI / 2, emissive: 0x1d3a63, emi: 0.7 });
+      box(0.46, 0.06, 0.46, 0x1a1a1f, { x: DX + 0.45, y: 0.48, z: -0.45 });
+      box(0.44, 0.5, 0.05, 0x1a1a1f, { x: DX + 0.45, y: 0.74, z: -0.66 });
+      box(0.05, 0.48, 0.05, 0x111114, { x: DX + 0.45, y: 0.24, z: -0.45 });
+      box(0.06, 1.1, 1.3, 0x202024, { x: -HW + 0.05, y: 1.65, z: -1.0 });
+
+      box(0.5, 0.8, 1.7, 0x161619, { x: HW - 0.28, y: 0.4, z: 0.7 });
+      box(0.16, 0.28, 0.16, 0x111114, { x: HW - 0.34, y: 0.94, z: 0.2 });
+      box(0.18, 0.30, 0.18, 0x3f6b46, { x: HW - 0.34, y: 1.18, z: 0.2, emissive: 0x244a2c, emi: 0.3 });
+
+      box(0.05, 2.1, 1.0, 0x121214, { x: -HW + 0.04, y: 1.05, z: 2.0 });
+      box(0.06, 2.16, 1.08, 0x2a2a30, { x: -HW + 0.02, y: 1.08, z: 2.0 });
+
+      box(0.05, 1.6, 2.3, 0x111114, { x: HW - 0.02, y: 1.5, z: -0.8 });
+      var winMesh = plane(2.1, 1.4, 0xe9f1f8, { ry: -Math.PI / 2, x: HW - 0.06, y: 1.5, z: -0.8, emissive: 0xeaf2fb, emi: 0.95 });
+      winMat = winMesh.material;
+      box(0.06, 1.4, 0.04, 0x111114, { x: HW - 0.06, y: 1.5, z: -0.8 });
+      box(0.06, 0.04, 2.1, 0x111114, { x: HW - 0.06, y: 1.5, z: -0.8 });
+      box(0.10, 1.7, 0.18, 0x3a3a40, { x: HW - 0.16, y: 1.45, z: 0.45 });
+      box(0.10, 1.7, 0.18, 0x3a3a40, { x: HW - 0.16, y: 1.45, z: -2.05 });
+
+      hemi = new THREE.HemisphereLight(0xffffff, 0x3a3a42, 0.55); scene.add(hemi);
+      sunLight = new THREE.DirectionalLight(0xfff4e2, 0.85); sunLight.position.set(6, 4.5, -1); scene.add(sunLight);
+      ceil = new THREE.PointLight(0xffffff, 0.35, 12); ceil.position.set(0, 2.6, 0.4); scene.add(ceil);
+      lampL = new THREE.PointLight(0xffd49a, 0.5, 4); lampL.position.set(-1.45, 0.85, BK + 0.6); scene.add(lampL);
+      lampR = new THREE.PointLight(0xffd49a, 0.5, 4); lampR.position.set(1.45, 0.85, BK + 0.6); scene.add(lampR);
+
+      orbitTarget = new THREE.Vector3(-0.12, 0.94, -2.29);
+
+      function resize() {
+        var w = stage.clientWidth, h = stage.clientHeight;
+        if (!w || !h) return;
+        var rw = Math.min(w, 960), rh = Math.round(rw * h / w);
+        renderer.setSize(rw, rh, false);
+        camera.aspect = w / h; camera.updateProjectionMatrix();
+        needRender = true;
+      }
+      window.addEventListener('resize', function () { needRender = true; });
+      has3D = true;
+    } catch (e) {
+      has3D = false;
+      var pl = document.getElementById('layerProc'); if (pl) pl.style.display = 'none';
+      console.warn('3D viewer unavailable:', e);
+    }
+
+    /* ---- orbit rig: defaults reproduce the photo-matched framing exactly ---- */
+    var userYaw = 0, userPitch = 0, dollyT = 0, needRender = true;
+    function updateCamera() {
+      if (!has3D) return;
+      var radius = R0 + (6.7 - R0) * dollyT;
+      var yaw = userYaw * dollyT;
+      var pitch = P0 + userPitch * dollyT;
+      var cp = Math.cos(pitch), sp = Math.sin(pitch), sy = Math.sin(yaw), cy = Math.cos(yaw);
+      camera.position.set(
+        orbitTarget.x + radius * sy * cp,
+        orbitTarget.y + radius * sp,
+        orbitTarget.z + radius * cy * cp
+      );
+      camera.lookAt(orbitTarget);
+    }
+    updateCamera();
+
+    /* =====================================================================
+       THEME: device theme first, user toggle overrides, sun/moon arc.
+       p = 0 (day / light)  ->  1 (night / dark)
+       ===================================================================== */
+    var THEME_KEY = 'rf-theme';
+    var saved = (function () { try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })();
+    var manual = saved !== null;
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var curP = theme === 'dark' ? 1 : 0;
+    var themeActive = false;
+    var toggle = document.getElementById('themeToggle');
+    var dial = toggle ? toggle.querySelector('.dial') : null;
+
+    function applyScene(p) {
+      if (!has3D) return;
+      var L = function (a, b) { return a + (b - a) * p; };
+      sunLight.intensity = L(0.95, 0.10);
+      sunLight.color.setRGB(L(1.0, 0.62), L(0.957, 0.70), L(0.886, 0.92));
+      sunLight.position.set(6, L(4.5, -3.0), -1);
+      hemi.intensity = L(0.58, 0.34);
+      hemi.color.setRGB(L(1.0, 0.80), L(1.0, 0.85), L(1.0, 1.0));
+      winMat.emissive.setRGB(L(0.916, 0.16), L(0.949, 0.22), L(0.984, 0.42));
+      winMat.emissiveIntensity = L(0.95, 0.45);
+      lampL.intensity = lampR.intensity = L(0.40, 0.95);
+      ceil.intensity = L(0.40, 0.22);
+      needRender = true;
+    }
+    function renderTheme(p) {
+      curP = p;
+      var deg = (p * 180).toFixed(2) + 'deg';
+      if (dial) dial.style.transform = 'translate(-50%,-50%) rotate(' + deg + ')';
+      if (sky) sky.style.setProperty('--rot', deg);
+      applyScene(p);
+    }
+    function setPageTheme(dark) { root.setAttribute('data-theme', dark ? 'dark' : 'light'); }
+
+    function animateTheme(toDark) {
+      var to = toDark ? 1 : 0, from = curP, start = performance.now();
+      var dur = reduce ? 0 : 820;
+      var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+      var switched = false;
+      themeActive = true;
+      if (dur === 0) { renderTheme(to); setPageTheme(toDark); themeActive = false; return; }
+      (function step(now) {
+        var k = Math.min(1, (now - start) / dur);
+        var e = from + (to - from) * ease(k);
+        renderTheme(e);
+        if (!switched && ((to > from && e >= 0.5) || (to < from && e <= 0.5))) { setPageTheme(toDark); switched = true; }
+        if (k < 1) requestAnimationFrame(step);
+        else { setPageTheme(toDark); themeActive = false; }
+      })(performance.now());
+    }
+
+    if (toggle) {
+      toggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      toggle.addEventListener('click', function () {
+        manual = true;
+        theme = theme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+        toggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+        animateTheme(theme === 'dark');
+      });
+    }
+    var osQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    var osHandler = function (e) {
+      if (manual) return;
+      theme = e.matches ? 'dark' : 'light';
+      if (toggle) toggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      animateTheme(e.matches);
+    };
+    if (osQuery.addEventListener) osQuery.addEventListener('change', osHandler);
+    else if (osQuery.addListener) osQuery.addListener(osHandler);
+
+    renderTheme(curP);
+
+    /* =====================================================================
+       Pointer: subtle stage tilt + drag-to-orbit (active in the 3D phase).
+       ===================================================================== */
+    var dragging = false, lastX = 0, lastY = 0, userDragged = false;
+    stage.addEventListener('pointerdown', function (e) {
+      if (dollyT < 0.12) return; // only grab once we're in the 3D phase
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      stage.classList.add('grabbing');
+      userDragged = true; hint.classList.add('gone');
+      if (stage.setPointerCapture) { try { stage.setPointerCapture(e.pointerId); } catch (er) {} }
+    });
+    window.addEventListener('pointerup', function () { dragging = false; stage.classList.remove('grabbing'); });
+    stage.addEventListener('pointermove', function (e) {
+      if (dragging) {
+        var dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
+        userYaw = clamp(userYaw - dx * 0.005, -0.62, 0.62);
+        userPitch = clamp(userPitch + dy * 0.004, -0.22, 0.36);
+        needRender = true;
+      }
+    });
+
+    /* =====================================================================
+       Scroll timeline: dock the photo into the viewer, then
+       reveal 3D -> reconstruct -> orbit.
+       ===================================================================== */
+    var lastT = -1, actIndex = -1, orbitHintShown = false, running = false, loopOn = false;
+    var lastSW = 0, lastSH = 0;
+
+    function frame() {
+      if (!running) { loopOn = false; return; }
+      var total = introSec.offsetHeight - window.innerHeight;
+      var rect = introSec.getBoundingClientRect();
+      var t = total > 0 ? clamp(-rect.top / total, 0, 1) : 0;
+
+      var intro = smooth(t, 0.0, 0.26);
+      var reveal = smooth(t, 0.28, 0.54);
+      var recon = smooth(t, 0.52, 0.72);
+      dollyT = smooth(t, 0.70, 1.0);
+
+      /* ---- morph the blurred full-bleed photo into the docked viewer ---- */
+      var W = introPin.clientWidth, H = introPin.clientHeight;
+      var pad = W < 760 ? 16 : 28;
+      var dockW = Math.min(1120, W - pad * 2);
+      var dockH = dockW * 900 / 1536;
+      var maxH = H - (W < 760 ? 140 : 168);
+      if (dockH > maxH) { dockH = maxH; dockW = dockH * 1536 / 900; }
+      var dockL = (W - dockW) / 2, dockT = (H - dockH) / 2;
+      var lx = function (a, b) { return a + (b - a) * intro; };
+
+      stage.style.left = lx(0, dockL).toFixed(1) + 'px';
+      stage.style.top = lx(0, dockT).toFixed(1) + 'px';
+      stage.style.width = lx(W, dockW).toFixed(1) + 'px';
+      stage.style.height = lx(H, dockH).toFixed(1) + 'px';
+      stage.style.borderRadius = (8 * intro).toFixed(2) + 'px';
+      stage.style.borderColor = 'rgba(214,226,236,' + (0.16 * intro).toFixed(3) + ')';
+      stage.style.boxShadow = '0 48px 100px rgba(0,0,0,' + (0.55 * intro).toFixed(3) + '), inset 0 1px 0 rgba(255,255,255,' + (0.16 * intro).toFixed(3) + ')';
+      stage.style.setProperty('--dock', intro.toFixed(3));
+      if (photoImg) photoImg.style.filter =
+        'saturate(' + (0.5 + 0.08 * intro).toFixed(3) + ') contrast(1.08) brightness(' + (0.45 + 0.29 * intro).toFixed(3) + ') blur(' + (14 * (1 - intro)).toFixed(2) + 'px)';
+
+      /* ---- hero text fades out, dockbar + scrim follow ---- */
+      var tf = smooth(t, 0.03, 0.18);
+      heroText.style.opacity = (1 - tf).toFixed(3);
+      heroText.style.transform = 'translateY(' + (-tf * 36).toFixed(1) + 'px)';
+      if (tf > 0.6) heroText.classList.add('faded'); else heroText.classList.remove('faded');
+      introPin.style.setProperty('--introScrim', (1 - smooth(t, 0.06, 0.22)).toFixed(3));
+      dockbar.style.setProperty('--dockbar', smooth(t, 0.20, 0.30).toFixed(3));
+
+      var docked = intro > 0.6;
+      var uiFade = smooth(intro, 0.55, 1.0);
+
+      /* ---- in-viewer chrome (only meaningful once docked) ---- */
+      badge.style.opacity = uiFade.toFixed(3);
+
+      if (has3D && docked) {
+        var sw = stage.clientWidth, sh = stage.clientHeight;
+        if (sw !== lastSW || sh !== lastSH) { lastSW = sw; lastSH = sh; resize(); }
+
+        var px = reveal * 100; // boundary slides from the far left edge to the right
+        scan.style.left = px + '%';
+        scan.style.opacity = (reveal > 0.005 && reveal < 0.995) ? uiFade.toFixed(3) : '0';
+        proc.style.clipPath = 'inset(0 ' + (100 - px).toFixed(2) + '% 0 0)';
+        photoBadge.style.opacity = (uiFade * (1 - reveal)).toFixed(3);
+        glow.style.left = px + '%';
+        glow.style.opacity = (reveal > 0.005 && reveal < 0.995) ? '1' : '0';
+
+        stage.style.setProperty('--grid', (recon * (1 - dollyT) * 0.52).toFixed(3));
+        dim1.style.opacity = clamp((dollyT - 0.15) / 0.6, 0, 1).toFixed(3);
+        dim2.style.opacity = clamp((dollyT - 0.38) / 0.6, 0, 1).toFixed(3);
+
+        var ai = reveal < 0.4 ? 0 : (dollyT < 0.25 ? 1 : 2);
+        if (ai !== actIndex) {
+          actIndex = ai;
+          steps.forEach(function (s) { s.classList.toggle('on', +s.dataset.step === ai); });
+          badge.textContent = ai === 0 ? '원본 사진' : (ai === 1 ? '재구성 중…' : 'Live 3D 공간');
+        }
+        if (!orbitHintShown && dollyT > 0.25 && !userDragged) {
+          orbitHintShown = true; hint.classList.remove('gone');
+        }
+      } else {
+        proc.style.clipPath = 'inset(0 100% 0 0)';
+        scan.style.opacity = '0';
+        photoBadge.style.opacity = '0';
+        stage.style.setProperty('--grid', '0');
+      }
+
+      updateCamera();
+
+      var changed = Math.abs(t - lastT) > 1e-4; lastT = t;
+      if (has3D && docked && (changed || dragging || themeActive || needRender)) {
+        renderer.render(scene, camera);
+        needRender = false;
+      }
+      requestAnimationFrame(frame);
+    }
+    function startLoop() { if (loopOn) return; loopOn = true; needRender = true; requestAnimationFrame(frame); }
+
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) { running = en.isIntersecting; if (running) startLoop(); });
+      }, { threshold: 0 }).observe(introSec);
+    } else {
+      running = true; startLoop();
+    }
+
+    function updateNav() {
+      document.getElementById('lnav').classList.toggle('is-scrolled', window.scrollY > 40);
+    }
+    window.addEventListener('scroll', updateNav, { passive: true });
+    updateNav();
+  })();
+  </script>
+</body>
+</html>

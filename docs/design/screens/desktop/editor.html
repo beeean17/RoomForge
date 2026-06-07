@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge — 에디터</title>
+  <script>
+    (function () {
+      try { var s = localStorage.getItem('rf-theme');
+        var dark = s ? s === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <script src="../../system/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: ['selector', '[data-theme="dark"]'],
+      theme: { extend: {
+        colors: {
+          page: 'var(--page-bg)', surface: 'var(--surface)', 'surface-hi': 'var(--surface-hover)',
+          panel: 'var(--panel)', line: 'var(--line-soft)', 'line-hi': 'var(--line-strong)',
+          ink: 'var(--brand-ink)', main: 'var(--text-main)', muted: 'var(--text-muted)', dim: 'var(--text-dim)', accent: 'var(--accent)',
+        },
+        fontFamily: { sans: ['var(--rf-sans)'] }, borderRadius: { card: '14px' },
+      } },
+    };
+  </script>
+  <style>
+    :root[data-theme="dark"] {
+      --page-bg:#050505; --text-main:#f8f8f5; --text-muted:rgba(248,248,245,.66); --text-dim:rgba(248,248,245,.42);
+      --brand-ink:#fff; --line-soft:rgba(214,226,236,.13); --line-strong:rgba(214,226,236,.30);
+      --surface:rgba(255,255,255,.04); --surface-hover:rgba(255,255,255,.09); --panel:rgba(255,255,255,.025);
+      --accent:#8fb4ff; --bar-bg:rgba(10,10,12,.86); --canvas:#0a0b0d;
+    }
+    :root[data-theme="light"] {
+      --page-bg:#ecebe4; --text-main:#15171c; --text-muted:rgba(21,23,28,.66); --text-dim:rgba(21,23,28,.46);
+      --brand-ink:#0a0c10; --line-soft:rgba(20,30,45,.12); --line-strong:rgba(20,30,45,.26);
+      --surface:rgba(15,20,30,.045); --surface-hover:rgba(15,20,30,.09); --panel:rgba(255,255,255,.6);
+      --accent:#3f6ad8; --bar-bg:rgba(238,237,230,.92); --canvas:#1a1c20;
+    }
+    html, body { font-family: var(--rf-sans); height: 100%; }
+    body { margin:0; background: var(--page-bg); color: var(--text-main); overflow: hidden; transition: background-color .6s ease, color .6s ease; }
+    .btn-primary { background: var(--rf-grad-primary); color:#050505; border-color: rgba(220,232,255,.86); }
+    .theme-toggle { position:relative; width:34px; height:34px; border-radius:9px; overflow:hidden; }
+    .theme-toggle::after { content:""; position:absolute; inset:0; pointer-events:none; background: radial-gradient(circle at 50% 36%, transparent 42%, rgba(0,0,0,.28)); }
+    .theme-toggle .dial { position:absolute; left:50%; top:50%; width:14px; height:42px; transform: translate(-50%,-50%) rotate(0deg); transform-origin:50% 50%; will-change:transform; }
+    .theme-toggle .body { position:absolute; left:50%; width:13px; height:13px; border-radius:50%; transform: translateX(-50%); }
+    .theme-toggle .sun { top:0; background: radial-gradient(circle at 50% 45%, #ffe9b0, #ffb347 70%); box-shadow:0 0 9px rgba(255,196,90,.85); }
+    .theme-toggle .moon { bottom:0; background: radial-gradient(circle at 36% 34%, #f2f5ff, #b6c2e0 72%); box-shadow:0 0 7px rgba(180,196,232,.7); }
+    .tool { display:grid; place-items:center; width:40px; height:40px; border-radius:10px; color:var(--text-dim); cursor:pointer; transition: background .15s, color .15s; }
+    .tool:hover { background: var(--surface); color: var(--text-main); }
+    .tool.active { background: rgba(143,180,255,.16); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(143,180,255,.4); }
+    .fld { display:flex; align-items:center; gap:6px; height:32px; padding:0 9px; border:1px solid var(--line-soft); border-radius:8px; background:var(--surface); font-size:12.5px; color:var(--text-main); }
+    .fld input { width:100%; background:transparent; border:0; outline:0; color:inherit; font:inherit; }
+    .fld .u { color:var(--text-dim); font-size:11px; }
+    @media (prefers-reduced-motion: reduce) { .theme-toggle .dial { transition:none; } }
+  </style>
+</head>
+
+<body>
+  <!-- ============================ <TopBar/> + <PipelineProgress current="editor"/> ============================ -->
+  <header class="h-14 flex items-center gap-3 px-4 border-b border-line" style="background: var(--bar-bg);">
+    <a href="../../landing.html" class="flex items-center gap-2 font-extrabold text-[13px] uppercase tracking-tight text-main shrink-0">
+      <span class="w-4 h-4 rounded-[5px]" style="background: var(--rf-grad-brand); box-shadow: var(--rf-ring-inset);"></span> RoomForge
+    </a>
+    <nav class="ml-2 hidden md:flex items-center gap-1.5 text-[13px] text-dim shrink-0">
+      <a href="projects.html" class="hover:text-main transition-colors">프로젝트</a>
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+      <a href="project.html" class="hover:text-main transition-colors">거실 리노베이션</a>
+    </nav>
+    <div id="pipeline" class="hidden xl:flex flex-1 items-center justify-center gap-1"></div>
+    <div class="ml-auto flex items-center gap-2.5">
+      <span class="hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold text-dim"><span class="w-1.5 h-1.5 rounded-full" style="background:#48d39a"></span>모든 변경 저장됨</span>
+      <button class="theme-toggle border border-line bg-surface hover:bg-surface-hi transition-colors" id="themeToggle" type="button" aria-label="낮/밤 테마 전환" aria-pressed="true"><span class="dial" aria-hidden="true"><span class="body sun"></span><span class="body moon"></span></span></button>
+      <button class="w-8 h-8 rounded-full grid place-items-center text-[12px] font-extrabold text-white" style="background:linear-gradient(135deg,#8fb4ff,#80c7c2);">SY</button>
+    </div>
+  </header>
+
+  <!-- ============================ <EditorBody/> ============================ -->
+  <div class="flex" style="height: calc(100vh - 3.5rem);">
+
+    <!-- <ToolRail/> -->
+    <div class="w-14 shrink-0 flex flex-col items-center gap-1 py-3 border-r border-line" style="background: var(--bar-bg);">
+      <div class="tool active" title="선택"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 7.5 18 2.5-7.5L20.5 11z"/></svg></div>
+      <div class="tool" title="이동/팬"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 0 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.6-2.5L2.4 15"/></svg></div>
+      <div class="tool" title="벽 편집"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13M3 13h18M9 21v-6h6v6"/></svg></div>
+      <div class="tool" title="문·창 개구부"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M14 12h.01"/></svg></div>
+      <div class="tool" title="가구"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4M3 11a2 2 0 0 0-2 2v4h22v-4a2 2 0 0 0-2-2M3 11h18M5 21v-4M19 21v-4"/></svg></div>
+      <div class="tool" title="측정"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h18v8H3z"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/></svg></div>
+      <div class="mt-auto tool" title="메모"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+    </div>
+
+    <!-- <LibraryPanel/> -->
+    <aside class="w-60 shrink-0 flex flex-col border-r border-line" style="background: var(--bar-bg);">
+      <div class="px-3.5 h-11 flex items-center gap-2 border-b border-line">
+        <h2 class="text-[13px] font-bold text-main">가구 라이브러리</h2>
+        <span class="ml-auto text-dim"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+      </div>
+      <div class="px-3 py-2 flex gap-1.5 overflow-x-auto border-b border-line text-[12px] font-bold">
+        <button class="h-7 px-2.5 rounded-md text-main shrink-0" style="background:var(--surface-hi)">전체</button>
+        <button class="h-7 px-2.5 rounded-md text-dim hover:text-main shrink-0">침대</button>
+        <button class="h-7 px-2.5 rounded-md text-dim hover:text-main shrink-0">소파</button>
+        <button class="h-7 px-2.5 rounded-md text-dim hover:text-main shrink-0">테이블</button>
+        <button class="h-7 px-2.5 rounded-md text-dim hover:text-main shrink-0">수납</button>
+      </div>
+      <div class="p-3 grid grid-cols-2 gap-2 overflow-y-auto" id="library"></div>
+      <div class="mt-auto px-3.5 py-2.5 border-t border-line text-[11px] text-dim flex items-center gap-1.5">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l3 3 3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+        끌어다 캔버스에 배치
+      </div>
+    </aside>
+
+    <!-- <CanvasArea/> -->
+    <div class="flex-1 min-w-0 flex flex-col">
+      <!-- canvas toolbar -->
+      <div class="h-11 shrink-0 flex items-center gap-2 px-3 border-b border-line" style="background: var(--bar-bg);">
+        <!-- 2D/3D toggle -->
+        <div class="flex p-0.5 rounded-lg border border-line bg-surface text-[12.5px] font-bold">
+          <button id="m3d" class="h-7 px-3 rounded-md inline-flex items-center gap-1.5"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/></svg>3D</button>
+          <button id="m2d" class="h-7 px-3 rounded-md inline-flex items-center gap-1.5"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 3v18M3 9h18"/></svg>2D 평면도</button>
+        </div>
+        <span class="w-px h-5 bg-line mx-1"></span>
+        <button class="tool !w-8 !h-8" title="실행 취소"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7L3 9"/></svg></button>
+        <button class="tool !w-8 !h-8" title="다시 실행"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7l3 3"/></svg></button>
+        <div class="ml-auto flex items-center gap-2 text-[12px] text-dim">
+          <button class="tool !w-8 !h-8" title="축소"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
+          <span class="font-bold text-muted tabular-nums">100%</span>
+          <button class="tool !w-8 !h-8" title="확대"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+          <span class="inline-flex items-center gap-1.5 font-semibold"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>스냅</span>
+          <span class="w-px h-5 bg-line mx-1"></span>
+          <button class="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-line bg-surface text-[12px] font-bold text-main hover:bg-surface-hi transition-colors" title="현재 2D 평면도를 PNG 이미지로 저장">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg>이미지로 내보내기
+          </button>
+        </div>
+      </div>
+
+      <!-- canvas -->
+      <div class="flex-1 relative" style="background: var(--canvas);" id="stage">
+        <!-- 3D -->
+        <div id="view3d" class="absolute inset-0"><canvas id="rfcanvas" class="block w-full h-full"></canvas></div>
+        <!-- 2D floor plan -->
+        <div id="view2d" class="absolute inset-0 hidden grid place-items-center p-8">
+          <svg viewBox="-40 -50 600 700" class="w-full h-full max-w-[760px]" font-family="var(--rf-sans)">
+            <!-- grid -->
+            <defs><pattern id="g" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="rgba(143,180,255,.10)" stroke-width="1"/></pattern></defs>
+            <rect x="-40" y="-50" width="600" height="700" fill="url(#g)"/>
+            <!-- room walls -->
+            <rect x="0" y="0" width="520" height="600" fill="rgba(143,180,255,.04)" stroke="var(--text-muted)" stroke-width="6"/>
+            <!-- window (right wall) -->
+            <line x1="520" y1="105" x2="520" y2="335" stroke="var(--accent)" stroke-width="7"/>
+            <line x1="513" y1="105" x2="513" y2="335" stroke="var(--accent)" stroke-width="2" opacity="0.6"/>
+            <!-- door (left-front) -->
+            <path d="M0 450 A100 100 0 0 1 100 550" fill="none" stroke="var(--text-dim)" stroke-width="1.5"/>
+            <line x1="0" y1="450" x2="0" y2="550" stroke="var(--canvas)" stroke-width="8"/>
+            <!-- furniture -->
+            <g stroke-width="2" font-size="13" font-weight="700">
+              <!-- desk (left) -->
+              <rect x="12" y="120" width="58" height="170" rx="6" fill="rgba(255,255,255,.05)" stroke="var(--text-dim)"/>
+              <text x="41" y="210" fill="var(--text-dim)" text-anchor="middle" transform="rotate(-90 41 210)">책상</text>
+              <!-- nightstands -->
+              <rect x="120" y="22" width="48" height="42" rx="5" fill="rgba(255,255,255,.05)" stroke="var(--text-dim)"/>
+              <rect x="352" y="22" width="48" height="42" rx="5" fill="rgba(255,255,255,.05)" stroke="var(--text-dim)"/>
+              <!-- dresser (right-front) -->
+              <rect x="455" y="285" width="52" height="170" rx="6" fill="rgba(255,255,255,.05)" stroke="var(--text-dim)"/>
+              <text x="481" y="372" fill="var(--text-dim)" text-anchor="middle" transform="rotate(-90 481 372)">수납</text>
+              <!-- bed (selected) -->
+              <rect x="150" y="60" width="230" height="270" rx="8" fill="rgba(143,180,255,.16)" stroke="var(--accent)" stroke-width="2.5"/>
+              <line x1="150" y1="92" x2="380" y2="92" stroke="var(--accent)" stroke-width="2"/>
+              <text x="265" y="205" fill="var(--accent)" text-anchor="middle">침대</text>
+              <!-- selection handles -->
+              <g fill="var(--accent)">
+                <rect x="144" y="54" width="9" height="9" rx="2"/><rect x="377" y="54" width="9" height="9" rx="2"/>
+                <rect x="144" y="324" width="9" height="9" rx="2"/><rect x="377" y="324" width="9" height="9" rx="2"/>
+              </g>
+            </g>
+            <!-- dimensions -->
+            <g stroke="var(--text-dim)" stroke-width="1" fill="var(--text-muted)" font-size="13" font-weight="700">
+              <line x1="0" y1="-20" x2="520" y2="-20"/><text x="260" y="-26" text-anchor="middle">5.2 m</text>
+              <line x1="-22" y1="0" x2="-22" y2="600"/><text x="-26" y="300" text-anchor="middle" transform="rotate(-90 -26 300)">6.0 m</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- floating selection badge (3D) -->
+        <div id="selBadge" class="absolute top-4 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 h-8 px-3 rounded-lg text-[12px] font-bold text-white border" style="background:rgba(5,7,12,.6);backdrop-filter:blur(8px);border-color:rgba(143,180,255,.4)">
+          <span class="w-1.5 h-1.5 rounded-full" style="background:var(--accent)"></span>침대 선택됨 · 드래그로 회전
+        </div>
+      </div>
+    </div>
+
+    <!-- <Inspector/> -->
+    <aside class="w-72 shrink-0 flex flex-col border-l border-line overflow-y-auto" style="background: var(--bar-bg);">
+      <div class="px-4 h-11 flex items-center gap-2 border-b border-line">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 11V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4M3 11a2 2 0 0 0-2 2v4h22v-4a2 2 0 0 0-2-2M3 11h18"/></svg>
+        <h2 class="text-[13px] font-bold text-main">침대</h2>
+        <span class="ml-auto text-[11px] font-bold text-dim">가구</span>
+      </div>
+
+      <div class="p-4 flex flex-col gap-4">
+        <div>
+          <p class="text-[11px] font-bold text-dim mb-2">치수</p>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="fld"><span class="u">W</span><input value="2.30" /><span class="u">m</span></label>
+            <label class="fld"><span class="u">D</span><input value="2.75" /><span class="u">m</span></label>
+            <label class="fld"><span class="u">H</span><input value="0.55" /><span class="u">m</span></label>
+          </div>
+        </div>
+        <div>
+          <p class="text-[11px] font-bold text-dim mb-2">위치 · 회전</p>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="fld"><span class="u">X</span><input value="0.00" /></label>
+            <label class="fld"><span class="u">Y</span><input value="-1.40" /></label>
+            <label class="fld"><span class="u">∠</span><input value="0" /><span class="u">°</span></label>
+          </div>
+        </div>
+        <div>
+          <p class="text-[11px] font-bold text-dim mb-2">재질</p>
+          <div class="grid grid-cols-5 gap-2">
+            <button class="aspect-square rounded-lg border-2" style="background:#2a2a30;border-color:var(--accent)"></button>
+            <button class="aspect-square rounded-lg border border-line" style="background:#6b6f78"></button>
+            <button class="aspect-square rounded-lg border border-line" style="background:#b9bac2"></button>
+            <button class="aspect-square rounded-lg border border-line" style="background:#7a5b46"></button>
+            <button class="aspect-square rounded-lg border border-line" style="background:#3f6b46"></button>
+          </div>
+          <p class="mt-2 text-[12px] text-muted">다크 패브릭</p>
+        </div>
+        <div class="h-px bg-line"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border border-line bg-surface text-[12.5px] font-bold text-main hover:bg-surface-hi transition-colors"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>복제</button>
+          <button class="inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border text-[12.5px] font-bold transition-colors" style="border-color:rgba(240,114,106,.35);color:#f0726a"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>삭제</button>
+        </div>
+      </div>
+
+      <!-- room info -->
+      <div class="mt-auto p-4 border-t border-line">
+        <p class="text-[11px] font-bold text-dim mb-2.5">공간 정보</p>
+        <dl class="grid grid-cols-2 gap-y-2 text-[12.5px]">
+          <dt class="text-dim">방 크기</dt><dd class="text-main font-semibold text-right">5.2 × 6.0 m</dd>
+          <dt class="text-dim">천장 높이</dt><dd class="text-main font-semibold text-right">2.8 m</dd>
+          <dt class="text-dim">바닥 면적</dt><dd class="text-main font-semibold text-right">31.2 m²</dd>
+          <dt class="text-dim">배치 가구</dt><dd class="text-main font-semibold text-right">6</dd>
+        </dl>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../../assets/vendor/three.min.js"></script>
+  <script>
+  // ===== <PipelineProgress current="editor"/> =====
+  (function () {
+    var PIPE = [
+      { k: 'source', label: '소스', href: 'source.html' }, { k: 'status', label: '재구성', href: 'status.html' },
+      { k: 'editor', label: '편집', href: 'editor.html' },
+    ];
+    var st = { source: 'done', status: 'done', editor: 'active' }, CUR = 'editor';
+    var el = document.getElementById('pipeline'); if (!el) return;
+    function circ(s) { return s === 'done' ? 'background:rgba(72,211,154,.16);color:#48d39a;border-color:rgba(72,211,154,.4)' : s === 'active' ? 'background:rgba(143,180,255,.16);color:var(--accent);border-color:rgba(143,180,255,.5)' : 'background:var(--surface);color:var(--text-dim);border-color:var(--line-soft)'; }
+    function ico(s) { return s === 'done' ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M20 6 9 17l-5-5"/></svg>' : '<span class="w-2 h-2 rounded-full" style="background:currentColor"></span>'; }
+    el.innerHTML = PIPE.map(function (s, i) {
+      var state = st[s.k], isCur = s.k === CUR, ring = isCur ? ';box-shadow:0 0 0 3px rgba(143,180,255,.22)' : '';
+      var node = '<a href="' + s.href + '" title="' + s.label + '" class="flex items-center gap-1.5 shrink-0 group"><span class="grid place-items-center w-6 h-6 rounded-md border ' + (state === 'active' ? 'animate-pulse' : '') + ' group-hover:border-line-hi" style="' + circ(state) + ring + '">' + ico(state) + '</span><span class="text-[11.5px] font-bold whitespace-nowrap ' + (isCur ? 'text-main' : (state === 'pending' ? 'text-dim' : 'text-muted')) + '">' + s.label + '</span></a>';
+      return node + (i < PIPE.length - 1 ? '<span class="w-5 h-px shrink-0" style="background:' + (state === 'done' ? 'linear-gradient(90deg,#48d39a,var(--line-strong))' : 'var(--line-soft)') + '"></span>' : '');
+    }).join('');
+  })();
+
+  // ===== <LibraryPanel/> items =====
+  (function () {
+    var items = [
+      { n: '플랫폼 침대', i: 'M3 11V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4M3 11a2 2 0 0 0-2 2v4h22v-4a2 2 0 0 0-2-2M3 11h18M5 21v-4M19 21v-4' },
+      { n: '2인 소파', i: 'M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M3 11a2 2 0 0 1 2 2v3h14v-3a2 2 0 0 1 2-2M5 19v-3M19 19v-3' },
+      { n: '책상', i: 'M3 7h18M4 7v11M20 7v11M3 12h18' },
+      { n: '오피스 의자', i: 'M6 19v2M18 19v2M5 13h14l-1 6H6zM9 13V6a3 3 0 0 1 6 0v7' },
+      { n: '서랍장', i: 'M4 4h16v16H4zM4 12h16M9 8h.01M9 16h.01' },
+      { n: '러그', i: 'M3 6h18v12H3zM3 9h18M3 15h18' },
+      { n: '조명', i: 'M9 18h6M10 22h4M12 2a6 6 0 0 0-4 10.5c.8.8 1 1.2 1 2.5h6c0-1.3.2-1.7 1-2.5A6 6 0 0 0 12 2z' },
+      { n: '화분', i: 'M5 10h14l-1.5 11h-11zM12 10C12 6 9 3 5 3c0 4 3 7 7 7zM12 10c0-4 3-7 7-7 0 4-3 7-7 7z' },
+    ];
+    document.getElementById('library').innerHTML = items.map(function (it) {
+      return '<button class="group rounded-lg border border-line hover:border-line-hi hover:bg-surface transition-colors p-2 grid justify-items-center gap-1.5" title="끌어다 배치">' +
+        '<span class="w-full aspect-square rounded-md grid place-items-center text-dim group-hover:text-main" style="background:var(--surface)"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><path d="' + it.i + '"/></svg></span>' +
+        '<span class="text-[11px] font-semibold text-muted leading-tight text-center">' + it.n + '</span></button>';
+    }).join('');
+  })();
+
+  // ===== 2D / 3D mode toggle =====
+  (function () {
+    var v3 = document.getElementById('view3d'), v2 = document.getElementById('view2d');
+    var b3 = document.getElementById('m3d'), b2 = document.getElementById('m2d'), badge = document.getElementById('selBadge');
+    function seg(on3) {
+      b3.style.background = on3 ? 'var(--surface-hi)' : 'transparent'; b3.style.color = on3 ? 'var(--text-main)' : 'var(--text-dim)';
+      b2.style.background = on3 ? 'transparent' : 'var(--surface-hi)'; b2.style.color = on3 ? 'var(--text-dim)' : 'var(--text-main)';
+    }
+    window.__set3D = function (on3) {
+      v3.classList.toggle('hidden', !on3); v2.classList.toggle('hidden', on3);
+      badge.style.display = on3 ? '' : 'none'; seg(on3);
+      if (on3 && window.__resize3D) window.__resize3D();
+    };
+    b3.addEventListener('click', function () { window.__set3D(true); });
+    b2.addEventListener('click', function () { window.__set3D(false); });
+    seg(true);
+  })();
+
+  // ===== live Three.js room (reused from the landing scene) =====
+  (function () {
+    var stage = document.getElementById('stage'), canvas = document.getElementById('rfcanvas');
+    var renderer, scene, camera, has3D = false;
+    var R0 = 8.0, P0 = 0.12, userYaw = 0, userPitch = 0, needRender = true;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+      renderer.setPixelRatio(1); renderer.setClearColor(0x0a0b0d, 1);
+      scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(40, 1.6, 0.1, 100);
+      function box(w, h, d, c, o) { o = o || {}; var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: c, roughness: o.rough != null ? o.rough : .85, metalness: o.metal || 0, emissive: o.emissive != null ? o.emissive : 0, emissiveIntensity: o.emi != null ? o.emi : 1 })); m.position.set(o.x || 0, o.y || 0, o.z || 0); if (o.ry) m.rotation.y = o.ry; scene.add(m); return m; }
+      function plane(w, h, c, o) { o = o || {}; var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: c, roughness: o.rough != null ? o.rough : .9, metalness: 0, side: THREE.DoubleSide, emissive: o.emissive != null ? o.emissive : 0, emissiveIntensity: o.emi != null ? o.emi : 1 })); m.position.set(o.x || 0, o.y || 0, o.z || 0); if (o.rx) m.rotation.x = o.rx; if (o.ry) m.rotation.y = o.ry; scene.add(m); return m; }
+      var HW = 2.6, BK = -3.0, HT = 2.8;
+      plane(5.2, 6.0, 0xcdbca0, { rx: -Math.PI / 2, y: 0, z: 0, rough: .95 });
+      plane(2.6, 1.7, 0x9a9aa0, { rx: -Math.PI / 2, y: .01, z: .4, rough: 1 });
+      plane(5.2, HT, 0xcfd0d4, { y: HT / 2, z: BK });
+      plane(6.0, HT, 0xeef0f3, { ry: Math.PI / 2, x: -HW, y: HT / 2 });
+      plane(6.0, HT, 0xe7e8ec, { ry: -Math.PI / 2, x: HW, y: HT / 2 });
+      plane(5.2, 6.0, 0xf2f3f5, { rx: Math.PI / 2, y: HT, z: 0, rough: 1 });
+      box(1.5, .85, .05, 0x111114, { y: 1.85, z: BK + .05 });
+      plane(1.35, .72, 0x2b3340, { y: 1.85, z: BK + .08, emissive: 0x2b3340, emi: .25 });
+      box(2.4, .04, .12, 0xffffff, { y: HT - .02, z: .2, emissive: 0xffffff, emi: .8 });
+      // bed (selected)
+      var bed = box(2.30, .30, 2.75, 0x2a2a30, { y: .15, z: -1.40 });
+      box(2.18, .24, 2.55, 0x35353c, { y: .42, z: -1.48 });
+      box(2.20, .12, 1.45, 0x232328, { y: .55, z: -.95 });
+      box(2.34, 1.15, .14, 0x2d2d33, { y: .74, z: BK + .12 });
+      box(.74, .20, .44, 0xc9cad0, { y: .60, z: -2.45, x: -.5 });
+      box(.74, .20, .44, 0xb9bac2, { y: .60, z: -2.45, x: .5 });
+      [[-1.45], [1.45]].forEach(function (n) { box(.5, .46, .42, 0x1e1e23, { x: n[0], y: .23, z: BK + .55 }); box(.26, .18, .26, 0xfff3d6, { x: n[0], y: .80, z: BK + .55, emissive: 0xffcf80, emi: .6 }); });
+      var DX = -2.18;
+      box(.62, .05, 1.7, 0x26262b, { x: DX, y: .74, z: -.9 });
+      box(.42, .30, .04, 0x101013, { x: DX + .02, y: 1.06, z: -1.5, ry: Math.PI / 2 });
+      plane(.40, .26, 0x16263f, { x: DX + .05, y: 1.06, z: -1.5, ry: -Math.PI / 2, emissive: 0x1d3a63, emi: .7 });
+      box(.46, .06, .46, 0x1a1a1f, { x: DX + .45, y: .48, z: -.45 });
+      box(.5, .8, 1.7, 0x161619, { x: HW - .28, y: .4, z: .7 });
+      box(.18, .30, .18, 0x3f6b46, { x: HW - .34, y: 1.18, z: .2, emissive: 0x244a2c, emi: .3 });
+      box(.05, 2.1, 1.0, 0x121214, { x: -HW + .04, y: 1.05, z: 2.0 });
+      box(.05, 1.6, 2.3, 0x111114, { x: HW - .02, y: 1.5, z: -.8 });
+      plane(2.1, 1.4, 0xe9f1f8, { ry: -Math.PI / 2, x: HW - .06, y: 1.5, z: -.8, emissive: 0xeaf2fb, emi: .95 });
+      // selection wireframe around the bed
+      var selGeo = new THREE.BoxGeometry(2.55, 1.0, 2.95);
+      var sel = new THREE.LineSegments(new THREE.EdgesGeometry(selGeo), new THREE.LineBasicMaterial({ color: 0x8fb4ff }));
+      sel.position.set(0, .5, -1.45); scene.add(sel);
+      // lights
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3a42, .6));
+      var sun = new THREE.DirectionalLight(0xfff4e2, .9); sun.position.set(6, 4.5, -1); scene.add(sun);
+      var ceil = new THREE.PointLight(0xffffff, .4, 12); ceil.position.set(0, 2.6, .4); scene.add(ceil);
+      var target = new THREE.Vector3(-0.1, 1.0, -1.2);
+      function updateCam() {
+        var cp = Math.cos(P0 + userPitch), sp = Math.sin(P0 + userPitch), sy = Math.sin(userYaw), cy = Math.cos(userYaw);
+        camera.position.set(target.x + R0 * sy * cp, target.y + R0 * sp, target.z + R0 * cy * cp); camera.lookAt(target);
+      }
+      window.__resize3D = function () {
+        var w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
+        var rw = Math.min(w, 1100), rh = Math.round(rw * h / w);
+        renderer.setSize(rw, rh, false); camera.aspect = w / h; camera.updateProjectionMatrix(); needRender = true;
+      };
+      window.addEventListener('resize', window.__resize3D); window.__resize3D(); updateCam();
+      has3D = true;
+      // drag orbit
+      var drag = false, lx = 0, ly = 0;
+      canvas.addEventListener('pointerdown', function (e) { drag = true; lx = e.clientX; ly = e.clientY; canvas.style.cursor = 'grabbing'; });
+      window.addEventListener('pointerup', function () { drag = false; canvas.style.cursor = 'grab'; });
+      canvas.addEventListener('pointermove', function (e) {
+        if (!drag) return; userYaw = Math.max(-.7, Math.min(.7, userYaw - (e.clientX - lx) * .005)); userPitch = Math.max(-.15, Math.min(.4, userPitch + (e.clientY - ly) * .004)); lx = e.clientX; ly = e.clientY; updateCam(); needRender = true;
+      });
+      canvas.style.cursor = 'grab';
+      (function loop() { if (has3D && needRender) { renderer.render(scene, camera); needRender = false; } requestAnimationFrame(loop); })();
+    } catch (e) { console.warn('3D unavailable', e); document.getElementById('view3d').style.display = 'none'; }
+  })();
+
+  // ===== theme toggle =====
+  (function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var root = document.documentElement, KEY = 'rf-theme';
+    var saved = (function () { try { return localStorage.getItem(KEY); } catch (e) { return null; } })();
+    var manual = saved !== null;
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var curP = theme === 'dark' ? 1 : 0;
+    var toggle = document.getElementById('themeToggle'), dial = toggle.querySelector('.dial');
+    function render(p) { curP = p; dial.style.transform = 'translate(-50%,-50%) rotate(' + (p * 180).toFixed(2) + 'deg)'; }
+    function setPage(d) { root.setAttribute('data-theme', d ? 'dark' : 'light'); if (window.__resize3D) window.__resize3D(); }
+    function animate(toDark) {
+      var to = toDark ? 1 : 0, from = curP, start = performance.now(), dur = reduce ? 0 : 820, sw = false;
+      var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+      if (!dur) { render(to); setPage(toDark); return; }
+      (function step(now) { var k = Math.min(1, (now - start) / dur), e = from + (to - from) * ease(k); render(e);
+        if (!sw && ((to > from && e >= 0.5) || (to < from && e <= 0.5))) { setPage(toDark); sw = true; }
+        if (k < 1) requestAnimationFrame(step); else setPage(toDark); })(performance.now());
+    }
+    toggle.setAttribute('aria-pressed', theme === 'dark');
+    toggle.addEventListener('click', function () { manual = true; theme = theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(KEY, theme); } catch (e) {}
+      toggle.setAttribute('aria-pressed', theme === 'dark'); animate(theme === 'dark'); });
+    var osq = window.matchMedia('(prefers-color-scheme: dark)');
+    var oh = function (e) { if (manual) return; theme = e.matches ? 'dark' : 'light'; toggle.setAttribute('aria-pressed', theme === 'dark'); animate(e.matches); };
+    if (osq.addEventListener) osq.addEventListener('change', oh); else if (osq.addListener) osq.addListener(oh);
+    render(curP);
+  })();
+  </script>
+</body>
+</html>

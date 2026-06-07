@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>21 · Templates And A11y — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>quality</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/21-templates-a11y.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">21 · Responsive &amp; Quality</span>
+            <h1>Templates And A11y</h1>
+            <p>empty, loading, error, accessibility 상태 템플릿을 한 화면에 모읍니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">포커스 순서 보기</button>
+            <button class="rf-btn rf-btn--primary">템플릿 적용</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="template-scene">
+          <div class="template-card"><span class="rf-chip rf-chip--admin"><span class="dot"></span>empty</span><b>아직 후보가 없습니다</b><span>수동으로 추가하거나 사진을 다시 업로드하세요.</span></div>
+          <div class="template-card"><div class="rf-skeleton" style="height:76px"></div><span class="rf-chip rf-chip--save"><span class="dot"></span>loading</span></div>
+          <div class="template-card"><span class="rf-chip rf-chip--error"><span class="dot"></span>error</span><b>저장을 완료하지 못했어요</b><span>네트워크가 복구되면 다시 시도할 수 있습니다.</span></div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--admin"><span class="dot"></span>empty</span><span class="rf-chip rf-chip--save"><span class="dot"></span>loading</span><span class="rf-chip rf-chip--error"><span class="dot"></span>error</span><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>accessible</span></div>
+        <ul class="component-list">
+          <li><strong>Empty template</strong><span>빈 프로젝트, 빈 admin 결과, 빈 candidate tray에 각각 구체 CTA 제공.</span></li><li><strong>Loading template</strong><span>skeleton, progress text, 오래 걸릴 때 상태 설명.</span></li><li><strong>Error template</strong><span>재시도 가능/불가능, 권한/네트워크/검증 오류를 구분.</span></li><li><strong>A11y states</strong><span>키보드 포커스, aria-live status, 색상 외 선택 표시, 텍스트 요약.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

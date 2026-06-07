@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-01T20:03:22.687Z",
+  "fixtureCount": 1,
+  "aggregate": {
+    "detectionRecall": {
+      "status": "available",
+      "value": 1,
+      "unit": "ratio"
+    },
+    "categoryAccuracy": {
+      "status": "available",
+      "value": 0.667,
+      "unit": "ratio"
+    },
+    "falsePositiveCount": {
+      "status": "available",
+      "value": 1,
+      "unit": "count"
+    },
+    "placementMeanErrorMeters": {
+      "status": "available",
+      "value": 0.174,
+      "unit": "meters"
+    },
+    "sizeMeanErrorMeters": {
+      "status": "available",
+      "value": 0.108,
+      "unit": "meters"
+    },
+    "processingTimeMs": {
+      "status": "available",
+      "value": 842,
+      "unit": "milliseconds"
+    },
+    "userCorrectionCount": {
+      "status": "available",
+      "value": 3,
+      "unit": "count"
+    }
+  },
+  "fixtures": [
+    {
+      "fixtureId": "studio-demo",
+      "description": "Privacy-safe example manifest. Image files are expected to live under the ignored local/ directory.",
+      "expectedObjectCount": 3,
+      "predictionCount": 4,
+      "matchedObjectCount": 3,
+      "metrics": {
+        "detectionRecall": {
+          "status": "available",
+          "value": 1,
+          "unit": "ratio"
+        },
+        "categoryAccuracy": {
+          "status": "available",
+          "value": 0.667,
+          "unit": "ratio"
+        },
+        "falsePositiveCount": {
+          "status": "available",
+          "value": 1,
+          "unit": "count"
+        },
+        "placementMeanErrorMeters": {
+          "status": "available",
+          "value": 0.174,
+          "unit": "meters"
+        },
+        "sizeMeanErrorMeters": {
+          "status": "available",
+          "value": 0.108,
+          "unit": "meters"
+        },
+        "processingTimeMs": {
+          "status": "available",
+          "value": 842,
+          "unit": "milliseconds"
+        },
+        "userCorrectionCount": {
+          "status": "available",
+          "value": 3,
+          "unit": "count"
+        }
+      },
+      "missedExpectedObjects": [],
+      "falsePositivePredictions": [
+        "pred-extra-chair"
+      ]
+    }
+  ],
+  "userEditFallbackRationale": "Browser CV is evaluated as a suggestion layer. Missed detections, category errors, false positives, and placement/size error mean users must be able to review and edit room objects before saving confirmed layouts."
+}

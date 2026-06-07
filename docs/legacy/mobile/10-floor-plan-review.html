@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>10 · Floor Plan Review — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>10</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">CV Review &amp; Editor</span>
+          <h1>Floor Plan Review</h1>
+          <p>미터 기반 평면도, 경고, artifact 상태를 확인하고 편집기로 넘깁니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="floor-scene">
+          <div class="metric-plan"><span class="room-shape"></span><span class="door"></span><span class="window"></span><span class="mini-bed"></span><span class="desk"></span></div>
+          <div class="warning-rail">
+            <div><span class="rf-chip rf-chip--warning"><span class="dot"></span>warning</span>가려진 벽 confidence 52%</div>
+            <div><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>ready</span>meters 좌표계 변환 완료</div>
+            <div><span class="rf-chip rf-chip--admin"><span class="dot"></span>artifact</span>overlay, mask, depth.json</div>
+          </div>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--confirmed"><span class="dot"></span>metric ready</span><span class="rf-chip rf-chip--warning"><span class="dot"></span>warning</span><span class="rf-chip rf-chip--error"><span class="dot"></span>artifact missing</span></div>
+          <ul class="component-list">
+            <li><strong>Metric plan canvas</strong><span>방 윤곽, 문/창문, 후보 가구를 meters 좌표계로 표시.</span></li><li><strong>Warnings rail</strong><span>낮은 confidence, 가려진 벽, 치수 불일치, depth 누락.</span></li><li><strong>Artifact links</strong><span>overlay, mask, depth JSON 등 생성물의 존재와 접근 상태.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">편집기로 이동</button>
+        <button class="rf-btn rf-btn--block">후보 재검토</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

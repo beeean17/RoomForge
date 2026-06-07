@@ -1,0 +1,5 @@
+{
+  "mode": "opencv-js-browser-worker",
+  "opencvJs": "@techstark/opencv-js",
+  "opencvWasm": "bundled-by-vite-worker"
+}

@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge — 소스 이미지</title>
+  <script>
+    (function () {
+      try { var s = localStorage.getItem('rf-theme');
+        var dark = s ? s === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <script src="../../system/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: ['selector', '[data-theme="dark"]'],
+      theme: { extend: {
+        colors: {
+          page: 'var(--page-bg)', surface: 'var(--surface)', 'surface-hi': 'var(--surface-hover)',
+          panel: 'var(--panel)', line: 'var(--line-soft)', 'line-hi': 'var(--line-strong)',
+          ink: 'var(--brand-ink)', main: 'var(--text-main)', muted: 'var(--text-muted)', dim: 'var(--text-dim)', accent: 'var(--accent)',
+        },
+        fontFamily: { sans: ['var(--rf-sans)'] }, borderRadius: { card: '14px' },
+      } },
+    };
+  </script>
+  <style>
+    :root[data-theme="dark"] {
+      --page-bg:#050505; --text-main:#f8f8f5; --text-muted:rgba(248,248,245,.66); --text-dim:rgba(248,248,245,.42);
+      --brand-ink:#fff; --line-soft:rgba(214,226,236,.13); --line-strong:rgba(214,226,236,.30);
+      --surface:rgba(255,255,255,.04); --surface-hover:rgba(255,255,255,.09); --panel:rgba(255,255,255,.025);
+      --accent:#8fb4ff; --bar-bg:rgba(8,8,9,.72);
+      --grid-tint:rgba(185,204,220,.05); --grid-tint-soft:rgba(185,204,220,.038); --grid-opacity:.5;
+    }
+    :root[data-theme="light"] {
+      --page-bg:#ecebe4; --text-main:#15171c; --text-muted:rgba(21,23,28,.66); --text-dim:rgba(21,23,28,.46);
+      --brand-ink:#0a0c10; --line-soft:rgba(20,30,45,.12); --line-strong:rgba(20,30,45,.26);
+      --surface:rgba(15,20,30,.045); --surface-hover:rgba(15,20,30,.09); --panel:rgba(255,255,255,.5);
+      --accent:#3f6ad8; --bar-bg:rgba(240,239,233,.78);
+      --grid-tint:rgba(60,80,110,.06); --grid-tint-soft:rgba(60,80,110,.045); --grid-opacity:.4;
+    }
+    html, body { font-family: var(--rf-sans); }
+    body { background: var(--page-bg); color: var(--text-main); transition: background-color .6s ease, color .6s ease; }
+    body::before {
+      content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+      background:
+        linear-gradient(180deg, rgba(143,180,255,.06), transparent 22%, transparent 78%, rgba(128,199,194,.045)),
+        repeating-linear-gradient(90deg, var(--grid-tint) 0 1px, transparent 1px 92px),
+        repeating-linear-gradient(180deg, var(--grid-tint-soft) 0 1px, transparent 1px 92px);
+      opacity: var(--grid-opacity); transition: opacity .6s ease;
+    }
+    .btn-primary { background: var(--rf-grad-primary); color:#050505; border-color: rgba(220,232,255,.86); }
+    .btn-primary:hover { box-shadow: 0 16px 40px rgba(143,180,255,.26); }
+    .theme-toggle { position:relative; width:38px; height:38px; border-radius:10px; overflow:hidden; }
+    .theme-toggle::after { content:""; position:absolute; inset:0; pointer-events:none; background: radial-gradient(circle at 50% 36%, transparent 42%, rgba(0,0,0,.28)); }
+    .theme-toggle .dial { position:absolute; left:50%; top:50%; width:16px; height:46px; transform: translate(-50%,-50%) rotate(0deg); transform-origin:50% 50%; will-change:transform; }
+    .theme-toggle .body { position:absolute; left:50%; width:15px; height:15px; border-radius:50%; transform: translateX(-50%); }
+    .theme-toggle .sun { top:0; background: radial-gradient(circle at 50% 45%, #ffe9b0, #ffb347 70%); box-shadow:0 0 10px rgba(255,196,90,.85); }
+    .theme-toggle .moon { bottom:0; background: radial-gradient(circle at 36% 34%, #f2f5ff, #b6c2e0 72%); box-shadow:0 0 8px rgba(180,196,232,.7); }
+    .nav-sec { display:flex; align-items:center; gap:12px; height:38px; padding:0 12px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--text-dim); transition: background .15s, color .15s; }
+    .nav-sec:hover { background: var(--surface); color: var(--text-main); }
+    .nav-sec.active { background: var(--surface); color: var(--text-main); }
+    .nav-grouptitle { padding: 14px 12px 6px; font-size:11px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; color: var(--text-dim); }
+    @media (prefers-reduced-motion: reduce) { .theme-toggle .dial { transition:none; } }
+  </style>
+</head>
+
+<body class="min-h-screen">
+  <div class="relative z-[1]">
+
+    <!-- ============================ <TopBar/> ============================ -->
+    <header class="fixed top-0 inset-x-0 z-30 h-14 flex items-center gap-3 px-4 border-b border-line backdrop-blur-xl" style="background: var(--bar-bg);">
+      <a href="../../landing.html" class="flex items-center gap-2 font-extrabold text-[13px] uppercase tracking-tight text-main">
+        <span class="w-4 h-4 rounded-[5px]" style="background: var(--rf-grad-brand); box-shadow: var(--rf-ring-inset);"></span> RoomForge
+      </a>
+      <nav class="ml-2 hidden md:flex items-center gap-1.5 text-[13px] text-dim shrink-0">
+        <a href="projects.html" class="hover:text-main transition-colors">프로젝트</a>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+        <a href="project.html" class="hover:text-main transition-colors">거실 리노베이션</a>
+      </nav>
+
+      <!-- <PipelineProgress current="source"/> in the title bar -->
+      <div id="pipeline" class="hidden xl:flex flex-1 items-center justify-center gap-1"></div>
+
+      <div class="ml-auto flex items-center gap-2">
+        <button class="theme-toggle border border-line bg-surface hover:bg-surface-hi transition-colors" id="themeToggle" type="button" aria-label="낮/밤 테마 전환" aria-pressed="true" title="낮 / 밤 전환">
+          <span class="dial" aria-hidden="true"><span class="body sun"></span><span class="body moon"></span></span>
+        </button>
+        <button class="w-9 h-9 rounded-full grid place-items-center text-[12px] font-extrabold text-white" style="background:linear-gradient(135deg,#8fb4ff,#80c7c2);" aria-label="계정">SY</button>
+      </div>
+    </header>
+
+    <!-- ============================ <ProjectSidebar/> ============================ -->
+    <aside class="fixed top-14 left-0 bottom-0 z-20 w-64 hidden lg:flex flex-col px-3 py-3 border-r border-line overflow-y-auto" style="background: var(--bar-bg);">
+      <a href="projects.html" class="flex items-center gap-2 h-9 px-2.5 rounded-lg text-[13px] font-semibold text-dim hover:text-main hover:bg-surface transition-colors">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M11 18l-6-6 6-6"/></svg> 프로젝트 목록
+      </a>
+      <div class="mt-2 flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-line" style="background: var(--panel);">
+        <span class="w-8 h-8 rounded-md bg-cover bg-center shrink-0" style="background-image:url(../../assets/room.png); filter:brightness(.8)"></span>
+        <span class="min-w-0">
+          <span class="block text-[13px] font-bold text-main truncate">거실 리노베이션</span>
+          <span class="block text-[11px] text-dim truncate">재구성 완료 · 편집 단계</span>
+        </span>
+      </div>
+      <nav class="mt-1 flex flex-col">
+        <p class="nav-grouptitle">촬영 · 재구성</p>
+        <a class="nav-sec" href="project.html">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          개요
+        </a>
+        <a class="nav-sec active" href="source.html">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          소스 이미지 <span class="ml-auto text-[11px] font-bold text-dim">18</span>
+        </a>
+        <a class="nav-sec" href="status.html">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 3v6h6"/></svg>
+          재구성 상태 <span class="ml-auto w-1.5 h-1.5 rounded-full" style="background:#48d39a"></span>
+        </a>
+        <p class="nav-grouptitle">편집</p>
+        <a class="nav-sec" href="editor.html"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></svg> 에디터 <span class="ml-auto w-1.5 h-1.5 rounded-full animate-pulse" style="background:var(--accent)"></span></a>
+      </nav>
+      <div class="mt-auto pt-3">
+        <div class="rounded-lg border border-dashed border-line p-2">
+          <p class="text-[10px] font-bold uppercase tracking-wide text-dim px-1 pb-1.5">미리보기 상태 · demo</p>
+          <div class="flex p-0.5 rounded-md border border-line bg-surface">
+            <button id="stReady" class="flex-1 h-7 rounded text-[12px] font-bold">채워짐</button>
+            <button id="stEmpty" class="flex-1 h-7 rounded text-[12px] font-bold">빈 상태</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============================ <Main> ============================ -->
+    <main class="pt-14 lg:pl-64">
+      <div class="mx-auto max-w-[1180px] px-5 sm:px-7 py-7">
+
+        <!-- header -->
+        <div class="flex flex-wrap items-end gap-4">
+          <div>
+            <h1 class="text-3xl sm:text-[32px] font-extrabold text-ink leading-none">소스 이미지</h1>
+            <p class="mt-2.5 text-[13px] text-muted">방을 위에서 보고 둘러싼 <b class="text-main">8개 각도</b>로 촬영을 채우고, 그 밖의 디테일 사진을 추가합니다.</p>
+          </div>
+          <div class="ml-auto flex items-center gap-2">
+            <button class="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-line bg-surface text-sm font-bold text-main hover:bg-surface-hi transition-colors">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg> 업로드
+            </button>
+            <button id="reconBtn" class="btn-primary inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border text-sm font-bold transition-shadow">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 3v6h6"/></svg> 재구성 다시 실행
+            </button>
+          </div>
+        </div>
+
+        <!-- coverage banner -->
+        <div id="coverageBanner" class="mt-6 rounded-card border border-line p-4 flex flex-wrap items-center gap-4" style="background: var(--panel);"></div>
+
+        <!-- ===================== directional capture ===================== -->
+        <div class="mt-7 grid grid-cols-1 xl:grid-cols-[minmax(0,600px)_1fr] gap-7">
+
+          <!-- <DirectionCompass/> -->
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <h2 class="text-[15px] font-bold text-main">각도별 촬영</h2>
+              <span id="dirSummary" class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-md text-[11px] font-bold"></span>
+            </div>
+            <div id="compass" class="grid grid-cols-3 gap-2.5"></div>
+          </div>
+
+          <!-- side guide -->
+          <div class="flex flex-col gap-4">
+            <div class="rounded-card border border-line p-4" style="background: var(--panel);">
+              <h3 class="text-[13.5px] font-bold text-main">왜 8개 각도인가요?</h3>
+              <p class="mt-2 text-[12.5px] text-muted leading-relaxed">방을 위에서 보고 둘러싼 여덟 각도에서 고르게 찍으면, 벽·모서리·개구부가 빠짐없이 겹쳐 재구성 정확도가 크게 올라갑니다.</p>
+              <ul class="mt-3 space-y-2 text-[12.5px] text-muted">
+                <li class="flex gap-2"><span class="text-accent">·</span> 각 각도에서 방 전체가 프레임에 들어오게</li>
+                <li class="flex gap-2"><span class="text-accent">·</span> 인접한 각도끼리 시야가 30~50% 겹치게</li>
+                <li class="flex gap-2"><span class="text-accent">·</span> 모서리 각도가 모서리 정확도를 좌우</li>
+              </ul>
+            </div>
+            <div class="rounded-card border border-line p-4 flex items-center gap-3" style="background: var(--panel);">
+              <span class="w-10 h-10 rounded-xl grid place-items-center shrink-0" style="background:rgba(143,180,255,.14)">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+              </span>
+              <div class="min-w-0">
+                <p class="text-[13px] font-bold text-main">앱 가이드 촬영</p>
+                <p class="text-[12px] text-muted">앱이 각도를 안내하며 빈 칸을 채워줍니다.</p>
+              </div>
+              <a href="#" class="ml-auto text-[12px] font-bold text-accent hover:underline shrink-0">연결</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== additional (+@) ===================== -->
+        <div id="additional" class="mt-9">
+          <div class="flex items-center gap-2 mb-3">
+            <h2 class="text-[15px] font-bold text-main">추가 사진</h2>
+            <span class="inline-flex items-center h-6 px-2 rounded-md text-[11px] font-bold text-accent" style="background:rgba(143,180,255,.14)">+@</span>
+            <span class="text-[12.5px] text-dim">특정 각도에 매이지 않는 디테일·접사 12장</span>
+          </div>
+          <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3" id="extraGrid"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+  // ===== directional capture model =====
+  // 8 compass directions viewed from above + a center room cell.
+  // 8 viewpoints around the room — grid position only, no real-world compass names.
+  var ORDER = ['NW', 'N', 'NE', 'W', 'ROOM', 'E', 'SW', 'S', 'SE'];
+
+  // filled[dir] = {b: brightness, q: 'ok'|'warn'}; missing dirs are empty slots
+  var FILLED = {
+    N:  { b: .85, q: 'ok' },  E:  { b: .78, q: 'ok' },  S: { b: .70, q: 'ok' },
+    W:  { b: .60, q: 'warn' }, NW: { b: .90, q: 'ok' },  SE:{ b: .82, q: 'ok' },
+  }; // missing: NE, SW
+
+  function centerCell() {
+    return '<div class="relative rounded-xl border border-line aspect-square grid place-items-center" style="background:var(--surface)">' +
+      '<span class="absolute top-2 left-0 right-0 text-center text-[9.5px] font-bold text-dim">위에서 본 방</span>' +
+      '<svg viewBox="0 0 120 120" class="w-[62%] h-[62%]" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="16" y="24" width="88" height="74" rx="4"/>' +
+        '<line x1="46" y1="24" x2="74" y2="24" stroke="var(--accent)" stroke-width="4.5"/>' +
+        '<path d="M16 70 a14 14 0 0 0 14 14" stroke-width="2.5"/>' +
+        '<rect x="60" y="42" width="34" height="42" rx="2" stroke-width="2.5"/>' +
+      '</svg>' +
+      '<span class="absolute bottom-2 text-[11px] font-bold text-main">거실</span></div>';
+  }
+  function filledCell(dir, d) {
+    var qDot = d.q === 'warn'
+      ? '<span class="absolute top-2 right-2 inline-flex items-center gap-1 h-5 px-1.5 rounded text-[9px] font-bold text-white border" style="background:rgba(5,7,12,.6);border-color:rgba(240,190,90,.5)"><span class="w-1 h-1 rounded-full" style="background:#f0be5a"></span>흐릿함</span>'
+      : '';
+    return '<div class="group relative rounded-xl overflow-hidden border" style="border-color:var(--line-soft)">' +
+      '<div class="relative aspect-square bg-[#0a0a0a]">' +
+        '<img src="../../assets/room.png" class="w-full h-full object-cover" style="filter:brightness(' + d.b + ') saturate(.9)" alt="" />' +
+        qDot +
+        '<div class="absolute inset-x-0 bottom-0 px-2 py-1.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity" style="background:linear-gradient(transparent,rgba(3,4,6,.82))">' +
+          '<span class="text-[10px] font-semibold text-white/90">교체</span>' +
+          '<button class="ml-auto text-white/80 hover:text-white" aria-label="삭제"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>' +
+        '</div>' +
+      '</div></div>';
+  }
+  function emptyCell(dir) {
+    return '<button class="group rounded-xl border border-dashed border-line aspect-square grid place-items-center text-center hover:border-line-hi hover:bg-surface transition-colors">' +
+      '<span class="grid justify-items-center gap-1.5 text-dim group-hover:text-main">' +
+        '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7h3l2-2h8l2 2h3v12H3z"/><circle cx="12" cy="13" r="3.3"/></svg>' +
+        '<span class="text-[10.5px] font-bold">촬영 필요</span>' +
+      '</span></button>';
+  }
+
+  function renderCompass(filled) {
+    var el = document.getElementById('compass');
+    el.innerHTML = ORDER.map(function (k) {
+      if (k === 'ROOM') return centerCell();
+      return filled[k] ? filledCell(k, filled[k]) : emptyCell(k);
+    }).join('');
+  }
+
+  function renderExtra(n) {
+    var el = document.getElementById('extraGrid');
+    var add = '<button class="rounded-xl border border-dashed border-line hover:border-line-hi hover:bg-surface transition-colors aspect-square grid place-items-center text-dim hover:text-main">' +
+      '<span class="grid justify-items-center gap-1"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span class="text-[10px] font-bold">추가</span></span></button>';
+    var cells = '';
+    var br = [.8, .65, .92, .74, .86, .6];
+    for (var i = 0; i < n; i++) {
+      cells += '<div class="group relative rounded-xl overflow-hidden border" style="border-color:var(--line-soft)">' +
+        '<div class="relative aspect-square bg-[#0a0a0a]"><img src="../../assets/room.png" class="w-full h-full object-cover" style="filter:brightness(' + br[i % br.length] + ') saturate(.85)" alt=""/>' +
+        '<div class="absolute inset-x-0 bottom-0 px-2 py-1.5 flex opacity-0 group-hover:opacity-100 transition-opacity" style="background:linear-gradient(transparent,rgba(3,4,6,.8))">' +
+          '<button class="ml-auto text-white/80 hover:text-white" aria-label="삭제"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button></div>' +
+        '</div></div>';
+    }
+    el.innerHTML = add + cells;
+  }
+
+  function coverage(state) {
+    var el = document.getElementById('coverageBanner');
+    if (state === 'ready') {
+      el.innerHTML =
+        '<span class="w-10 h-10 rounded-xl grid place-items-center shrink-0" style="background:rgba(240,190,90,.14)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#f0be5a" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/></svg></span>' +
+        '<div class="min-w-0"><p class="text-[13.5px] font-bold text-main">8개 각도 중 6개 촬영됨 · <span style="color:#f0be5a">2개</span>가 비어 있어요</p>' +
+        '<p class="mt-0.5 text-[12.5px] text-muted">현재 상태로 재구성은 가능하지만, 비어 있는 각도를 채우면 모서리 정확도가 올라갑니다.</p></div>' +
+        '<a href="#" class="ml-auto inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-line bg-surface text-sm font-bold text-main hover:bg-surface-hi transition-colors shrink-0"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg> 앱으로 빈 각도 촬영</a>';
+    } else {
+      el.innerHTML =
+        '<span class="w-10 h-10 rounded-xl grid place-items-center shrink-0" style="background:rgba(143,180,255,.14)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg></span>' +
+        '<div class="min-w-0"><p class="text-[13.5px] font-bold text-main">아직 촬영이 없어요 · 8개 각도를 채워 시작하세요</p>' +
+        '<p class="mt-0.5 text-[12.5px] text-muted">데스크탑은 각도별로 사진을 업로드하고, 앱은 가이드를 따라 자동으로 빈 칸을 채웁니다.</p></div>' +
+        '<a href="#" class="ml-auto inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-bold btn-primary shrink-0"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg> 앱으로 촬영 시작</a>';
+    }
+  }
+  function summary(filledCount) {
+    var el = document.getElementById('dirSummary');
+    var full = filledCount === 8;
+    el.style.background = full ? 'rgba(72,211,154,.16)' : 'rgba(240,190,90,.14)';
+    el.style.color = full ? '#7fe3b6' : '#f0be5a';
+    el.textContent = filledCount + ' / 8';
+  }
+
+  // ===== demo state switch =====
+  (function () {
+    var bR = document.getElementById('stReady'), bE = document.getElementById('stEmpty');
+    var additional = document.getElementById('additional'), recon = document.getElementById('reconBtn');
+    function seg(a) { [bR, bE].forEach(function (b) { var on = b === a; b.style.background = on ? 'var(--surface-hi)' : 'transparent'; b.style.color = on ? 'var(--text-main)' : 'var(--text-dim)'; }); }
+    function ready() {
+      renderCompass(FILLED); renderExtra(11); summary(6); coverage('ready');
+      additional.style.display = ''; recon.style.display = ''; seg(bR);
+    }
+    function empty() {
+      renderCompass({}); renderExtra(0); summary(0); coverage('empty');
+      additional.style.display = 'none'; recon.style.display = 'none'; seg(bE);
+    }
+    bR.addEventListener('click', ready); bE.addEventListener('click', empty);
+    ready();
+  })();
+
+  // ===== <PipelineProgress/> — linked workflow stages (each node → its page) =====
+  (function () {
+    var PIPE = [
+      { k: 'source', label: '소스', href: 'source.html', st: 'done' },
+      { k: 'status', label: '재구성', href: 'status.html', st: 'done' },
+      { k: 'editor', label: '편집', href: 'editor.html', st: 'active' },
+    ];
+    var CUR = 'source';
+    var el = document.getElementById('pipeline');
+    if (!el) return;
+    function circ(st) {
+      return st === 'done' ? 'background:rgba(72,211,154,.16);color:#48d39a;border-color:rgba(72,211,154,.4)'
+        : st === 'active' ? 'background:rgba(143,180,255,.16);color:var(--accent);border-color:rgba(143,180,255,.5)'
+        : 'background:var(--surface);color:var(--text-dim);border-color:var(--line-soft)';
+    }
+    function ico(st) {
+      return st === 'done'
+        ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M20 6 9 17l-5-5"/></svg>'
+        : '<span class="w-2 h-2 rounded-full" style="background:currentColor"></span>';
+    }
+    var html = '';
+    PIPE.forEach(function (s, i) {
+      var isCur = s.k === CUR;
+      var ring = isCur ? ';box-shadow:0 0 0 3px rgba(143,180,255,.22)' : '';
+      html += '<a href="' + s.href + '" title="' + s.label + '" class="flex items-center gap-1.5 shrink-0 group">'
+        + '<span class="grid place-items-center w-6 h-6 rounded-md border ' + (s.st === 'active' ? 'animate-pulse' : '') + ' group-hover:border-line-hi" style="' + circ(s.st) + ring + '">' + ico(s.st) + '</span>'
+        + '<span class="text-[11.5px] font-bold whitespace-nowrap ' + (isCur ? 'text-main' : (s.st === 'pending' ? 'text-dim' : 'text-muted')) + '">' + s.label + '</span>'
+        + '</a>';
+      if (i < PIPE.length - 1) {
+        var done = s.st === 'done';
+        html += '<span class="w-5 h-px shrink-0" style="background:' + (done ? 'linear-gradient(90deg,#48d39a,var(--line-strong))' : 'var(--line-soft)') + '"></span>';
+      }
+    });
+    el.innerHTML = html;
+  })();
+
+  // ===== theme toggle =====
+  (function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var root = document.documentElement, KEY = 'rf-theme';
+    var saved = (function () { try { return localStorage.getItem(KEY); } catch (e) { return null; } })();
+    var manual = saved !== null;
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var curP = theme === 'dark' ? 1 : 0;
+    var toggle = document.getElementById('themeToggle'), dial = toggle.querySelector('.dial');
+    function render(p) { curP = p; dial.style.transform = 'translate(-50%,-50%) rotate(' + (p * 180).toFixed(2) + 'deg)'; }
+    function setPage(d) { root.setAttribute('data-theme', d ? 'dark' : 'light'); }
+    function animate(toDark) {
+      var to = toDark ? 1 : 0, from = curP, start = performance.now(), dur = reduce ? 0 : 820, sw = false;
+      var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+      if (!dur) { render(to); setPage(toDark); return; }
+      (function step(now) { var k = Math.min(1, (now - start) / dur), e = from + (to - from) * ease(k); render(e);
+        if (!sw && ((to > from && e >= 0.5) || (to < from && e <= 0.5))) { setPage(toDark); sw = true; }
+        if (k < 1) requestAnimationFrame(step); else setPage(toDark); })(performance.now());
+    }
+    toggle.setAttribute('aria-pressed', theme === 'dark');
+    toggle.addEventListener('click', function () { manual = true; theme = theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(KEY, theme); } catch (e) {}
+      toggle.setAttribute('aria-pressed', theme === 'dark'); animate(theme === 'dark'); });
+    var osq = window.matchMedia('(prefers-color-scheme: dark)');
+    var oh = function (e) { if (manual) return; theme = e.matches ? 'dark' : 'light'; toggle.setAttribute('aria-pressed', theme === 'dark'); animate(e.matches); };
+    if (osq.addEventListener) osq.addEventListener('change', oh); else if (osq.addListener) osq.addListener(oh);
+    render(curP);
+  })();
+  </script>
+</body>
+</html>

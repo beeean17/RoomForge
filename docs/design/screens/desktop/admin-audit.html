@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoomForge Admin — 감사 로그</title>
+  <script>
+    (function () { try { var s = localStorage.getItem('rf-theme');
+      var dark = s ? s === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light'); } catch (e) {} })();
+  </script>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <script src="../../system/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = { darkMode: ['selector', '[data-theme="dark"]'], theme: { extend: {
+      colors: { page:'var(--page-bg)', surface:'var(--surface)', 'surface-hi':'var(--surface-hover)', panel:'var(--panel)', line:'var(--line-soft)', 'line-hi':'var(--line-strong)', ink:'var(--brand-ink)', main:'var(--text-main)', muted:'var(--text-muted)', dim:'var(--text-dim)', accent:'var(--accent)', admin:'var(--admin)' },
+      fontFamily: { sans: ['var(--rf-sans)'], mono: ['ui-monospace','Menlo','monospace'] }, borderRadius: { card: '14px' } } } };
+  </script>
+  <style>
+    :root[data-theme="dark"]{ --page-bg:#070608; --text-main:#f8f8f5; --text-muted:rgba(248,248,245,.66); --text-dim:rgba(248,248,245,.42); --brand-ink:#fff; --line-soft:rgba(214,226,236,.13); --line-strong:rgba(214,226,236,.30); --surface:rgba(255,255,255,.04); --surface-hover:rgba(255,255,255,.09); --panel:rgba(255,255,255,.025); --accent:#8fb4ff; --admin:#a78bfa; --bar-bg:rgba(12,9,16,.82); --grid-tint:rgba(180,160,235,.05); --grid-tint-soft:rgba(180,160,235,.04); --grid-opacity:.5; }
+    :root[data-theme="light"]{ --page-bg:#eceae8; --text-main:#15171c; --text-muted:rgba(21,23,28,.66); --text-dim:rgba(21,23,28,.46); --brand-ink:#0a0c10; --line-soft:rgba(20,30,45,.12); --line-strong:rgba(20,30,45,.26); --surface:rgba(15,20,30,.045); --surface-hover:rgba(15,20,30,.09); --panel:rgba(255,255,255,.55); --accent:#3f6ad8; --admin:#7c5cd6; --bar-bg:rgba(243,240,247,.82); --grid-tint:rgba(120,92,214,.06); --grid-tint-soft:rgba(120,92,214,.045); --grid-opacity:.4; }
+    html,body{ font-family:var(--rf-sans); } body{ background:var(--page-bg); color:var(--text-main); transition:background-color .6s ease,color .6s ease; }
+    body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:none; background: linear-gradient(180deg, rgba(167,139,250,.06), transparent 22%, transparent 80%, rgba(143,180,255,.04)), repeating-linear-gradient(90deg, var(--grid-tint) 0 1px, transparent 1px 92px), repeating-linear-gradient(180deg, var(--grid-tint-soft) 0 1px, transparent 1px 92px); opacity:var(--grid-opacity); }
+    .theme-toggle{ position:relative; width:38px; height:38px; border-radius:10px; overflow:hidden; } .theme-toggle::after{ content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle at 50% 36%, transparent 42%, rgba(0,0,0,.28)); }
+    .theme-toggle .dial{ position:absolute; left:50%; top:50%; width:16px; height:46px; transform:translate(-50%,-50%) rotate(0deg); transform-origin:50% 50%; } .theme-toggle .body{ position:absolute; left:50%; width:15px; height:15px; border-radius:50%; transform:translateX(-50%); }
+    .theme-toggle .sun{ top:0; background:radial-gradient(circle at 50% 45%, #ffe9b0, #ffb347 70%); } .theme-toggle .moon{ bottom:0; background:radial-gradient(circle at 36% 34%, #f2f5ff, #b6c2e0 72%); }
+    .nav-sec{ display:flex; align-items:center; gap:12px; height:38px; padding:0 12px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--text-dim); transition:background .15s,color .15s; } .nav-sec:hover{ background:var(--surface); color:var(--text-main); } .nav-sec.active{ background:rgba(167,139,250,.14); color:var(--admin); }
+    @media (prefers-reduced-motion: reduce){ .theme-toggle .dial{ transition:none; } }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="relative z-[1]">
+    <header class="fixed top-0 inset-x-0 z-30 h-14 flex items-center gap-3 px-4 border-b border-line backdrop-blur-xl" style="background:var(--bar-bg);">
+      <a href="../../landing.html" class="flex items-center gap-2 font-extrabold text-[13px] uppercase tracking-tight text-main shrink-0"><span class="w-4 h-4 rounded-[5px]" style="background:linear-gradient(135deg,#a78bfa,#8fb4ff); box-shadow:var(--rf-ring-inset);"></span> RoomForge</a>
+      <span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-md text-[11px] font-extrabold tracking-wide" style="background:rgba(167,139,250,.16); color:var(--admin); border:1px solid rgba(167,139,250,.4)"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>ADMIN</span>
+      <label class="ml-3 hidden md:flex items-center gap-2 h-9 w-[clamp(200px,30vw,380px)] px-3 rounded-lg border border-line bg-surface text-sm">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" class="text-dim"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" placeholder="행위자 · 액션 · 대상 검색" class="bg-transparent outline-none w-full text-main placeholder:text-dim" />
+      </label>
+      <div class="ml-auto flex items-center gap-2">
+        <button class="theme-toggle border border-line bg-surface hover:bg-surface-hi transition-colors" id="themeToggle" type="button" aria-label="낮/밤 테마 전환"><span class="dial" aria-hidden="true"><span class="body sun"></span><span class="body moon"></span></span></button>
+        <button class="w-9 h-9 rounded-full grid place-items-center text-[12px] font-extrabold text-white" style="background:linear-gradient(135deg,#a78bfa,#8fb4ff);">SY</button>
+      </div>
+    </header>
+    <aside class="fixed top-14 left-0 bottom-0 z-20 w-60 hidden lg:flex flex-col px-3 py-3 border-r border-line overflow-y-auto" style="background:var(--bar-bg);">
+      <nav class="flex flex-col gap-0.5">
+        <a class="nav-sec" href="admin-dashboard.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> 대시보드</a>
+        <a class="nav-sec" href="admin-jobs.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> 작업 <span class="ml-auto text-[11px] font-bold text-dim">142</span></a>
+        <a class="nav-sec active" href="admin-audit.html"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg> 감사 로그</a>
+      </nav>
+      <div class="h-px bg-line my-2"></div>
+      <nav class="flex flex-col gap-0.5"><a class="nav-sec" href="#"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="6" rx="2"/><rect x="2" y="15" width="20" height="6" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg> 시스템</a></nav>
+      <a href="projects.html" class="mt-auto nav-sec"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M11 18l-6-6 6-6"/></svg> 제품으로 돌아가기</a>
+    </aside>
+    <main class="pt-14 lg:pl-60">
+      <div class="mx-auto max-w-[1240px] px-5 sm:px-7 py-7">
+        <div class="flex flex-wrap items-end gap-4">
+          <div><p class="text-[11px] font-extrabold uppercase tracking-tight" style="color:var(--admin)">Operations</p><h1 class="mt-2 text-3xl sm:text-[32px] font-extrabold text-ink leading-none">감사 로그</h1></div>
+          <div class="ml-auto flex items-center gap-2">
+            <button class="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-line bg-surface text-sm font-semibold text-muted hover:text-main transition-colors">최근 7일 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></button>
+            <button class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-line bg-surface text-sm font-bold text-main hover:bg-surface-hi transition-colors"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg> 내보내기 (CSV)</button>
+          </div>
+        </div>
+        <div class="mt-6 flex flex-wrap items-center gap-2" id="tabs"></div>
+        <div class="mt-4 rounded-card border border-line overflow-hidden" style="background:var(--panel);">
+          <div class="overflow-x-auto">
+            <table class="w-full text-[12.5px] min-w-[920px]">
+              <thead class="text-dim"><tr class="border-b border-line">
+                <th class="text-left font-semibold px-5 py-3">시각</th>
+                <th class="text-left font-semibold py-3">행위자</th>
+                <th class="text-left font-semibold py-3">액션</th>
+                <th class="text-left font-semibold py-3">대상</th>
+                <th class="text-left font-semibold py-3">결과</th>
+                <th class="text-right font-semibold px-5 py-3">영수증</th>
+              </tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+          <div class="flex items-center gap-2 px-5 h-12 border-t border-line text-[12.5px]">
+            <span class="text-dim"><span class="text-main font-semibold">1,284</span>건 중 1–12</span>
+            <div class="ml-auto flex items-center gap-1.5">
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-line bg-surface text-dim" disabled><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-[12px] font-bold text-white" style="background:var(--admin)">1</button>
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-line bg-surface text-[12px] font-bold text-muted hover:text-main">2</button>
+              <button class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-line bg-surface text-muted hover:text-main"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script>
+  (function () {
+    var tabs = [['전체', '1,284', true], ['작업', 612], ['권한', 38], ['접근 거부', 17], ['시스템', 617]];
+    document.getElementById('tabs').innerHTML = tabs.map(function (t) { var on = t[2];
+      return '<button class="h-8 px-3.5 rounded-full text-[12.5px] font-bold border" style="'+(on?'background:rgba(167,139,250,.14);border-color:rgba(167,139,250,.4);color:var(--admin)':'border-color:var(--line-soft);color:var(--text-muted)')+'">'+t[0]+' <span class="text-dim">'+t[1]+'</span></button>';
+    }).join('');
+    function actor(a, admin) { return '<span class="inline-flex items-center gap-1.5">'+(admin?'<span class="inline-flex items-center h-4 px-1 rounded text-[9px] font-extrabold" style="background:rgba(167,139,250,.16);color:var(--admin)">ADMIN</span>':'')+'<span class="'+(admin?'text-main font-semibold':'text-muted')+'">'+a+'</span></span>'; }
+    function result(r) { var m = r==='성공'?['#48d39a','rgba(72,211,154,.14)']: r==='거부'?['#f0726a','rgba(240,114,106,.14)']:['var(--text-dim)','var(--surface)'];
+      return '<span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-md text-[11px] font-bold" style="background:'+m[1]+';color:'+m[0]+'"><span class="w-1.5 h-1.5 rounded-full" style="background:'+m[0]+'"></span>'+r+'</span>'; }
+    var rows = [
+      ['10:42:18', 'sy00nb7907', true, 'job.retry', '#J-2058', '성공', 'rcpt_9f2a31'],
+      ['10:42:05', 'sy00nb7907', true, 'job.retry.request', '#J-2058', '성공', 'rcpt_9f2a30'],
+      ['10:31:50', 'kim@studio.co', false, 'job.create', '#J-2061', '성공', '—'],
+      ['10:24:11', 'guest@x.io', false, 'admin.access', '/admin', '거부', 'rcpt_9f29c7'],
+      ['10:18:02', 'system', false, 'job.failed', '#J-2058', '—', '—'],
+      ['09:58:44', 'sy00nb7907', true, 'role.grant', 'lee@acme.io', '성공', 'rcpt_9f2980'],
+      ['09:40:23', 'park@home.kr', false, 'job.create', '#J-2058', '성공', '—'],
+      ['09:12:09', 'sy00nb7907', true, 'job.cancel', '#J-2049', '성공', 'rcpt_9f28f1'],
+      ['08:55:31', 'han@kids.kr', false, 'admin.access', '/admin/jobs', '거부', 'rcpt_9f28c2'],
+      ['08:33:18', 'system', false, 'worker.scale', '4 → 6', '—', '—'],
+      ['08:01:55', 'lee@acme.io', false, 'job.create', '#J-2060', '성공', '—'],
+      ['07:46:40', 'sy00nb7907', true, 'export.download', '#J-2057', '성공', 'rcpt_9f2860'],
+    ];
+    document.getElementById('rows').innerHTML = rows.map(function (r) {
+      return '<tr class="border-b border-line hover:bg-surface transition-colors">' +
+        '<td class="px-5 py-3 text-dim tabular-nums">'+r[0]+'</td>' +
+        '<td class="py-3">'+actor(r[1], r[2])+'</td>' +
+        '<td class="py-3"><span class="font-mono text-main">'+r[3]+'</span></td>' +
+        '<td class="py-3 text-muted tabular-nums">'+r[4]+'</td>' +
+        '<td class="py-3">'+result(r[5])+'</td>' +
+        '<td class="px-5 py-3 text-right font-mono '+(r[6]==='—'?'text-dim':'text-muted')+'">'+r[6]+'</td></tr>';
+    }).join('');
+  })();
+  (function () {
+    var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches, root=document.documentElement, KEY='rf-theme';
+    var saved=(function(){try{return localStorage.getItem(KEY);}catch(e){return null;}})(); var manual=saved!==null;
+    var theme=saved||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); var curP=theme==='dark'?1:0;
+    var toggle=document.getElementById('themeToggle'), dial=toggle.querySelector('.dial');
+    function render(p){curP=p; dial.style.transform='translate(-50%,-50%) rotate('+(p*180).toFixed(2)+'deg)';}
+    function setPage(d){root.setAttribute('data-theme', d?'dark':'light');}
+    function animate(toDark){ var to=toDark?1:0, from=curP, start=performance.now(), dur=reduce?0:820, sw=false; var ease=function(t){return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}; if(!dur){render(to);setPage(toDark);return;} (function step(now){var k=Math.min(1,(now-start)/dur), e=from+(to-from)*ease(k); render(e); if(!sw&&((to>from&&e>=.5)||(to<from&&e<=.5))){setPage(toDark);sw=true;} if(k<1)requestAnimationFrame(step); else setPage(toDark);})(performance.now()); }
+    toggle.setAttribute('aria-pressed', theme==='dark');
+    toggle.addEventListener('click', function(){ manual=true; theme=theme==='dark'?'light':'dark'; try{localStorage.setItem(KEY,theme);}catch(e){} toggle.setAttribute('aria-pressed', theme==='dark'); animate(theme==='dark'); });
+    var osq=window.matchMedia('(prefers-color-scheme: dark)'); var oh=function(e){ if(manual)return; theme=e.matches?'dark':'light'; animate(e.matches); }; if(osq.addEventListener)osq.addEventListener('change',oh); else if(osq.addListener)osq.addListener(oh);
+    render(curP);
+  })();
+  </script>
+</body>
+</html>

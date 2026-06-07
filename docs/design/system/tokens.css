@@ -1,0 +1,134 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap");
+
+/* =========================================================================
+   RoomForge Design Tokens
+   Single source of truth for color, type, spacing, elevation, and motion.
+   Derived from packages/design-tokens.json + screen-component-catalog.html,
+   refined with charcoal surfaces, restrained accents, and quiet motion.
+   ========================================================================= */
+
+:root {
+  /* ---- Brand & ink ---------------------------------------------------- */
+  --rf-ink: #f8f8f5;
+  --rf-ink-soft: #deded8;
+  --rf-muted: rgba(248, 248, 245, 0.68);
+  --rf-subtle: rgba(248, 248, 245, 0.44);
+  --rf-line: rgba(214, 226, 236, 0.13);
+  --rf-line-strong: rgba(214, 226, 236, 0.30);
+
+  /* ---- Surfaces ------------------------------------------------------- */
+  --rf-paper: #050505;
+  --rf-surface: #0b0d0f;
+  --rf-surface-raised: #12161a;
+  --rf-canvas: #101419;
+  --rf-grid: rgba(185, 204, 220, 0.085);
+  /* Glass: translucent panels that sit over the gridded backdrop */
+  --rf-glass: rgba(5, 6, 7, 0.72);
+  --rf-glass-strong: rgba(12, 15, 18, 0.88);
+  --rf-glass-blur: saturate(120%) blur(18px);
+
+  /* ---- Status palette (state-carrying color) -------------------------- */
+  --rf-candidate: #8fb4ff;   /* CV candidate / primary action           */
+  --rf-confirmed: #8bc3a7;   /* confirmed / success                     */
+  --rf-selected: #d8b46a;    /* current selection                       */
+  --rf-warning: #d49a5c;     /* needs attention                         */
+  --rf-error: #e08b82;       /* error / blocking                        */
+  --rf-measure: #b9a7e8;     /* measurement / calibration               */
+  --rf-save: #80c7c2;        /* saving / sync                           */
+  --rf-admin: #9ba7b4;       /* operator context                        */
+
+  /* Tinted fills (for chips, notices, focus halos) */
+  --rf-candidate-tint: rgba(143, 180, 255, 0.14);
+  --rf-confirmed-tint: rgba(139, 195, 167, 0.13);
+  --rf-selected-tint: rgba(216, 180, 106, 0.16);
+  --rf-warning-tint: rgba(212, 154, 92, 0.14);
+  --rf-error-tint: rgba(224, 139, 130, 0.15);
+  --rf-measure-tint: rgba(185, 167, 232, 0.13);
+  --rf-save-tint: rgba(128, 199, 194, 0.13);
+  --rf-admin-tint: rgba(155, 167, 180, 0.11);
+
+  /* ---- Gradients ------------------------------------------------------ */
+  --rf-grad-brand: linear-gradient(135deg, #050505 0%, #172235 46%, #294642 74%, #d8b46a 100%);
+  --rf-grad-primary: linear-gradient(135deg, #dce8ff 0%, #8fb4ff 58%, #80c7c2 100%);
+  --rf-grad-progress: linear-gradient(90deg, #8fb4ff 0%, #80c7c2 58%, #d8b46a 100%);
+  --rf-grad-sheen: linear-gradient(120deg, transparent 20%, rgba(220,232,255,0.54) 50%, transparent 80%);
+
+  /* ---- Typography ----------------------------------------------------- */
+  --rf-sans: "IBM Plex Sans KR", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Pretendard", sans-serif;
+  --rf-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace, monospace;
+
+  --rf-text-xs: 11px;
+  --rf-text-sm: 12px;
+  --rf-text-base: 14px;
+  --rf-text-md: 16px;
+  --rf-text-lg: 18px;
+  --rf-text-xl: 22px;
+  --rf-text-2xl: 28px;
+  --rf-text-3xl: clamp(34px, 5vw, 56px);
+
+  --rf-weight-regular: 400;
+  --rf-weight-medium: 500;
+  --rf-weight-semibold: 600;
+  --rf-weight-bold: 700;
+  --rf-weight-black: 800;
+
+  /* ---- Spacing scale (4px base) --------------------------------------- */
+  --rf-space-1: 4px;
+  --rf-space-2: 8px;
+  --rf-space-3: 12px;
+  --rf-space-4: 16px;
+  --rf-space-5: 20px;
+  --rf-space-6: 24px;
+  --rf-space-8: 32px;
+  --rf-space-10: 40px;
+  --rf-space-12: 48px;
+  --rf-space-16: 64px;
+
+  /* ---- Radii ---------------------------------------------------------- */
+  --rf-radius-xs: 6px;
+  --rf-radius-sm: 8px;
+  --rf-radius-md: 8px;
+  --rf-radius-lg: 8px;
+  --rf-radius-xl: 8px;
+  --rf-radius-pill: 999px;
+
+  /* ---- Elevation ------------------------------------------------------ */
+  --rf-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --rf-shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.34);
+  --rf-shadow-md: 0 18px 48px rgba(0, 0, 0, 0.42);
+  --rf-shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.52);
+  --rf-shadow-pop: 0 34px 90px rgba(0, 0, 0, 0.64);
+  --rf-ring: 0 0 0 3px rgba(143, 180, 255, 0.34);
+  --rf-ring-inset: inset 0 0 0 1px rgba(220, 232, 255, 0.36);
+
+  /* ---- Motion --------------------------------------------------------- */
+  /* Durations */
+  --rf-dur-1: 120ms;   /* taps, hovers      */
+  --rf-dur-2: 200ms;   /* default UI moves  */
+  --rf-dur-3: 320ms;   /* panels, reveals   */
+  --rf-dur-4: 520ms;   /* page transitions  */
+  /* Easing */
+  --rf-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --rf-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.1);
+  --rf-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* overshoot/bounce */
+  --rf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --rf-ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+
+  /* ---- Layout --------------------------------------------------------- */
+  --rf-rail-w: 64px;
+  --rf-inspector-w: 320px;
+  --rf-topbar-h: 56px;
+  --rf-statusbar-h: 40px;
+  --rf-max-w: 1440px;
+}
+
+/* Reduced motion: collapse all durations + remove transforms-as-motion. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --rf-dur-1: 0.01ms;
+    --rf-dur-2: 0.01ms;
+    --rf-dur-3: 0.01ms;
+    --rf-dur-4: 0.01ms;
+    --rf-ease-spring: cubic-bezier(0.2, 0, 0, 1);
+  }
+}

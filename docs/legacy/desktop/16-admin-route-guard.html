@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>16 · Admin Route Guard — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--error"><span class="dot"></span>authz</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/16-admin-route-guard.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">16 · Admin &amp; Support</span>
+            <h1>Admin Route Guard</h1>
+            <p>관리자 권한 확인, 거부, stale role 상태를 민감 정보 없이 처리합니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">계정 전환</button>
+            <button class="rf-btn rf-btn--primary">권한 다시 확인</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="guard-scene">
+          <div class="guard-card">
+            <span class="rf-chip rf-chip--save"><span class="dot"></span>admin check</span>
+            <h2>관리자 권한 확인 중</h2>
+            <div class="rf-skeleton" style="height:12px;width:80%"></div>
+            <div class="rf-skeleton" style="height:12px;width:56%"></div>
+          </div>
+          <div class="rf-notice rf-notice--error"><span class="ic">!</span><div><strong>접근 권한이 없습니다</strong>운영 데이터는 관리자 역할이 확인된 계정만 볼 수 있습니다.</div></div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--save"><span class="dot"></span>checking</span><span class="rf-chip rf-chip--error"><span class="dot"></span>denied</span><span class="rf-chip rf-chip--warning"><span class="dot"></span>stale role</span></div>
+        <ul class="component-list">
+          <li><strong>Role check state</strong><span>관리자 권한 확인 중 skeleton과 짧은 상태 문구.</span></li><li><strong>Denied panel</strong><span>민감 정보 없이 접근 거부 사유와 계정 전환/새로고침 제공.</span></li><li><strong>Stale role notice</strong><span>토큰 갱신 또는 권한 변경 반영 지연 안내.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>17 · Admin Dashboard And Search — RoomForge (Mobile)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body class="mobile-body">
+  <div class="device">
+    <main class="phone-screen">
+      <div class="phone-status"></div>
+      <header class="phone-appbar">
+        <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+        <div class="rf-spacer"></div>
+        <span class="rf-chip rf-chip--admin"><span class="dot"></span>17</span>
+      </header>
+      <div class="phone-scroll">
+        <section class="phone-hero" data-reveal>
+          <span class="rf-eyebrow">Admin &amp; Support</span>
+          <h1>Admin Dashboard And Search</h1>
+          <p>운영자가 job을 검색, 필터, 스캔하고 실패 상태를 빠르게 찾는 화면입니다.</p>
+        </section>
+        <section class="phone-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="admin-scene">
+          <div class="admin-metrics"><div><b>128</b><span>jobs</span></div><div><b>17</b><span>Needs review</span></div><div><b>9</b><span>failed</span></div></div>
+          <table class="job-table"><thead><tr><th>Job</th><th>Status</th><th>Owner</th><th>Updated</th></tr></thead><tbody><tr><td>job_9b2f</td><td><span class="rf-chip rf-chip--save"><span class="dot"></span>processing</span></td><td>user_342</td><td>2m</td></tr><tr><td>job_82ac</td><td><span class="rf-chip rf-chip--warning"><span class="dot"></span>Needs review</span></td><td>user_118</td><td>8m</td></tr><tr><td>job_77cd</td><td><span class="rf-chip rf-chip--error"><span class="dot"></span>failed</span></td><td>user_029</td><td>13m</td></tr></tbody></table>
+        </div></div>
+        </section>
+        <section class="rf-panel phone-panel" data-reveal>
+          <div class="chip-row"><span class="rf-chip rf-chip--admin"><span class="dot"></span>empty</span><span class="rf-chip rf-chip--candidate"><span class="dot"></span>filtered</span><span class="rf-chip rf-chip--error"><span class="dot"></span>permission denied</span></div>
+          <ul class="component-list">
+            <li><strong>Status filters</strong><span>created, processing, Needs review, failed, timeout 등을 빠르게 필터.</span></li><li><strong>Job table</strong><span>job id, user, project, status, provider, updated time, action.</span></li><li><strong>Global search</strong><span>user id, project id, job id, status 검색과 no results 상태.</span></li>
+          </ul>
+        </section>
+      </div>
+      <footer class="phone-actions">
+        <button class="rf-btn rf-btn--primary rf-btn--block">필터 적용</button>
+        <button class="rf-btn rf-btn--block">CSV 내보내기</button>
+      </footer>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.phone-actions .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

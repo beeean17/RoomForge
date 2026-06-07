@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>03 · Project Dialog — RoomForge (Desktop)</title>
+  <link rel="stylesheet" href="../../system/tokens.css" />
+  <link rel="stylesheet" href="../../system/base.css" />
+  <link rel="stylesheet" href="../../system/screen-mockups.css" />
+</head>
+<body>
+  <div class="rf-shell">
+    <header class="rf-topbar">
+      <a class="rf-brand" href="../../index.html" style="text-decoration:none"><span class="rf-brand-mark"></span> RoomForge</a>
+      <span class="rf-chip rf-chip--candidate"><span class="dot"></span>modal</span>
+      <div class="rf-spacer"></div>
+      <a class="rf-btn rf-btn--sm" href="../../index.html">Gallery</a>
+      <a class="rf-btn rf-btn--sm rf-btn--ghost" href="../../specs/03-project-dialog.md">Spec</a>
+      <div class="rf-avatar">SY</div>
+    </header>
+    <main class="mock-main">
+      <section>
+        <div class="mock-head" data-reveal>
+          <div>
+            <span class="rf-eyebrow">03 · P0 Core Flow</span>
+            <h1>Project Dialog</h1>
+            <p>프로젝트 생성, 편집, 삭제 확인을 한 흐름 안에서 처리합니다.</p>
+          </div>
+          <div class="mock-actions">
+            <button class="rf-btn">삭제 확인</button>
+            <button class="rf-btn rf-btn--primary">프로젝트 저장</button>
+          </div>
+        </div>
+        <div class="mock-stage" data-reveal="scale">
+          <div class="stage-inner">
+        <div class="dialog-scene">
+          <div class="mock-dialog">
+            <div class="dialog-top"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>create</span><span class="rf-muted">새 프로젝트</span></div>
+            <label class="rf-field"><span class="rf-label">프로젝트 이름</span><input class="rf-input" value="침실 - 리모델링 A안" /></label>
+            <label class="rf-field"><span class="rf-label">설명</span><textarea class="rf-textarea">붙박이장 교체 전 침대, 책상 배치 확인</textarea></label>
+            <div class="danger-zone"><span class="rf-chip rf-chip--error"><span class="dot"></span>delete confirm</span><p>삭제는 프로젝트 이미지와 layout draft를 함께 제거합니다.</p></div>
+            <div class="dialog-actions"><button class="rf-btn">취소</button><button class="rf-btn rf-btn--primary">저장</button></div>
+          </div>
+        </div></div>
+        </div>
+      </section>
+      <aside class="rf-panel context-panel" data-reveal>
+        <div class="rf-between">
+          <h2>화면 구성</h2>
+          <span class="rf-chip rf-chip--candidate"><span class="dot"></span>desktop</span>
+        </div>
+        <div class="chip-row"><span class="rf-chip rf-chip--candidate"><span class="dot"></span>create</span><span class="rf-chip rf-chip--save"><span class="dot"></span>edit</span><span class="rf-chip rf-chip--error"><span class="dot"></span>delete confirm</span></div>
+        <ul class="component-list">
+          <li><strong>Name field</strong><span>필수 입력, 글자 수, 중복 또는 빈 값 검증.</span></li><li><strong>Description</strong><span>선택 입력. 방 이름만으로 부족할 때 메모를 남김.</span></li><li><strong>Danger zone</strong><span>삭제 확인은 별도 강조 영역과 최종 확인 버튼.</span></li><li><strong>Save footer</strong><span>취소, 저장, 저장 중, 실패 재시도 상태.</span></li>
+        </ul>
+        <div class="rf-notice rf-notice--info">
+          <span class="ic">i</span>
+          <div><strong>Design note</strong>Charcoal surface 위에 muted status accent를 사용하고, 상태는 항상 텍스트와 함께 표시합니다.</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="../../system/motion.js"></script>
+  <script>
+    document.querySelectorAll('.mock-actions .rf-btn, .dialog-actions .rf-btn, .retry-grid .rf-btn, .choice-bar .rf-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){ rfToast(btn.textContent.trim() + ' 상태 미리보기'); });
+    });
+  </script>
+</body>
+</html>

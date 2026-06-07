@@ -1,0 +1,1699 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function userDocPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(userDocPath(request.auth.uid))
+        && get(userDocPath(request.auth.uid)).data.keys().hasAny(['role'])
+        && get(userDocPath(request.auth.uid)).data.role == 'admin';
+    }
+
+    function projectDocPath(projectId) {
+      return /databases/$(database)/documents/projects/$(projectId);
+    }
+
+    function ownsProject(projectId) {
+      return isSignedIn()
+        && exists(projectDocPath(projectId))
+        && get(projectDocPath(projectId)).data.owner_uid == request.auth.uid;
+    }
+
+    function userProfileKeys() {
+      return [
+        'uid',
+        'email',
+        'display_name',
+        'photo_url',
+        'created_at',
+        'updated_at',
+        'last_seen_at',
+        'schema_version'
+      ];
+    }
+
+    function userProfileUpdateKeys() {
+      return [
+        'uid',
+        'email',
+        'display_name',
+        'photo_url',
+        'updated_at',
+        'last_seen_at',
+        'schema_version'
+      ];
+    }
+
+    function privilegedUserRoleKeys() {
+      return ['role', 'role_updated_at', 'role_updated_by_uid'];
+    }
+
+    function projectKeys() {
+      return [
+        'project_id',
+        'owner_uid',
+        'name',
+        'description',
+        'schema_version',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+        'latest_source_image_id',
+        'latest_job_id',
+        'latest_floor_plan_id',
+        'latest_layout_id',
+        'current_reconstruction_status',
+        'last_opened_at'
+      ];
+    }
+
+    function mutableProjectKeys() {
+      return [
+        'name',
+        'description',
+        'updated_at',
+        'deleted_at',
+        'latest_source_image_id',
+        'latest_job_id',
+        'latest_floor_plan_id',
+        'latest_layout_id',
+        'current_reconstruction_status',
+        'last_opened_at'
+      ];
+    }
+
+    function roomDimensionsKeys() {
+      return [
+        'project_id',
+        'owner_uid',
+        'width_m',
+        'depth_m',
+        'height_m',
+        'unit',
+        'source',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function sourceImageKeys() {
+      return [
+        'source_image_id',
+        'project_id',
+        'owner_uid',
+        'storage_path',
+        'original_filename',
+        'stored_filename',
+        'content_type',
+        'byte_size',
+        'sha256_hex',
+        'width_px',
+        'height_px',
+        'capture_source',
+        'capture_session_id',
+        'capture_image_id',
+        'capture_image_role',
+        'retention_status',
+        'uploaded_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function captureSessionKeys() {
+      return [
+        'capture_session_id',
+        'project_id',
+        'owner_uid',
+        'room_dimensions_id',
+        'capture_method',
+        'depth_enabled',
+        'started_at',
+        'completed_at',
+        'notes',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function captureImageKeys() {
+      return [
+        'capture_image_id',
+        'capture_session_id',
+        'project_id',
+        'owner_uid',
+        'source_image_id',
+        'role',
+        'storage_path',
+        'content_type',
+        'width_px',
+        'height_px',
+        'capture_order',
+        'depth_artifact_refs',
+        'camera_pose',
+        'guidance_state',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function reconstructionJobKeys() {
+      return [
+        'job_id',
+        'project_id',
+        'owner_uid',
+        'source_image_id',
+        'room_dimensions_id',
+        'status',
+        'status_updated_at',
+        'provider_type',
+        'provider_id',
+        'algorithm_id',
+        'opencv_version',
+        'created_by_uid',
+        'retry_of_job_id',
+        'root_job_id',
+        'retry_count',
+        'latest_transition_id',
+        'latest_result_id',
+        'latest_confirmed_geometry_id',
+        'latest_floor_plan_id',
+        'failure_reason_code',
+        'failure_reason',
+        'quality_status',
+        'artifact_refs',
+        'started_at',
+        'completed_at',
+        'timeout_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function mutableReconstructionJobKeys() {
+      return [
+        'status',
+        'status_updated_at',
+        'latest_transition_id',
+        'latest_result_id',
+        'latest_confirmed_geometry_id',
+        'latest_floor_plan_id',
+        'failure_reason_code',
+        'failure_reason',
+        'quality_status',
+        'artifact_refs',
+        'started_at',
+        'completed_at',
+        'timeout_at',
+        'updated_at'
+      ];
+    }
+
+    function adminRetryCurrentJobMutableKeys() {
+      return [
+        'status',
+        'status_updated_at',
+        'root_job_id',
+        'latest_transition_id',
+        'latest_result_id',
+        'latest_confirmed_geometry_id',
+        'latest_floor_plan_id',
+        'failure_reason_code',
+        'failure_reason',
+        'quality_status',
+        'artifact_refs',
+        'started_at',
+        'completed_at',
+        'timeout_at',
+        'updated_at'
+      ];
+    }
+
+    function jobTransitionKeys() {
+      return [
+        'transition_id',
+        'project_id',
+        'owner_uid',
+        'job_id',
+        'from_status',
+        'to_status',
+        'occurred_at',
+        'actor_type',
+        'actor_uid',
+        'reason_code',
+        'reason_message',
+        'artifact_refs',
+        'retry_job_id',
+        'schema_version'
+      ];
+    }
+
+    function openCvResultKeys() {
+      return [
+        'result_id',
+        'project_id',
+        'owner_uid',
+        'job_id',
+        'source_image_id',
+        'coordinate_space',
+        'algorithm_id',
+        'opencv_version',
+        'candidate_edges',
+        'candidate_lines',
+        'candidate_corners',
+        'boundary_hints',
+        'confidence_score',
+        'quality_status',
+        'failure_reason_code',
+        'failure_reason',
+        'artifact_refs',
+        'processing_started_at',
+        'processing_completed_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function confirmedGeometryKeys() {
+      return [
+        'geometry_id',
+        'project_id',
+        'owner_uid',
+        'job_id',
+        'source_image_id',
+        'opencv_result_id',
+        'coordinate_space',
+        'boundary_type',
+        'boundary_points',
+        'correction_method',
+        'confirmed_by_uid',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function floorPlanKeys() {
+      return [
+        'floor_plan_id',
+        'project_id',
+        'owner_uid',
+        'job_id',
+        'source_image_id',
+        'confirmed_geometry_id',
+        'room_dimensions_id',
+        'coordinate_space',
+        'room_dimensions',
+        'floor_polygon',
+        'walls',
+        'calibration',
+        'quality_status',
+        'warnings',
+        'artifact_refs',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function sceneUnderstandingResultKeys() {
+      return [
+        'result_id',
+        'project_id',
+        'owner_uid',
+        'capture_session_id',
+        'job_id',
+        'provider_type',
+        'algorithm_id',
+        'model_id',
+        'confidence_score',
+        'quality_status',
+        'failure_reason_code',
+        'failure_reason',
+        'coverage',
+        'candidate_objects',
+        'placed_objects',
+        'confirmed_objects',
+        'structural_fixtures',
+        'artifact_refs',
+        'processing_started_at',
+        'processing_completed_at',
+        'created_at',
+        'updated_at',
+        'schema_version'
+      ];
+    }
+
+    function artifactRefKeys() {
+      return [
+        'artifact_id',
+        'storage_path',
+        'artifact_type',
+        'content_type',
+        'byte_size',
+        'sha256_hex',
+        'width_px',
+        'height_px',
+        'created_at',
+        'description'
+      ];
+    }
+
+    function layoutKeys() {
+      return [
+        'layout_id',
+        'project_id',
+        'owner_uid',
+        'name',
+        'source_image_id',
+        'reconstruction_job_id',
+        'reconstruction_status',
+        'review_required',
+        'floor_plan_id',
+        'coordinate_space',
+        'room_dimensions',
+        'source_metadata',
+        'floor_plan',
+        'editor_scene',
+        'furniture_objects',
+        'base_floor_plan_updated_at',
+        'saved_at',
+        'created_at',
+        'updated_at',
+        'schema_version',
+        'export_version'
+      ];
+    }
+
+    function furnitureObjectKeys() {
+      return [
+        'furniture_id',
+        'category',
+        'position_m',
+        'size_m',
+        'rotation_deg',
+        'color',
+        'label',
+        'locked'
+      ];
+    }
+
+    function adminActionKeys() {
+      return [
+        'action_id',
+        'project_id',
+        'owner_uid',
+        'created_by_uid',
+        'created_by_role',
+        'action_type',
+        'target_type',
+        'target_id',
+        'reason_code',
+        'reason_message',
+        'permission_outcome',
+        'retry_job_id',
+        'metadata',
+        'created_at',
+        'schema_version'
+      ];
+    }
+
+    function isAllowedSourceImageContentType(contentType) {
+      return contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    function isAllowedCaptureMethod(method) {
+      return method in [
+        'android_guided_photo',
+        'android_arcore_depth',
+        'desktop_upload'
+      ];
+    }
+
+    function isAllowedCaptureImageRole(role) {
+      return role in [
+        'overview',
+        'front_wall',
+        'front_right_corner',
+        'right_wall',
+        'back_right_corner',
+        'back_wall',
+        'back_left_corner',
+        'left_wall',
+        'front_left_corner',
+        'extra'
+      ];
+    }
+
+    function isAllowedJobStatus(status) {
+      return status in [
+        'created',
+        'uploading',
+        'processing',
+        'review_required',
+        'succeeded',
+        'failed',
+        'timeout',
+        'cancelled',
+        'retrying'
+      ];
+    }
+
+    function isAllowedQualityStatus(status) {
+      return status in ['success', 'review_required', 'failed'];
+    }
+
+    function isAllowedSceneUnderstandingProvider(providerType) {
+      return providerType in [
+        'browser_cv',
+        'android_arcore_depth',
+        'cloud_gpu',
+        'manual'
+      ];
+    }
+
+    function isAllowedSceneUnderstandingFailureReason(reasonCode) {
+      return reasonCode in [
+        'no_source_images',
+        'unsupported_runtime',
+        'detector_failed',
+        'low_confidence',
+        'insufficient_coverage',
+        'provider_unavailable'
+      ];
+    }
+
+    function isAllowedArtifactContentType(contentType) {
+      return contentType in [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'application/json'
+      ];
+    }
+
+    function isAllowedFurnitureCategory(category) {
+      return category in [
+        'bed',
+        'desk',
+        'chair',
+        'wardrobe',
+        'sofa',
+        'table',
+        'custom'
+      ];
+    }
+
+    function isNumber(value) {
+      return value is int || value is float;
+    }
+
+    function isSafePathSegment(value) {
+      return value is string
+        && value.matches('^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$');
+    }
+
+    function isAllowedActorType(actorType) {
+      return actorType in ['user', 'system', 'admin', 'worker'];
+    }
+
+    function isAllowedBoundaryType(boundaryType) {
+      return boundaryType in ['rectangle', 'simple_polygon'];
+    }
+
+    function validProjectReconstructionState(data) {
+      return (
+          (!data.keys().hasAny(['latest_job_id']) || data.latest_job_id == null)
+          && (!data.keys().hasAny(['current_reconstruction_status'])
+            || data.current_reconstruction_status == null)
+        )
+        || (
+          data.latest_job_id is string
+          && isAllowedJobStatus(data.current_reconstruction_status)
+          && getAfter(reconstructionJobDocPath(data.project_id, data.latest_job_id)).data.owner_uid == data.owner_uid
+          && getAfter(reconstructionJobDocPath(data.project_id, data.latest_job_id)).data.status == data.current_reconstruction_status
+        );
+    }
+
+    function validSourceImageCreate(projectId, sourceImageId) {
+      return ownsProject(projectId)
+        && request.resource.data.source_image_id == sourceImageId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && validSourceImageStoragePath(projectId, sourceImageId)
+        && isAllowedSourceImageContentType(request.resource.data.content_type)
+        && request.resource.data.byte_size <= 10 * 1024 * 1024
+        && request.resource.data.byte_size > 0
+        && request.resource.data.width_px > 0
+        && request.resource.data.height_px > 0
+        && request.resource.data.retention_status == 'active'
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(sourceImageKeys())
+        && request.resource.data.keys().hasAll([
+          'source_image_id',
+          'project_id',
+          'owner_uid',
+          'storage_path',
+          'stored_filename',
+          'content_type',
+          'byte_size',
+          'sha256_hex',
+          'width_px',
+          'height_px',
+          'retention_status',
+          'uploaded_at',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validSourceImageStoragePath(projectId, sourceImageId) {
+      return (
+          (
+            !request.resource.data.keys().hasAny(['capture_source'])
+            || request.resource.data.capture_source == null
+            || request.resource.data.capture_source == 'file_upload'
+          )
+          && !request.resource.data.keys().hasAny([
+            'capture_session_id',
+            'capture_image_id',
+            'capture_image_role'
+          ])
+          && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/source-images/' + sourceImageId + '/' + request.resource.data.stored_filename
+        )
+        || (
+          request.resource.data.capture_source == 'guided_capture'
+          && request.resource.data.capture_session_id is string
+          && request.resource.data.capture_image_id is string
+          && isAllowedCaptureImageRole(request.resource.data.capture_image_role)
+          && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/capture-sessions/' + request.resource.data.capture_session_id + '/images/' + request.resource.data.capture_image_id + '/' + request.resource.data.stored_filename
+        );
+    }
+
+    function validUserProfileCreate(uid) {
+      return isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly(userProfileKeys())
+        && request.resource.data.keys().hasAll([
+          'uid',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validUserProfileUpdate(uid) {
+      return isSelf(uid)
+        && exists(userDocPath(uid))
+        && resource.data.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(userProfileUpdateKeys())
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(privilegedUserRoleKeys());
+    }
+
+    function validProjectCreate(projectId) {
+      return isSignedIn()
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.schema_version == 1
+        && validProjectReconstructionState(request.resource.data)
+        && request.resource.data.keys().hasOnly(projectKeys())
+        && request.resource.data.keys().hasAll([
+          'project_id',
+          'owner_uid',
+          'name',
+          'schema_version',
+          'created_at',
+          'updated_at'
+        ]);
+    }
+
+    function validProjectUpdate(projectId) {
+      return isSignedIn()
+        && resource.data.owner_uid == request.auth.uid
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && validProjectReconstructionState(request.resource.data)
+        && request.resource.data.keys().hasOnly(projectKeys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(mutableProjectKeys());
+    }
+
+    function validRoomDimensionsWrite(projectId) {
+      return ownsProject(projectId)
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.unit == 'meters'
+        && request.resource.data.width_m > 0
+        && request.resource.data.depth_m > 0
+        && request.resource.data.height_m > 0
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(roomDimensionsKeys())
+        && request.resource.data.keys().hasAll([
+          'project_id',
+          'owner_uid',
+          'width_m',
+          'depth_m',
+          'height_m',
+          'unit',
+          'source',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function sourceImageDocPath(projectId, sourceImageId) {
+      return /databases/$(database)/documents/projects/$(projectId)/source_images/$(sourceImageId);
+    }
+
+    function captureSessionDocPath(projectId, captureSessionId) {
+      return /databases/$(database)/documents/projects/$(projectId)/capture_sessions/$(captureSessionId);
+    }
+
+    function roomDimensionsDocPath(projectId) {
+      return /databases/$(database)/documents/projects/$(projectId)/room_dimensions/current;
+    }
+
+    function reconstructionJobDocPath(projectId, jobId) {
+      return /databases/$(database)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId);
+    }
+
+    function validCaptureSessionCreate(projectId, captureSessionId) {
+      return ownsProject(projectId)
+        && request.resource.data.capture_session_id == captureSessionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.room_dimensions_id == 'current'
+        && exists(roomDimensionsDocPath(projectId))
+        && get(roomDimensionsDocPath(projectId)).data.owner_uid == request.auth.uid
+        && isAllowedCaptureMethod(request.resource.data.capture_method)
+        && request.resource.data.depth_enabled is bool
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(captureSessionKeys())
+        && request.resource.data.keys().hasAll([
+          'capture_session_id',
+          'project_id',
+          'owner_uid',
+          'room_dimensions_id',
+          'capture_method',
+          'depth_enabled',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validCaptureImageCreate(projectId, captureSessionId, captureImageId) {
+      let sourcePath = sourceImageDocPath(projectId, request.resource.data.source_image_id);
+      let source = get(sourcePath).data;
+      return ownsProject(projectId)
+        && exists(captureSessionDocPath(projectId, captureSessionId))
+        && get(captureSessionDocPath(projectId, captureSessionId)).data.owner_uid == request.auth.uid
+        && exists(sourcePath)
+        && request.resource.data.capture_image_id == captureImageId
+        && request.resource.data.capture_session_id == captureSessionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && isAllowedCaptureImageRole(request.resource.data.role)
+        && isAllowedSourceImageContentType(request.resource.data.content_type)
+        && request.resource.data.width_px > 0
+        && request.resource.data.height_px > 0
+        && request.resource.data.storage_path == 'users/' + request.auth.uid + '/projects/' + projectId + '/capture-sessions/' + captureSessionId + '/images/' + captureImageId + '/' + source.stored_filename
+        && source.owner_uid == request.auth.uid
+        && source.capture_session_id == captureSessionId
+        && source.capture_image_id == captureImageId
+        && source.capture_image_role == request.resource.data.role
+        && source.storage_path == request.resource.data.storage_path
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(captureImageKeys())
+        && request.resource.data.keys().hasAll([
+          'capture_image_id',
+          'capture_session_id',
+          'project_id',
+          'owner_uid',
+          'source_image_id',
+          'role',
+          'storage_path',
+          'content_type',
+          'width_px',
+          'height_px',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function jobTransitionDocPath(projectId, jobId, transitionId) {
+      return /databases/$(database)/documents/projects/$(projectId)/reconstruction_jobs/$(jobId)/transitions/$(transitionId);
+    }
+
+    function openCvResultDocPath(projectId, resultId) {
+      return /databases/$(database)/documents/projects/$(projectId)/opencv_results/$(resultId);
+    }
+
+    function confirmedGeometryDocPath(projectId, geometryId) {
+      return /databases/$(database)/documents/projects/$(projectId)/confirmed_geometries/$(geometryId);
+    }
+
+    function floorPlanDocPath(projectId, floorPlanId) {
+      return /databases/$(database)/documents/projects/$(projectId)/floor_plans/$(floorPlanId);
+    }
+
+    function adminActionDocPath(projectId, actionId) {
+      return /databases/$(database)/documents/projects/$(projectId)/admin_actions/$(actionId);
+    }
+
+    function adminRetryActionId(retryJobId) {
+      return 'retry_' + retryJobId;
+    }
+
+    function validJobQualityStatus(data) {
+      return !data.keys().hasAny(['quality_status'])
+        || data.quality_status == null
+        || isAllowedQualityStatus(data.quality_status);
+    }
+
+    function validJobTransitionAfter(projectId, jobId) {
+      let transition = getAfter(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id)).data;
+      return request.resource.data.latest_transition_id is string
+        && !exists(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id))
+        && transition.transition_id == request.resource.data.latest_transition_id
+        && transition.job_id == jobId
+        && transition.owner_uid == request.resource.data.owner_uid
+        && transition.to_status == request.resource.data.status;
+    }
+
+    function validRetryJobAfter(projectId, jobId, retryJobId) {
+      let retryJob = getAfter(reconstructionJobDocPath(projectId, retryJobId)).data;
+      return !exists(reconstructionJobDocPath(projectId, retryJobId))
+        && retryJob.job_id == retryJobId
+        && retryJob.project_id == projectId
+        && retryJob.owner_uid == request.resource.data.owner_uid
+        && retryJob.source_image_id == request.resource.data.source_image_id
+        && retryJob.room_dimensions_id == request.resource.data.room_dimensions_id
+        && retryJob.retry_of_job_id == jobId
+        && retryJob.retry_count == resource.data.retry_count + 1
+        && retryJob.status == 'created';
+    }
+
+    function validRetryTransitionLink(projectId, jobId) {
+      let transition = getAfter(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id)).data;
+      return request.resource.data.status != 'retrying'
+        || (
+          transition.keys().hasAny(['retry_job_id'])
+          && transition.retry_job_id is string
+          && validRetryJobAfter(projectId, jobId, transition.retry_job_id)
+        );
+    }
+
+    function validAdminRetryActionAfter(projectId, sourceJobId, retryJobId) {
+      let actionId = adminRetryActionId(retryJobId);
+      let action = getAfter(adminActionDocPath(projectId, actionId)).data;
+      return !exists(adminActionDocPath(projectId, actionId))
+        && existsAfter(adminActionDocPath(projectId, actionId))
+        && action.action_id == actionId
+        && action.project_id == projectId
+        && action.owner_uid == request.resource.data.owner_uid
+        && action.created_by_uid == request.auth.uid
+        && action.created_by_role == 'admin'
+        && action.action_type == 'retry_reconstruction_job'
+        && action.target_type == 'reconstruction_job'
+        && action.target_id == sourceJobId
+        && action.reason_code == 'admin_retry'
+        && action.reason_message is string
+        && action.retry_job_id == retryJobId
+        && action.created_at is timestamp
+        && action.schema_version == 1
+        && action.keys().hasOnly(adminActionKeys())
+        && action.keys().hasAll([
+          'action_id',
+          'project_id',
+          'owner_uid',
+          'created_by_uid',
+          'created_by_role',
+          'action_type',
+          'target_type',
+          'target_id',
+          'reason_code',
+          'reason_message',
+          'retry_job_id',
+          'created_at',
+          'schema_version'
+        ]);
+    }
+
+    function validAdminRetryCurrentAuditAfter(projectId, jobId) {
+      let transition = getAfter(jobTransitionDocPath(projectId, jobId, request.resource.data.latest_transition_id)).data;
+      return validAdminRetryActionAfter(projectId, jobId, transition.retry_job_id);
+    }
+
+    function validAdminRetrySourceJobAfter(projectId, sourceJobId, retryJobId) {
+      let sourceAfter = getAfter(reconstructionJobDocPath(projectId, sourceJobId)).data;
+      let transition = getAfter(jobTransitionDocPath(projectId, sourceJobId, sourceAfter.latest_transition_id)).data;
+      return existsAfter(reconstructionJobDocPath(projectId, sourceJobId))
+        && sourceAfter.job_id == sourceJobId
+        && sourceAfter.project_id == projectId
+        && sourceAfter.owner_uid == request.resource.data.owner_uid
+        && sourceAfter.source_image_id == request.resource.data.source_image_id
+        && sourceAfter.room_dimensions_id == request.resource.data.room_dimensions_id
+        && sourceAfter.status == 'retrying'
+        && sourceAfter.root_job_id == request.resource.data.root_job_id
+        && sourceAfter.retry_count + 1 == request.resource.data.retry_count
+        && sourceAfter.latest_transition_id is string
+        && transition.transition_id == sourceAfter.latest_transition_id
+        && transition.job_id == sourceJobId
+        && transition.to_status == 'retrying'
+        && transition.retry_job_id == retryJobId
+        && transition.actor_type == 'admin'
+        && transition.actor_uid == request.auth.uid;
+    }
+
+    function validRetryReference(projectId) {
+      return request.resource.data.retry_count == 0
+        || (
+          request.resource.data.retry_of_job_id is string
+          && exists(reconstructionJobDocPath(projectId, request.resource.data.retry_of_job_id))
+          && request.resource.data.root_job_id is string
+        );
+    }
+
+    function validJobTransitionTroubleshootingFields(data) {
+      return data.actor_uid is string
+        && data.reason_code is string
+        && data.reason_message is string;
+    }
+
+    function validReconstructionJobCreate(projectId, jobId) {
+      return ownsProject(projectId)
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.created_by_uid == request.auth.uid
+        && request.resource.data.room_dimensions_id == 'current'
+        && request.resource.data.retry_count >= 0
+        && isAllowedJobStatus(request.resource.data.status)
+        && request.resource.data.status != 'retrying'
+        && validJobQualityStatus(request.resource.data)
+        && validRetryReference(projectId)
+        && validJobTransitionAfter(projectId, jobId)
+        && exists(sourceImageDocPath(projectId, request.resource.data.source_image_id))
+        && exists(roomDimensionsDocPath(projectId))
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.keys().hasAll([
+          'job_id',
+          'project_id',
+          'owner_uid',
+          'source_image_id',
+          'room_dimensions_id',
+          'status',
+          'status_updated_at',
+          'provider_type',
+          'created_by_uid',
+          'retry_count',
+          'latest_transition_id',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ])
+        && request.resource.data.schema_version == 1;
+    }
+
+    function validReconstructionJobUpdate(projectId, jobId) {
+      return ownsProject(projectId)
+        && resource.data.owner_uid == request.auth.uid
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.room_dimensions_id == resource.data.room_dimensions_id
+        && request.resource.data.provider_type == resource.data.provider_type
+        && request.resource.data.created_by_uid == resource.data.created_by_uid
+        && request.resource.data.retry_count == resource.data.retry_count
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && isAllowedJobStatus(request.resource.data.status)
+        && validJobQualityStatus(request.resource.data)
+        && validJobTransitionAfter(projectId, jobId)
+        && request.resource.data.latest_transition_id != resource.data.latest_transition_id
+        && validRetryTransitionLink(projectId, jobId)
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(mutableReconstructionJobKeys());
+    }
+
+    function validAdminRetryCurrentJobUpdate(projectId, jobId) {
+      return isAdmin()
+        && resource.data.status in ['failed', 'timeout']
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.room_dimensions_id == resource.data.room_dimensions_id
+        && request.resource.data.provider_type == resource.data.provider_type
+        && request.resource.data.created_by_uid == resource.data.created_by_uid
+        && request.resource.data.retry_count == resource.data.retry_count
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && request.resource.data.status == 'retrying'
+        && request.resource.data.root_job_id is string
+        && (
+          (
+            resource.data.keys().hasAny(['root_job_id'])
+            && request.resource.data.root_job_id == resource.data.root_job_id
+          )
+          || (
+            !resource.data.keys().hasAny(['root_job_id'])
+            && request.resource.data.root_job_id == jobId
+          )
+        )
+        && validJobTransitionAfter(projectId, jobId)
+        && request.resource.data.latest_transition_id != resource.data.latest_transition_id
+        && validRetryTransitionLink(projectId, jobId)
+        && validAdminRetryCurrentAuditAfter(projectId, jobId)
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(adminRetryCurrentJobMutableKeys());
+    }
+
+    function validAdminRetryJobCreate(projectId, jobId) {
+      let sourceJob = get(reconstructionJobDocPath(projectId, request.resource.data.retry_of_job_id)).data;
+      return isAdmin()
+        && request.resource.data.job_id == jobId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == sourceJob.owner_uid
+        && request.resource.data.source_image_id == sourceJob.source_image_id
+        && request.resource.data.room_dimensions_id == sourceJob.room_dimensions_id
+        && request.resource.data.provider_type == sourceJob.provider_type
+        && request.resource.data.created_by_uid == request.auth.uid
+        && sourceJob.status in ['failed', 'timeout']
+        && request.resource.data.retry_of_job_id is string
+        && request.resource.data.root_job_id is string
+        && request.resource.data.retry_count == sourceJob.retry_count + 1
+        && request.resource.data.status == 'created'
+        && validJobQualityStatus(request.resource.data)
+        && validJobTransitionAfter(projectId, jobId)
+        && validAdminRetrySourceJobAfter(projectId, request.resource.data.retry_of_job_id, jobId)
+        && validAdminRetryActionAfter(projectId, request.resource.data.retry_of_job_id, jobId)
+        && exists(sourceImageDocPath(projectId, request.resource.data.source_image_id))
+        && exists(roomDimensionsDocPath(projectId))
+        && request.resource.data.keys().hasOnly(reconstructionJobKeys())
+        && request.resource.data.keys().hasAll([
+          'job_id',
+          'project_id',
+          'owner_uid',
+          'source_image_id',
+          'room_dimensions_id',
+          'status',
+          'status_updated_at',
+          'provider_type',
+          'created_by_uid',
+          'retry_of_job_id',
+          'root_job_id',
+          'retry_count',
+          'latest_transition_id',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ])
+        && request.resource.data.schema_version == 1;
+    }
+
+    function validJobTransitionCreate(projectId, jobId, transitionId) {
+      let jobAfter = getAfter(reconstructionJobDocPath(projectId, jobId)).data;
+      return (ownsProject(projectId) || isAdmin())
+        && request.resource.data.transition_id == transitionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.job_id == jobId
+        && request.resource.data.owner_uid == jobAfter.owner_uid
+        && jobAfter.latest_transition_id == transitionId
+        && request.resource.data.to_status == jobAfter.status
+        && isAllowedJobStatus(request.resource.data.to_status)
+        && (
+          (
+            !exists(reconstructionJobDocPath(projectId, jobId))
+            && (!request.resource.data.keys().hasAny(['from_status'])
+              || request.resource.data.from_status == null)
+          )
+          || (
+            exists(reconstructionJobDocPath(projectId, jobId))
+            && request.resource.data.from_status == get(reconstructionJobDocPath(projectId, jobId)).data.status
+          )
+        )
+        && isAllowedActorType(request.resource.data.actor_type)
+        && validJobTransitionTroubleshootingFields(request.resource.data)
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(jobTransitionKeys())
+        && request.resource.data.keys().hasAll([
+          'transition_id',
+          'project_id',
+          'owner_uid',
+          'job_id',
+          'to_status',
+          'occurred_at',
+          'actor_type',
+          'actor_uid',
+          'reason_code',
+          'reason_message',
+          'schema_version'
+        ]);
+    }
+
+    function validOpenCvResultWrite(projectId, resultId) {
+      return ownsProject(projectId)
+        && request.resource.data.result_id == resultId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.coordinate_space == 'image_pixels'
+        && request.resource.data.quality_status is string
+        && isAllowedQualityStatus(request.resource.data.quality_status)
+        && exists(reconstructionJobDocPath(projectId, request.resource.data.job_id))
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.owner_uid == request.auth.uid
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.source_image_id == request.resource.data.source_image_id
+        && exists(sourceImageDocPath(projectId, request.resource.data.source_image_id))
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(openCvResultKeys())
+        && request.resource.data.keys().hasAll([
+          'result_id',
+          'project_id',
+          'owner_uid',
+          'job_id',
+          'source_image_id',
+          'coordinate_space',
+          'algorithm_id',
+          'quality_status',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validOpenCvResultCreate(projectId, resultId) {
+      return validOpenCvResultWrite(projectId, resultId);
+    }
+
+    function validOpenCvResultUpdate(projectId, resultId) {
+      return validOpenCvResultWrite(projectId, resultId)
+        && request.resource.data.result_id == resource.data.result_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && (
+          resultId == 'latest'
+          || (
+            request.resource.data.job_id == resource.data.job_id
+            && request.resource.data.source_image_id == resource.data.source_image_id
+          )
+        )
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version;
+    }
+
+    function validConfirmedGeometryWrite(projectId, geometryId) {
+      return ownsProject(projectId)
+        && request.resource.data.geometry_id == geometryId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.confirmed_by_uid == request.auth.uid
+        && request.resource.data.coordinate_space == 'image_pixels'
+        && isAllowedBoundaryType(request.resource.data.boundary_type)
+        && request.resource.data.boundary_points is list
+        && request.resource.data.boundary_points.size() >= 3
+        && exists(reconstructionJobDocPath(projectId, request.resource.data.job_id))
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.owner_uid == request.auth.uid
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.source_image_id == request.resource.data.source_image_id
+        && validConfirmedGeometryOpenCvResultLink(projectId)
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(confirmedGeometryKeys())
+        && request.resource.data.keys().hasAll([
+          'geometry_id',
+          'project_id',
+          'owner_uid',
+          'job_id',
+          'source_image_id',
+          'coordinate_space',
+          'boundary_type',
+          'boundary_points',
+          'confirmed_by_uid',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validConfirmedGeometryOpenCvResultLink(projectId) {
+      return !request.resource.data.keys().hasAny(['opencv_result_id'])
+        || request.resource.data.opencv_result_id == null
+        || (
+          exists(openCvResultDocPath(projectId, request.resource.data.opencv_result_id))
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.result_id == request.resource.data.opencv_result_id
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.project_id == projectId
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.owner_uid == request.auth.uid
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.job_id == request.resource.data.job_id
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.source_image_id == request.resource.data.source_image_id
+          && get(openCvResultDocPath(projectId, request.resource.data.opencv_result_id)).data.coordinate_space == 'image_pixels'
+        );
+    }
+
+    function validConfirmedGeometryCreate(projectId, geometryId) {
+      return validConfirmedGeometryWrite(projectId, geometryId);
+    }
+
+    function validConfirmedGeometryUpdate(projectId, geometryId) {
+      return validConfirmedGeometryWrite(projectId, geometryId)
+        && request.resource.data.geometry_id == resource.data.geometry_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.coordinate_space == resource.data.coordinate_space
+        && request.resource.data.confirmed_by_uid == resource.data.confirmed_by_uid
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version;
+    }
+
+    function validFloorPlanRoomDimensions(projectId) {
+      return request.resource.data.room_dimensions is map
+        && request.resource.data.room_dimensions.project_id == projectId
+        && request.resource.data.room_dimensions.owner_uid == request.auth.uid
+        && request.resource.data.room_dimensions.unit == 'meters'
+        && request.resource.data.room_dimensions.width_m > 0
+        && request.resource.data.room_dimensions.depth_m > 0
+        && request.resource.data.room_dimensions.height_m > 0;
+    }
+
+    function validArtifactByteSize(ref) {
+      return !ref.keys().hasAny(['byte_size'])
+        || (
+          ref.byte_size is int
+          && ref.byte_size > 0
+          && (
+            (ref.content_type == 'application/json' && ref.byte_size <= 2 * 1024 * 1024)
+            || (ref.content_type != 'application/json' && ref.byte_size <= 10 * 1024 * 1024)
+          )
+        );
+    }
+
+    function validArtifactImageDimensions(ref) {
+      return (
+          !ref.keys().hasAny(['width_px'])
+          || (ref.width_px is int && ref.width_px > 0)
+        )
+        && (
+          !ref.keys().hasAny(['height_px'])
+          || (ref.height_px is int && ref.height_px > 0)
+        );
+    }
+
+    function validFloorPlanArtifactRef(ref, projectId, jobId) {
+      return ref is map
+        && ref.keys().hasOnly(artifactRefKeys())
+        && ref.keys().hasAll([
+          'artifact_id',
+          'storage_path',
+          'artifact_type',
+          'content_type'
+        ])
+        && ref.artifact_id is string
+        && ref.storage_path is string
+        && ref.artifact_type is string
+        && ref.content_type is string
+        && isSafePathSegment(request.auth.uid)
+        && isSafePathSegment(projectId)
+        && isSafePathSegment(jobId)
+        && isSafePathSegment(ref.artifact_id)
+        && isAllowedArtifactContentType(ref.content_type)
+        && ref.storage_path.matches('^users/' + request.auth.uid + '/projects/' + projectId + '/artifacts/' + jobId + '/' + ref.artifact_id + '/[^/]+$')
+        && validArtifactByteSize(ref)
+        && validArtifactImageDimensions(ref);
+    }
+
+    function validFloorPlanArtifactRefAt(index, projectId, jobId) {
+      return request.resource.data.artifact_refs.size() <= index
+        || validFloorPlanArtifactRef(
+          request.resource.data.artifact_refs[index],
+          projectId,
+          jobId
+        );
+    }
+
+    function validFloorPlanArtifactRefs(projectId, jobId) {
+      return !request.resource.data.keys().hasAny(['artifact_refs'])
+        || (
+          request.resource.data.artifact_refs is list
+          && request.resource.data.artifact_refs.size() <= 8
+          && validFloorPlanArtifactRefAt(0, projectId, jobId)
+          && validFloorPlanArtifactRefAt(1, projectId, jobId)
+          && validFloorPlanArtifactRefAt(2, projectId, jobId)
+          && validFloorPlanArtifactRefAt(3, projectId, jobId)
+          && validFloorPlanArtifactRefAt(4, projectId, jobId)
+          && validFloorPlanArtifactRefAt(5, projectId, jobId)
+          && validFloorPlanArtifactRefAt(6, projectId, jobId)
+          && validFloorPlanArtifactRefAt(7, projectId, jobId)
+        );
+    }
+
+    function validFloorPlanWrite(projectId, floorPlanId) {
+      return ownsProject(projectId)
+        && request.resource.data.floor_plan_id == floorPlanId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.coordinate_space == 'meters'
+        && request.resource.data.room_dimensions_id == 'current'
+        && validFloorPlanRoomDimensions(projectId)
+        && request.resource.data.floor_polygon is list
+        && request.resource.data.floor_polygon.size() >= 3
+        && request.resource.data.calibration is map
+        && request.resource.data.quality_status is string
+        && isAllowedQualityStatus(request.resource.data.quality_status)
+        && validFloorPlanArtifactRefs(projectId, request.resource.data.job_id)
+        && exists(reconstructionJobDocPath(projectId, request.resource.data.job_id))
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.owner_uid == request.auth.uid
+        && get(reconstructionJobDocPath(projectId, request.resource.data.job_id)).data.source_image_id == request.resource.data.source_image_id
+        && exists(sourceImageDocPath(projectId, request.resource.data.source_image_id))
+        && exists(roomDimensionsDocPath(projectId))
+        && get(roomDimensionsDocPath(projectId)).data.owner_uid == request.auth.uid
+        && exists(confirmedGeometryDocPath(projectId, request.resource.data.confirmed_geometry_id))
+        && get(confirmedGeometryDocPath(projectId, request.resource.data.confirmed_geometry_id)).data.owner_uid == request.auth.uid
+        && get(confirmedGeometryDocPath(projectId, request.resource.data.confirmed_geometry_id)).data.job_id == request.resource.data.job_id
+        && get(confirmedGeometryDocPath(projectId, request.resource.data.confirmed_geometry_id)).data.source_image_id == request.resource.data.source_image_id
+        && get(confirmedGeometryDocPath(projectId, request.resource.data.confirmed_geometry_id)).data.coordinate_space == 'image_pixels'
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(floorPlanKeys())
+        && request.resource.data.keys().hasAll([
+          'floor_plan_id',
+          'project_id',
+          'owner_uid',
+          'job_id',
+          'source_image_id',
+          'confirmed_geometry_id',
+          'room_dimensions_id',
+          'coordinate_space',
+          'room_dimensions',
+          'floor_polygon',
+          'calibration',
+          'quality_status',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validFloorPlanCreate(projectId, floorPlanId) {
+      return validFloorPlanWrite(projectId, floorPlanId);
+    }
+
+    function validFloorPlanUpdate(projectId, floorPlanId) {
+      return validFloorPlanWrite(projectId, floorPlanId)
+        && request.resource.data.floor_plan_id == resource.data.floor_plan_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.job_id == resource.data.job_id
+        && request.resource.data.source_image_id == resource.data.source_image_id
+        && request.resource.data.confirmed_geometry_id == resource.data.confirmed_geometry_id
+        && request.resource.data.room_dimensions_id == resource.data.room_dimensions_id
+        && request.resource.data.coordinate_space == resource.data.coordinate_space
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version;
+    }
+
+    function validSceneUnderstandingFailureFields() {
+      return (
+          !request.resource.data.keys().hasAny(['failure_reason_code'])
+          || request.resource.data.failure_reason_code == null
+          || isAllowedSceneUnderstandingFailureReason(request.resource.data.failure_reason_code)
+        )
+        && (
+          request.resource.data.quality_status != 'failed'
+          || (
+            request.resource.data.failure_reason_code is string
+            && isAllowedSceneUnderstandingFailureReason(request.resource.data.failure_reason_code)
+          )
+        );
+    }
+
+    function validSceneUnderstandingObjects() {
+      return request.resource.data.candidate_objects is list
+        && request.resource.data.candidate_objects.size() <= 64
+        && request.resource.data.placed_objects is list
+        && request.resource.data.placed_objects.size() <= 64
+        && request.resource.data.confirmed_objects is list
+        && request.resource.data.confirmed_objects.size() <= 64
+        && request.resource.data.structural_fixtures is list
+        && request.resource.data.structural_fixtures.size() <= 32;
+    }
+
+    function validSceneUnderstandingWrite(projectId, resultId) {
+      return ownsProject(projectId)
+        && request.resource.data.result_id == resultId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.capture_session_id is string
+        && request.resource.data.provider_type is string
+        && isAllowedSceneUnderstandingProvider(request.resource.data.provider_type)
+        && request.resource.data.algorithm_id is string
+        && request.resource.data.quality_status is string
+        && isAllowedQualityStatus(request.resource.data.quality_status)
+        && validSceneUnderstandingFailureFields()
+        && validSceneUnderstandingObjects()
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.updated_at is timestamp
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(sceneUnderstandingResultKeys())
+        && request.resource.data.keys().hasAll([
+          'result_id',
+          'project_id',
+          'owner_uid',
+          'capture_session_id',
+          'provider_type',
+          'algorithm_id',
+          'quality_status',
+          'candidate_objects',
+          'placed_objects',
+          'confirmed_objects',
+          'structural_fixtures',
+          'created_at',
+          'updated_at',
+          'schema_version'
+        ]);
+    }
+
+    function validSceneUnderstandingCreate(projectId, resultId) {
+      return validSceneUnderstandingWrite(projectId, resultId);
+    }
+
+    function validSceneUnderstandingUpdate(projectId, resultId) {
+      return validSceneUnderstandingWrite(projectId, resultId)
+        && request.resource.data.result_id == resource.data.result_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.capture_session_id == resource.data.capture_session_id
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version;
+    }
+
+    function validLayoutRoomDimensions(projectId) {
+      return request.resource.data.room_dimensions is map
+        && request.resource.data.floor_plan is map
+        && request.resource.data.room_dimensions == request.resource.data.floor_plan.room_dimensions;
+    }
+
+    function validLayoutSourceMetadata(projectId) {
+      return request.resource.data.source_metadata is map
+        && request.resource.data.source_metadata.source_image_id == request.resource.data.source_image_id
+        && request.resource.data.source_metadata.project_id == projectId
+        && request.resource.data.source_metadata.owner_uid == request.auth.uid
+        && request.resource.data.source_metadata.reconstruction_job_id == request.resource.data.reconstruction_job_id
+        && request.resource.data.source_metadata.reconstruction_status == request.resource.data.reconstruction_status
+        && request.resource.data.source_metadata.schema_version == 1;
+    }
+
+    function validLayoutFloorPlanSnapshot(projectId) {
+      return request.resource.data.floor_plan is map
+        && request.resource.data.floor_plan.floor_plan_id == request.resource.data.floor_plan_id
+        && request.resource.data.floor_plan.project_id == projectId
+        && request.resource.data.floor_plan.owner_uid == request.auth.uid;
+    }
+
+    function validPoint3d(value) {
+      return value is map
+        && isNumber(value.x)
+        && isNumber(value.y)
+        && isNumber(value.z);
+    }
+
+    function validLayoutFurnitureObject(object) {
+      return object is map
+        && isSafePathSegment(object.furniture_id)
+        && isAllowedFurnitureCategory(object.category)
+        && validPoint3d(object.position_m)
+        && validPoint3d(object.size_m)
+        && object.size_m.x > 0
+        && object.size_m.y > 0
+        && object.size_m.z > 0
+        && isNumber(object.rotation_deg);
+    }
+
+    function validLayoutFurnitureAt(index) {
+      return request.resource.data.furniture_objects.size() <= index
+        || validLayoutFurnitureObject(
+          request.resource.data.furniture_objects[index]
+        );
+    }
+
+    function validLayoutFurnitureObjects() {
+      return request.resource.data.furniture_objects is list
+        && request.resource.data.furniture_objects.size() <= 8
+        && validLayoutFurnitureAt(0)
+        && validLayoutFurnitureAt(1)
+        && validLayoutFurnitureAt(2)
+        && validLayoutFurnitureAt(3)
+        && validLayoutFurnitureAt(4)
+        && validLayoutFurnitureAt(5)
+        && validLayoutFurnitureAt(6)
+        && validLayoutFurnitureAt(7);
+    }
+
+    function validLayoutExistingReferences(projectId) {
+      let sourcePath = sourceImageDocPath(projectId, request.resource.data.source_image_id);
+      let jobPath = reconstructionJobDocPath(projectId, request.resource.data.reconstruction_job_id);
+      let floorPlanPath = floorPlanDocPath(projectId, request.resource.data.floor_plan_id);
+      let source = get(sourcePath).data;
+      let job = get(jobPath).data;
+      let floorPlan = get(floorPlanPath).data;
+      return source.owner_uid == request.auth.uid
+        && request.resource.data.source_metadata.diff(source).affectedKeys().hasOnly([
+          'reconstruction_job_id',
+          'reconstruction_status'
+        ])
+        && job.owner_uid == request.auth.uid
+        && job.source_image_id == request.resource.data.source_image_id
+        && job.status == request.resource.data.reconstruction_status
+        && floorPlan.owner_uid == request.auth.uid
+        && floorPlan.job_id == request.resource.data.reconstruction_job_id
+        && floorPlan.source_image_id == request.resource.data.source_image_id
+        && floorPlan.coordinate_space == 'meters'
+        && request.resource.data.floor_plan == floorPlan;
+    }
+
+    function validLayoutTimestamps() {
+      return request.resource.data.review_required is bool
+        && request.resource.data.saved_at is timestamp
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.updated_at is timestamp;
+    }
+
+    function validLayoutWrite(projectId, layoutId) {
+      return ownsProject(projectId)
+        && request.resource.data.layout_id == layoutId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.coordinate_space == 'meters'
+        && isAllowedJobStatus(request.resource.data.reconstruction_status)
+        && (
+          request.resource.data.reconstruction_status != 'review_required'
+          || request.resource.data.review_required == true
+        )
+        && validLayoutRoomDimensions(projectId)
+        && validLayoutSourceMetadata(projectId)
+        && validLayoutFloorPlanSnapshot(projectId)
+        && validLayoutExistingReferences(projectId)
+        && request.resource.data.editor_scene is map
+        && validLayoutFurnitureObjects()
+        && validLayoutTimestamps()
+        && request.resource.data.schema_version == 1
+        && request.resource.data.export_version == 1;
+    }
+
+    function validLayoutCreate(projectId, layoutId) {
+      return validLayoutWrite(projectId, layoutId);
+    }
+
+    function validLayoutUpdate(projectId, layoutId) {
+      return validLayoutWrite(projectId, layoutId)
+        && request.resource.data.layout_id == resource.data.layout_id
+        && request.resource.data.project_id == resource.data.project_id
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.schema_version == resource.data.schema_version
+        && request.resource.data.export_version == resource.data.export_version;
+    }
+
+    function validAdminActionCreate(projectId, actionId) {
+      return isAdmin()
+        && request.resource.data.action_id == actionId
+        && request.resource.data.project_id == projectId
+        && request.resource.data.owner_uid is string
+        && request.resource.data.created_by_uid == request.auth.uid
+        && request.resource.data.created_by_role == 'admin'
+        && request.resource.data.action_type is string
+        && request.resource.data.target_type is string
+        && request.resource.data.target_id is string
+        && request.resource.data.created_at is timestamp
+        && request.resource.data.schema_version == 1
+        && request.resource.data.keys().hasOnly(adminActionKeys())
+        && request.resource.data.keys().hasAll([
+          'action_id',
+          'project_id',
+          'owner_uid',
+          'created_by_uid',
+          'created_by_role',
+          'action_type',
+          'target_type',
+          'target_id',
+          'created_at',
+          'schema_version'
+        ]);
+    }
+
+    match /users/{uid} {
+      allow get: if isSelf(uid) || isAdmin();
+      allow list: if false;
+      allow create: if validUserProfileCreate(uid);
+      allow update: if validUserProfileUpdate(uid);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow get, list: if (isSignedIn() && resource.data.owner_uid == request.auth.uid) || isAdmin();
+      allow create: if validProjectCreate(projectId);
+      allow update: if validProjectUpdate(projectId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/room_dimensions/{dimensionsId} {
+      allow get, list: if dimensionsId == 'current' && (ownsProject(projectId) || isAdmin());
+      allow create, update: if dimensionsId == 'current' && validRoomDimensionsWrite(projectId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/source_images/{sourceImageId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validSourceImageCreate(projectId, sourceImageId);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/capture_sessions/{captureSessionId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validCaptureSessionCreate(projectId, captureSessionId);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/capture_sessions/{captureSessionId}/images/{captureImageId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validCaptureImageCreate(projectId, captureSessionId, captureImageId);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/reconstruction_jobs/{jobId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validReconstructionJobCreate(projectId, jobId)
+        || validAdminRetryJobCreate(projectId, jobId);
+      allow update: if validReconstructionJobUpdate(projectId, jobId)
+        || validAdminRetryCurrentJobUpdate(projectId, jobId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/reconstruction_jobs/{jobId}/transitions/{transitionId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validJobTransitionCreate(projectId, jobId, transitionId);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId}/opencv_results/{resultId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validOpenCvResultCreate(projectId, resultId);
+      allow update: if validOpenCvResultUpdate(projectId, resultId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/confirmed_geometries/{geometryId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validConfirmedGeometryCreate(projectId, geometryId);
+      allow update: if validConfirmedGeometryUpdate(projectId, geometryId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/floor_plans/{floorPlanId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validFloorPlanCreate(projectId, floorPlanId);
+      allow update: if validFloorPlanUpdate(projectId, floorPlanId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/scene_understanding_results/{resultId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validSceneUnderstandingCreate(projectId, resultId);
+      allow update: if validSceneUnderstandingUpdate(projectId, resultId);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId}/layouts/{layoutId} {
+      allow get, list: if ownsProject(projectId) || isAdmin();
+      allow create: if validLayoutCreate(projectId, layoutId);
+      allow update: if validLayoutUpdate(projectId, layoutId);
+      allow delete: if ownsProject(projectId)
+        && resource.data.owner_uid == request.auth.uid;
+    }
+
+    match /projects/{projectId}/admin_actions/{actionId} {
+      allow get, list: if isAdmin();
+      allow create: if validAdminActionCreate(projectId, actionId);
+      allow update, delete: if false;
+    }
+
+    match /{path=**}/reconstruction_jobs/{jobId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/transitions/{transitionId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/opencv_results/{resultId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/scene_understanding_results/{resultId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/layouts/{layoutId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/admin_actions/{actionId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

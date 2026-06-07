@@ -2,7 +2,7 @@
 title: 'CV-UI.4-8 Execution Goal'
 type: 'goal'
 created: '2026-06-07'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '98162a7039ded0f0cf2725d7203977c3fcd6493b'
 ---
 
@@ -50,3 +50,16 @@ Stories that change visible editor behavior must also run a browser smoke on `/p
 - bridge commands emit responses or scene updates;
 - console error logs are empty.
 
+## Completion Summary
+
+Completed locally through CV-UI.8.
+
+| Story | Commit | Result |
+| --- | --- | --- |
+| CV-UI.4 | `bea4726` | React placed object editor, transform controls, and runtime furniture bridge commands. |
+| CV-UI.5 | `32e7b49` | React structural fixture review, fixture candidate placement, and runtime fixture bridge commands. |
+| CV-UI.6 | `7d22fbf` | React confirmation handoff and runtime confirmed object bridge commands. |
+| CV-UI.7 | `0c9deed` | Responsive and accessibility hardening for React-owned CV editor panels. |
+| CV-UI.8 | `this commit` | Final validation report and execution goal closure. |
+
+Final validation is recorded in `_bmad-output/implementation-artifacts/spec-cv-ui-8-final-validation-report.md`.

@@ -5223,6 +5223,134 @@ button:disabled {
   margin-top: 8px;
 }
 
+.candidate-review-tray {
+  display: grid;
+  gap: 12px;
+}
+
+.candidate-review-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.candidate-review-counts span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.candidate-review-counts strong {
+  color: var(--text-main);
+  font-size: 0.96rem;
+}
+
+.candidate-review-list {
+  display: grid;
+  gap: 10px;
+}
+
+.candidate-review-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.candidate-review-card.is-review-required {
+  border-color: rgba(234, 179, 8, 0.42);
+}
+
+.candidate-review-card.is-placed {
+  border-color: rgba(64, 211, 145, 0.34);
+}
+
+.candidate-review-card.is-rejected {
+  opacity: 0.72;
+}
+
+.candidate-review-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.candidate-review-card-header strong {
+  display: block;
+  color: var(--text-main);
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.candidate-review-card-header span:not(.state-pill) {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.candidate-review-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.candidate-review-meta div {
+  min-width: 0;
+}
+
+.candidate-review-meta dt,
+.candidate-review-category span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.candidate-review-meta dd {
+  min-width: 0;
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: 0.78rem;
+}
+
+.candidate-review-category {
+  display: grid;
+  gap: 5px;
+}
+
+.candidate-review-category select {
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.candidate-review-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.candidate-review-actions .rf-btn {
+  justify-content: center;
+  min-width: 0;
+  padding-inline: 8px;
+}
+
 .editor-host-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);

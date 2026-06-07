@@ -1,14 +1,17 @@
 import {
   Armchair,
   ArrowLeft,
+  Ban,
   Box,
   Camera,
+  CheckCircle2,
   Cpu,
   Eye,
   EyeOff,
   ExternalLink,
   Grid3X3,
   Layers,
+  ListChecks,
   LoaderCircle,
   Lock,
   Maximize2,
@@ -47,6 +50,12 @@ import {
   type EditorEventPersistenceResult,
 } from './editorEventPersistence'
 import { EditorRuntimeSurface, type EditorRuntimeDispatch } from './EditorRuntimeSurface'
+import {
+  candidateReviewCategoryOptions,
+  candidateReviewStateFromPayload,
+  type CandidateReviewItem,
+  type CandidateReviewState,
+} from './editorCandidateReview'
 import { useEditorSourceImagePayload } from './editorSourceImages'
 
 type BridgeState = 'loading' | 'ready' | 'initializing' | 'initialized' | 'error'
@@ -117,6 +126,17 @@ const initialRuntimeSummary: RuntimeSceneSummary = {
   saveLabel: 'Saved',
 }
 
+const initialCandidateReviewState: CandidateReviewState = {
+  items: [],
+  counts: {
+    candidates: 0,
+    needsReview: 0,
+    placed: 0,
+    rejected: 0,
+    confirmed: 0,
+  },
+}
+
 const toolControls: Array<{ key: EditorTool; label: string; icon: typeof MousePointer2 }> = [
   { key: 'select', label: '선택', icon: MousePointer2 },
   { key: 'move', label: '이동', icon: Move },
@@ -172,6 +192,7 @@ export function EditorPage() {
   const [layerState, setLayerState] = useState<LayerState>(initialLayerState)
   const [canvasToggleState, setCanvasToggleState] = useState<CanvasToggleState>(initialCanvasToggleState)
   const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSceneSummary>(initialRuntimeSummary)
+  const [candidateReviewState, setCandidateReviewState] = useState<CandidateReviewState>(initialCandidateReviewState)
   const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
     status: 'ignored',
     label: 'Waiting for CV events',
@@ -241,6 +262,11 @@ export function EditorPage() {
       setCanvasToggleState(nextCanvasToggleState)
     }
 
+    const nextCandidateReviewState = candidateReviewStateFromPayload(message.payload)
+    if (nextCandidateReviewState) {
+      setCandidateReviewState(nextCandidateReviewState)
+    }
+
     if (!project) {
       return
     }
@@ -294,6 +320,7 @@ export function EditorPage() {
     setLayerState(initialLayerState)
     setCanvasToggleState(initialCanvasToggleState)
     setRuntimeSummary(initialRuntimeSummary)
+    setCandidateReviewState(initialCandidateReviewState)
   }, [])
 
   useEffect(() => {
@@ -324,7 +351,7 @@ export function EditorPage() {
     })
 
     setBridgeState('initializing')
-    setInitializeMessage(message)
+    setInitializeMessage(withDevCandidateReviewFixture(message, location.search))
   }, [location.pathname, location.search, project, runtimeKey, runtimeReady, sourceImageState])
 
   if (!project && status === 'loading') {
@@ -618,6 +645,17 @@ export function EditorPage() {
               </div>
             </section>
 
+            <CandidateReviewTray
+              disabled={!runtimeReady}
+              state={candidateReviewState}
+              onCategoryChange={(candidateId, category) =>
+                sendRuntimeCommand('roomforge.candidate.updateCategory', { candidateId, category })}
+              onPlace={(candidateId) =>
+                sendRuntimeCommand('roomforge.candidate.place', { candidateId })}
+              onReject={(candidateId) =>
+                sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
+            />
+
             <section>
               <div className="editor-host-section-title">
                 <Cpu size={18} />
@@ -701,6 +739,156 @@ export function EditorPage() {
   )
 }
 
+function CandidateReviewTray({
+  disabled,
+  state,
+  onCategoryChange,
+  onPlace,
+  onReject,
+}: {
+  disabled: boolean
+  state: CandidateReviewState
+  onCategoryChange: (candidateId: string, category: string) => void
+  onPlace: (candidateId: string) => void
+  onReject: (candidateId: string) => void
+}) {
+  return (
+    <section className="candidate-review-tray" aria-labelledby="react-candidate-review-title">
+      <div className="editor-host-section-title">
+        <ListChecks size={18} />
+        <h2 id="react-candidate-review-title">Candidate review</h2>
+      </div>
+
+      <div className="candidate-review-counts" aria-label="CV candidate counts">
+        <span><strong>{state.counts.candidates}</strong> candidates</span>
+        <span><strong>{state.counts.needsReview}</strong> Needs review</span>
+        <span><strong>{state.counts.placed}</strong> placed</span>
+        <span><strong>{state.counts.confirmed}</strong> confirmed</span>
+      </div>
+
+      {state.items.length === 0 ? (
+        <p className="editor-host-empty">CV 후보가 아직 없습니다.</p>
+      ) : (
+        <div className="candidate-review-list" role="list" aria-label="React CV candidate tray">
+          {state.items.map((item) => (
+            <CandidateReviewCard
+              disabled={disabled}
+              item={item}
+              key={item.candidateId}
+              onCategoryChange={onCategoryChange}
+              onPlace={onPlace}
+              onReject={onReject}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function CandidateReviewCard({
+  disabled,
+  item,
+  onCategoryChange,
+  onPlace,
+  onReject,
+}: {
+  disabled: boolean
+  item: CandidateReviewItem
+  onCategoryChange: (candidateId: string, category: string) => void
+  onPlace: (candidateId: string) => void
+  onReject: (candidateId: string) => void
+}) {
+  return (
+    <article
+      className={`candidate-review-card ${candidateStateClass(item)}`}
+      data-candidate-id={item.candidateId}
+      role="listitem"
+    >
+      <div className="candidate-review-card-header">
+        <div>
+          <strong>{item.label}</strong>
+          <span>{item.objectType} · {item.coordinateSpace}</span>
+        </div>
+        <span className={`state-pill ${candidateStatePillClass(item)}`}>{item.reviewLabel}</span>
+      </div>
+
+      <dl className="candidate-review-meta">
+        <div>
+          <dt>Confidence</dt>
+          <dd>{item.confidenceLabel}</dd>
+        </div>
+        <div>
+          <dt>Source</dt>
+          <dd>{item.sourceLabel}</dd>
+        </div>
+        <div>
+          <dt>Evidence</dt>
+          <dd>{item.evidenceLabel}</dd>
+        </div>
+      </dl>
+
+      <label className="candidate-review-category">
+        <span>Category</span>
+        <select
+          aria-label={`${item.label} category`}
+          disabled={disabled || !item.canChangeCategory}
+          value={item.category}
+          onChange={(event) => onCategoryChange(item.candidateId, event.target.value)}
+        >
+          {categoryOptionsFor(item.category).map((category) => (
+            <option key={category} value={category}>{category}</option>
+          ))}
+        </select>
+      </label>
+
+      <div className="candidate-review-actions">
+        <button
+          aria-label={`Reject ${item.label}`}
+          className="rf-btn"
+          disabled={disabled || !item.canReject}
+          type="button"
+          onClick={() => onReject(item.candidateId)}
+        >
+          <Ban size={15} />
+          Reject
+        </button>
+        <button
+          aria-label={`Place ${item.label}`}
+          className="rf-btn rf-btn--primary"
+          disabled={disabled || !item.canPlace}
+          type="button"
+          onClick={() => onPlace(item.candidateId)}
+        >
+          <CheckCircle2 size={15} />
+          Place
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function categoryOptionsFor(category: string): string[] {
+  const options = [...candidateReviewCategoryOptions]
+  return options.includes(category as (typeof candidateReviewCategoryOptions)[number])
+    ? options
+    : [category, ...options]
+}
+
+function candidateStateClass(item: CandidateReviewItem): string {
+  if (item.isRejected) return 'is-rejected'
+  if (item.isPlaced) return 'is-placed'
+  if (item.needsReview) return 'is-review-required'
+  return 'is-candidate'
+}
+
+function candidateStatePillClass(item: CandidateReviewItem): string {
+  if (item.isRejected) return 'warning'
+  if (item.isPlaced) return 'confirmed'
+  if (item.needsReview) return 'candidate'
+  return 'selected'
+}
+
 function bridgeStateLabel(state: BridgeState) {
   const labels: Record<BridgeState, string> = {
     loading: 'Runtime loading',
@@ -724,6 +912,63 @@ function sourceImageStatusLabel(state: ReturnType<typeof useEditorSourceImagePay
   if (state.status === 'loading') return 'Loading private source image'
   if (state.status === 'error') return state.error ?? 'Source image load failed'
   return 'No source image bytes available'
+}
+
+function withDevCandidateReviewFixture(message: EditorBridgeMessage, search: string): EditorBridgeMessage {
+  if (!import.meta.env.DEV || !new URLSearchParams(search).has('candidateFixture')) {
+    return message
+  }
+
+  const scene = recordValue(message.payload.scene)
+  return {
+    ...message,
+    payload: {
+      ...message.payload,
+      scene: {
+        ...scene,
+        candidateObjects: [
+          {
+            candidateId: 'candidate-bed-dev-fixture',
+            objectType: 'furniture',
+            category: 'bed',
+            label: 'Detected bed',
+            sourceImageRole: 'front_wall',
+            coordinateSpace: 'image_pixels',
+            confidenceScore: 0.52,
+            reviewState: 'review_required',
+            suggestedAssetId: 'bed.double',
+            suggestedPosition: { x: 2.1, y: 0, z: 2.2 },
+            suggestedSize: { x: 1.9, y: 0.65, z: 1.45 },
+            suggestedRotationDegrees: 0,
+          },
+          {
+            candidateId: 'candidate-chair-dev-fixture',
+            objectType: 'furniture',
+            category: 'chair',
+            sourceEvidence: [
+              { candidateId: 'candidate-chair-dev-fixture', sourceImageRole: 'overview' },
+              { candidateId: 'candidate-chair-dev-fixture', sourceImageRole: 'right_wall' },
+            ],
+            coordinateSpace: 'image_pixels',
+            confidenceScore: 0.91,
+            reviewState: 'new',
+            suggestedPosition: { x: 3.1, y: 0, z: 1.8 },
+          },
+          {
+            candidateId: 'candidate-window-dev-fixture',
+            objectType: 'structural_fixture',
+            category: 'window',
+            sourceImageRole: 'left_wall',
+            coordinateSpace: 'image_pixels',
+            confidenceScore: 0.88,
+            reviewState: 'new',
+          },
+        ],
+        placedObjects: [],
+        confirmedObjects: [],
+      },
+    },
+  }
 }
 
 function runtimeSummaryFromPayload(payload: Record<string, unknown>): RuntimeSceneSummary | null {

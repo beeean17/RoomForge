@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowRight, Check, RotateCcw, X } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import { ProductShell } from '../../components/shell/ProductShell'
@@ -27,9 +27,13 @@ export function ReconstructionStatusPage() {
   const requestedConversion = searchParams.get('convert') === '1'
   const requestedJobId = searchParams.get('job')
   const forceConversion = searchParams.get('rerun') === '1'
-  const conversionProject = project && requestedConversion && requestedJobId
-    ? { ...project, latestJobId: requestedJobId, status: 'created' as const }
-    : project
+  const conversionProject = useMemo(
+    () =>
+      project && requestedConversion && requestedJobId
+        ? { ...project, latestJobId: requestedJobId, status: 'created' as const }
+        : project,
+    [project, requestedConversion, requestedJobId],
+  )
   const effectiveStatus = statusOverride ?? conversionProject?.status
   const sourceImageState = useEditorSourceImagePayload(conversionProject)
   const openCvResultState = useLatestOpenCvResultPayload(project)

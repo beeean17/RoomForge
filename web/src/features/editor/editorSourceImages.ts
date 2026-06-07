@@ -49,10 +49,17 @@ type CaptureImageMetadata = {
   guidanceState?: string
 }
 
+const sourceImageDataUrlCache = new Map<string, Promise<string>>()
+const maxSourceImageDataUrlCacheEntries = 6
+
 export function useEditorSourceImagePayload(
   project: WorkspaceProject | null | undefined,
 ): SourceImageState {
   const auth = useAuth()
+  const authStatus = auth.status
+  const authUserId = auth.status === 'signed-in' ? auth.user.uid : null
+  const projectId = project?.id
+  const latestSourceImageId = project?.latestSourceImageId
   const [state, setState] = useState<SourceImageState>({ status: 'loading' })
 
   useEffect(() => {
@@ -72,14 +79,14 @@ export function useEditorSourceImagePayload(
       }
     }
 
-    if (auth.status === 'loading') {
+    if (authStatus === 'loading') {
       setState({ status: 'loading' })
       return () => {
         active = false
       }
     }
 
-    if (auth.status !== 'signed-in') {
+    if (authStatus !== 'signed-in') {
       setState({ status: 'empty' })
       return () => {
         active = false
@@ -87,7 +94,10 @@ export function useEditorSourceImagePayload(
     }
 
     setState({ status: 'loading' })
-    loadEditorSourceImage(project)
+    loadEditorSourceImage({
+      id: project.id,
+      latestSourceImageId: project.latestSourceImageId,
+    })
       .then((bridgePayload) => {
         if (!active) return
         if (!bridgePayload?.sourceImage) {
@@ -111,13 +121,13 @@ export function useEditorSourceImagePayload(
     return () => {
       active = false
     }
-  }, [auth, project])
+  }, [authStatus, authUserId, projectId, latestSourceImageId])
 
   return state
 }
 
 async function loadEditorSourceImage(
-  project: WorkspaceProject,
+  project: Pick<WorkspaceProject, 'id' | 'latestSourceImageId'>,
 ): Promise<EditorSourceImageBridgePayload | undefined> {
   const app = roomForgeFirebaseApp()
   const firestore = getFirestore(app)
@@ -126,8 +136,7 @@ async function loadEditorSourceImage(
     return undefined
   }
 
-  const blob = await getBlob(storageRef(getStorage(app), sourceImage.storagePath))
-  const dataUrl = await blobToDataUrl(blob)
+  const dataUrl = await loadSourceImageDataUrl(app, sourceImage.storagePath)
   const captureSession = await loadCaptureSessionPayload(firestore, project.id, sourceImage)
 
   return {
@@ -142,9 +151,39 @@ async function loadEditorSourceImage(
   }
 }
 
+async function loadSourceImageDataUrl(
+  app: ReturnType<typeof roomForgeFirebaseApp>,
+  storagePath: string,
+): Promise<string> {
+  const cached = sourceImageDataUrlCache.get(storagePath)
+  if (cached) {
+    return cached
+  }
+
+  const promise = getBlob(storageRef(getStorage(app), storagePath))
+    .then(blobToDataUrl)
+    .catch((error) => {
+      sourceImageDataUrlCache.delete(storagePath)
+      throw error
+    })
+  sourceImageDataUrlCache.set(storagePath, promise)
+  trimSourceImageDataUrlCache()
+  return promise
+}
+
+function trimSourceImageDataUrlCache(): void {
+  while (sourceImageDataUrlCache.size > maxSourceImageDataUrlCacheEntries) {
+    const oldestKey = sourceImageDataUrlCache.keys().next().value
+    if (!oldestKey) {
+      return
+    }
+    sourceImageDataUrlCache.delete(oldestKey)
+  }
+}
+
 async function loadLatestSourceImageMetadata(
   firestore: ReturnType<typeof getFirestore>,
-  project: WorkspaceProject,
+  project: Pick<WorkspaceProject, 'id' | 'latestSourceImageId'>,
 ): Promise<SourceImageMetadata | null> {
   if (project.latestSourceImageId) {
     const snapshot = await getDoc(

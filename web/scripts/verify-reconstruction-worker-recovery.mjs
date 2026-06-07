@@ -9,6 +9,10 @@ const statusPageSource = readFileSync(
   new URL('../src/features/reconstruction/ReconstructionStatusPage.tsx', import.meta.url),
   'utf8',
 )
+const sourceImageSource = readFileSync(
+  new URL('../src/features/editor/editorSourceImages.ts', import.meta.url),
+  'utf8',
+)
 
 assert.match(
   workerSource,
@@ -44,6 +48,21 @@ assert.match(
   statusPageSource,
   /completedOrRecoverable \? routes\.editor\(projectId\) : routes\.source\(projectId\)/,
   'Recoverable conversion failures should route to the editor instead of the source page.',
+)
+assert.match(
+  statusPageSource,
+  /const conversionProject = useMemo\(/,
+  'Conversion project override should be memoized so source image loading does not restart every render.',
+)
+assert.match(
+  sourceImageSource,
+  /const sourceImageDataUrlCache = new Map<string, Promise<string>>\(\)/,
+  'Editor source image loading should cache in-flight Storage downloads by path.',
+)
+assert.match(
+  sourceImageSource,
+  /sourceImageDataUrlCache\.get\(storagePath\)/,
+  'Repeated source image loads should reuse the existing Storage download promise.',
 )
 
 console.log('Reconstruction worker recovery contract verified')

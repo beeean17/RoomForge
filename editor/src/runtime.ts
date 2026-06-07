@@ -28,6 +28,10 @@ import {
   updateCandidateCategoryInModel,
 } from './candidateTray'
 import {
+  confirmAllPlacedObjectsInModel,
+  confirmSelectedObjectInModel,
+} from './confirmationModel'
+import {
   addFurnitureToModel,
   editSelectedFurnitureInModel,
   furnitureDefaults,
@@ -1119,6 +1123,18 @@ function handleBridgeCommand(message: BridgeMessage): void {
     if (isFixtureEditAction(action)) {
       editSelectedFixture(action)
     }
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.confirmation.confirmSelected') {
+    confirmSelectedObject(stringPayloadValue(message.payload, 'confirmedByUid'))
+    respondToFlutter(message)
+    return
+  }
+
+  if (message.type === 'roomforge.confirmation.confirmAllPlaced') {
+    confirmAllPlacedObjects(stringPayloadValue(message.payload, 'confirmedByUid'))
     respondToFlutter(message)
     return
   }
@@ -3234,6 +3250,26 @@ function editSelectedFixture(action: FixtureEditAction): void {
       )
   updateSpatialStatus()
   emitSceneState('roomforge.fixture.updated')
+}
+
+function confirmSelectedObject(confirmedByUid?: string): void {
+  const result = confirmSelectedObjectInModel({ model: spatialModel, confirmedByUid })
+  if (!result.changed) {
+    return
+  }
+  spatialModel = result.model
+  updateSpatialStatus()
+  emitSceneState('roomforge.confirmation.confirmed')
+}
+
+function confirmAllPlacedObjects(confirmedByUid?: string): void {
+  const result = confirmAllPlacedObjectsInModel({ model: spatialModel, confirmedByUid })
+  if (!result.changed) {
+    return
+  }
+  spatialModel = result.model
+  updateSpatialStatus()
+  emitSceneState('roomforge.confirmation.confirmed')
 }
 
 function selectedFurniture(): FurnitureObject | null {

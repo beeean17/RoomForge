@@ -58,6 +58,12 @@ import {
   type CandidateReviewState,
 } from './editorCandidateReview'
 import {
+  confirmationHandoffStateFromPayload,
+  type ConfirmationHandoffItem,
+  type ConfirmationHandoffState,
+  type ConfirmedObjectItem,
+} from './editorConfirmationHandoff'
+import {
   maxValueForField,
   placedObjectStateFromPayload,
   placedObjectTransformFields,
@@ -182,6 +188,20 @@ const initialStructuralFixtureState: StructuralFixtureState = {
   },
 }
 
+const initialConfirmationHandoffState: ConfirmationHandoffState = {
+  placedItems: [],
+  confirmedItems: [],
+  selectedItem: null,
+  counts: {
+    placed: 0,
+    confirmed: 0,
+    unconfirmed: 0,
+    selectedConfirmed: 0,
+  },
+  canConfirmSelected: false,
+  canConfirmAll: false,
+}
+
 const toolControls: Array<{ key: EditorTool; label: string; icon: typeof MousePointer2 }> = [
   { key: 'select', label: '선택', icon: MousePointer2 },
   { key: 'move', label: '이동', icon: Move },
@@ -240,6 +260,7 @@ export function EditorPage() {
   const [candidateReviewState, setCandidateReviewState] = useState<CandidateReviewState>(initialCandidateReviewState)
   const [placedObjectState, setPlacedObjectState] = useState<PlacedObjectState>(initialPlacedObjectState)
   const [structuralFixtureState, setStructuralFixtureState] = useState<StructuralFixtureState>(initialStructuralFixtureState)
+  const [confirmationHandoffState, setConfirmationHandoffState] = useState<ConfirmationHandoffState>(initialConfirmationHandoffState)
   const [persistenceState, setPersistenceState] = useState<EditorEventPersistenceResult>({
     status: 'ignored',
     label: 'Waiting for CV events',
@@ -324,6 +345,11 @@ export function EditorPage() {
       setStructuralFixtureState(nextStructuralFixtureState)
     }
 
+    const nextConfirmationHandoffState = confirmationHandoffStateFromPayload(message.payload)
+    if (nextConfirmationHandoffState) {
+      setConfirmationHandoffState(nextConfirmationHandoffState)
+    }
+
     if (!project) {
       return
     }
@@ -380,6 +406,7 @@ export function EditorPage() {
     setCandidateReviewState(initialCandidateReviewState)
     setPlacedObjectState(initialPlacedObjectState)
     setStructuralFixtureState(initialStructuralFixtureState)
+    setConfirmationHandoffState(initialConfirmationHandoffState)
   }, [])
 
   useEffect(() => {
@@ -737,6 +764,19 @@ export function EditorPage() {
                 sendRuntimeCommand('roomforge.candidate.reject', { candidateId })}
               onSelect={(fixtureId) =>
                 sendRuntimeCommand('roomforge.fixture.select', { fixtureId })}
+            />
+
+            <ConfirmationHandoffPanel
+              disabled={!runtimeReady}
+              state={confirmationHandoffState}
+              onConfirmAll={() =>
+                sendRuntimeCommand('roomforge.confirmation.confirmAllPlaced', {
+                  confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
+                })}
+              onConfirmSelected={() =>
+                sendRuntimeCommand('roomforge.confirmation.confirmSelected', {
+                  confirmedByUid: auth.status === 'signed-in' ? auth.user.uid : undefined,
+                })}
             />
 
             <section>
@@ -1278,6 +1318,112 @@ const fixtureEditActionButtons = [
   { action: 'category-next', label: 'Category', icon: 'fixture' },
   { action: 'delete', label: 'Delete', icon: 'trash' },
 ] as const
+
+function ConfirmationHandoffPanel({
+  disabled,
+  state,
+  onConfirmAll,
+  onConfirmSelected,
+}: {
+  disabled: boolean
+  state: ConfirmationHandoffState
+  onConfirmAll: () => void
+  onConfirmSelected: () => void
+}) {
+  return (
+    <section className="confirmation-handoff-panel" aria-labelledby="react-confirmation-handoff-title">
+      <div className="editor-host-section-title">
+        <ShieldCheck size={18} />
+        <h2 id="react-confirmation-handoff-title">Confirmation handoff</h2>
+      </div>
+
+      <div className="confirmation-counts" aria-label="Confirmation handoff counts">
+        <span><strong>{state.counts.placed}</strong> placed</span>
+        <span><strong>{state.counts.unconfirmed}</strong> unconfirmed</span>
+        <span><strong>{state.counts.confirmed}</strong> confirmed</span>
+        <span><strong>{state.counts.selectedConfirmed}</strong> selected done</span>
+      </div>
+
+      <div className="confirmation-selected-card">
+        {state.selectedItem ? (
+          <ConfirmationPlacedItem item={state.selectedItem} />
+        ) : (
+          <div className="confirmation-empty-selection">
+            <MousePointer2 size={16} />
+            <span>확정할 배치 객체를 선택하세요.</span>
+          </div>
+        )}
+      </div>
+
+      <div className="confirmation-actions">
+        <button
+          className="rf-btn"
+          disabled={disabled || !state.canConfirmSelected}
+          type="button"
+          onClick={onConfirmSelected}
+        >
+          <CheckCircle2 size={15} />
+          Confirm selected
+        </button>
+        <button
+          className="rf-btn rf-btn--primary"
+          disabled={disabled || !state.canConfirmAll}
+          type="button"
+          onClick={onConfirmAll}
+        >
+          <ShieldCheck size={15} />
+          Confirm all placed
+        </button>
+      </div>
+
+      {state.placedItems.length === 0 ? (
+        <p className="editor-host-empty">확정할 배치 객체가 없습니다.</p>
+      ) : (
+        <div className="confirmation-placed-list" role="list" aria-label="Placed confirmation states">
+          {state.placedItems.map((item) => (
+            <article className="confirmation-placed-row" key={item.objectId} role="listitem">
+              <ConfirmationPlacedItem item={item} />
+            </article>
+          ))}
+        </div>
+      )}
+
+      {state.confirmedItems.length > 0 ? (
+        <div className="confirmation-confirmed-list" role="list" aria-label="Confirmed objects">
+          {state.confirmedItems.map((item) => (
+            <ConfirmedObjectRow item={item} key={item.objectId} />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function ConfirmationPlacedItem({ item }: { item: ConfirmationHandoffItem }) {
+  return (
+    <div className={`confirmation-item${item.confirmed ? ' is-confirmed' : ''}${item.selected ? ' is-selected' : ''}`}>
+      <div>
+        <strong>{item.label}</strong>
+        <span>{item.objectType} · {item.category} · {item.sourceLabel}</span>
+      </div>
+      <span className={`state-pill ${item.confirmed ? 'confirmed' : 'candidate'}`}>
+        {item.confirmed ? 'Confirmed' : 'Unconfirmed'}
+      </span>
+    </div>
+  )
+}
+
+function ConfirmedObjectRow({ item }: { item: ConfirmedObjectItem }) {
+  return (
+    <article className="confirmed-object-row" role="listitem">
+      <div>
+        <strong>{item.label}</strong>
+        <span>{item.objectType} · {item.category}</span>
+      </div>
+      <small>{item.confirmedAtLabel}</small>
+    </article>
+  )
+}
 
 function CandidateReviewTray({
   disabled,

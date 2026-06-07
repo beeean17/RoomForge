@@ -5705,6 +5705,107 @@ button:disabled {
   padding-inline: 8px;
 }
 
+.confirmation-handoff-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.confirmation-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.confirmation-counts span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.confirmation-counts strong {
+  color: var(--text-main);
+  font-size: 0.96rem;
+}
+
+.confirmation-selected-card,
+.confirmation-placed-list,
+.confirmation-confirmed-list {
+  display: grid;
+  gap: 8px;
+}
+
+.confirmation-empty-selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px;
+  border: 1px dashed var(--line-soft);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.confirmation-item,
+.confirmed-object-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.confirmation-item.is-selected {
+  border-color: rgba(214, 167, 91, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(214, 167, 91, 0.2);
+}
+
+.confirmation-item.is-confirmed,
+.confirmed-object-row {
+  border-color: rgba(64, 211, 145, 0.34);
+}
+
+.confirmation-item strong,
+.confirmed-object-row strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.confirmation-item span:not(.state-pill),
+.confirmed-object-row span,
+.confirmed-object-row small {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.confirmation-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.confirmation-actions .rf-btn {
+  justify-content: center;
+  min-width: 0;
+  padding-inline: 8px;
+}
+
 .editor-host-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
